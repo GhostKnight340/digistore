@@ -137,7 +137,8 @@ export default function CheckoutPage() {
           <section className="card p-6">
             <h2 className="text-lg font-bold text-white">Vos informations</h2>
             <p className="mt-1 text-sm text-muted">
-              Nous envoyons une copie de votre code à cette adresse email.
+              Nous vous tiendrons informé du statut de votre commande à cette
+              adresse email.
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
@@ -260,7 +261,7 @@ export default function CheckoutPage() {
                 : "Passer une commande test"}
             </button>
             <p className="mt-3 text-center text-xs text-muted">
-              Paiement test sécurisé · Livraison instantanée
+              Paiement test · Vérification manuelle avant livraison
             </p>
           </div>
         </aside>
@@ -283,7 +284,7 @@ export default function CheckoutPage() {
             >
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            Commande confirmée
+            Commande reçue
           </span>
           <svg
             viewBox="0 0 24 24"
@@ -307,7 +308,7 @@ export default function CheckoutPage() {
               <rect x="4" y="4" width="16" height="16" rx="3" />
               <path d="M9 9h6M9 13h6M9 17h3" />
             </svg>
-            Affichage instantané du code
+            Vérification du paiement
           </span>
           <svg
             viewBox="0 0 24 24"
@@ -331,7 +332,7 @@ export default function CheckoutPage() {
               <rect x="3" y="5" width="18" height="14" rx="2" />
               <path d="m3 7 9 6 9-6" />
             </svg>
-            Copie email (option)
+            Code disponible après confirmation
           </span>
         </div>
       </div>

@@ -1,58 +1,68 @@
 /**
  * Mock test-code inventory. Phase 1 only — these are fake codes used to
- * demonstrate the instant-delivery flow. No real gift cards are involved.
+ * demonstrate the manual fulfillment flow. No real gift cards are involved.
  *
- * Keyed by product id. Products without an explicit list fall back to a
- * generated placeholder code so every purchase still delivers something.
+ * The live inventory (with used/unused status) is stored in localStorage and
+ * owned by StoreContext. This module only provides the initial seed data and
+ * pure helpers for summarizing it.
  */
-const inventory: Record<string, string[]> = {
+import type { InventoryCode } from "./types";
+
+/** Keyed by product id — a few demo codes per product. */
+const seedCodes: Record<string, string[]> = {
+  "steam-50": ["STEAM-TEST-50-001", "STEAM-TEST-50-002"],
   "steam-100": ["STEAM-TEST-100-001", "STEAM-TEST-100-002", "STEAM-TEST-100-003"],
+  "steam-200": ["STEAM-TEST-200-001", "STEAM-TEST-200-002"],
   "psn-100": ["PSN-TEST-100-001", "PSN-TEST-100-002"],
+  "psn-250": ["PSN-TEST-250-001"],
+  "xbox-100": ["XBOX-TEST-100-001", "XBOX-TEST-100-002"],
+  "xbox-200": ["XBOX-TEST-200-001"],
+  "nintendo-150": ["NINTENDO-TEST-150-001"],
+  "roblox-100": ["ROBLOX-TEST-100-001", "ROBLOX-TEST-100-002"],
+  "roblox-200": ["ROBLOX-TEST-200-001"],
   "valorant-100": ["VALORANT-TEST-100-001", "VALORANT-TEST-100-002"],
+  "valorant-200": ["VALORANT-TEST-200-001"],
 };
 
-/** Simple per-product cursor so repeat purchases cycle through the list. */
-const cursors: Record<string, number> = {};
-
-function prefixFor(productId: string): string {
-  return productId.toUpperCase().replace(/[^A-Z0-9]+/g, "-");
-}
-
-/**
- * Returns a single test code for the given product. When the mock inventory
- * for a product is exhausted (or missing), a deterministic placeholder code
- * is generated so the delivery flow always succeeds in Phase 1.
- */
-export function assignCode(productId: string): string {
-  const list = inventory[productId];
-  const cursor = cursors[productId] ?? 0;
-
-  if (list && cursor < list.length) {
-    cursors[productId] = cursor + 1;
-    return list[cursor];
+/** Builds the initial inventory list seeded into localStorage on first load. */
+export function seedInventory(): InventoryCode[] {
+  const codes: InventoryCode[] = [];
+  for (const [productId, list] of Object.entries(seedCodes)) {
+    list.forEach((code, i) => {
+      codes.push({
+        id: `${productId}-${String(i + 1).padStart(3, "0")}`,
+        productId,
+        code,
+        status: "unused",
+      });
+    });
   }
-
-  // Generated fallback code.
-  cursors[productId] = cursor + 1;
-  const serial = String(cursor + 1).padStart(3, "0");
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${prefixFor(productId)}-TEST-${serial}-${rand}`;
+  return codes;
 }
 
-/** Returns `quantity` codes for a product. */
-export function assignCodes(productId: string, quantity: number): string[] {
-  return Array.from({ length: quantity }, () => assignCode(productId));
+export interface InventorySnapshotRow {
+  productId: string;
+  total: number;
+  unused: number;
+  used: number;
 }
 
-/** Snapshot of remaining mock stock — used by the admin inventory view. */
-export function inventorySnapshot() {
-  return Object.entries(inventory).map(([productId, codes]) => {
-    const used = cursors[productId] ?? 0;
-    return {
+/** Summarizes a live inventory list into per-product used/unused counts. */
+export function inventorySnapshot(
+  inventory: InventoryCode[],
+): InventorySnapshotRow[] {
+  const byProduct = new Map<string, InventoryCode[]>();
+  for (const code of inventory) {
+    const list = byProduct.get(code.productId) ?? [];
+    list.push(code);
+    byProduct.set(code.productId, list);
+  }
+  return [...byProduct.entries()]
+    .map(([productId, list]) => ({
       productId,
-      total: codes.length,
-      remaining: Math.max(codes.length - used, 0),
-      codes,
-    };
-  });
+      total: list.length,
+      unused: list.filter((c) => c.status === "unused").length,
+      used: list.filter((c) => c.status === "used").length,
+    }))
+    .sort((a, b) => a.productId.localeCompare(b.productId));
 }

@@ -4,6 +4,7 @@ import { use } from "react";
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import { formatMAD, formatDate } from "@/lib/format";
+import { isDelivered, orderStatusLabel } from "@/lib/orderStatus";
 
 const methodLabels: Record<string, string> = {
   test: "Paiement test",
@@ -20,6 +21,7 @@ export default function OrderConfirmationPage({
   const { id } = use(params);
   const { getOrder, ready } = useStore();
   const order = getOrder(id);
+  const delivered = order ? isDelivered(order.status) : false;
 
   if (!ready) {
     return (
@@ -52,19 +54,40 @@ export default function OrderConfirmationPage({
     <div className="container-page py-10">
       <div className="mx-auto max-w-3xl">
         <section className="text-center">
-          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-green-500/30 bg-green-500/15 text-3xl">
-            ✓
-          </span>
-          <p className="mt-5 text-sm font-medium uppercase tracking-wide text-green-400">
-            Commande terminée
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-white">
-            Confirmation de commande
-          </h1>
-          <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
-            Merci, {order.fullName.split(" ")[0]}. Votre paiement test est
-            validé et vos codes sont prêts pour la livraison instantanée.
-          </p>
+          {delivered ? (
+            <>
+              <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-green-500/30 bg-green-500/15 text-3xl">
+                ✓
+              </span>
+              <p className="mt-5 text-sm font-medium uppercase tracking-wide text-green-400">
+                Commande livrée
+              </p>
+              <h1 className="mt-2 text-3xl font-bold text-white">
+                Confirmation de commande
+              </h1>
+              <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
+                Merci, {order.fullName.split(" ")[0]}. Votre paiement est
+                confirmé et votre code est disponible.
+              </p>
+            </>
+          ) : (
+            <>
+              <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-amber-500/30 bg-amber-500/15 text-3xl">
+                ⏳
+              </span>
+              <p className="mt-5 text-sm font-medium uppercase tracking-wide text-amber-400">
+                {orderStatusLabel(order.status)}
+              </p>
+              <h1 className="mt-2 text-3xl font-bold text-white">
+                Nous avons bien reçu votre commande
+              </h1>
+              <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
+                Merci, {order.fullName.split(" ")[0]}. Votre paiement est en
+                cours de vérification. Votre code sera disponible sur la page de
+                livraison dès que la commande sera confirmée.
+              </p>
+            </>
+          )}
         </section>
 
         <section className="card mt-8 overflow-hidden">
@@ -75,11 +98,19 @@ export default function OrderConfirmationPage({
                   Détails de la commande
                 </h2>
                 <p className="mt-1 text-sm text-muted">
-                  Aucune action supplémentaire n'est nécessaire.
+                  {delivered
+                    ? "Aucune action supplémentaire n'est nécessaire."
+                    : "Aucune action n'est requise pendant la vérification."}
                 </p>
               </div>
-              <span className="chip border-accent/40 text-accent">
-                Code prêt
+              <span
+                className={`chip ${
+                  delivered
+                    ? "border-green-500/40 text-green-400"
+                    : "border-amber-500/40 text-amber-400"
+                }`}
+              >
+                {orderStatusLabel(order.status)}
               </span>
             </div>
           </div>
@@ -93,7 +124,11 @@ export default function OrderConfirmationPage({
             <Meta label="Email client" value={order.email} />
             <Meta label="Total payé" value={formatMAD(order.total)} highlight />
             <Meta label="Date d'achat" value={formatDate(order.createdAt)} />
-            <Meta label="Statut de livraison" value="Code prêt" highlight />
+            <Meta
+              label="Statut de livraison"
+              value={orderStatusLabel(order.status)}
+              highlight={delivered}
+            />
           </dl>
 
           <div className="border-t border-border px-6 py-5">
@@ -119,16 +154,18 @@ export default function OrderConfirmationPage({
 
         <section className="mt-6 rounded-2xl border border-accent/40 bg-accent/10 p-6 text-center">
           <h2 className="text-lg font-bold text-white">
-            Votre livraison est sécurisée
+            {delivered
+              ? "Votre livraison est sécurisée"
+              : "Suivez l'état de votre commande"}
           </h2>
           <p className="mx-auto mt-1 max-w-xl text-sm leading-relaxed text-muted">
-            Votre code est sauvegardé dans l'historique de commandes de votre
-            compte. Vous pouvez revenir à cette page à tout moment depuis votre
-            compte.
+            {delivered
+              ? "Votre code est sauvegardé dans l'historique de commandes de votre compte. Vous pouvez revenir à cette page à tout moment depuis votre compte."
+              : "Suivez l'état de votre commande sur la page de livraison. Votre code y apparaîtra automatiquement une fois le paiement confirmé."}
           </p>
           <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href={`/delivery/${order.id}`} className="btn-primary">
-              Voir mon code
+              {delivered ? "Voir mon code" : "Suivre ma commande"}
             </Link>
             <Link href="/products" className="btn-ghost">
               Retour à la boutique

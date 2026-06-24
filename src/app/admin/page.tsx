@@ -5,7 +5,9 @@ import { useStore } from "@/context/StoreContext";
 import { products } from "@/lib/products";
 import { inventorySnapshot } from "@/lib/inventory";
 import { formatMAD, formatDate } from "@/lib/format";
+import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
 import SettingsPanel from "@/components/admin/SettingsPanel";
+import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: "📊" },
@@ -20,12 +22,13 @@ const navItems = [
 ];
 
 export default function AdminPage() {
-  const { orders, ready } = useStore();
+  const { orders, inventory: inventoryCodes, ready } = useStore();
   const [activeTab, setActiveTab] = useState("overview");
 
   const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
   const customers = new Set(orders.map((order) => order.email)).size;
-  const inventory = inventorySnapshot();
+  const pendingCount = orders.filter((o) => o.status !== "delivered").length;
+  const inventory = inventorySnapshot(inventoryCodes);
 
   return (
     <div className="container-page py-10">
@@ -62,6 +65,8 @@ export default function AdminPage() {
 
         {activeTab === "settings" ? (
           <SettingsPanel />
+        ) : activeTab === "fulfillment" ? (
+          <FulfillmentPanel />
         ) : (
           <div className="space-y-8">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -70,10 +75,13 @@ export default function AdminPage() {
                 value={ready ? String(orders.length) : "-"}
               />
               <Stat
+                label="Pending fulfillment"
+                value={ready ? String(pendingCount) : "-"}
+              />
+              <Stat
                 label="Total revenue"
                 value={ready ? formatMAD(totalRevenue) : "-"}
               />
-              <Stat label="Products" value={String(products.length)} />
               <Stat
                 label="Customers"
                 value={ready ? String(customers) : "-"}
@@ -118,16 +126,21 @@ export default function AdminPage() {
                             {formatMAD(order.total)}
                           </td>
                           <td className="px-5 py-3">
-                            <span className="chip border-green-500/40 text-green-400">
-                              Completed
+                            <span
+                              className={`chip ${orderStatusBadgeClass(
+                                order.status,
+                              )}`}
+                            >
+                              {orderStatusShort(order.status)}
                             </span>
                           </td>
                           <td className="px-5 py-3">
                             <button
-                              className="text-xs text-muted hover:text-white"
-                              disabled
+                              type="button"
+                              onClick={() => setActiveTab("fulfillment")}
+                              className="text-xs font-medium text-accent hover:text-accent-hover"
                             >
-                              Refund
+                              {order.status === "delivered" ? "View" : "Fulfill"}
                             </button>
                           </td>
                         </tr>
@@ -147,7 +160,8 @@ export default function AdminPage() {
                   <thead className="text-xs uppercase text-muted">
                     <tr className="border-b border-border">
                       <th className="px-5 py-3 font-medium">Product</th>
-                      <th className="px-5 py-3 font-medium">Remaining</th>
+                      <th className="px-5 py-3 font-medium">Unused</th>
+                      <th className="px-5 py-3 font-medium">Used</th>
                       <th className="px-5 py-3 font-medium">Total</th>
                     </tr>
                   </thead>
@@ -157,7 +171,12 @@ export default function AdminPage() {
                         <td className="px-5 py-3 font-mono text-xs text-white">
                           {row.productId}
                         </td>
-                        <td className="px-5 py-3 text-muted">{row.remaining}</td>
+                        <td className="px-5 py-3">
+                          <span className="font-semibold text-green-400">
+                            {row.unused}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-muted">{row.used}</td>
                         <td className="px-5 py-3 text-muted">{row.total}</td>
                       </tr>
                     ))}

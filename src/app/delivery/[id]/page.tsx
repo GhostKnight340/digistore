@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import { getProduct } from "@/lib/products";
 import { formatDate } from "@/lib/format";
+import {
+  isDelivered,
+  orderStatusLabel,
+  orderStatusBadgeClass,
+} from "@/lib/orderStatus";
 import ProductArt from "@/components/ProductArt";
 import CopyCode from "@/components/CopyCode";
 
@@ -14,8 +19,9 @@ export default function DeliveryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { getOrder, ready } = useStore();
+  const { getOrder, ready, syncFromStorage } = useStore();
   const order = getOrder(id);
+  const delivered = order ? isDelivered(order.status) : false;
 
   if (!ready) {
     return (
@@ -44,22 +50,36 @@ export default function DeliveryPage({
     <div className="container-page py-10">
       <div className="mx-auto max-w-4xl">
         <section className="rounded-[22px] border border-border-strong bg-gradient-to-b from-surface2 to-base px-5 py-8 text-center shadow-card sm:px-8">
-          <span className="chip border-cyan-glow/40 text-cyan-glow">
-            Coffre sécurisé · Livraison instantanée
+          <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
+            {orderStatusLabel(order.status)}
           </span>
           <h1 className="mt-4 text-3xl font-bold text-white">
-            Vos codes sont prêts
+            {delivered ? "Vos codes sont prêts" : "Commande en cours de traitement"}
           </h1>
           <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-            Les codes ci-dessous sont liés à votre commande. Affichez-les
-            uniquement lorsque vous êtes prêt à les utiliser.
+            {delivered
+              ? "Les codes ci-dessous sont liés à votre commande. Affichez-les uniquement lorsque vous êtes prêt à les utiliser."
+              : "Votre paiement est en cours de vérification. Votre code apparaîtra ici une fois la commande confirmée."}
           </p>
+          {!delivered && (
+            <button
+              type="button"
+              onClick={syncFromStorage}
+              className="btn-ghost mt-5 h-10 px-4 text-xs"
+            >
+              Actualiser le statut
+            </button>
+          )}
 
           <dl className="mx-auto mt-6 grid max-w-2xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
             <VaultMeta label="ID commande" value={order.id} />
             <VaultMeta label="Date d'achat" value={formatDate(order.createdAt)} />
             <VaultMeta label="Email client" value={order.email} />
-            <VaultMeta label="Statut" value="Livré" highlight />
+            <VaultMeta
+              label="Statut"
+              value={orderStatusLabel(order.status)}
+              highlight={delivered}
+            />
           </dl>
         </section>
 
@@ -86,8 +106,8 @@ export default function DeliveryPage({
                           Quantité: {item.quantity}
                         </p>
                       </div>
-                      <span className="chip border-green-500/40 text-green-400">
-                        Code prêt
+                      <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
+                        {delivered ? "Code prêt" : "En attente"}
                       </span>
                     </div>
 
@@ -109,25 +129,42 @@ export default function DeliveryPage({
                 </div>
 
                 <div className="border-t border-border bg-base/35 p-5 sm:p-6">
-                  <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <h3 className="text-sm font-semibold text-white">
-                      Codes livrés
-                    </h3>
-                    <p className="text-xs text-muted">
-                      {item.codes.length} code
-                      {item.codes.length === 1 ? "" : "s"} disponible
-                      {item.codes.length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    {item.codes.map((code, index) => (
-                      <CopyCode
-                        key={`${code}-${index}`}
-                        code={code}
-                        index={index}
-                      />
-                    ))}
-                  </div>
+                  {delivered ? (
+                    <>
+                      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <h3 className="text-sm font-semibold text-white">
+                          Codes livrés
+                        </h3>
+                        <p className="text-xs text-muted">
+                          {item.codes.length} code
+                          {item.codes.length === 1 ? "" : "s"} disponible
+                          {item.codes.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <div className="space-y-3">
+                        {item.codes.map((code, index) => (
+                          <CopyCode
+                            key={`${code}-${index}`}
+                            code={code}
+                            index={index}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-5 text-center">
+                      <span className="grid mx-auto h-11 w-11 place-items-center rounded-full border border-amber-500/30 bg-amber-500/15 text-xl">
+                        ⏳
+                      </span>
+                      <p className="mt-3 text-sm font-semibold text-white">
+                        Votre paiement est en cours de vérification.
+                      </p>
+                      <p className="mt-1 text-sm text-muted">
+                        Votre code apparaîtra ici une fois la commande
+                        confirmée.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </article>
             );

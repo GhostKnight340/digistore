@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import { formatMAD, formatDate } from "@/lib/format";
+import {
+  isDelivered,
+  orderStatusShort,
+  orderStatusBadgeClass,
+} from "@/lib/orderStatus";
 
 export default function AccountPage() {
   const { orders, ready } = useStore();
@@ -73,8 +78,10 @@ export default function AccountPage() {
                         {formatDate(order.createdAt)}
                       </p>
                     </div>
-                    <span className="chip border-green-500/40 text-green-400">
-                      ● Terminée
+                    <span
+                      className={`chip ${orderStatusBadgeClass(order.status)}`}
+                    >
+                      ● {orderStatusShort(order.status)}
                     </span>
                   </div>
 
@@ -104,7 +111,9 @@ export default function AccountPage() {
                       href={`/delivery/${order.id}`}
                       className="text-sm font-medium text-accent hover:text-accent-hover"
                     >
-                      Voir les codes →
+                      {isDelivered(order.status)
+                        ? "Voir les codes →"
+                        : "Suivre la commande →"}
                     </Link>
                   </div>
                 </li>
