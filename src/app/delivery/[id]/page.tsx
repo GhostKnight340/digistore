@@ -1,8 +1,7 @@
 "use client";
 
-import { use } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useStore } from "@/context/StoreContext";
 import { getProduct } from "@/lib/products";
 import { formatDate } from "@/lib/format";
 import {
@@ -10,6 +9,8 @@ import {
   orderStatusLabel,
   orderStatusBadgeClass,
 } from "@/lib/orderStatus";
+import { getCustomerOrderAction } from "@/app/actions/orders";
+import type { CustomerOrderDTO } from "@/lib/dto";
 import ProductArt from "@/components/ProductArt";
 import CopyCode from "@/components/CopyCode";
 
@@ -19,9 +20,27 @@ export default function DeliveryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { getOrder, ready, syncFromStorage } = useStore();
-  const order = getOrder(id);
+  const [order, setOrder] = useState<CustomerOrderDTO | null>(null);
+  const [ready, setReady] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const data = await getCustomerOrderAction(id);
+    setOrder(data);
+    setReady(true);
+  }, [id]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Poll while the order is not yet delivered so the code appears
+  // automatically once an admin fulfills it (no manual reload needed).
   const delivered = order ? isDelivered(order.status) : false;
+  useEffect(() => {
+    if (!ready || delivered) return;
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, [ready, delivered, refresh]);
 
   if (!ready) {
     return (
@@ -54,7 +73,9 @@ export default function DeliveryPage({
             {orderStatusLabel(order.status)}
           </span>
           <h1 className="mt-4 text-3xl font-bold text-white">
-            {delivered ? "Vos codes sont prêts" : "Commande en cours de traitement"}
+            {delivered
+              ? "Vos codes sont prêts"
+              : "Commande en cours de traitement"}
           </h1>
           <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-muted">
             {delivered
@@ -64,7 +85,7 @@ export default function DeliveryPage({
           {!delivered && (
             <button
               type="button"
-              onClick={syncFromStorage}
+              onClick={refresh}
               className="btn-ghost mt-5 h-10 px-4 text-xs"
             >
               Actualiser le statut
@@ -74,7 +95,7 @@ export default function DeliveryPage({
           <dl className="mx-auto mt-6 grid max-w-2xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
             <VaultMeta label="ID commande" value={order.id} />
             <VaultMeta label="Date d'achat" value={formatDate(order.createdAt)} />
-            <VaultMeta label="Email client" value={order.email} />
+            <VaultMeta label="Email client" value={order.customerEmail} />
             <VaultMeta
               label="Statut"
               value={orderStatusLabel(order.status)}
@@ -86,8 +107,11 @@ export default function DeliveryPage({
         <section className="mt-8 space-y-6">
           {order.items.map((item) => {
             const product = getProduct(item.productId);
+            const codes = order.deliveredCodes
+              .filter((d) => d.productId === item.productId)
+              .map((d) => d.code);
             return (
-              <article key={item.productId} className="card overflow-hidden">
+              <article key={item.id} className="card overflow-hidden">
                 <div className="grid gap-5 p-5 sm:grid-cols-[112px_1fr] sm:p-6">
                   {product && (
                     <ProductArt
@@ -106,7 +130,9 @@ export default function DeliveryPage({
                           Quantité: {item.quantity}
                         </p>
                       </div>
-                      <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
+                      <span
+                        className={`chip ${orderStatusBadgeClass(order.status)}`}
+                      >
                         {delivered ? "Code prêt" : "En attente"}
                       </span>
                     </div>
@@ -136,13 +162,13 @@ export default function DeliveryPage({
                           Codes livrés
                         </h3>
                         <p className="text-xs text-muted">
-                          {item.codes.length} code
-                          {item.codes.length === 1 ? "" : "s"} disponible
-                          {item.codes.length === 1 ? "" : "s"}
+                          {codes.length} code
+                          {codes.length === 1 ? "" : "s"} disponible
+                          {codes.length === 1 ? "" : "s"}
                         </p>
                       </div>
                       <div className="space-y-3">
-                        {item.codes.map((code, index) => (
+                        {codes.map((code, index) => (
                           <CopyCode
                             key={`${code}-${index}`}
                             code={code}

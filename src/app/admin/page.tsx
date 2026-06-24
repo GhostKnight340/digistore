@@ -1,34 +1,53 @@
 "use client";
 
-import { useState } from "react";
-import { useStore } from "@/context/StoreContext";
+import { useCallback, useEffect, useState } from "react";
 import { products } from "@/lib/products";
-import { inventorySnapshot } from "@/lib/inventory";
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
+import {
+  getAdminOrdersAction,
+  getInventoryAction,
+} from "@/app/actions/admin";
+import type { AdminOrderDTO, InventoryGroupDTO } from "@/lib/dto";
 import SettingsPanel from "@/components/admin/SettingsPanel";
 import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
+import InventoryPanel from "@/components/admin/InventoryPanel";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: "📊" },
   { id: "settings", label: "Settings", icon: "⚙️" },
   { id: "products", label: "Products", icon: "🛍️" },
   { id: "inventory", label: "Inventory", icon: "🔑" },
-  { id: "orders", label: "Orders", icon: "🧾" },
-  { id: "customers", label: "Customers", icon: "👥" },
   { id: "fulfillment", label: "Manual fulfillment", icon: "📦" },
+  { id: "customers", label: "Customers", icon: "👥" },
   { id: "suppliers", label: "Supplier API", icon: "🔌" },
   { id: "refunds", label: "Refunds", icon: "↩" },
 ];
 
 export default function AdminPage() {
-  const { orders, inventory: inventoryCodes, ready } = useStore();
   const [activeTab, setActiveTab] = useState("overview");
+  const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
+  const [inventory, setInventory] = useState<InventoryGroupDTO[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
-  const customers = new Set(orders.map((order) => order.email)).size;
+  const load = useCallback(async () => {
+    const [o, inv] = await Promise.all([
+      getAdminOrdersAction(),
+      getInventoryAction(),
+    ]);
+    setOrders(o);
+    setInventory(inv);
+    setLoaded(true);
+  }, []);
+
+  // Refresh overview data whenever we return to the overview tab.
+  useEffect(() => {
+    if (activeTab === "overview") load();
+  }, [activeTab, load]);
+
+  const totalRevenue = orders.reduce((sum, order) => sum + order.totalMad, 0);
+  const customers = new Set(orders.map((o) => o.customerEmail)).size;
   const pendingCount = orders.filter((o) => o.status !== "delivered").length;
-  const inventory = inventorySnapshot(inventoryCodes);
 
   return (
     <div className="container-page py-10">
@@ -36,7 +55,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-3xl font-bold text-white">Admin dashboard</h1>
           <p className="mt-1 text-sm text-muted">
-            Phase 1 placeholder - structure only, limited functionality.
+            Database-backed inventory and manual fulfillment.
           </p>
         </div>
         <span className="chip border-accent/40 text-accent">Prototype mode</span>
@@ -67,24 +86,26 @@ export default function AdminPage() {
           <SettingsPanel />
         ) : activeTab === "fulfillment" ? (
           <FulfillmentPanel />
+        ) : activeTab === "inventory" ? (
+          <InventoryPanel />
         ) : (
           <div className="space-y-8">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Stat
                 label="Total orders"
-                value={ready ? String(orders.length) : "-"}
+                value={loaded ? String(orders.length) : "-"}
               />
               <Stat
                 label="Pending fulfillment"
-                value={ready ? String(pendingCount) : "-"}
+                value={loaded ? String(pendingCount) : "-"}
               />
               <Stat
                 label="Total revenue"
-                value={ready ? formatMAD(totalRevenue) : "-"}
+                value={loaded ? formatMAD(totalRevenue) : "-"}
               />
               <Stat
                 label="Customers"
-                value={ready ? String(customers) : "-"}
+                value={loaded ? String(customers) : "-"}
               />
             </div>
 
@@ -93,7 +114,7 @@ export default function AdminPage() {
                 <h2 className="font-bold text-white">Recent orders</h2>
                 <span className="text-xs text-muted">Manual fulfillment</span>
               </div>
-              {!ready ? (
+              {!loaded ? (
                 <p className="px-5 py-8 text-sm text-muted">Loading...</p>
               ) : orders.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-muted">
@@ -118,12 +139,14 @@ export default function AdminPage() {
                           <td className="px-5 py-3 font-mono text-xs text-white">
                             {order.id}
                           </td>
-                          <td className="px-5 py-3 text-muted">{order.email}</td>
+                          <td className="px-5 py-3 text-muted">
+                            {order.customerEmail}
+                          </td>
                           <td className="px-5 py-3 text-muted">
                             {formatDate(order.createdAt)}
                           </td>
                           <td className="px-5 py-3 text-white">
-                            {formatMAD(order.total)}
+                            {formatMAD(order.totalMad)}
                           </td>
                           <td className="px-5 py-3">
                             <span
@@ -152,8 +175,15 @@ export default function AdminPage() {
             </section>
 
             <section className="card overflow-hidden">
-              <div className="border-b border-border px-5 py-4">
-                <h2 className="font-bold text-white">Mock inventory</h2>
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <h2 className="font-bold text-white">Inventory summary</h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("inventory")}
+                  className="text-xs font-medium text-accent hover:text-accent-hover"
+                >
+                  Manage codes
+                </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -167,7 +197,10 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {inventory.map((row) => (
-                      <tr key={row.productId} className="border-b border-border/60">
+                      <tr
+                        key={row.productId}
+                        className="border-b border-border/60"
+                      >
                         <td className="px-5 py-3 font-mono text-xs text-white">
                           {row.productId}
                         </td>
@@ -197,9 +230,9 @@ export default function AdminPage() {
                 text="Review and process customer refund requests. Coming in a later phase."
               />
               <Placeholder
-                icon="📦"
-                title="Manual fulfillment"
-                text="Manually assign codes to orders that need attention. Structure only for now."
+                icon="🛍️"
+                title="Products"
+                text={`${products.length} products in the catalog. Editing UI coming later.`}
               />
               <Placeholder
                 icon="👥"

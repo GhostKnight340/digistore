@@ -7,6 +7,7 @@ import { useStore } from "@/context/StoreContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getProduct } from "@/lib/products";
 import { formatMAD } from "@/lib/format";
+import { createOrderAction } from "@/app/actions/orders";
 import type { PaymentMethod } from "@/lib/types";
 
 const methods: {
@@ -27,7 +28,7 @@ const methods: {
 ];
 
 export default function CheckoutPage() {
-  const { cart, ready, cartTotal, placeOrder } = useStore();
+  const { cart, ready, cartTotal, rememberOrder } = useStore();
   const { settings } = useStoreSettings();
   const router = useRouter();
 
@@ -59,7 +60,7 @@ export default function CheckoutPage() {
     );
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -73,19 +74,30 @@ export default function CheckoutPage() {
     }
 
     setSubmitting(true);
-    const order = placeOrder({
-      email: email.trim(),
-      fullName: fullName.trim(),
-      paymentMethod: method,
-    });
+    try {
+      // Order + prices are created in the database (server action).
+      const order = await createOrderAction({
+        customerName: fullName.trim(),
+        customerEmail: email.trim(),
+        paymentMethod: method,
+        items: cart.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+        })),
+      });
 
-    if (!order) {
+      if (!order) {
+        setSubmitting(false);
+        setError("Une erreur est survenue. Veuillez réessayer.");
+        return;
+      }
+
+      rememberOrder(order.id);
+      router.push(`/order/${order.id}`);
+    } catch {
       setSubmitting(false);
       setError("Une erreur est survenue. Veuillez réessayer.");
-      return;
     }
-
-    router.push(`/order/${order.id}`);
   }
 
   return (

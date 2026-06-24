@@ -1,32 +1,51 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useStore, type CodeAssignments } from "@/context/StoreContext";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
 import {
   orderStatusShort,
   orderStatusBadgeClass,
   isDelivered,
 } from "@/lib/orderStatus";
-import type { Order } from "@/lib/types";
+import {
+  getAdminOrdersAction,
+  getAvailableCodesAction,
+  confirmPaymentAction,
+  deliverOrderAction,
+} from "@/app/actions/admin";
+import type {
+  AdminOrderDTO,
+  AdminCodeDTO,
+  AssignmentEntry,
+  ItemAssignment,
+} from "@/lib/dto";
 
 type Filter = "todo" | "all";
 
 export default function FulfillmentPanel() {
-  const { orders, ready } = useStore();
+  const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<Filter>("todo");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const visibleOrders = useMemo(() => {
-    if (filter === "all") return orders;
-    return orders.filter((o) => o.status !== "delivered");
-  }, [orders, filter]);
+  const load = useCallback(async () => {
+    const data = await getAdminOrdersAction();
+    setOrders(data);
+    setLoaded(true);
+  }, []);
 
-  const todoCount = useMemo(
-    () => orders.filter((o) => o.status !== "delivered").length,
-    [orders],
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const visibleOrders = useMemo(
+    () =>
+      filter === "all"
+        ? orders
+        : orders.filter((o) => o.status !== "delivered"),
+    [orders, filter],
   );
-
+  const todoCount = orders.filter((o) => o.status !== "delivered").length;
   const selected = selectedId
     ? orders.find((o) => o.id === selectedId) ?? null
     : null;
@@ -37,7 +56,7 @@ export default function FulfillmentPanel() {
         <div>
           <h2 className="text-xl font-bold text-white">Manual fulfillment</h2>
           <p className="mt-1 text-sm text-muted">
-            Review payments, assign codes, and deliver orders manually.
+            Review payments, assign codes from the database, and deliver orders.
           </p>
         </div>
         <div className="flex gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
@@ -63,7 +82,7 @@ export default function FulfillmentPanel() {
       </div>
 
       <section className="card overflow-hidden">
-        {!ready ? (
+        {!loaded ? (
           <p className="px-5 py-8 text-sm text-muted">Loading...</p>
         ) : visibleOrders.length === 0 ? (
           <p className="px-5 py-8 text-sm text-muted">
@@ -90,12 +109,14 @@ export default function FulfillmentPanel() {
                     <td className="px-5 py-3 font-mono text-xs text-white">
                       {order.id}
                     </td>
-                    <td className="px-5 py-3 text-muted">{order.email}</td>
+                    <td className="px-5 py-3 text-muted">
+                      {order.customerEmail}
+                    </td>
                     <td className="px-5 py-3 text-muted">
                       {formatDate(order.createdAt)}
                     </td>
                     <td className="px-5 py-3 text-white">
-                      {formatMAD(order.total)}
+                      {formatMAD(order.totalMad)}
                     </td>
                     <td className="px-5 py-3">
                       <span
@@ -125,6 +146,7 @@ export default function FulfillmentPanel() {
         <OrderDrawer
           order={selected}
           onClose={() => setSelectedId(null)}
+          onChanged={load}
         />
       )}
     </div>
@@ -134,80 +156,100 @@ export default function FulfillmentPanel() {
 function OrderDrawer({
   order,
   onClose,
+  onChanged,
 }: {
-  order: Order;
+  order: AdminOrderDTO;
   onClose: () => void;
+  onChanged: () => Promise<void>;
 }) {
-  const {
-    confirmPayment,
-    deliverOrder,
-    getAvailableCodes,
-    emailLogsForOrder,
-  } = useStore();
-
-  // Per-item code inputs: productId -> array of length `quantity`.
-  const [inputs, setInputs] = useState<CodeAssignments>({});
+  // Per-item entries: orderItemId -> array (length = quantity).
+  const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
+  const [available, setAvailable] = useState<Record<string, AdminCodeDTO[]>>({});
   const [error, setError] = useState("");
-
-  // Initialize the inputs whenever a different order opens.
-  useEffect(() => {
-    const initial: CodeAssignments = {};
-    for (const item of order.items) {
-      const existing = item.codes ?? [];
-      initial[item.productId] = Array.from(
-        { length: item.quantity },
-        (_, i) => existing[i] ?? "",
-      );
-    }
-    setInputs(initial);
-    setError("");
-  }, [order.id, order.items]);
+  const [busy, setBusy] = useState(false);
 
   const delivered = isDelivered(order.status);
   const paymentConfirmed =
     order.status === "payment_confirmed" || delivered;
 
-  const logs = emailLogsForOrder(order.id);
+  // Initialize per-unit entries and load available codes when the order opens.
+  useEffect(() => {
+    const init: Record<string, AssignmentEntry[]> = {};
+    for (const item of order.items) {
+      init[item.id] = Array.from({ length: item.quantity }, () => ({}));
+    }
+    setEntries(init);
+    setError("");
 
-  function setCode(productId: string, index: number, value: string) {
-    setInputs((prev) => {
-      const arr = [...(prev[productId] ?? [])];
-      arr[index] = value;
-      return { ...prev, [productId]: arr };
+    const slugs = [...new Set(order.items.map((i) => i.productId))];
+    Promise.all(slugs.map((s) => getAvailableCodesAction(s))).then((lists) => {
+      const map: Record<string, AdminCodeDTO[]> = {};
+      slugs.forEach((s, i) => (map[s] = lists[i]));
+      setAvailable(map);
+    });
+  }, [order.id, order.items]);
+
+  function setEntry(itemId: string, index: number, entry: AssignmentEntry) {
+    setEntries((prev) => {
+      const arr = [...(prev[itemId] ?? [])];
+      arr[index] = entry;
+      return { ...prev, [itemId]: arr };
     });
   }
 
-  // Codes already chosen in this form (to avoid double-assigning stock codes).
-  const chosen = useMemo(() => {
+  // Inventory code ids already chosen in this form (avoid double-assigning).
+  const chosenIds = useMemo(() => {
     const set = new Set<string>();
-    for (const arr of Object.values(inputs)) {
-      for (const v of arr) if (v.trim()) set.add(v.trim());
+    for (const arr of Object.values(entries)) {
+      for (const e of arr) if (e.digitalCodeId) set.add(e.digitalCodeId);
     }
     return set;
-  }, [inputs]);
+  }, [entries]);
 
   const allFilled = order.items.every((item) =>
-    (inputs[item.productId] ?? [])
+    (entries[item.id] ?? [])
       .slice(0, item.quantity)
-      .every((c) => c.trim().length > 0),
+      .every((e) => e.digitalCodeId || e.manualCode?.trim()),
   );
 
-  function handleDeliver() {
+  async function handleConfirmPayment() {
+    setBusy(true);
+    setError("");
+    const res = await confirmPaymentAction(order.id);
+    if (!res.ok) setError(res.error ?? "Failed to confirm payment.");
+    await onChanged();
+    setBusy(false);
+  }
+
+  async function handleDeliver() {
     setError("");
     if (!paymentConfirmed) {
       setError("Confirm the payment before delivering.");
       return;
     }
-    const ok = deliverOrder(order.id, inputs);
-    if (!ok) {
-      setError("Please assign a code to every unit before delivering.");
-      return;
+    const assignments: ItemAssignment[] = order.items.map((item) => ({
+      orderItemId: item.id,
+      codes: entries[item.id] ?? [],
+    }));
+    setBusy(true);
+    const res = await deliverOrderAction(order.id, assignments);
+    if (!res.ok) {
+      setError(res.error ?? "Delivery failed.");
+      // Reload available codes in case stock changed underneath us.
+      const slugs = [...new Set(order.items.map((i) => i.productId))];
+      const lists = await Promise.all(
+        slugs.map((s) => getAvailableCodesAction(s)),
+      );
+      const map: Record<string, AdminCodeDTO[]> = {};
+      slugs.forEach((s, i) => (map[s] = lists[i]));
+      setAvailable(map);
     }
+    await onChanged();
+    setBusy(false);
   }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      {/* backdrop */}
       <button
         type="button"
         aria-label="Close"
@@ -230,12 +272,11 @@ function OrderDrawer({
         </div>
 
         <div className="space-y-6 px-5 py-5">
-          {/* Meta */}
           <section className="grid grid-cols-2 gap-3 text-sm">
-            <Field label="Customer" value={order.fullName} />
-            <Field label="Email" value={order.email} />
+            <Field label="Customer" value={order.customerName} />
+            <Field label="Email" value={order.customerEmail} />
             <Field label="Date" value={formatDate(order.createdAt)} />
-            <Field label="Total" value={formatMAD(order.total)} />
+            <Field label="Total" value={formatMAD(order.totalMad)} />
             <div>
               <p className="text-[11px] uppercase tracking-wide text-faint">
                 Status
@@ -248,18 +289,13 @@ function OrderDrawer({
             </div>
           </section>
 
-          {/* Payment */}
           <section className="rounded-xl border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-white">Payment</h4>
                 <p className="mt-0.5 text-xs text-muted">
                   {paymentConfirmed
-                    ? `Confirmed${
-                        order.paymentConfirmedAt
-                          ? ` · ${formatDate(order.paymentConfirmedAt)}`
-                          : ""
-                      }`
+                    ? "Confirmed."
                     : "Awaiting manual confirmation."}
                 </p>
               </div>
@@ -270,8 +306,9 @@ function OrderDrawer({
               ) : (
                 <button
                   type="button"
-                  onClick={() => confirmPayment(order.id)}
-                  className="btn-primary h-9 px-4 text-xs"
+                  disabled={busy}
+                  onClick={handleConfirmPayment}
+                  className="btn-primary h-9 px-4 text-xs disabled:opacity-50"
                 >
                   Confirm payment
                 </button>
@@ -279,15 +316,14 @@ function OrderDrawer({
             </div>
           </section>
 
-          {/* Code assignment */}
           <section className="space-y-4">
             <h4 className="text-sm font-semibold text-white">Assign codes</h4>
             {order.items.map((item) => {
-              const available = getAvailableCodes(item.productId);
-              const arr = inputs[item.productId] ?? [];
+              const stock = available[item.productId] ?? [];
+              const arr = entries[item.id] ?? [];
               return (
                 <div
-                  key={item.productId}
+                  key={item.id}
                   className="rounded-xl border border-border bg-surface p-4"
                 >
                   <div className="flex items-center justify-between">
@@ -295,64 +331,74 @@ function OrderDrawer({
                       {item.name}
                     </p>
                     <span className="text-xs text-muted">
-                      ×{item.quantity} · {available.length} in stock
+                      ×{item.quantity} · {stock.length} in stock
                     </span>
                   </div>
 
                   {delivered ? (
                     <ul className="mt-3 space-y-2">
-                      {item.codes.map((code, i) => (
-                        <li
-                          key={`${code}-${i}`}
-                          className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-sm text-white"
-                        >
-                          {code}
-                        </li>
-                      ))}
+                      {order.deliveredCodes
+                        .filter((d) => d.productId === item.productId)
+                        .map((d, i) => (
+                          <li
+                            key={`${d.code}-${i}`}
+                            className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-sm text-white"
+                          >
+                            {d.code}
+                          </li>
+                        ))}
                     </ul>
                   ) : (
                     <div className="mt-3 space-y-3">
-                      {Array.from({ length: item.quantity }).map((_, i) => (
-                        <div key={i} className="space-y-1.5">
-                          <p className="text-[11px] uppercase tracking-wide text-faint">
-                            Unit {i + 1}
-                          </p>
-                          <select
-                            value=""
-                            onChange={(e) => {
-                              if (e.target.value)
-                                setCode(item.productId, i, e.target.value);
-                            }}
-                            className="input h-10 py-0 text-sm"
-                          >
-                            <option value="">
-                              Choisir un code du stock…
-                            </option>
-                            {available.map((c) => (
-                              <option
-                                key={c.id}
-                                value={c.code}
-                                disabled={
-                                  chosen.has(c.code) && arr[i] !== c.code
-                                }
-                              >
-                                {c.code}
-                                {chosen.has(c.code) && arr[i] !== c.code
-                                  ? " (used in form)"
-                                  : ""}
+                      {Array.from({ length: item.quantity }).map((_, i) => {
+                        const entry = arr[i] ?? {};
+                        return (
+                          <div key={i} className="space-y-1.5">
+                            <p className="text-[11px] uppercase tracking-wide text-faint">
+                              Unit {i + 1}
+                            </p>
+                            <select
+                              value={entry.digitalCodeId ?? ""}
+                              onChange={(e) =>
+                                setEntry(
+                                  item.id,
+                                  i,
+                                  e.target.value
+                                    ? { digitalCodeId: e.target.value }
+                                    : {},
+                                )
+                              }
+                              className="input h-10 py-0 text-sm"
+                            >
+                              <option value="">
+                                Choisir un code du stock…
                               </option>
-                            ))}
-                          </select>
-                          <input
-                            value={arr[i] ?? ""}
-                            onChange={(e) =>
-                              setCode(item.productId, i, e.target.value)
-                            }
-                            placeholder="Ou saisir un code manuellement"
-                            className="input h-10 py-0 font-mono text-sm"
-                          />
-                        </div>
-                      ))}
+                              {stock.map((c) => (
+                                <option
+                                  key={c.id}
+                                  value={c.id}
+                                  disabled={
+                                    chosenIds.has(c.id) &&
+                                    entry.digitalCodeId !== c.id
+                                  }
+                                >
+                                  {c.code}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              value={entry.manualCode ?? ""}
+                              onChange={(e) =>
+                                setEntry(item.id, i, {
+                                  manualCode: e.target.value,
+                                })
+                              }
+                              placeholder="Ou saisir un code manuellement"
+                              className="input h-10 py-0 font-mono text-sm"
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -360,7 +406,6 @@ function OrderDrawer({
             })}
           </section>
 
-          {/* Deliver action */}
           {!delivered && (
             <section className="space-y-3">
               {error && (
@@ -371,10 +416,10 @@ function OrderDrawer({
               <button
                 type="button"
                 onClick={handleDeliver}
-                disabled={!paymentConfirmed || !allFilled}
+                disabled={!paymentConfirmed || !allFilled || busy}
                 className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Confirm and deliver
+                {busy ? "Working…" : "Confirm and deliver"}
               </button>
               {!paymentConfirmed && (
                 <p className="text-center text-xs text-muted">
@@ -386,27 +431,24 @@ function OrderDrawer({
 
           {delivered && (
             <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
-              ✓ Delivered
-              {order.deliveredAt ? ` · ${formatDate(order.deliveredAt)}` : ""}.
-              The customer can now reveal the code.
+              ✓ Delivered. The customer can now reveal the code.
             </div>
           )}
 
-          {/* Simulated email log */}
           <section className="rounded-xl border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-white">
                 Simulated emails
               </h4>
               <span className="text-xs text-muted">
-                {logs.length} logged · none actually sent
+                {order.emailLogs.length} logged · none actually sent
               </span>
             </div>
-            {logs.length === 0 ? (
+            {order.emailLogs.length === 0 ? (
               <p className="mt-2 text-xs text-muted">No emails yet.</p>
             ) : (
               <ul className="mt-3 space-y-3">
-                {logs.map((log) => (
+                {order.emailLogs.map((log) => (
                   <li
                     key={log.id}
                     className="rounded-lg border border-border bg-base px-3 py-2.5"
@@ -416,7 +458,9 @@ function OrderDrawer({
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                           log.type === "code_delivered"
                             ? "bg-green-500/15 text-green-400"
-                            : "bg-amber-500/15 text-amber-400"
+                            : log.type === "payment_confirmed"
+                              ? "bg-accent/15 text-accent"
+                              : "bg-amber-500/15 text-amber-400"
                         }`}
                       >
                         {log.type}

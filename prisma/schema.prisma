@@ -1,0 +1,116 @@
+// Prisma schema for the Karta digital store.
+//
+// SQLite is used for local development so the project has a real database
+// structure that can later be migrated to PostgreSQL (Supabase / Neon) by
+// swapping the datasource `provider` and `DATABASE_URL`.
+//
+// NOTE: SQLite has no native enum type, so status fields are stored as
+// strings. The allowed values are documented next to each field and mirrored
+// by the TypeScript unions in src/lib/types.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  category     String
+  priceMad     Int
+  region       String
+  deliveryType String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  digitalCodes DigitalCode[]
+  orderItems   OrderItem[]
+  deliveredCodes DeliveredCode[]
+}
+
+model DigitalCode {
+  id              String    @id @default(cuid())
+  productId       String
+  code            String
+  // status: "unused" | "reserved" | "used" | "disabled"
+  status          String    @default("unused")
+  assignedOrderId String?
+  reservedAt      DateTime?
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product        Product         @relation(fields: [productId], references: [id])
+  deliveredCodes DeliveredCode[]
+
+  // A given code string is unique per product.
+  @@unique([productId, code])
+  @@index([productId, status])
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  customerName  String
+  customerEmail String
+  // status: "pending_payment" | "payment_confirmed" | "delivered" | "cancelled"
+  status        String   @default("pending_payment")
+  paymentMethod String
+  totalMad      Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items          OrderItem[]
+  deliveredCodes DeliveredCode[]
+  emailLogs      EmailLog[]
+}
+
+model OrderItem {
+  id           String @id @default(cuid())
+  orderId      String
+  productId    String
+  quantity     Int
+  unitPriceMad Int
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id])
+  deliveredCodes DeliveredCode[]
+}
+
+model DeliveredCode {
+  id            String   @id @default(cuid())
+  orderId       String
+  orderItemId   String
+  productId     String
+  // Either a code drawn from inventory (digitalCodeId) or a manually typed one.
+  digitalCodeId String?
+  manualCode    String?
+  deliveredAt   DateTime @default(now())
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id])
+  digitalCode DigitalCode? @relation(fields: [digitalCodeId], references: [id])
+
+  @@index([orderId])
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  orderId   String
+  // type: "order_received" | "payment_confirmed" | "code_delivered"
+  type      String
+  recipient String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}

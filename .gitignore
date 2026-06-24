@@ -9,3 +9,8 @@ npm-debug.log*
 next-env.d.ts.bak
 .vercel
 *.tsbuildinfo
+
+# SQLite journal/wal sidecar files (keep dev.db itself tracked for the prototype)
+*.db-journal
+*.db-wal
+*.db-shm

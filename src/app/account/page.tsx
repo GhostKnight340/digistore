@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import { formatMAD, formatDate } from "@/lib/format";
@@ -8,9 +9,27 @@ import {
   orderStatusShort,
   orderStatusBadgeClass,
 } from "@/lib/orderStatus";
+import { getMyOrdersAction } from "@/app/actions/orders";
+import type { CustomerOrderDTO } from "@/lib/dto";
 
 export default function AccountPage() {
-  const { orders, ready } = useStore();
+  const { myOrderIds, ready } = useStore();
+  const [orders, setOrders] = useState<CustomerOrderDTO[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    getMyOrdersAction(myOrderIds).then((data) => {
+      if (active) {
+        setOrders(data);
+        setLoaded(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [ready, myOrderIds]);
 
   return (
     <div className="container-page py-10">
@@ -42,8 +61,8 @@ export default function AccountPage() {
             </Link>
           </div>
           <p className="mt-3 px-1 text-xs text-muted">
-            Les commandes sont stockées localement dans ce navigateur pour la
-            phase 1.
+            Vos commandes sont enregistrées dans la base de données. Ce
+            navigateur retient lesquelles vous appartiennent.
           </p>
         </aside>
 
@@ -52,7 +71,7 @@ export default function AccountPage() {
             Historique des commandes
           </h1>
 
-          {!ready ? (
+          {!loaded ? (
             <p className="mt-8 text-muted">Chargement...</p>
           ) : orders.length === 0 ? (
             <div className="card mt-8 grid place-items-center px-6 py-20 text-center">
@@ -89,7 +108,7 @@ export default function AccountPage() {
 
                   <ul className="space-y-1 text-sm text-muted">
                     {order.items.map((item) => (
-                      <li key={item.productId} className="flex justify-between">
+                      <li key={item.id} className="flex justify-between">
                         <span>
                           {item.name}{" "}
                           <span className="text-muted/70">
@@ -97,7 +116,7 @@ export default function AccountPage() {
                           </span>
                         </span>
                         <span className="text-white">
-                          {formatMAD(item.price * item.quantity)}
+                          {formatMAD(item.unitPriceMad * item.quantity)}
                         </span>
                       </li>
                     ))}
@@ -105,7 +124,7 @@ export default function AccountPage() {
 
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-sm font-bold text-white">
-                      Total {formatMAD(order.total)}
+                      Total {formatMAD(order.totalMad)}
                     </span>
                     <Link
                       href={`/delivery/${order.id}`}

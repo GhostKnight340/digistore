@@ -1,10 +1,7 @@
-"use client";
-
-import { use } from "react";
 import Link from "next/link";
-import { useStore } from "@/context/StoreContext";
 import { formatMAD, formatDate } from "@/lib/format";
 import { isDelivered, orderStatusLabel } from "@/lib/orderStatus";
+import { getCustomerOrder } from "@/lib/db/orders";
 
 const methodLabels: Record<string, string> = {
   test: "Paiement test",
@@ -13,23 +10,13 @@ const methodLabels: Record<string, string> = {
   paypal: "PayPal",
 };
 
-export default function OrderConfirmationPage({
+export default async function OrderConfirmationPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
-  const { getOrder, ready } = useStore();
-  const order = getOrder(id);
-  const delivered = order ? isDelivered(order.status) : false;
-
-  if (!ready) {
-    return (
-      <div className="container-page py-20 text-center text-muted">
-        Chargement...
-      </div>
-    );
-  }
+  const { id } = await params;
+  const order = await getCustomerOrder(id);
 
   if (!order) {
     return (
@@ -50,6 +37,8 @@ export default function OrderConfirmationPage({
     );
   }
 
+  const delivered = isDelivered(order.status);
+
   return (
     <div className="container-page py-10">
       <div className="mx-auto max-w-3xl">
@@ -66,7 +55,7 @@ export default function OrderConfirmationPage({
                 Confirmation de commande
               </h1>
               <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
-                Merci, {order.fullName.split(" ")[0]}. Votre paiement est
+                Merci, {order.customerName.split(" ")[0]}. Votre paiement est
                 confirmé et votre code est disponible.
               </p>
             </>
@@ -82,7 +71,7 @@ export default function OrderConfirmationPage({
                 Nous avons bien reçu votre commande
               </h1>
               <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
-                Merci, {order.fullName.split(" ")[0]}. Votre paiement est en
+                Merci, {order.customerName.split(" ")[0]}. Votre paiement est en
                 cours de vérification. Votre code sera disponible sur la page de
                 livraison dès que la commande sera confirmée.
               </p>
@@ -121,8 +110,8 @@ export default function OrderConfirmationPage({
               label="Méthode de paiement"
               value={methodLabels[order.paymentMethod] ?? order.paymentMethod}
             />
-            <Meta label="Email client" value={order.email} />
-            <Meta label="Total payé" value={formatMAD(order.total)} highlight />
+            <Meta label="Email client" value={order.customerEmail} />
+            <Meta label="Total payé" value={formatMAD(order.totalMad)} highlight />
             <Meta label="Date d'achat" value={formatDate(order.createdAt)} />
             <Meta
               label="Statut de livraison"
@@ -136,7 +125,7 @@ export default function OrderConfirmationPage({
             <ul className="mt-3 space-y-2">
               {order.items.map((item) => (
                 <li
-                  key={item.productId}
+                  key={item.id}
                   className="flex justify-between gap-4 text-sm text-muted"
                 >
                   <span>
@@ -144,7 +133,7 @@ export default function OrderConfirmationPage({
                     <span className="text-muted/70">×{item.quantity}</span>
                   </span>
                   <span className="shrink-0 text-white">
-                    {formatMAD(item.price * item.quantity)}
+                    {formatMAD(item.unitPriceMad * item.quantity)}
                   </span>
                 </li>
               ))}
