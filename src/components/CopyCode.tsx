@@ -40,7 +40,7 @@ export default function CopyCode({
           <p className="text-[11px] font-medium uppercase tracking-wide text-faint">
             Code livré{typeof index === "number" ? ` #${index + 1}` : ""}
           </p>
-          <code className="mt-2 block break-all rounded-xl border border-border bg-base px-4 py-3 font-mono text-sm font-semibold tracking-[0.08em] text-cyan-glow sm:text-base">
+          <code className="mt-2 block break-all rounded-xl border border-border bg-base px-4 py-3 font-mono text-sm font-semibold tracking-[0.08em] text-cyan-glow sm:text-[1rem]">
             {revealed ? code : maskedCode}
           </code>
         </div>
