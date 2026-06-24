@@ -29,15 +29,22 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
   const [inventory, setInventory] = useState<InventoryGroupDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [dbError, setDbError] = useState(false);
 
   const load = useCallback(async () => {
-    const [o, inv] = await Promise.all([
-      getAdminOrdersAction(),
-      getInventoryAction(),
-    ]);
-    setOrders(o);
-    setInventory(inv);
-    setLoaded(true);
+    setDbError(false);
+    try {
+      const [o, inv] = await Promise.all([
+        getAdminOrdersAction(),
+        getInventoryAction(),
+      ]);
+      setOrders(o);
+      setInventory(inv);
+    } catch {
+      setDbError(true);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   // Refresh overview data whenever we return to the overview tab.
@@ -90,6 +97,11 @@ export default function AdminPage() {
           <InventoryPanel />
         ) : (
           <div className="space-y-8">
+            {dbError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                Connexion à la base de données impossible. Vérifiez DATABASE_URL et relancez <code className="font-mono">npx prisma migrate dev</code>.
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Stat
                 label="Total orders"

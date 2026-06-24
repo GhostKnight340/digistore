@@ -25,13 +25,20 @@ type Filter = "todo" | "all";
 export default function FulfillmentPanel() {
   const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [dbError, setDbError] = useState(false);
   const [filter, setFilter] = useState<Filter>("todo");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await getAdminOrdersAction();
-    setOrders(data);
-    setLoaded(true);
+    setDbError(false);
+    try {
+      const data = await getAdminOrdersAction();
+      setOrders(data);
+    } catch {
+      setDbError(true);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -84,6 +91,10 @@ export default function FulfillmentPanel() {
       <section className="card overflow-hidden">
         {!loaded ? (
           <p className="px-5 py-8 text-sm text-muted">Loading...</p>
+        ) : dbError ? (
+          <p className="px-5 py-8 text-sm text-red-400">
+            Connexion à la base de données impossible. Vérifiez DATABASE_URL.
+          </p>
         ) : visibleOrders.length === 0 ? (
           <p className="px-5 py-8 text-sm text-muted">
             {filter === "todo"

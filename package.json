@@ -7,11 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "CHECKPOINT_DISABLE=1 prisma generate",
+    "prisma:migrate": "CHECKPOINT_DISABLE=1 prisma migrate dev",
     "prisma:seed": "prisma db seed",
-    "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "db:studio": "CHECKPOINT_DISABLE=1 prisma studio",
+    "postinstall": "CHECKPOINT_DISABLE=1 prisma generate || true"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

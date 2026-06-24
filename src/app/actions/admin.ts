@@ -24,48 +24,88 @@ import type {
 } from "@/lib/dto";
 
 export async function getAdminOrdersAction(): Promise<AdminOrderDTO[]> {
-  return getAdminOrders();
+  try {
+    return await getAdminOrders();
+  } catch (e) {
+    console.error("[getAdminOrdersAction]", e);
+    return [];
+  }
 }
 
 export async function getInventoryAction(): Promise<InventoryGroupDTO[]> {
-  return getInventoryGroups();
+  try {
+    return await getInventoryGroups();
+  } catch (e) {
+    console.error("[getInventoryAction]", e);
+    return [];
+  }
 }
 
 export async function getAvailableCodesAction(
   productSlug: string,
 ): Promise<AdminCodeDTO[]> {
-  return getAvailableCodes(productSlug);
+  try {
+    return await getAvailableCodes(productSlug);
+  } catch (e) {
+    console.error("[getAvailableCodesAction]", e);
+    return [];
+  }
 }
 
 export async function addCodeAction(
   productSlug: string,
   code: string,
 ): Promise<ActionResult> {
-  return addCode(productSlug, code);
+  try {
+    return await addCode(productSlug, code);
+  } catch (e) {
+    console.error("[addCodeAction]", e);
+    return { ok: false, error: "Base de données non configurée." };
+  }
 }
 
 export async function addCodesBulkAction(
   productSlug: string,
   raw: string,
 ): Promise<ActionResult & { added?: number; skipped?: number }> {
-  return addCodesBulk(productSlug, raw);
+  try {
+    return await addCodesBulk(productSlug, raw);
+  } catch (e) {
+    console.error("[addCodesBulkAction]", e);
+    return { ok: false, error: "Base de données non configurée." };
+  }
 }
 
 export async function disableCodeAction(
   codeId: string,
 ): Promise<ActionResult> {
-  return disableCode(codeId);
+  try {
+    return await disableCode(codeId);
+  } catch (e) {
+    console.error("[disableCodeAction]", e);
+    return { ok: false, error: "Base de données non configurée." };
+  }
 }
 
 export async function confirmPaymentAction(
   orderId: string,
 ): Promise<ActionResult> {
-  return confirmPayment(orderId);
+  try {
+    return await confirmPayment(orderId);
+  } catch (e) {
+    console.error("[confirmPaymentAction]", e);
+    return { ok: false, error: "Base de données non configurée." };
+  }
 }
 
 export async function deliverOrderAction(
   orderId: string,
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
-  return deliverOrder(orderId, assignments);
+  try {
+    return await deliverOrder(orderId, assignments);
+  } catch (e) {
+    console.error("[deliverOrderAction]", e);
+    return { ok: false, error: "Base de données non configurée." };
+  }
 }

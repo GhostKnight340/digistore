@@ -20,12 +20,19 @@ const STATUS_STYLES: Record<string, string> = {
 export default function InventoryPanel() {
   const [groups, setGroups] = useState<InventoryGroupDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [dbError, setDbError] = useState(false);
   const [openSlug, setOpenSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await getInventoryAction();
-    setGroups(data);
-    setLoaded(true);
+    setDbError(false);
+    try {
+      const data = await getInventoryAction();
+      setGroups(data);
+    } catch {
+      setDbError(true);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -44,6 +51,10 @@ export default function InventoryPanel() {
 
       {!loaded ? (
         <p className="text-sm text-muted">Loading...</p>
+      ) : dbError ? (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          Connexion à la base de données impossible. Vérifiez DATABASE_URL.
+        </div>
       ) : (
         <div className="space-y-3">
           {groups.map((group) => (

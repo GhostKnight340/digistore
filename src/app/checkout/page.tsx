@@ -19,7 +19,7 @@ const methods: {
   {
     id: "test",
     label: "Paiement test",
-    hint: "Valide la commande instantanément",
+    hint: "Commande soumise, livraison après vérification manuelle",
     badge: "Recommandé",
   },
   { id: "bank", label: "Virement bancaire", hint: "Bientôt disponible" },

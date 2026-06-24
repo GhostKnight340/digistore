@@ -16,7 +16,24 @@ export default async function OrderConfirmationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const order = await getCustomerOrder(id);
+
+  let order = null;
+  try {
+    order = await getCustomerOrder(id);
+  } catch {
+    return (
+      <div className="container-page py-10">
+        <div className="card grid place-items-center px-6 py-20 text-center">
+          <p className="text-lg font-semibold text-white">
+            Base de données non configurée.
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Connexion à la base de données impossible. Vérifiez DATABASE_URL.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!order) {
     return (
