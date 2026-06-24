@@ -40,7 +40,7 @@ export default function CopyCode({
           <p className="text-[11px] font-medium uppercase tracking-wide text-faint">
             Code livré{typeof index === "number" ? ` #${index + 1}` : ""}
           </p>
-          <code className="mt-2 block break-all rounded-xl border border-border bg-base px-4 py-3 font-mono text-sm font-semibold tracking-[0.08em] text-cyan-glow sm:text-[1rem]">
+          <code className="mt-2 flex min-h-[3rem] items-center break-all rounded-xl border border-white/10 bg-black/40 px-4 py-3 font-mono text-[1rem] font-semibold tracking-wider text-white">
             {revealed ? code : maskedCode}
           </code>
         </div>
@@ -60,7 +60,7 @@ export default function CopyCode({
               onClick={copy}
               className="btn-primary h-10 px-4 text-xs"
             >
-              {copied ? "Copié" : "Copier le code"}
+              {copied ? "Code copié" : "Copier le code"}
             </button>
           )}
         </div>
