@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Fonts are injected by next/font; these are fallbacks. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Geist Mono", "SFMono-Regular", monospace;
+  --store-accent: #3e7bfa;
+  --store-bg: #0a0b0d;
+  --store-card-radius: 16px;
+  --store-button-radius: 12px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--store-bg);
+  color: #f3f4f7;
+  background-image: radial-gradient(
+    900px 500px at 80% -8%,
+    rgba(62, 123, 250, 0.07),
+    transparent 60%
+  );
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(62, 123, 250, 0.18);
+  color: #fff;
+}
+
+/* Respect users who prefer reduced motion: neutralize animations/transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+    border-radius: var(--store-button-radius);
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white shadow-glow hover:-translate-y-px hover:bg-accent-hover hover:shadow-glow-strong;
+    background-color: var(--store-accent);
+  }
+
+  .btn-ghost {
+    @apply btn border border-border-strong bg-transparent text-text hover:bg-surface2;
+  }
+
+  .card {
+    @apply rounded-2xl border border-border bg-card shadow-soft;
+    border-radius: var(--store-card-radius);
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-text placeholder:text-faint outline-none transition focus:border-accent/70 focus:ring-2 focus:ring-accent/25;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted;
+  }
+}
+
+/* Thin custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2c2f3a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3e4d;
+}

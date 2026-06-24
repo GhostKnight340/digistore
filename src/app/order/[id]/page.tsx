@@ -1,0 +1,164 @@
+"use client";
+
+import { use } from "react";
+import Link from "next/link";
+import { useStore } from "@/context/StoreContext";
+import { formatMAD, formatDate } from "@/lib/format";
+
+const methodLabels: Record<string, string> = {
+  test: "Paiement test",
+  bank: "Virement bancaire",
+  crypto: "Crypto",
+  paypal: "PayPal",
+};
+
+export default function OrderConfirmationPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const { getOrder, ready } = useStore();
+  const order = getOrder(id);
+
+  if (!ready) {
+    return (
+      <div className="container-page py-20 text-center text-muted">
+        Chargement...
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="container-page py-10">
+        <div className="card grid place-items-center px-6 py-20 text-center">
+          <p className="text-lg font-semibold text-white">
+            Commande introuvable
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Cette commande a peut-être été passée sur un autre appareil ou un
+            autre navigateur.
+          </p>
+          <Link href="/products" className="btn-primary mt-6">
+            Parcourir le catalogue
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container-page py-10">
+      <div className="mx-auto max-w-3xl">
+        <section className="text-center">
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-green-500/30 bg-green-500/15 text-3xl">
+            ✓
+          </span>
+          <p className="mt-5 text-sm font-medium uppercase tracking-wide text-green-400">
+            Commande terminée
+          </p>
+          <h1 className="mt-2 text-3xl font-bold text-white">
+            Confirmation de commande
+          </h1>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
+            Merci, {order.fullName.split(" ")[0]}. Votre paiement test est
+            validé et vos codes sont prêts pour la livraison instantanée.
+          </p>
+        </section>
+
+        <section className="card mt-8 overflow-hidden">
+          <div className="border-b border-border px-6 py-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Détails de la commande
+                </h2>
+                <p className="mt-1 text-sm text-muted">
+                  Aucune action supplémentaire n'est nécessaire.
+                </p>
+              </div>
+              <span className="chip border-accent/40 text-accent">
+                Code prêt
+              </span>
+            </div>
+          </div>
+
+          <dl className="grid gap-px bg-border/60 sm:grid-cols-2">
+            <Meta label="ID commande" value={order.id} />
+            <Meta
+              label="Méthode de paiement"
+              value={methodLabels[order.paymentMethod] ?? order.paymentMethod}
+            />
+            <Meta label="Email client" value={order.email} />
+            <Meta label="Total payé" value={formatMAD(order.total)} highlight />
+            <Meta label="Date d'achat" value={formatDate(order.createdAt)} />
+            <Meta label="Statut de livraison" value="Code prêt" highlight />
+          </dl>
+
+          <div className="border-t border-border px-6 py-5">
+            <h3 className="text-sm font-semibold text-white">Articles</h3>
+            <ul className="mt-3 space-y-2">
+              {order.items.map((item) => (
+                <li
+                  key={item.productId}
+                  className="flex justify-between gap-4 text-sm text-muted"
+                >
+                  <span>
+                    {item.name}{" "}
+                    <span className="text-muted/70">×{item.quantity}</span>
+                  </span>
+                  <span className="shrink-0 text-white">
+                    {formatMAD(item.price * item.quantity)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-accent/40 bg-accent/10 p-6 text-center">
+          <h2 className="text-lg font-bold text-white">
+            Votre livraison est sécurisée
+          </h2>
+          <p className="mx-auto mt-1 max-w-xl text-sm leading-relaxed text-muted">
+            Votre code est sauvegardé dans l'historique de commandes de votre
+            compte. Vous pouvez revenir à cette page à tout moment depuis votre
+            compte.
+          </p>
+          <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link href={`/delivery/${order.id}`} className="btn-primary">
+              Voir mon code
+            </Link>
+            <Link href="/products" className="btn-ghost">
+              Retour à la boutique
+            </Link>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function Meta({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="bg-surface px-5 py-4">
+      <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
+      <dd
+        className={`mt-1 break-words text-sm font-semibold ${
+          highlight ? "text-accent-strong" : "text-white"
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
