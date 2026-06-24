@@ -114,6 +114,16 @@ export async function createOrder(
   });
   const bySlug = new Map(products.map((p) => [p.slug, p]));
 
+  if (products.length === 0) {
+    // Almost always means the database has not been seeded yet.
+    // Run: npm run prisma:migrate && npm run prisma:seed
+    console.warn(
+      `[createOrder] No active products found for slugs ${JSON.stringify(
+        slugs,
+      )}. Has the database been migrated and seeded?`,
+    );
+  }
+
   const lineItems = input.items
     .map((i) => {
       const product = bySlug.get(i.productId);
