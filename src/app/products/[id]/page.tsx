@@ -59,11 +59,20 @@ export default async function ProductDetailPage({
 
       <div className="grid gap-10 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
         <div>
-          <ProductArt
-            category={product.category}
-            label={category?.name}
-            className="aspect-[1.4] w-full rounded-[18px] border border-border"
-          />
+          {product.thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={product.thumbnail}
+              alt={product.name}
+              className="aspect-[1.4] w-full rounded-[18px] border border-border object-cover"
+            />
+          ) : (
+            <ProductArt
+              category={product.category}
+              label={category?.name}
+              className="aspect-[1.4] w-full rounded-[18px] border border-border"
+            />
+          )}
 
           <section className="mt-10">
             <h2 className="text-lg font-semibold tracking-tight text-text">

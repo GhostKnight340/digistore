@@ -25,6 +25,8 @@ export interface Product {
   deliveryType: string;
   description: string;
   featured?: boolean;
+  /** URL of the product thumbnail image set in the admin panel. */
+  thumbnail?: string | null;
 }
 
 export interface CartItem {

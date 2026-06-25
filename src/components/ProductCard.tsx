@@ -11,7 +11,16 @@ export default function ProductCard({ product }: { product: Product }) {
       href={`/products/${product.id}`}
       className="group flex flex-col overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-border-strong hover:shadow-soft"
     >
-      <ProductArt category={product.category} className="aspect-[3/2] w-full" />
+      {product.thumbnail ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={product.thumbnail}
+          alt={product.name}
+          className="aspect-[3/2] w-full object-cover"
+        />
+      ) : (
+        <ProductArt category={product.category} className="aspect-[3/2] w-full" />
+      )}
       <div className="flex flex-1 flex-col p-4">
         <span className="mb-2.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent">
           <svg

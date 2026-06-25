@@ -4,11 +4,11 @@ import { prisma } from "@/lib/prisma";
 import type { Product } from "@/lib/types";
 import type { CategoryId } from "@/lib/types";
 
-async function buildParentMap(parentSlugs: string[]): Promise<Map<string, { description: string }>> {
+async function buildParentMap(parentSlugs: string[]): Promise<Map<string, { description: string; thumbnail: string | null }>> {
   if (parentSlugs.length === 0) return new Map();
   const parents = await prisma.parentProduct.findMany({
     where: { slug: { in: parentSlugs } },
-    select: { slug: true, description: true },
+    select: { slug: true, description: true, thumbnail: true },
   });
   return new Map(parents.map((p) => [p.slug, p]));
 }
@@ -24,7 +24,7 @@ function toProduct(
     featured: boolean;
     parentSlug: string;
   },
-  parentMap: Map<string, { description: string }>,
+  parentMap: Map<string, { description: string; thumbnail: string | null }>,
 ): Product {
   const parent = parentMap.get(variant.parentSlug);
   return {
@@ -36,6 +36,7 @@ function toProduct(
     deliveryType: variant.deliveryType,
     description: parent?.description ?? "",
     featured: variant.featured,
+    thumbnail: parent?.thumbnail ?? null,
   };
 }
 
