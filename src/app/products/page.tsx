@@ -1,6 +1,9 @@
 import Link from "next/link";
-import { categories, products } from "@/lib/products";
+import { categories } from "@/lib/products";
+import { getStorefrontProducts } from "@/lib/db/storefront";
 import ProductCard from "@/components/ProductCard";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Catalogue - Karta",
@@ -14,7 +17,9 @@ export default async function ProductsPage({
   const { category, q } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
 
-  let filtered = products;
+  const allProducts = await getStorefrontProducts();
+
+  let filtered = allProducts;
   if (category) {
     filtered = filtered.filter((product) => product.category === category);
   }

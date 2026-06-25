@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { getProduct } from "@/lib/products";
+import { getStorefrontProductsByIdsAction } from "@/app/actions/storefront";
 import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
-import type { PaymentMethod } from "@/lib/types";
+import type { PaymentMethod, Product } from "@/lib/types";
 
 const methods: {
   id: PaymentMethod;
@@ -28,7 +28,7 @@ const methods: {
 ];
 
 export default function CheckoutPage() {
-  const { cart, ready, cartTotal, rememberOrder } = useStore();
+  const { cart, ready, rememberOrder } = useStore();
   const { settings } = useStoreSettings();
   const router = useRouter();
 
@@ -37,7 +37,20 @@ export default function CheckoutPage() {
   const [method, setMethod] = useState<PaymentMethod>("test");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [products, setProducts] = useState<Product[]>([]);
   const enabledMethods = methods.filter((item) => settings.paymentMethods[item.id]);
+
+  useEffect(() => {
+    if (!ready || cart.length === 0) return;
+    const slugs = cart.map((i) => i.productId);
+    getStorefrontProductsByIdsAction(slugs).then(setProducts);
+  }, [cart, ready]);
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
+  const cartTotal = cart.reduce((sum, i) => {
+    const p = productMap.get(i.productId);
+    return sum + (p ? p.price * i.quantity : 0);
+  }, 0);
 
   useEffect(() => {
     if (!settings.paymentMethods[method] && enabledMethods[0]) {
@@ -233,7 +246,7 @@ export default function CheckoutPage() {
             </h2>
             <ul className="mt-4 space-y-3">
               {cart.map((item) => {
-                const product = getProduct(item.productId);
+                const product = productMap.get(item.productId);
                 if (!product) return null;
                 return (
                   <li

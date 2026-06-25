@@ -1,12 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { categories, products } from "@/lib/products";
+import { categories } from "@/lib/products";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
 import HeroDeliveryCard from "@/components/HeroDeliveryCard";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
+import {
+  getStorefrontFeaturedAction,
+  getStorefrontProductsByIdsAction,
+  getCategoryCountsAction,
+} from "@/app/actions/storefront";
+import type { Product } from "@/lib/types";
 
 const steps = [
   {
@@ -28,14 +35,18 @@ const steps = [
 
 export default function HomePage() {
   const { settings } = useStoreSettings();
-  const featured =
-    settings.featuredProductIds.length > 0
-      ? settings.featuredProductIds
-          .map((id) => products.find((product) => product.id === id))
-          .filter((product): product is (typeof products)[number] =>
-            Boolean(product),
-          )
-      : products.filter((product) => product.featured);
+  const [featured, setFeatured] = useState<Product[]>([]);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    getCategoryCountsAction().then(setCategoryCounts);
+
+    if (settings.featuredProductIds.length > 0) {
+      getStorefrontProductsByIdsAction(settings.featuredProductIds).then(setFeatured);
+    } else {
+      getStorefrontFeaturedAction().then(setFeatured);
+    }
+  }, [settings.featuredProductIds]);
 
   return (
     <div className="container-page">
@@ -121,7 +132,11 @@ export default function HomePage() {
           </div>
           <div className="mt-8 grid grid-cols-2 gap-[18px] md:grid-cols-4">
             {categories.slice(0, 4).map((category) => (
-              <CategoryCard key={category.id} category={category} />
+              <CategoryCard
+                key={category.id}
+                category={category}
+                count={categoryCounts[category.id]}
+              />
             ))}
           </div>
         </section>

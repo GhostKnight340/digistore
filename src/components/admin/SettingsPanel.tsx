@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
-import { products } from "@/lib/products";
-import type { PaymentMethod } from "@/lib/types";
+import { getStorefrontProductsAction } from "@/app/actions/storefront";
+import type { PaymentMethod, Product } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
   test: "Paiement test",
@@ -26,6 +26,11 @@ export default function SettingsPanel() {
   const { settings, ready, saveSettings, resetSettings } = useStoreSettings();
   const [draft, setDraft] = useState<StoreSettings>(settings);
   const [message, setMessage] = useState("");
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    getStorefrontProductsAction().then(setProducts);
+  }, []);
 
   useEffect(() => {
     setDraft(settings);

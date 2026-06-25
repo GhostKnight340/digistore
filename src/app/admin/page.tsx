@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { products } from "@/lib/products";
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
 import {
@@ -238,7 +237,7 @@ export default function AdminPage() {
               <Placeholder
                 icon="🛍️"
                 title="Products"
-                text={`${products.length} products in the catalog. Editing UI coming later.`}
+                text="Manage your product catalog from the Products tab."
               />
               <Placeholder
                 icon="👥"

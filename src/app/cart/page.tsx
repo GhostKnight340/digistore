@@ -1,13 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
-import { getProduct } from "@/lib/products";
+import { getStorefrontProductsByIdsAction } from "@/app/actions/storefront";
 import { formatMAD } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
+import type { Product } from "@/lib/types";
 
 export default function CartPage() {
-  const { cart, ready, cartTotal, setQuantity, removeFromCart } = useStore();
+  const { cart, ready, setQuantity, removeFromCart } = useStore();
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    if (!ready || cart.length === 0) return;
+    const slugs = cart.map((i) => i.productId);
+    getStorefrontProductsByIdsAction(slugs).then(setProducts);
+  }, [cart, ready]);
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
+  const cartTotal = cart.reduce((sum, i) => {
+    const p = productMap.get(i.productId);
+    return sum + (p ? p.price * i.quantity : 0);
+  }, 0);
 
   if (!ready) {
     return (
@@ -46,7 +61,7 @@ export default function CartPage() {
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
         <ul className="space-y-4">
           {cart.map((item) => {
-            const product = getProduct(item.productId);
+            const product = productMap.get(item.productId);
             if (!product) return null;
             return (
               <li key={item.productId} className="card flex gap-4 p-4">

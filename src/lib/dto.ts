@@ -1,8 +1,7 @@
 import type { OrderStatus } from "./types";
 
 // Plain serializable shapes passed between server (DB) and client components.
-// `productId` always refers to the catalog SLUG (e.g. "steam-100") so existing
-// UI helpers like getProduct(slug) keep working.
+// `productId` always refers to the catalog SLUG (e.g. "steam-100").
 
 export interface OrderItemDTO {
   id: string;
@@ -10,6 +9,9 @@ export interface OrderItemDTO {
   name: string;
   quantity: number;
   unitPriceMad: number;
+  category: string;
+  region: string;
+  deliveryType: string;
 }
 
 export interface DeliveredCodeDTO {

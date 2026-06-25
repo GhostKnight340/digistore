@@ -1,18 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getCategory } from "@/lib/products";
 import {
-  getCategory,
-  getProduct,
-  getProductsByCategory,
-  products,
-} from "@/lib/products";
+  getStorefrontProduct,
+  getStorefrontProductsByCategory,
+} from "@/lib/db/storefront";
 import ProductArt from "@/components/ProductArt";
 import ProductCard from "@/components/ProductCard";
 import AddToCartForm from "@/components/AddToCartForm";
 
-export function generateStaticParams() {
-  return products.map((product) => ({ id: product.id }));
-}
+export const dynamic = "force-dynamic";
 
 const howItWorks = [
   {
@@ -38,11 +35,11 @@ export default async function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const product = getProduct(id);
+  const product = await getStorefrontProduct(id);
   if (!product) notFound();
 
   const category = getCategory(product.category);
-  const related = getProductsByCategory(product.category)
+  const related = (await getStorefrontProductsByCategory(product.category))
     .filter((item) => item.id !== product.id)
     .slice(0, 4);
 

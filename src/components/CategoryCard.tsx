@@ -1,10 +1,14 @@
 import Link from "next/link";
 import type { Category } from "@/lib/types";
-import { getProductsByCategory } from "@/lib/products";
 import ProductArt from "./ProductArt";
 
-export default function CategoryCard({ category }: { category: Category }) {
-  const count = getProductsByCategory(category.id).length;
+export default function CategoryCard({
+  category,
+  count,
+}: {
+  category: Category;
+  count?: number;
+}) {
   return (
     <Link
       href={`/products?category=${category.id}`}
@@ -18,9 +22,11 @@ export default function CategoryCard({ category }: { category: Category }) {
         <span className="text-[15px] font-medium text-text">
           {category.name}
         </span>
-        <span className="font-mono text-xs text-faint">
-          {count} cartes
-        </span>
+        {count !== undefined && (
+          <span className="font-mono text-xs text-faint">
+            {count} cartes
+          </span>
+        )}
       </div>
     </Link>
   );

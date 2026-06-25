@@ -8,8 +8,8 @@ import {
   useMemo,
   useState,
 } from "react";
+
 import type { CartItem } from "@/lib/types";
-import { getProduct } from "@/lib/products";
 
 const CART_KEY = "digitalshop.cart.v1";
 // Without real auth we remember which order ids belong to this browser so the
@@ -23,7 +23,6 @@ interface StoreContextValue {
   /** Hydration guard — true once localStorage has been read on the client. */
   ready: boolean;
   cartCount: number;
-  cartTotal: number;
   addToCart: (productId: string, quantity?: number) => void;
   removeFromCart: (productId: string) => void;
   setQuantity: (productId: string, quantity: number) => void;
@@ -108,21 +107,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [cart],
   );
 
-  const cartTotal = useMemo(
-    () =>
-      cart.reduce((sum, i) => {
-        const product = getProduct(i.productId);
-        return sum + (product ? product.price * i.quantity : 0);
-      }, 0),
-    [cart],
-  );
-
   const value: StoreContextValue = {
     cart,
     myOrderIds,
     ready,
     cartCount,
-    cartTotal,
     addToCart,
     removeFromCart,
     setQuantity,

@@ -37,6 +37,9 @@ function toCustomerDTO(order: NonNullable<DbOrderWithRelations>): CustomerOrderD
       name: it.product.name,
       quantity: it.quantity,
       unitPriceMad: it.unitPriceMad,
+      category: it.product.category,
+      region: it.product.region,
+      deliveryType: it.product.deliveryType,
     })),
     // Only delivered codes are exposed to the customer — never raw inventory.
     deliveredCodes: order.deliveredCodes.map((dc) => ({

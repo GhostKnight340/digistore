@@ -2,7 +2,6 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { getProduct } from "@/lib/products";
 import { formatDate } from "@/lib/format";
 import {
   isDelivered,
@@ -106,19 +105,16 @@ export default function DeliveryPage({
 
         <section className="mt-8 space-y-6">
           {order.items.map((item) => {
-            const product = getProduct(item.productId);
             const codes = order.deliveredCodes
               .filter((d) => d.productId === item.productId)
               .map((d) => d.code);
             return (
               <article key={item.id} className="card overflow-hidden">
                 <div className="grid gap-5 p-5 sm:grid-cols-[112px_1fr] sm:p-6">
-                  {product && (
-                    <ProductArt
-                      category={product.category}
-                      className="h-24 w-full rounded-xl sm:h-24 sm:w-28"
-                    />
-                  )}
+                  <ProductArt
+                    category={item.category as import("@/lib/types").CategoryId}
+                    className="h-24 w-full rounded-xl sm:h-24 sm:w-28"
+                  />
 
                   <div className="min-w-0">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -140,11 +136,11 @@ export default function DeliveryPage({
                     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                       <MiniMeta
                         label="Région"
-                        value={product?.region ?? "Non précisée"}
+                        value={item.region || "Non précisée"}
                       />
                       <MiniMeta
                         label="Type de livraison"
-                        value={product?.deliveryType ?? "Code numérique"}
+                        value={item.deliveryType || "Code numérique"}
                       />
                       <MiniMeta
                         label="Achat"
