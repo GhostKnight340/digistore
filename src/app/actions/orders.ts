@@ -35,13 +35,13 @@ export async function getCustomerOrderAction(
   }
 }
 
-/** Customer: look up an order by id + email. */
+/** Customer: look up an order by orderNumber + email. */
 export async function lookupOrderAction(
-  id: string,
+  orderNumber: number,
   email: string,
 ): Promise<{ id: string } | null> {
   try {
-    const order = await lookupOrder(id, email);
+    const order = await lookupOrder(orderNumber, email);
     return order ? { id: order.id } : null;
   } catch (e) {
     console.error("[lookupOrderAction]", e);

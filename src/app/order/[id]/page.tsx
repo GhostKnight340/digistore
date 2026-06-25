@@ -100,7 +100,7 @@ export default async function OrderConfirmationPage({
             </div>
 
             <dl className="grid gap-px bg-border/60 sm:grid-cols-2">
-              <Meta label="ID commande" value={order.id} />
+              <Meta label="Numéro de commande" value={`#${order.orderNumber}`} />
               <Meta
                 label="Méthode de paiement"
                 value={methodLabels[order.paymentMethod] ?? order.paymentMethod}

@@ -25,6 +25,7 @@ function loadOrderRecord(id: string) {
 function toCustomerDTO(order: NonNullable<DbOrderWithRelations>): CustomerOrderDTO {
   return {
     id: order.id,
+    orderNumber: order.orderNumber,
     status: order.status as OrderStatus,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
@@ -71,12 +72,19 @@ export async function getOrderSummaries(
   return orders.map(toCustomerDTO);
 }
 
-/** Customer: look up an order by id + email (case-insensitive). */
+/** Customer: look up an order by orderNumber + email (case-insensitive). */
 export async function lookupOrder(
-  id: string,
+  orderNumber: number,
   email: string,
 ): Promise<CustomerOrderDTO | null> {
-  const order = await loadOrderRecord(id);
+  const order = await prisma.order.findUnique({
+    where: { orderNumber },
+    include: {
+      items: { include: { product: true } },
+      deliveredCodes: { include: { product: true, digitalCode: true } },
+      emailLogs: true,
+    },
+  });
   if (!order) return null;
   if (order.customerEmail.toLowerCase() !== email.trim().toLowerCase()) return null;
   return toCustomerDTO(order);

@@ -118,7 +118,7 @@ export default function FulfillmentPanel({ refreshTrigger = 0 }: { refreshTrigge
                 {visibleOrders.map((order) => (
                   <tr key={order.id} className="border-b border-border/60">
                     <td className="px-5 py-3 font-mono text-xs text-white">
-                      {order.id}
+                      #{order.orderNumber}
                     </td>
                     <td className="px-5 py-3 text-muted">
                       {order.customerEmail}
@@ -270,7 +270,7 @@ function OrderDrawer({
       <div className="relative h-full w-full max-w-lg overflow-y-auto border-l border-border-strong bg-base shadow-card">
         <div className="sticky top-0 flex items-center justify-between border-b border-border bg-base/95 px-5 py-4 backdrop-blur">
           <div>
-            <p className="font-mono text-xs text-muted">{order.id}</p>
+            <p className="font-mono text-xs text-muted">#{order.orderNumber}</p>
             <h3 className="text-lg font-bold text-white">Order fulfillment</h3>
           </div>
           <button

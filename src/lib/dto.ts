@@ -20,6 +20,7 @@ export interface DeliveredCodeDTO {
 /** Customer-safe order view — only this order's delivered codes, no inventory. */
 export interface CustomerOrderDTO {
   id: string;
+  orderNumber: number;
   status: OrderStatus;
   customerName: string;
   customerEmail: string;

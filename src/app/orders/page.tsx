@@ -7,7 +7,7 @@ import { lookupOrderAction } from "@/app/actions/orders";
 
 export default function OrderLookupPage() {
   const router = useRouter();
-  const [orderId, setOrderId] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,16 +16,16 @@ export default function OrderLookupPage() {
     e.preventDefault();
     setError("");
 
-    const trimmedId = orderId.trim();
+    const num = parseInt(orderNumber.trim(), 10);
     const trimmedEmail = email.trim();
 
-    if (!trimmedId || !trimmedEmail) {
+    if (!orderNumber.trim() || isNaN(num) || !trimmedEmail) {
       setError("Veuillez remplir les deux champs.");
       return;
     }
 
     setLoading(true);
-    const result = await lookupOrderAction(trimmedId, trimmedEmail);
+    const result = await lookupOrderAction(num, trimmedEmail);
     setLoading(false);
 
     if (!result) {
@@ -57,14 +57,18 @@ export default function OrderLookupPage() {
             <label className="mb-1.5 block text-sm font-medium text-white">
               Numéro de commande
             </label>
-            <input
-              className="input font-mono text-sm"
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
-              placeholder="cmq..."
-              autoComplete="off"
-              spellCheck={false}
-            />
+            <div className="flex items-center gap-0">
+              <span className="flex h-10 items-center rounded-l-lg border border-r-0 border-border bg-surface px-3 text-sm text-muted">#</span>
+              <input
+                className="input rounded-l-none text-sm"
+                type="number"
+                inputMode="numeric"
+                value={orderNumber}
+                onChange={(e) => setOrderNumber(e.target.value)}
+                placeholder="1001"
+                autoComplete="off"
+              />
+            </div>
             <p className="mt-1 text-xs text-muted">
               Visible sur votre page de confirmation après l'achat.
             </p>

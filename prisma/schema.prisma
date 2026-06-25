@@ -57,6 +57,7 @@ model DigitalCode {
 
 model Order {
   id            String   @id @default(cuid())
+  orderNumber   Int      @unique @default(autoincrement())
   customerName  String
   customerEmail String
   // status: "pending_payment" | "payment_confirmed" | "delivered" | "cancelled"

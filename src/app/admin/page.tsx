@@ -173,7 +173,7 @@ export default function AdminPage() {
                       {orders.slice(0, 10).map((order) => (
                         <tr key={order.id} className="border-b border-border/60">
                           <td className="px-5 py-3 font-mono text-xs text-white">
-                            {order.id}
+                            #{order.orderNumber}
                           </td>
                           <td className="px-5 py-3 text-muted">
                             {order.customerEmail}

@@ -93,7 +93,7 @@ export default function DeliveryPage({
           )}
 
           <dl className="mx-auto mt-6 grid max-w-2xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
-            <VaultMeta label="ID commande" value={order.id} />
+            <VaultMeta label="Numéro de commande" value={`#${order.orderNumber}`} />
             <VaultMeta label="Date d'achat" value={formatDate(order.createdAt)} />
             <VaultMeta label="Email client" value={order.customerEmail} />
             <VaultMeta
@@ -223,8 +223,8 @@ export default function DeliveryPage({
             <li>Vérifiez que la région du produit correspond à votre compte.</li>
             <li>Copiez le code exactement comme il apparaît après révélation.</li>
             <li>
-              Contactez le support avec votre ID commande:{" "}
-              <span className="font-mono text-text">{order.id}</span>.
+              Contactez le support avec votre numéro de commande:{" "}
+              <span className="font-mono text-text">#{order.orderNumber}</span>.
             </li>
           </ul>
           <Link
