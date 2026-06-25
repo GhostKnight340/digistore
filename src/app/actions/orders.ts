@@ -4,6 +4,7 @@ import {
   createOrder,
   getCustomerOrder,
   getOrderSummaries,
+  lookupOrder,
 } from "@/lib/db/orders";
 import type { CustomerOrderDTO } from "@/lib/dto";
 
@@ -30,6 +31,20 @@ export async function getCustomerOrderAction(
     return await getCustomerOrder(id);
   } catch (e) {
     console.error("[getCustomerOrderAction]", e);
+    return null;
+  }
+}
+
+/** Customer: look up an order by id + email. */
+export async function lookupOrderAction(
+  id: string,
+  email: string,
+): Promise<{ id: string } | null> {
+  try {
+    const order = await lookupOrder(id, email);
+    return order ? { id: order.id } : null;
+  } catch (e) {
+    console.error("[lookupOrderAction]", e);
     return null;
   }
 }

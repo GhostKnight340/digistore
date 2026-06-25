@@ -7,6 +7,7 @@ import { useStoreSettings } from "@/context/StoreSettingsContext";
 
 const links = [
   { href: "/products", label: "Catégories" },
+  { href: "/orders", label: "Mes commandes" },
   { href: "/support", label: "Aide" },
 ];
 

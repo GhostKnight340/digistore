@@ -71,6 +71,17 @@ export async function getOrderSummaries(
   return orders.map(toCustomerDTO);
 }
 
+/** Customer: look up an order by id + email (case-insensitive). */
+export async function lookupOrder(
+  id: string,
+  email: string,
+): Promise<CustomerOrderDTO | null> {
+  const order = await loadOrderRecord(id);
+  if (!order) return null;
+  if (order.customerEmail.toLowerCase() !== email.trim().toLowerCase()) return null;
+  return toCustomerDTO(order);
+}
+
 /** Admin view of all orders (newest first), including simulated email logs. */
 export async function getAdminOrders(): Promise<AdminOrderDTO[]> {
   const orders = await prisma.order.findMany({
