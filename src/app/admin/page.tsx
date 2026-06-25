@@ -30,6 +30,7 @@ export default function AdminPage() {
   const [inventory, setInventory] = useState<InventoryGroupDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [dbError, setDbError] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const load = useCallback(async () => {
     setDbError(false);
@@ -46,6 +47,14 @@ export default function AdminPage() {
       setLoaded(true);
     }
   }, []);
+
+  const handleRefresh = useCallback(() => {
+    if (activeTab === "overview") {
+      load();
+    } else {
+      setRefreshTrigger((n) => n + 1);
+    }
+  }, [activeTab, load]);
 
   // Refresh overview data whenever we return to the overview tab.
   useEffect(() => {
@@ -65,7 +74,22 @@ export default function AdminPage() {
             Database-backed inventory and manual fulfillment.
           </p>
         </div>
-        <span className="chip border-accent/40 text-accent">Prototype mode</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="btn-ghost flex items-center gap-2 h-9 px-4 text-sm"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4" aria-hidden>
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M8 16H3v5" />
+            </svg>
+            Refresh
+          </button>
+          <span className="chip border-accent/40 text-accent">Prototype mode</span>
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
@@ -92,9 +116,9 @@ export default function AdminPage() {
         {activeTab === "settings" ? (
           <SettingsPanel />
         ) : activeTab === "fulfillment" ? (
-          <FulfillmentPanel />
+          <FulfillmentPanel refreshTrigger={refreshTrigger} />
         ) : activeTab === "inventory" ? (
-          <InventoryPanel />
+          <InventoryPanel refreshTrigger={refreshTrigger} />
         ) : (
           <div className="space-y-8">
             {dbError && (

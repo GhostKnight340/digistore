@@ -22,7 +22,7 @@ import type {
 
 type Filter = "todo" | "all";
 
-export default function FulfillmentPanel() {
+export default function FulfillmentPanel({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
   const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [dbError, setDbError] = useState(false);
@@ -43,7 +43,7 @@ export default function FulfillmentPanel() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshTrigger]);
 
   const visibleOrders = useMemo(
     () =>

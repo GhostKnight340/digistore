@@ -17,7 +17,7 @@ const STATUS_STYLES: Record<string, string> = {
   disabled: "bg-red-500/15 text-red-400",
 };
 
-export default function InventoryPanel() {
+export default function InventoryPanel({ refreshTrigger = 0 }: { refreshTrigger?: number }) {
   const [groups, setGroups] = useState<InventoryGroupDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [dbError, setDbError] = useState(false);
@@ -37,7 +37,7 @@ export default function InventoryPanel() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshTrigger]);
 
   return (
     <div className="space-y-6">
