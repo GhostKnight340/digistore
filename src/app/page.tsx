@@ -67,6 +67,8 @@ export default function HomePage() {
             style={{
               background:
                 "radial-gradient(circle at top right, rgba(59,130,246,0.16) 0%, rgba(59,130,246,0.10) 20%, rgba(59,130,246,0.05) 40%, rgba(59,130,246,0.02) 60%, transparent 80%)",
+              maskImage: "linear-gradient(to bottom, black 30%, transparent 100%)",
+              WebkitMaskImage: "linear-gradient(to bottom, black 30%, transparent 100%)",
             }}
           />
           <div className="container-page">
