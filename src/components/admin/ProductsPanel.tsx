@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { products, getCategory } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD, formatFaceValue } from "@/lib/format";
 import type { Product } from "@/lib/types";
 
 export default function ProductsPanel() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const { overrides } = useProductCatalog();
 
   const filtered = products.filter(
     (p) =>
@@ -44,6 +47,7 @@ export default function ProductsPanel() {
             <ProductRow
               key={product.id}
               product={product}
+              hasOverrides={!!overrides[product.id]}
               open={openId === product.id}
               onToggle={() =>
                 setOpenId((id) => (id === product.id ? null : product.id))
@@ -58,10 +62,12 @@ export default function ProductsPanel() {
 
 function ProductRow({
   product,
+  hasOverrides,
   open,
   onToggle,
 }: {
   product: Product;
+  hasOverrides: boolean;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -74,54 +80,69 @@ function ProductRow({
   return (
     <section className="card overflow-hidden">
       {/* Row header */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-4 px-5 py-4 text-left"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-white">{product.name}</span>
-            {product.brand && (
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-faint">
-                {product.brand}
-              </span>
-            )}
-            {product.featured && (
-              <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
-                Featured
-              </span>
-            )}
-            {product.active === false && (
-              <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
-                Inactive
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
-            <span className="font-mono">{product.id}</span>
-            <span>{cat?.name}</span>
-            <span>{product.region}</span>
-          </div>
-        </div>
-
-        {/* Pricing summary */}
-        <div className="shrink-0 text-right">
-          {hasForeignFaceValue ? (
-            <div className="text-xs text-muted">
-              <span className="text-white">
-                {formatFaceValue(product.faceValue!, product.faceCurrency!)}
-              </span>
-              {" → "}
-              <span className="font-semibold text-accent">{formatMAD(product.price)}</span>
+      <div className="flex items-center gap-2 px-5 py-4">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-white">{product.name}</span>
+              {product.brand && (
+                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-faint">
+                  {product.brand}
+                </span>
+              )}
+              {product.featured && (
+                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
+                  Featured
+                </span>
+              )}
+              {product.active === false && (
+                <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+                  Inactive
+                </span>
+              )}
+              {hasOverrides && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                  Modified
+                </span>
+              )}
             </div>
-          ) : (
-            <span className="text-sm font-semibold text-white">{formatMAD(product.price)}</span>
-          )}
-        </div>
+            <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
+              <span className="font-mono">{product.id}</span>
+              <span>{cat?.name}</span>
+              <span>{product.region}</span>
+            </div>
+          </div>
 
-        <span className="shrink-0 text-faint text-xs">{open ? "▲" : "▼"}</span>
-      </button>
+          {/* Pricing summary */}
+          <div className="shrink-0 text-right">
+            {hasForeignFaceValue ? (
+              <div className="text-xs text-muted">
+                <span className="text-white">
+                  {formatFaceValue(product.faceValue!, product.faceCurrency!)}
+                </span>
+                {" → "}
+                <span className="font-semibold text-accent">{formatMAD(product.price)}</span>
+              </div>
+            ) : (
+              <span className="text-sm font-semibold text-white">{formatMAD(product.price)}</span>
+            )}
+          </div>
+
+          <span className="shrink-0 text-faint text-xs">{open ? "▲" : "▼"}</span>
+        </button>
+
+        <Link
+          href={`/admin/products/${product.id}`}
+          className="btn-ghost shrink-0 h-8 px-3 text-xs"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Edit
+        </Link>
+      </div>
 
       {/* Expanded detail */}
       {open && (
