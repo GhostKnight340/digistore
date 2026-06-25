@@ -42,7 +42,7 @@ async function main() {
         deliveryType: product.deliveryType,
         active: true,
         featured: product.featured ?? false,
-        sourceType: "manual",
+        stockControl: "manual",
       },
       create: {
         slug: product.id,
@@ -53,7 +53,7 @@ async function main() {
         deliveryType: product.deliveryType,
         active: true,
         featured: product.featured ?? false,
-        sourceType: "manual",
+        stockControl: "manual",
       },
     });
 
