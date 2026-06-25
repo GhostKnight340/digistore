@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { categories, getCategory } from "@/lib/products";
 import { formatMAD, formatFaceValue, variantTitle } from "@/lib/format";
+import { BACKGROUND_PRESETS, resolvePreset } from "@/lib/presets";
 import {
   getCatalogAction,
   saveParentProductAction,
@@ -165,6 +166,37 @@ function CurrencySelect({
   );
 }
 
+function PresetSelect({
+  value,
+  category,
+  onChange,
+}: {
+  value: string;
+  category: string;
+  onChange: (v: string) => void;
+}) {
+  const effective = resolvePreset(value, category);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input w-full text-sm"
+      >
+        <option value="">— Auto (par catégorie)</option>
+        {BACKGROUND_PRESETS.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+      <p className="text-[11px] text-faint">
+        Actif : <span className="text-muted">{effective}</span>
+      </p>
+    </div>
+  );
+}
+
 // ── Parent form ───────────────────────────────────────────────────────────────
 
 interface ParentFormState {
@@ -179,6 +211,7 @@ interface ParentFormState {
   longDescription: string;
   instructions: string;
   thumbnail: string;
+  backgroundPreset: string;
   active: boolean;
 }
 
@@ -195,6 +228,7 @@ function emptyParentForm(): ParentFormState {
     longDescription: "",
     instructions: "",
     thumbnail: "",
+    backgroundPreset: "",
     active: true,
   };
 }
@@ -212,6 +246,7 @@ function parentToForm(p: CatalogParent): ParentFormState {
     longDescription: p.longDescription ?? "",
     instructions: p.instructions ?? "",
     thumbnail: p.thumbnail ?? "",
+    backgroundPreset: p.backgroundPreset ?? "",
     active: p.active,
   };
 }
@@ -314,6 +349,14 @@ function ParentForm({
             value={form.thumbnail}
             onChange={(v) => patch({ thumbnail: v })}
             placeholder="https://…"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <FieldLabel>Arrière-plan (preset)</FieldLabel>
+          <PresetSelect
+            value={form.backgroundPreset}
+            category={form.category}
+            onChange={(v) => patch({ backgroundPreset: v })}
           />
         </div>
         {!initial.slug && (

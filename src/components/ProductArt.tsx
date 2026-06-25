@@ -1,38 +1,25 @@
-import { getCategory } from "@/lib/products";
+import { resolvePreset } from "@/lib/presets";
 import type { CategoryId } from "@/lib/types";
-/**
- * Placeholder product/category artwork. Phase 1 ships no real images, so we
- * render a premium branded placeholder tile.
- */
+
 export default function ProductArt({
   category,
-  label,
+  backgroundPreset = "",
   className = "",
+  label: _label,
 }: {
-  category: CategoryId;
-  label?: string;
+  category: CategoryId | string;
+  backgroundPreset?: string;
   className?: string;
+  label?: string;
 }) {
-  const cat = getCategory(category);
-  const code = (cat?.name ?? category).split(" ")[0].toUpperCase();
+  const preset = resolvePreset(backgroundPreset, category);
 
+  // Apply only the background preset classes — not .kbg (which forces aspect-ratio: 1/1
+  // and border-radius, overriding caller-supplied Tailwind sizing classes).
+  // bg-cover + bg-center ensure PNGs display correctly when the PNG file exists.
   return (
     <div
-      className={`relative flex items-center justify-center overflow-hidden bg-[#15171f] ${className}`}
-      style={{
-        backgroundImage:
-          "repeating-linear-gradient(135deg,rgba(255,255,255,0.018) 0 8px,transparent 8px 16px)",
-      }}
-    >
-      <div className="absolute h-40 w-56 rounded-[30px] bg-[radial-gradient(circle,rgba(62,123,250,0.2),transparent_64%)] blur-3xl" />
-      <span className="relative font-mono text-sm tracking-[0.18em] text-[#5a6070] sm:text-lg">
-        {code}
-      </span>
-      {label && (
-        <span className="absolute right-3 top-2.5 font-mono text-[10px] text-faint">
-          [ visuel ]
-        </span>
-      )}
-    </div>
+      className={`kbg-css--${preset} kbg--${preset} bg-cover bg-center ${className}`}
+    />
   );
 }

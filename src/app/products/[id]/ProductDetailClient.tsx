@@ -69,7 +69,7 @@ export default function ProductDetailClient({
         <div>
           <ProductArt
             category={parent.category}
-            label={category?.name}
+            backgroundPreset={parent.backgroundPreset}
             className="aspect-[1.4] w-full rounded-[18px] border border-border"
           />
 

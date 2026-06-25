@@ -37,6 +37,7 @@ export interface ParentProduct {
   longDescription?: string;
   instructions?: string;
   thumbnail?: string;
+  backgroundPreset?: string;
   galleryImages?: string[];
   active?: boolean;
   variants: ProductVariant[];

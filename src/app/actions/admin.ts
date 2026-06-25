@@ -164,6 +164,7 @@ export async function saveParentProductAction(data: {
   longDescription: string;
   instructions: string;
   thumbnail: string;
+  backgroundPreset: string;
   active: boolean;
 }): Promise<ActionResult & { slug?: string }> {
   try {
@@ -179,6 +180,7 @@ export async function saveParentProductAction(data: {
       longDescription:  data.longDescription || undefined,
       instructions:     data.instructions || undefined,
       thumbnail:        data.thumbnail || undefined,
+      backgroundPreset: data.backgroundPreset,
       active:           data.active,
     });
     return { ok: true, slug };

@@ -1,0 +1,1 @@
+ALTER TABLE "ParentProduct" ADD COLUMN IF NOT EXISTS "backgroundPreset" TEXT NOT NULL DEFAULT '';

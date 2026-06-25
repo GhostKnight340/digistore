@@ -30,6 +30,7 @@ function dbParentToParent(db: CatalogParent): ParentProduct {
     longDescription: db.longDescription ?? undefined,
     instructions: db.instructions ?? undefined,
     thumbnail: db.thumbnail ?? undefined,
+    backgroundPreset: db.backgroundPreset,
     active: db.active,
     variants: db.variants.map((v) => ({
       id: v.slug,

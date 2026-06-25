@@ -98,3 +98,91 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #3a3e4d;
 }
+/* ==========================================================================
+   Karta Store — Reusable Product Backgrounds
+   1600x1600 premium dark gaming backgrounds for transparent product artwork.
+
+   Two ways to use each preset:
+   1) PNG (pixel-perfect, recommended for product cards):
+        <div class="kbg kbg--steam-blue">
+          <img class="kbg__art" src="product.png" alt="">
+        </div>
+   2) Pure CSS gradient (resolution-independent, lighter weight):
+        <div class="kbg kbg-css--steam-blue"> ... </div>
+
+   The center ~45% stays calm so artwork reads cleanly on top.
+   ========================================================================== */
+
+.kbg {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 16px;
+}
+.kbg__art {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  max-width: 62%;
+  max-height: 62%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* ---- PNG presets ---- */
+.kbg--default-dark      { background-image: url("/products/backgrounds/default-dark.png"); }
+.kbg--steam-blue        { background-image: url("/products/backgrounds/steam-blue.png"); }
+.kbg--playstation-blue  { background-image: url("/products/backgrounds/playstation-blue.png"); }
+.kbg--xbox-green        { background-image: url("/products/backgrounds/xbox-green.png"); }
+.kbg--nintendo-red      { background-image: url("/products/backgrounds/nintendo-red.png"); }
+.kbg--roblox            { background-image: url("/products/backgrounds/roblox.png"); }
+.kbg--valorant          { background-image: url("/products/backgrounds/valorant.png"); }
+
+/* ---- Pure-CSS approximations (no image required) ---- */
+.kbg-css--default-dark {
+  background:
+    radial-gradient(60% 50% at 50% 22%, rgba(141,162,192,.10), transparent 70%),
+    radial-gradient(65% 55% at 50% 95%, rgba(94,107,130,.09), transparent 70%),
+    linear-gradient(180deg, #181b20, #0a0c0f);
+}
+.kbg-css--steam-blue {
+  background:
+    radial-gradient(55% 50% at 27% 22%, rgba(31,111,214,.24), transparent 65%),
+    radial-gradient(48% 45% at 77% 80%, rgba(42,134,255,.15), transparent 65%),
+    linear-gradient(180deg, #0d2138, #060e1a);
+}
+.kbg-css--playstation-blue {
+  background:
+    radial-gradient(62% 52% at 50% 18%, rgba(10,107,214,.22), transparent 68%),
+    radial-gradient(46% 44% at 19% 84%, rgba(26,79,176,.16), transparent 66%),
+    linear-gradient(180deg, #0a3170, #02112e);
+}
+.kbg-css--xbox-green {
+  background:
+    radial-gradient(66% 56% at 50% 90%, rgba(16,124,16,.22), transparent 68%),
+    radial-gradient(40% 40% at 81% 20%, rgba(22,198,12,.12), transparent 66%),
+    linear-gradient(180deg, #101713, #080b09);
+}
+.kbg-css--nintendo-red {
+  background:
+    radial-gradient(60% 52% at 50% 21%, rgba(230,0,18,.18), transparent 66%),
+    radial-gradient(58% 50% at 50% 94%, rgba(168,0,13,.14), transparent 68%),
+    linear-gradient(180deg, #7a1216, #240507);
+}
+.kbg-css--roblox {
+  background:
+    radial-gradient(44% 42% at 78% 22%, rgba(226,35,26,.15), transparent 64%),
+    radial-gradient(46% 44% at 22% 81%, rgba(58,61,66,.30), transparent 66%),
+    linear-gradient(180deg, #26282c, #131416);
+}
+.kbg-css--valorant {
+  background:
+    radial-gradient(46% 44% at 21% 80%, rgba(255,70,85,.16), transparent 64%),
+    radial-gradient(36% 35% at 82% 19%, rgba(255,70,85,.10), transparent 64%),
+    linear-gradient(180deg, #1b2128, #0a0e12);
+}

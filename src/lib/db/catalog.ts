@@ -30,6 +30,7 @@ export interface CatalogParent {
   longDescription: string | null;
   instructions: string | null;
   thumbnail: string | null;
+  backgroundPreset: string;
   active: boolean;
   variants: CatalogVariant[];
 }
@@ -81,6 +82,7 @@ export async function getCatalogFromDB(): Promise<CatalogParent[]> {
     longDescription: p.longDescription,
     instructions: p.instructions,
     thumbnail: p.thumbnail,
+    backgroundPreset: p.backgroundPreset,
     active: p.active,
     variants: variantsByParent[p.slug] ?? [],
   }));
@@ -107,6 +109,7 @@ export async function getParentFromDB(slug: string): Promise<CatalogParent | nul
     longDescription: p.longDescription,
     instructions: p.instructions,
     thumbnail: p.thumbnail,
+    backgroundPreset: p.backgroundPreset,
     active: p.active,
     variants: variants.map((v) => ({
       slug: v.slug,
@@ -141,6 +144,7 @@ export async function upsertParentProduct(data: {
   longDescription?: string;
   instructions?: string;
   thumbnail?: string;
+  backgroundPreset?: string;
   active: boolean;
 }): Promise<string> {
   const slug = data.slug.trim() || slugify(data.name);
@@ -158,6 +162,7 @@ export async function upsertParentProduct(data: {
       longDescription:  data.longDescription || null,
       instructions:     data.instructions || null,
       thumbnail:        data.thumbnail || null,
+      backgroundPreset: data.backgroundPreset ?? "",
       active:           data.active,
     },
     create: {
@@ -172,6 +177,7 @@ export async function upsertParentProduct(data: {
       longDescription:  data.longDescription || null,
       instructions:     data.instructions || null,
       thumbnail:        data.thumbnail || null,
+      backgroundPreset: data.backgroundPreset ?? "",
       active:           data.active,
     },
   });

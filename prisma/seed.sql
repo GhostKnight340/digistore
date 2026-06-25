@@ -22,12 +22,17 @@ CREATE TABLE IF NOT EXISTS "ParentProduct" (
   "longDescription"  TEXT,
   "instructions"     TEXT,
   "thumbnail"        TEXT,
+  "backgroundPreset" TEXT NOT NULL DEFAULT '',
   "active"           BOOLEAN NOT NULL DEFAULT true,
   "createdAt"        TIMESTAMP NOT NULL DEFAULT NOW(),
   "updatedAt"        TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false;
+
+-- ── Migration 4: backgroundPreset column ─────────────────────────────────────
+
+ALTER TABLE "ParentProduct" ADD COLUMN IF NOT EXISTS "backgroundPreset" TEXT NOT NULL DEFAULT '';
 
 -- ── 1. Parent products ────────────────────────────────────────────────────────
 
