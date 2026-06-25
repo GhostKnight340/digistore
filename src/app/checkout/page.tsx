@@ -45,7 +45,7 @@ export default function CheckoutPage() {
     }
   }, [enabledMethods, method, settings.paymentMethods]);
 
-  if (ready && cart.length === 0) {
+  if (ready && cart.length === 0 && !submitting) {
     return (
       <div className="container-page py-10">
         <div className="card grid place-items-center px-6 py-20 text-center">
