@@ -62,7 +62,7 @@ export default function HomePage() {
     <div className="container-page">
       {settings.homepage.showHero && (
         <section className="relative overflow-hidden py-16 sm:py-24">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-72 w-72 rounded-full bg-accent/15 blur-3xl" />
+          <div className="pointer-events-none absolute right-[5%] top-[8%] h-[440px] w-[440px] rounded-full bg-accent/[0.05] blur-[110px]" />
           <div className="relative grid items-center gap-12 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
             <div>
               <span className="chip">

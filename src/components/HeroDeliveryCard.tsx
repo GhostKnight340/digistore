@@ -84,26 +84,26 @@ export default function HeroDeliveryCard() {
   return (
     <div className="relative flex min-h-[430px] items-center justify-center">
       <div
-        className={`pointer-events-none absolute h-80 w-[360px] rounded-full bg-[radial-gradient(circle,rgba(62,123,250,0.3),transparent_62%)] blur-[64px] transition-opacity duration-1000 ${
-          active ? "opacity-80" : "opacity-55"
+        className={`pointer-events-none absolute h-80 w-[360px] rounded-full bg-[radial-gradient(circle,rgba(62,123,250,0.11),transparent_62%)] blur-[88px] transition-opacity duration-1000 ${
+          active ? "opacity-60" : "opacity-35"
         }`}
       />
 
-      <div className="relative flex w-full max-w-[374px] flex-col gap-3.5">
+      <div className="relative flex w-full max-w-[374px] flex-col gap-[18px]">
         <div
           className={`relative overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(158deg,#1d2638_0%,#141a27_52%,#0d1017_100%)] p-[26px] pb-6 shadow-[0_28px_64px_rgba(0,0,0,0.55)] transition-transform duration-1000 ${
             active ? "-translate-y-1.5" : ""
           }`}
         >
           <div
-            className={`pointer-events-none absolute inset-0 rounded-[22px] border border-accent shadow-[inset_0_0_44px_rgba(62,123,250,0.16)] transition-opacity duration-1000 ${
-              active ? "opacity-80" : "opacity-35"
+            className={`pointer-events-none absolute inset-0 rounded-[22px] border border-accent/55 shadow-[inset_0_0_28px_rgba(62,123,250,0.07)] transition-opacity duration-1000 ${
+              active ? "opacity-65" : "opacity-25"
             }`}
           />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.06] to-transparent" />
           <div
-            className={`pointer-events-none absolute -right-8 -top-11 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(62,123,250,0.34),transparent_64%)] transition-opacity duration-1000 ${
-              active ? "opacity-80" : "opacity-45"
+            className={`pointer-events-none absolute -right-8 -top-11 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(62,123,250,0.14),transparent_64%)] transition-opacity duration-1000 ${
+              active ? "opacity-55" : "opacity-25"
             }`}
           />
 
@@ -152,7 +152,7 @@ export default function HeroDeliveryCard() {
           </div>
         </div>
 
-        <div className="rounded-[14px] border border-border bg-surface p-4">
+        <div className="rounded-[18px] border border-white/[0.08] bg-surface p-4 shadow-[0_8px_24px_rgba(0,0,0,0.32)]">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-2.5">
               {delivered ? (
