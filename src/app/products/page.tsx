@@ -1,11 +1,43 @@
 import Link from "next/link";
-import { categories, products } from "@/lib/products";
+import { categories, products as staticProducts } from "@/lib/products";
 import { getStorefrontStockStatus } from "@/lib/db/inventory";
+import { getCatalogFromDB } from "@/lib/db/catalog";
+import type { CatalogParent } from "@/lib/db/catalog";
+import type { CategoryId, Product } from "@/lib/types";
+import { variantTitle } from "@/lib/format";
 import ProductCard from "@/components/ProductCard";
 
 export const metadata = {
   title: "Catalogue - Karta",
 };
+
+function dbCatalogToProducts(parents: CatalogParent[]): Product[] {
+  const out: Product[] = [];
+  for (const p of parents) {
+    for (const v of p.variants) {
+      out.push({
+        id: v.slug,
+        variantOf: p.slug,
+        name: variantTitle(p.name, v.faceValue ?? 0, v.faceCurrency),
+        category: p.category as CategoryId,
+        brand: p.brand ?? undefined,
+        region: p.region,
+        deliveryType: p.deliveryType,
+        active: v.active && p.active,
+        featured: v.featured,
+        faceValue: v.faceValue ?? undefined,
+        faceCurrency: v.faceCurrency,
+        price: v.priceMad,
+        description: p.description,
+        shortDescription: p.shortDescription ?? undefined,
+        longDescription: p.longDescription ?? undefined,
+        instructions: p.instructions ?? undefined,
+        thumbnail: p.thumbnail ?? undefined,
+      });
+    }
+  }
+  return out;
+}
 
 export default async function ProductsPage({
   searchParams,
@@ -14,6 +46,17 @@ export default async function ProductsPage({
 }) {
   const { category, q } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
+
+  // Try DB first, fall back to static catalog
+  let products: Product[] = staticProducts;
+  try {
+    const dbParents = await getCatalogFromDB();
+    if (dbParents.length > 0) {
+      products = dbCatalogToProducts(dbParents).filter((p) => p.active !== false);
+    }
+  } catch {
+    // DB not configured — use static catalog
+  }
 
   let stockStatus: Record<string, { unused: number; stockControl: string }> = {};
   try { stockStatus = await getStorefrontStockStatus(); } catch { /* DB not configured */ }
