@@ -70,7 +70,7 @@ export default function HomePage() {
             }}
           />
           <div className="container-page">
-            <section className="relative py-16 sm:py-24">
+            <section className="relative pt-16 pb-10 sm:pt-24 sm:pb-14">
           <div className="relative grid items-center gap-12 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
             <div>
               <span className="chip">
@@ -134,7 +134,7 @@ export default function HomePage() {
 
       <div className="container-page">
       {settings.homepage.showCategories && (
-        <section className="mt-10">
+        <section className="mt-7">
           <div className="flex items-end justify-between gap-6">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text">
@@ -180,7 +180,7 @@ export default function HomePage() {
       )}
 
       {settings.homepage.showFeaturedProducts && (
-        <section className="mt-16">
+        <section className="mt-10">
           <div className="flex items-end justify-between gap-6">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text">
