@@ -122,6 +122,63 @@ function Toggle({
   );
 }
 
+// ── Currency selector ────────────────────────────────────────────────────────
+
+const PRESET_CURRENCIES = ["EUR", "USD", "GBP", "MAD", "TRY", "Robux", "VP"];
+
+function CurrencySelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const isPreset = PRESET_CURRENCIES.includes(value);
+  const [custom, setCustom] = useState(!isPreset ? value : "");
+  const [showCustom, setShowCustom] = useState(!isPreset);
+
+  function handleSelect(e: React.ChangeEvent<HTMLSelectElement>) {
+    const v = e.target.value;
+    if (v === "__custom__") {
+      setShowCustom(true);
+      onChange(custom || "");
+    } else {
+      setShowCustom(false);
+      onChange(v);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <select
+        value={showCustom ? "__custom__" : value}
+        onChange={handleSelect}
+        className="input w-full text-sm"
+      >
+        {PRESET_CURRENCIES.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+        <option value="__custom__">Custom…</option>
+      </select>
+      {showCustom && (
+        <input
+          type="text"
+          value={custom}
+          onChange={(e) => {
+            setCustom(e.target.value);
+            onChange(e.target.value);
+          }}
+          placeholder="e.g. SGD, Gems…"
+          className="input w-full text-sm"
+          autoFocus
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Instructions editor ──────────────────────────────────────────────────────
 
 function StepsEditor({
@@ -444,12 +501,9 @@ export default function ProductEditorPage() {
                 </div>
                 <div>
                   <p className="mb-1 text-[11px] text-faint">Face currency</p>
-                  <TextInput
-                    value={draft.faceCurrency ?? ""}
-                    onChange={(v) =>
-                      patch({ faceCurrency: v || undefined })
-                    }
-                    placeholder="EUR / USD / VP…"
+                  <CurrencySelect
+                    value={draft.faceCurrency ?? "MAD"}
+                    onChange={(v) => patch({ faceCurrency: v || undefined })}
                   />
                 </div>
               </div>

@@ -99,9 +99,9 @@ export const parentProducts: ParentProduct[] = [
       "Avec une carte Steam Wallet, rechargez votre compte Steam et accédez à des milliers de jeux, DLC, extensions et contenus en jeu. Compatible avec tous les comptes Steam actifs. Les fonds sont crédités immédiatement et n'expirent pas.",
     instructions: steamInstructions,
     variants: [
-      { id: "steam-50",  productId: "steam-wallet", faceValue: 50,  faceCurrency: "MAD", price: 50,  featured: true,  active: true },
-      { id: "steam-100", productId: "steam-wallet", faceValue: 100, faceCurrency: "MAD", price: 100, featured: true,  active: true },
-      { id: "steam-200", productId: "steam-wallet", faceValue: 200, faceCurrency: "MAD", price: 200, featured: false, active: true },
+      { id: "steam-50",  productId: "steam-wallet", faceValue: 5,  faceCurrency: "EUR", price: 60,  featured: true,  active: true },
+      { id: "steam-100", productId: "steam-wallet", faceValue: 10, faceCurrency: "EUR", price: 120, featured: true,  active: true },
+      { id: "steam-200", productId: "steam-wallet", faceValue: 20, faceCurrency: "EUR", price: 240, featured: false, active: true },
     ],
   },
 
