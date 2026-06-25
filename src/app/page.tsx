@@ -10,24 +10,6 @@ import HeroDeliveryCard from "@/components/HeroDeliveryCard";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getStockStatusAction } from "@/app/actions/orders";
 
-const steps = [
-  {
-    n: 1,
-    title: "Choisissez un produit",
-    text: "Sélectionnez une carte et la quantité.",
-  },
-  {
-    n: 2,
-    title: "Paiement sécurisé",
-    text: "Entrez votre email et payez simplement.",
-  },
-  {
-    n: 3,
-    title: "Recevez le code",
-    text: "Votre code apparaît instantanément.",
-  },
-];
-
 export default function HomePage() {
   const { settings } = useStoreSettings();
   const [stockStatus, setStockStatus] = useState<Record<string, { unused: number; stockControl: string }>>({});
@@ -168,19 +150,19 @@ export default function HomePage() {
 
       <section id="how-it-works" className="mt-16 scroll-mt-20">
           <h2 className="text-2xl font-semibold tracking-tight text-text">
-            Comment ça marche
+            {settings.howItWorks.title}
           </h2>
           <p className="mt-1 text-sm text-muted">
-            Trois étapes, en moins d'une minute.
+            {settings.howItWorks.subtitle}
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            {steps.map((step) => (
-              <div key={step.n} className="card p-6">
+            {settings.howItWorks.steps.map((step, i) => (
+              <div key={i} className="card p-6">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-lg font-bold text-accent">
-                  {step.n}
+                  {i + 1}
                 </span>
                 <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
-                <p className="mt-1 text-sm text-muted">{step.text}</p>
+                <p className="mt-1 text-sm text-muted">{step.description}</p>
               </div>
             ))}
           </div>

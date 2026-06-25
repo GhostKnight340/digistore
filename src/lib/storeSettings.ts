@@ -7,6 +7,11 @@ export type TrustItemSetting = {
   enabled: boolean;
 };
 
+export type HowItWorksStep = {
+  title: string;
+  description: string;
+};
+
 export type StoreSettings = {
   branding: {
     siteName: string;
@@ -15,6 +20,11 @@ export type StoreSettings = {
     heroSubtitle: string;
     primaryCtaLabel: string;
     secondaryCtaLabel: string;
+  };
+  howItWorks: {
+    title: string;
+    subtitle: string;
+    steps: HowItWorksStep[];
   };
   homepage: {
     showHero: boolean;
@@ -64,6 +74,15 @@ export const defaultStoreSettings: StoreSettings = {
     showFeaturedProducts: true,
     showWhyChooseUs: true,
     showFooter: true,
+  },
+  howItWorks: {
+    title: "Comment ça marche",
+    subtitle: "Trois étapes, en moins d'une minute.",
+    steps: [
+      { title: "Choisissez un produit", description: "Sélectionnez une carte et la quantité." },
+      { title: "Paiement sécurisé", description: "Entrez votre email et payez simplement." },
+      { title: "Recevez le code", description: "Votre code apparaît instantanément." },
+    ],
   },
   trustItems: [
     {
@@ -142,6 +161,18 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
       ...defaultStoreSettings.homepage,
       ...(isObject(value.homepage) ? value.homepage : {}),
     },
+    howItWorks: isObject(value.howItWorks)
+      ? {
+          title: typeof value.howItWorks.title === "string" ? value.howItWorks.title : defaultStoreSettings.howItWorks.title,
+          subtitle: typeof value.howItWorks.subtitle === "string" ? value.howItWorks.subtitle : defaultStoreSettings.howItWorks.subtitle,
+          steps: Array.isArray(value.howItWorks.steps)
+            ? value.howItWorks.steps.map((s, i) => ({
+                ...defaultStoreSettings.howItWorks.steps[i % defaultStoreSettings.howItWorks.steps.length],
+                ...(isObject(s) ? s : {}),
+              }))
+            : defaultStoreSettings.howItWorks.steps,
+        }
+      : defaultStoreSettings.howItWorks,
     trustItems: Array.isArray(value.trustItems)
       ? value.trustItems.map((item, index) => ({
           ...defaultStoreSettings.trustItems[index % defaultStoreSettings.trustItems.length],
