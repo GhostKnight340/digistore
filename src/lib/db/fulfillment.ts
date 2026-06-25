@@ -1,151 +1,117 @@
 import "server-only";
 
-import { prisma } from "@/lib/prisma";
+import { getDb, newId, nowIso } from "./sqlite";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
 
-/** Admin: mark payment confirmed (works from any non-delivered status). */
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  const db = getDb();
+  const order = db.prepare(`SELECT id, status, customerEmail FROM "Order" WHERE id = ?`).get(orderId);
   if (!order) return { ok: false, error: "Order not found." };
   if (order.status === "payment_confirmed" || order.status === "delivered") {
     return { ok: false, error: "Payment already confirmed." };
   }
 
-  const fromStatus = order.status;
+  const fromStatus = order.status as string;
 
-  await prisma.$transaction([
-    prisma.order.update({
-      where: { id: orderId },
-      data: { status: "payment_confirmed" },
-    }),
-    prisma.paymentEvent.create({
-      data: {
-        orderId,
-        type: "status_change",
-        fromStatus,
-        toStatus: "payment_confirmed",
-        note: "Admin confirmed payment.",
-      },
-    }),
-    prisma.emailLog.create({
-      data: {
-        orderId,
-        type: "payment_confirmed",
-        recipient: order.customerEmail,
-        subject: "Paiement confirmé",
-        body: "Your payment has been confirmed. Your code will be delivered shortly.",
-      },
-    }),
-  ]);
-  return { ok: true };
+  try {
+    db.exec("BEGIN IMMEDIATE");
+
+    db.prepare(`UPDATE "Order" SET status = 'payment_confirmed', updatedAt = ? WHERE id = ?`).run(nowIso(), orderId);
+    db.prepare(
+      `INSERT INTO PaymentEvent (id, orderId, type, fromStatus, toStatus, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(newId(), orderId, "status_change", fromStatus, "payment_confirmed", "Admin confirmed payment.", nowIso());
+    db.prepare(
+      `INSERT INTO EmailLog (id, orderId, type, recipient, subject, body, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      newId(), orderId, "payment_confirmed", order.customerEmail as string,
+      "Paiement confirmé",
+      "Your payment has been confirmed. Your code will be delivered shortly.",
+      nowIso(),
+    );
+
+    db.exec("COMMIT");
+    return { ok: true };
+  } catch (e) {
+    try { db.exec("ROLLBACK"); } catch {}
+    console.error("[confirmPayment]", e);
+    return { ok: false, error: e instanceof Error ? e.message : "Confirm failed." };
+  }
 }
 
-/**
- * Admin: deliver codes. In one transaction:
- *  - validates each order item has `quantity` codes (inventory or manual),
- *  - marks selected DigitalCodes as used,
- *  - creates DeliveredCode records,
- *  - sets the order to delivered,
- *  - logs a simulated code_delivered email.
- */
 export async function deliverOrder(
   orderId: string,
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
-    if (!order) return { ok: false, error: "Order not found." };
-    if (order.status === "delivered") {
-      return { ok: false, error: "Order is already delivered." };
-    }
-    if (order.status !== "payment_confirmed") {
-      return { ok: false, error: "Payment must be confirmed before delivery." };
-    }
+  const db = getDb();
+  const order = db.prepare(`SELECT id, status, customerEmail FROM "Order" WHERE id = ?`).get(orderId);
+  if (!order) return { ok: false, error: "Order not found." };
+  if (order.status === "delivered") return { ok: false, error: "Order is already delivered." };
+  if (order.status !== "payment_confirmed") {
+    return { ok: false, error: "Payment must be confirmed before delivery." };
+  }
 
-    for (const item of order.items) {
-      const entries = (
-        assignments.find((a) => a.orderItemId === item.id)?.codes ?? []
-      ).filter((e) => e.digitalCodeId || e.manualCode?.trim());
-      if (entries.length < item.quantity) {
-        return {
-          ok: false,
-          error: "Assign a code to every unit before delivering.",
-        };
-      }
+  const items = db.prepare("SELECT id, quantity FROM OrderItem WHERE orderId = ?").all(orderId);
+
+  for (const item of items) {
+    const assignment = assignments.find((a) => a.orderItemId === (item.id as string));
+    const entries = (assignment?.codes ?? []).filter((e) => e.digitalCodeId || e.manualCode?.trim());
+    if (entries.length < (item.quantity as number)) {
+      return { ok: false, error: "Assign a code to every unit before delivering." };
     }
+  }
 
-    const now = new Date();
+  try {
+    db.exec("BEGIN IMMEDIATE");
 
-    for (const item of order.items) {
-      const entries = (
-        assignments.find((a) => a.orderItemId === item.id)?.codes ?? []
-      )
+    for (const item of items) {
+      const assignment = assignments.find((a) => a.orderItemId === (item.id as string));
+      const entries = (assignment?.codes ?? [])
         .filter((e) => e.digitalCodeId || e.manualCode?.trim())
-        .slice(0, item.quantity);
+        .slice(0, item.quantity as number);
 
       for (const entry of entries) {
         let digitalCodeId: string | null = null;
         let manualCode: string | null = null;
 
         if (entry.digitalCodeId) {
-          const code = await tx.digitalCode.findUnique({
-            where: { id: entry.digitalCodeId },
-          });
+          const code = db.prepare("SELECT id, status FROM DigitalCode WHERE id = ?").get(entry.digitalCodeId);
           if (!code || code.status === "used" || code.status === "disabled") {
-            throw new Error("Selected code is no longer available.");
+            db.exec("ROLLBACK");
+            return { ok: false, error: "Selected code is no longer available." };
           }
-          await tx.digitalCode.update({
-            where: { id: code.id },
-            data: { status: "used", assignedOrderId: orderId, usedAt: now },
-          });
-          digitalCodeId = code.id;
+          db.prepare(
+            "UPDATE DigitalCode SET status = 'used', assignedOrderId = ?, usedAt = ?, updatedAt = ? WHERE id = ?",
+          ).run(orderId, nowIso(), nowIso(), entry.digitalCodeId);
+          digitalCodeId = entry.digitalCodeId;
         } else {
           manualCode = entry.manualCode!.trim();
         }
 
-        await tx.deliveredCode.create({
-          data: {
-            orderId,
-            orderItemId: item.id,
-            productId: item.productId,
-            digitalCodeId,
-            manualCode,
-          },
-        });
+        db.prepare(
+          `INSERT INTO DeliveredCode (id, orderId, orderItemId, productId, digitalCodeId, manualCode, deliveredAt)
+           SELECT ?, ?, ?, productId, ?, ?, ? FROM OrderItem WHERE id = ?`,
+        ).run(newId(), orderId, item.id as string, digitalCodeId, manualCode, nowIso(), item.id as string);
       }
     }
 
-    await tx.order.update({
-      where: { id: orderId },
-      data: { status: "delivered" },
-    });
+    db.prepare(`UPDATE "Order" SET status = 'delivered', updatedAt = ? WHERE id = ?`).run(nowIso(), orderId);
+    db.prepare(
+      `INSERT INTO PaymentEvent (id, orderId, type, fromStatus, toStatus, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(newId(), orderId, "status_change", "payment_confirmed", "delivered", "Admin delivered code(s).", nowIso());
+    db.prepare(
+      `INSERT INTO EmailLog (id, orderId, type, recipient, subject, body, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      newId(), orderId, "code_delivered", order.customerEmail as string,
+      "Votre code est disponible",
+      "Your payment was confirmed. Your code is now available. Thank you for your purchase.",
+      nowIso(),
+    );
 
-    await tx.paymentEvent.create({
-      data: {
-        orderId,
-        type: "status_change",
-        fromStatus: "payment_confirmed",
-        toStatus: "delivered",
-        note: "Admin delivered code(s).",
-      },
-    });
-
-    await tx.emailLog.create({
-      data: {
-        orderId,
-        type: "code_delivered",
-        recipient: order.customerEmail,
-        subject: "Votre code est disponible",
-        body: "Your payment was confirmed. Your code is now available. Thank you for your purchase.",
-      },
-    });
-
+    db.exec("COMMIT");
     return { ok: true };
-  }).catch((e: unknown) => ({
-    ok: false,
-    error: e instanceof Error ? e.message : "Delivery failed.",
-  }));
+  } catch (e) {
+    try { db.exec("ROLLBACK"); } catch {}
+    console.error("[deliverOrder]", e);
+    return { ok: false, error: e instanceof Error ? e.message : "Delivery failed." };
+  }
 }

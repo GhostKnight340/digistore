@@ -26,6 +26,7 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const [config, setConfig] = useState<PaymentConfigDTO | null>(null);
+  const [configError, setConfigError] = useState(false);
   const [method, setMethod] = useState<PaymentMethod | "">("");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -33,13 +34,17 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getPaymentConfigAction().then((cfg) => {
-      setConfig(cfg);
-      // Pick the first enabled method as default
-      const order: PaymentMethod[] = ["bank", "usdt", "paypal", "card"];
-      const first = order.find((m) => cfg.methods[m]?.enabled);
-      if (first) setMethod(first);
-    });
+    getPaymentConfigAction()
+      .then((cfg) => {
+        setConfig(cfg);
+        const order: PaymentMethod[] = ["bank", "usdt", "paypal", "card"];
+        const first = order.find((m) => cfg.methods[m]?.enabled);
+        if (first) setMethod(first);
+      })
+      .catch((err: unknown) => {
+        console.error("[checkout] Failed to load payment config:", err);
+        setConfigError(true);
+      });
   }, []);
 
   const enabledMethods = config
@@ -190,7 +195,11 @@ export default function CheckoutPage() {
             <h2 className="text-lg font-bold text-white">
               Méthode de paiement
             </h2>
-            {!config ? (
+            {configError ? (
+              <p className="mt-4 text-sm text-red-400">
+                Impossible de charger les méthodes de paiement.
+              </p>
+            ) : !config ? (
               <p className="mt-4 text-sm text-muted">Chargement...</p>
             ) : enabledMethods.length === 0 ? (
               <p className="mt-4 text-sm text-muted">
@@ -281,7 +290,7 @@ export default function CheckoutPage() {
 
             <button
               type="submit"
-              disabled={submitting || !config || enabledMethods.length === 0}
+              disabled={submitting || configError || !config || enabledMethods.length === 0}
               className="btn-primary mt-6 w-full disabled:opacity-50"
             >
               {submitting ? "Commande en cours..." : "Passer la commande"}
