@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
 import { getStorefrontProductsAction } from "@/app/actions/storefront";
+import { categories } from "@/lib/products";
 import type { PaymentMethod, Product } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -14,12 +15,13 @@ const paymentLabels: Record<PaymentMethod, string> = {
 };
 
 const sectionLabels: Record<keyof StoreSettings["homepage"], string> = {
-  showHero: "Afficher le hero",
-  showTrustStrip: "Afficher les indicateurs de confiance",
-  showCategories: "Afficher les catégories",
-  showFeaturedProducts: "Afficher les produits populaires",
-  showWhyChooseUs: "Afficher Pourquoi nous choisir",
-  showFooter: "Afficher le footer",
+  showHero: "Hero",
+  showTrustStrip: "Indicateurs de confiance",
+  showCategories: "Catégories populaires",
+  showFeaturedProducts: "Produits populaires",
+  showHowItWorks: "Comment ça marche",
+  showWhyChooseUs: "Pourquoi nous choisir",
+  showFooter: "Footer",
 };
 
 export default function SettingsPanel() {
@@ -166,6 +168,27 @@ export default function SettingsPanel() {
               />
             ),
           )}
+        </div>
+      </Panel>
+
+      <Panel title="Category images">
+        <p className="mb-4 text-sm text-muted">
+          Upload or link a custom image for each homepage category card. Leave blank to use the default placeholder.
+        </p>
+        <div className="space-y-4">
+          {categories.map((cat) => (
+            <CategoryMediaRow
+              key={cat.id}
+              label={cat.name}
+              value={draft.categoryMedia?.[cat.id] ?? null}
+              onChange={(url) =>
+                update("categoryMedia", {
+                  ...draft.categoryMedia,
+                  [cat.id]: url,
+                })
+              }
+            />
+          ))}
         </div>
       </Panel>
 
@@ -397,5 +420,98 @@ function Toggle({
       />
       <span>{label}</span>
     </label>
+  );
+}
+
+function CategoryMediaRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(file: File) {
+    setError("");
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const json = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !json.url) throw new Error(json.error ?? "Upload failed");
+      onChange(json.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-base p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-white">{label}</span>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-xs text-faint hover:text-white"
+          >
+            Supprimer
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={value}
+            alt={label}
+            className="h-20 w-32 shrink-0 rounded-lg border border-border object-cover"
+          />
+        ) : (
+          <div className="flex h-20 w-32 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-surface text-xs text-faint">
+            Aucune image
+          </div>
+        )}
+        <div className="flex flex-1 flex-col gap-2">
+          <input
+            type="text"
+            className="input text-sm"
+            placeholder="URL de l'image..."
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value || null)}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+              className="btn-ghost h-8 px-3 text-xs disabled:opacity-50"
+            >
+              {uploading ? "Envoi..." : "Choisir un fichier"}
+            </button>
+            {error && <span className="text-xs text-red-400">{error}</span>}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

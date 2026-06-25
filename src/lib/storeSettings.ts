@@ -21,9 +21,12 @@ export type StoreSettings = {
     showTrustStrip: boolean;
     showCategories: boolean;
     showFeaturedProducts: boolean;
+    showHowItWorks: boolean;
     showWhyChooseUs: boolean;
     showFooter: boolean;
   };
+  /** Map of category id → custom image URL (overrides the ProductArt placeholder). */
+  categoryMedia: Record<string, string | null>;
   trustItems: TrustItemSetting[];
   featuredProductIds: string[];
   paymentMethods: Record<PaymentMethod, boolean>;
@@ -62,9 +65,11 @@ export const defaultStoreSettings: StoreSettings = {
     showTrustStrip: true,
     showCategories: true,
     showFeaturedProducts: true,
+    showHowItWorks: true,
     showWhyChooseUs: true,
     showFooter: true,
   },
+  categoryMedia: {},
   trustItems: [
     {
       id: "instant-delivery",
@@ -151,6 +156,9 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
     featuredProductIds: Array.isArray(value.featuredProductIds)
       ? value.featuredProductIds.filter((id): id is string => typeof id === "string")
       : defaultStoreSettings.featuredProductIds,
+    categoryMedia: isObject(value.categoryMedia)
+      ? (value.categoryMedia as Record<string, string | null>)
+      : defaultStoreSettings.categoryMedia,
     paymentMethods: {
       ...defaultStoreSettings.paymentMethods,
       ...(isObject(value.paymentMethods) ? value.paymentMethods : {}),

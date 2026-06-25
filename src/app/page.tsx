@@ -136,6 +136,7 @@ export default function HomePage() {
                 key={category.id}
                 category={category}
                 count={categoryCounts[category.id]}
+                thumbnail={settings.categoryMedia?.[category.id]}
               />
             ))}
           </div>
@@ -168,7 +169,8 @@ export default function HomePage() {
         </section>
       )}
 
-      <section id="how-it-works" className="mt-16 scroll-mt-20">
+      {settings.homepage.showHowItWorks && (
+        <section id="how-it-works" className="mt-16 scroll-mt-20">
           <h2 className="text-2xl font-semibold tracking-tight text-text">
             Comment ça marche
           </h2>
@@ -186,9 +188,10 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-      </section>
+        </section>
+      )}
 
-      <TrustStrip />
+      {settings.homepage.showWhyChooseUs && <TrustStrip />}
 
       <section className="mt-16">
         <div className="relative overflow-hidden rounded-[20px] border border-accent/30 bg-gradient-to-br from-accent/20 to-surface px-6 py-12 text-center sm:py-16">
