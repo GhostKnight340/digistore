@@ -618,20 +618,108 @@ function MediaTab({
   update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
 }) {
   const preset = BG_PRESETS[draft.category];
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed.");
+      update("thumbnail", data.url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <Field label="Thumbnail / artwork URL">
-        <input
-          className="input"
-          value={draft.thumbnail ?? ""}
-          onChange={(e) => update("thumbnail", e.target.value || null)}
-          placeholder="https://example.com/art/steam-wallet.png"
-        />
-        <p className="mt-1 text-xs text-muted">
-          Used as the product card image. Leave blank to show the background gradient only.
+      <div>
+        <p className="mb-2 text-sm font-medium text-white">Thumbnail image</p>
+        <p className="mb-3 text-xs text-muted">
+          Used as the product card and detail page image. Leave blank to show the background gradient.
         </p>
-      </Field>
+
+        {/* Upload button */}
+        <label className={`relative flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl border-2 border-dashed px-5 py-6 transition-colors ${
+          uploading ? "border-accent/40 bg-accent/5" : "border-border hover:border-accent/50"
+        }`}>
+          <input
+            type="file"
+            accept="image/*"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            onChange={handleFile}
+            disabled={uploading}
+          />
+          {uploading ? (
+            <>
+              <svg className="h-5 w-5 animate-spin text-accent" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+              </svg>
+              <span className="text-sm text-accent">Uploading…</span>
+            </>
+          ) : (
+            <>
+              <svg className="h-5 w-5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <div className="text-center">
+                <p className="text-sm font-medium text-white">Click to upload</p>
+                <p className="text-xs text-muted">PNG, JPG, WebP · max 5 MB</p>
+              </div>
+            </>
+          )}
+        </label>
+
+        {uploadError && (
+          <p className="mt-2 text-xs text-red-400">{uploadError}</p>
+        )}
+
+        {/* Manual URL fallback */}
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs text-muted">Or paste an image URL directly</p>
+          <input
+            className="input text-xs"
+            value={draft.thumbnail ?? ""}
+            onChange={(e) => update("thumbnail", e.target.value || null)}
+            placeholder="https://example.com/image.png"
+          />
+        </div>
+
+        {draft.thumbnail && (
+          <div className="mt-3 flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={draft.thumbnail}
+              alt=""
+              className="h-14 w-20 rounded-lg object-cover border border-border"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+            <div className="min-w-0">
+              <p className="truncate font-mono text-[10px] text-muted">{draft.thumbnail}</p>
+              <button
+                type="button"
+                onClick={() => update("thumbnail", null)}
+                className="mt-1 text-xs text-red-400 hover:text-red-300"
+              >
+                Remove image
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div>
         <p className="mb-2 text-sm font-medium text-white">Background preset</p>
