@@ -16,15 +16,41 @@ export interface Category {
 }
 
 export interface Product {
+  // ── Identity ──────────────────────────────────────────────────────────
   id: string;
   name: string;
   category: CategoryId;
+  brand?: string;
   region: string;
-  /** Price in Moroccan Dirham. */
-  price: number;
   deliveryType: string;
-  description: string;
+
+  // ── Visibility ────────────────────────────────────────────────────────
+  active?: boolean;
   featured?: boolean;
+
+  // ── Face value (what the card is worth in its original currency) ───────
+  faceValue?: number;
+  faceCurrency?: string; // "EUR" | "USD" | "GBP" | "MAD" | "TRY" | "Robux" | "VP" | …
+
+  // ── Customer pricing ──────────────────────────────────────────────────
+  /** Selling price in MAD — what the customer pays. Used by cart/checkout. */
+  price: number;
+
+  // ── Supplier cost (admin-only, never shown publicly) ──────────────────
+  supplierCost?: number;
+  supplierCurrency?: string;
+
+  // ── Descriptions ──────────────────────────────────────────────────────
+  description: string;       // kept for backwards compat (= shortDescription)
+  shortDescription?: string;
+  longDescription?: string;
+
+  // ── Redemption instructions ────────────────────────────────────────────
+  instructions?: string;
+
+  // ── Media ─────────────────────────────────────────────────────────────
+  thumbnail?: string;
+  galleryImages?: string[];
 }
 
 export interface CartItem {

@@ -6,6 +6,7 @@ import {
   getProductsByCategory,
   products,
 } from "@/lib/products";
+import { formatFaceValue, formatMAD } from "@/lib/format";
 import { getStorefrontStockStatus } from "@/lib/db/inventory";
 import ProductArt from "@/components/ProductArt";
 import ProductCard from "@/components/ProductCard";
@@ -16,24 +17,6 @@ export const dynamic = "force-dynamic";
 export function generateStaticParams() {
   return products.map((product) => ({ id: product.id }));
 }
-
-const howItWorks = [
-  {
-    n: "01",
-    title: "Choisissez votre montant",
-    text: "Sélectionnez la valeur de la carte qui vous convient.",
-  },
-  {
-    n: "02",
-    title: "Payez en toute sécurité",
-    text: "Carte bancaire ou portefeuille, paiement chiffré.",
-  },
-  {
-    n: "03",
-    title: "Recevez votre code",
-    text: "Code affiché à l'écran et envoyé par email instantanément.",
-  },
-];
 
 export default async function ProductDetailPage({
   params,
@@ -79,29 +62,39 @@ export default async function ProductDetailPage({
             className="aspect-[1.4] w-full rounded-[18px] border border-border"
           />
 
-          <section className="mt-10">
-            <h2 className="text-lg font-semibold tracking-tight text-text">
-              Comment ca marche
-            </h2>
-            <div className="mt-5 flex flex-col gap-2">
-              {howItWorks.map((step) => (
-                <article
-                  key={step.n}
-                  className="flex gap-4 rounded-[14px] border border-border bg-surface p-4"
-                >
-                  <span className="w-6 shrink-0 font-mono text-[13px] text-accent">
-                    {step.n}
-                  </span>
-                  <div>
-                    <h3 className="text-[14.5px] font-medium text-text">
-                      {step.title}
-                    </h3>
-                    <p className="mt-1 text-[13px] text-muted">{step.text}</p>
+          {product.longDescription && (
+            <section className="mt-8">
+              <h2 className="text-lg font-semibold tracking-tight text-text">
+                Description
+              </h2>
+              <p className="mt-3 text-[14.5px] leading-relaxed text-muted">
+                {product.longDescription}
+              </p>
+            </section>
+          )}
+
+          {product.instructions && (
+            <section className="mt-8">
+              <h2 className="text-lg font-semibold tracking-tight text-text">
+                Comment utiliser
+              </h2>
+              <div className="mt-4 flex flex-col gap-2">
+                {product.instructions.split("\n").filter(Boolean).map((line, i) => (
+                  <div
+                    key={i}
+                    className="flex gap-4 rounded-[14px] border border-border bg-surface p-4"
+                  >
+                    <span className="w-6 shrink-0 font-mono text-[13px] text-accent">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <p className="text-[13.5px] text-muted">
+                      {line.replace(/^\d+\.\s*/, "")}
+                    </p>
                   </div>
-                </article>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
@@ -123,10 +116,24 @@ export default async function ProductDetailPage({
             {product.name}
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-muted">
-            {product.description}
+            {product.shortDescription ?? product.description}
           </p>
 
+          {product.faceValue && product.faceCurrency && product.faceCurrency !== "MAD" && (
+            <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm">
+              <span className="text-muted">Valeur faciale</span>
+              <span className="font-semibold text-white">
+                {formatFaceValue(product.faceValue, product.faceCurrency)}
+              </span>
+              <span className="text-border">→</span>
+              <span className="font-semibold text-accent">
+                {formatMAD(product.price)}
+              </span>
+            </div>
+          )}
+
           <div className="mt-6 flex flex-wrap gap-2">
+            {product.brand && <span className="chip">{product.brand}</span>}
             <span className="chip">Région: {product.region}</span>
             <span className="chip">{product.deliveryType}</span>
           </div>

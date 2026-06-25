@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Product } from "@/lib/types";
 import { getCategory } from "@/lib/products";
-import { formatMAD } from "@/lib/format";
+import { formatMAD, formatFaceValue } from "@/lib/format";
 import ProductArt from "./ProductArt";
 
 export default function ProductCard({
@@ -49,9 +49,16 @@ export default function ProductCard({
           {product.name}
         </h3>
         <div className="mt-3 flex items-baseline justify-between">
-          <span className={`font-mono text-lg font-semibold tracking-tight ${outOfStock ? "text-muted" : "text-text"}`}>
-            {formatMAD(product.price)}
-          </span>
+          <div>
+            {product.faceValue && product.faceCurrency && product.faceCurrency !== "MAD" && (
+              <div className="mb-0.5 text-[11px] text-faint">
+                {formatFaceValue(product.faceValue, product.faceCurrency)}
+              </div>
+            )}
+            <span className={`font-mono text-lg font-semibold tracking-tight ${outOfStock ? "text-muted" : "text-text"}`}>
+              {formatMAD(product.price)}
+            </span>
+          </div>
           <span className="text-xs text-faint">{cat?.name}</span>
         </div>
       </div>

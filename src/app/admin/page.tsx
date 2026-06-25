@@ -13,6 +13,7 @@ import type { AdminOrderDTO, InventoryGroupDTO } from "@/lib/dto";
 import SettingsPanel from "@/components/admin/SettingsPanel";
 import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
+import ProductsPanel from "@/components/admin/ProductsPanel";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: "📊" },
@@ -127,6 +128,8 @@ export default function AdminPage() {
           <FulfillmentPanel refreshTrigger={refreshTrigger} />
         ) : activeTab === "inventory" ? (
           <InventoryPanel refreshTrigger={refreshTrigger} />
+        ) : activeTab === "products" ? (
+          <ProductsPanel />
         ) : (
           <div className="space-y-8">
             {dbError && (
@@ -276,7 +279,7 @@ export default function AdminPage() {
               <Placeholder
                 icon="🛍️"
                 title="Products"
-                text={`${products.length} products in the catalog. Editing UI coming later.`}
+                text={`${products.length} products in the catalog. Go to the Products tab to manage them.`}
               />
               <Placeholder
                 icon="👥"
