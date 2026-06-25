@@ -52,6 +52,8 @@ model Product {
   featured     Boolean  @default(false)
   // stockControl: "manual" | "api"
   stockControl String   @default("manual")
+  // stockMode: "automatic" | "force_in_stock" | "force_out_of_stock"
+  stockMode    String   @default("automatic")
 
   digitalCodes   DigitalCode[]
   orderItems     OrderItem[]

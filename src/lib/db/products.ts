@@ -56,6 +56,7 @@ export async function getParentProducts(): Promise<ParentProductDTO[]> {
           active: v.active,
           featured: v.featured,
           stockControl: v.stockControl,
+          stockMode: v.stockMode,
           inventoryUnused: unusedMap.get(v.id) ?? 0,
         }),
       ),
@@ -143,6 +144,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
         active: data.active,
         featured: data.featured,
         stockControl: data.stockControl,
+        stockMode: data.stockMode,
       },
       create: {
         slug: data.slug,
@@ -157,6 +159,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
         active: data.active,
         featured: data.featured,
         stockControl: data.stockControl,
+        stockMode: data.stockMode,
       },
     });
     return { ok: true };

@@ -6,8 +6,9 @@ import {
   getStorefrontFeatured,
   getStorefrontProductsByIds,
   getCategoryCounts,
+  getCategoryStockStatuses,
 } from "@/lib/db/storefront";
-import type { Product } from "@/lib/types";
+import type { Product, StockStatus } from "@/lib/types";
 
 export async function getStorefrontProductsAction(): Promise<Product[]> {
   return getStorefrontProducts();
@@ -27,4 +28,8 @@ export async function getStorefrontProductsByIdsAction(slugs: string[]): Promise
 
 export async function getCategoryCountsAction(): Promise<Record<string, number>> {
   return getCategoryCounts();
+}
+
+export async function getCategoryStockStatusesAction(): Promise<Record<string, StockStatus>> {
+  return getCategoryStockStatuses();
 }

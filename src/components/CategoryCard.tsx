@@ -1,16 +1,19 @@
 import Link from "next/link";
-import type { Category } from "@/lib/types";
+import type { Category, StockStatus } from "@/lib/types";
 import ProductArt from "./ProductArt";
 
 export default function CategoryCard({
   category,
   count,
   thumbnail,
+  stockStatus,
 }: {
   category: Category;
   count?: number;
   thumbnail?: string | null;
+  stockStatus?: StockStatus;
 }) {
+  const outOfStock = stockStatus === "out_of_stock";
   return (
     <Link
       href={`/products?category=${category.id}`}
@@ -33,11 +36,18 @@ export default function CategoryCard({
         <span className="text-[15px] font-medium text-text">
           {category.name}
         </span>
-        {count !== undefined && (
-          <span className="font-mono text-xs text-faint">
-            {count} cartes
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {stockStatus && (
+            <span className={`text-[10.5px] font-medium ${outOfStock ? "text-yellow-500" : "text-green-400"}`}>
+              {outOfStock ? "En rupture" : "En stock"}
+            </span>
+          )}
+          {count !== undefined && (
+            <span className="font-mono text-xs text-faint">
+              {count} cartes
+            </span>
+          )}
+        </div>
       </div>
     </Link>
   );

@@ -174,6 +174,7 @@ export default function ProductsPanel() {
       active: true,
       featured: false,
       stockControl: "manual",
+      stockMode: "automatic",
       inventoryUnused: 0,
     });
     setMsg(null);
@@ -205,6 +206,7 @@ export default function ProductsPanel() {
       active: newVariantDraft.active,
       featured: newVariantDraft.featured,
       stockControl: newVariantDraft.stockControl,
+      stockMode: newVariantDraft.stockMode,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -249,6 +251,7 @@ export default function ProductsPanel() {
       active: v.active,
       featured: v.featured,
       stockControl: v.stockControl,
+      stockMode: v.stockMode,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -597,6 +600,17 @@ function VariantForm({
             {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
           </select>
         </Field>
+        <Field label={`Stock display${!slugEditable ? ` · ${v.inventoryUnused} code(s)` : ""}`}>
+          <select
+            className="input"
+            value={v.stockMode}
+            onChange={(e) => onChange("stockMode", e.target.value)}
+          >
+            <option value="automatic">Automatique (inventaire)</option>
+            <option value="force_in_stock">Toujours En stock</option>
+            <option value="force_out_of_stock">Toujours En rupture</option>
+          </select>
+        </Field>
         {!slugEditable && (
           <Field label="Inventory (unused codes)">
             <input className="input" value={v.inventoryUnused} disabled readOnly />
@@ -716,7 +730,9 @@ function VariantsTab({
                   <span className="font-medium text-white">{orig.faceValue} {orig.faceCurrency}</span>
                 )}
                 <span className="font-semibold text-white">{orig.priceMad} MAD</span>
-                <span className="text-xs">{orig.inventoryUnused} in stock</span>
+                <span className={`text-xs ${orig.stockMode === "force_out_of_stock" ? "text-yellow-500" : orig.stockMode === "force_in_stock" ? "text-green-400" : "text-muted"}`}>
+                  {orig.stockMode === "force_in_stock" ? "↑ En stock" : orig.stockMode === "force_out_of_stock" ? "↓ En rupture" : `${orig.inventoryUnused} codes`}
+                </span>
                 {isEditing ? (
                   <div className="flex gap-1">
                     <button type="button" onClick={() => setEditingVariant(null)} className="btn-ghost py-1 text-xs" disabled={saving}>

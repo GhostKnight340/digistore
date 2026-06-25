@@ -12,8 +12,9 @@ import {
   getStorefrontFeaturedAction,
   getStorefrontProductsByIdsAction,
   getCategoryCountsAction,
+  getCategoryStockStatusesAction,
 } from "@/app/actions/storefront";
-import type { Product } from "@/lib/types";
+import type { Product, StockStatus } from "@/lib/types";
 
 const steps = [
   {
@@ -37,11 +38,16 @@ export default function HomePage() {
   const { settings } = useStoreSettings();
   const [featured, setFeatured] = useState<Product[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  const [autoStockStatuses, setAutoStockStatuses] = useState<Record<string, StockStatus>>({});
   const [countsReady, setCountsReady] = useState(false);
 
   useEffect(() => {
-    getCategoryCountsAction().then((counts) => {
+    Promise.all([
+      getCategoryCountsAction(),
+      getCategoryStockStatusesAction(),
+    ]).then(([counts, stockStatuses]) => {
       setCategoryCounts(counts);
+      setAutoStockStatuses(stockStatuses);
       setCountsReady(true);
     });
 
@@ -138,14 +144,26 @@ export default function HomePage() {
             {(countsReady
               ? categories.filter((cat) => (categoryCounts[cat.id] ?? 0) > 0)
               : categories
-            ).slice(0, 4).map((category) => (
-              <CategoryCard
-                key={category.id}
-                category={category}
-                count={categoryCounts[category.id]}
-                thumbnail={settings.categoryMedia?.[category.id]}
-              />
-            ))}
+            ).slice(0, 4).map((category) => {
+              const mode = settings.categoryStockModes?.[category.id] ?? "automatic";
+              const autoStatus = autoStockStatuses[category.id];
+              const stockStatus: StockStatus | undefined = countsReady
+                ? mode === "force_in_stock"
+                  ? "in_stock"
+                  : mode === "force_out_of_stock"
+                  ? "out_of_stock"
+                  : autoStatus
+                : undefined;
+              return (
+                <CategoryCard
+                  key={category.id}
+                  category={category}
+                  count={categoryCounts[category.id]}
+                  thumbnail={settings.categoryMedia?.[category.id]}
+                  stockStatus={stockStatus}
+                />
+              );
+            })}
           </div>
         </section>
       )}
@@ -169,7 +187,10 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="mt-8 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
-            {featured.map((product) => (
+            {(settings.featuredOutOfStock === "hide"
+              ? featured.filter((p) => p.stockStatus === "in_stock")
+              : featured
+            ).map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

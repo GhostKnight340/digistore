@@ -78,6 +78,8 @@ export interface VariantDTO {
   active: boolean;
   featured: boolean;
   stockControl: string;
+  /** "automatic" | "force_in_stock" | "force_out_of_stock" */
+  stockMode: string;
   inventoryUnused: number;
 }
 
@@ -126,6 +128,7 @@ export interface SaveVariantInput {
   active: boolean;
   featured: boolean;
   stockControl: string;
+  stockMode: string;
 }
 
 // ─── Customer summaries ───────────────────────────────────────────────────────

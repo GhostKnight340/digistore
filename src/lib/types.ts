@@ -6,6 +6,12 @@ export type CategoryId =
   | "roblox"
   | "valorant";
 
+/** How the stock display is determined for a variant or category. */
+export type StockMode = "automatic" | "force_in_stock" | "force_out_of_stock";
+
+/** The resolved public stock label. */
+export type StockStatus = "in_stock" | "out_of_stock";
+
 export interface Category {
   id: CategoryId;
   name: string;
@@ -33,6 +39,10 @@ export interface Product {
   faceValue?: number | null;
   /** Currency of the face value (e.g. "USD", "EUR", "MAD"). */
   faceCurrency?: string;
+  /** How stock display is determined (automatic = uses real inventory). */
+  stockMode: StockMode;
+  /** Resolved stock label after applying stockMode. */
+  stockStatus: StockStatus;
 }
 
 export interface CartItem {

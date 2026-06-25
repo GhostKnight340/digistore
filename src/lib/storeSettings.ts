@@ -1,4 +1,4 @@
-import type { PaymentMethod } from "./types";
+import type { PaymentMethod, StockMode } from "./types";
 
 export type TrustItemSetting = {
   id: string;
@@ -27,6 +27,10 @@ export type StoreSettings = {
   };
   /** Map of category id → custom image URL (overrides the ProductArt placeholder). */
   categoryMedia: Record<string, string | null>;
+  /** Map of category id → stock display mode override. */
+  categoryStockModes: Record<string, StockMode>;
+  /** Whether to show or hide out-of-stock featured products on the homepage. */
+  featuredOutOfStock: "show" | "hide";
   trustItems: TrustItemSetting[];
   featuredProductIds: string[];
   paymentMethods: Record<PaymentMethod, boolean>;
@@ -70,6 +74,8 @@ export const defaultStoreSettings: StoreSettings = {
     showFooter: true,
   },
   categoryMedia: {},
+  categoryStockModes: {},
+  featuredOutOfStock: "show",
   trustItems: [
     {
       id: "instant-delivery",
@@ -159,6 +165,13 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
     categoryMedia: isObject(value.categoryMedia)
       ? (value.categoryMedia as Record<string, string | null>)
       : defaultStoreSettings.categoryMedia,
+    categoryStockModes: isObject(value.categoryStockModes)
+      ? (value.categoryStockModes as Record<string, StockMode>)
+      : defaultStoreSettings.categoryStockModes,
+    featuredOutOfStock:
+      value.featuredOutOfStock === "hide" || value.featuredOutOfStock === "show"
+        ? value.featuredOutOfStock
+        : defaultStoreSettings.featuredOutOfStock,
     paymentMethods: {
       ...defaultStoreSettings.paymentMethods,
       ...(isObject(value.paymentMethods) ? value.paymentMethods : {}),

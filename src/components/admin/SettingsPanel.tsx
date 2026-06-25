@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
-import { getStorefrontProductsAction } from "@/app/actions/storefront";
+import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
 import { categories } from "@/lib/products";
-import type { PaymentMethod, Product } from "@/lib/types";
+import type { PaymentMethod, Product, StockMode, StockStatus } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
   test: "Paiement test",
@@ -29,9 +29,11 @@ export default function SettingsPanel() {
   const [draft, setDraft] = useState<StoreSettings>(settings);
   const [message, setMessage] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
+  const [autoStockStatuses, setAutoStockStatuses] = useState<Record<string, StockStatus>>({});
 
   useEffect(() => {
     getStorefrontProductsAction().then(setProducts);
+    getCategoryStockStatusesAction().then(setAutoStockStatuses);
   }, []);
 
   useEffect(() => {
@@ -247,6 +249,81 @@ export default function SettingsPanel() {
               }}
             />
           ))}
+        </div>
+      </Panel>
+
+      <Panel title="Featured products behavior">
+        <p className="mb-4 text-sm text-muted">
+          Control what happens to out-of-stock products in the featured section.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(["show", "hide"] as const).map((opt) => (
+            <label
+              key={opt}
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
+                draft.featuredOutOfStock === opt
+                  ? "border-accent bg-accent/5"
+                  : "border-border bg-base hover:border-border-strong"
+              }`}
+            >
+              <input
+                type="radio"
+                name="featuredOutOfStock"
+                value={opt}
+                checked={draft.featuredOutOfStock === opt}
+                onChange={() => update("featuredOutOfStock", opt)}
+                className="mt-0.5 accent-[#3e7bfa]"
+              />
+              <div>
+                <p className="text-sm font-medium text-white">
+                  {opt === "show" ? "Afficher les produits en rupture" : "Masquer les produits en rupture"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {opt === "show"
+                    ? "Les produits en rupture restent visibles avec leur badge."
+                    : "Les produits en rupture sont masqués de la section produits populaires."}
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="Category stock modes">
+        <p className="mb-4 text-sm text-muted">
+          Override stock display for each category card on the homepage.
+        </p>
+        <div className="space-y-3">
+          {categories.map((cat) => {
+            const mode: StockMode = draft.categoryStockModes?.[cat.id] ?? "automatic";
+            const autoStatus = autoStockStatuses[cat.id];
+            return (
+              <div key={cat.id} className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-base p-4">
+                <div className="min-w-[120px]">
+                  <p className="text-sm font-medium text-white">{cat.name}</p>
+                  {autoStatus && (
+                    <p className={`mt-0.5 text-xs ${autoStatus === "in_stock" ? "text-green-400" : "text-yellow-500"}`}>
+                      Auto: {autoStatus === "in_stock" ? "En stock" : "En rupture"}
+                    </p>
+                  )}
+                </div>
+                <select
+                  className="input flex-1 text-sm"
+                  value={mode}
+                  onChange={(e) =>
+                    update("categoryStockModes", {
+                      ...draft.categoryStockModes,
+                      [cat.id]: e.target.value as StockMode,
+                    })
+                  }
+                >
+                  <option value="automatic">Automatique</option>
+                  <option value="force_in_stock">Toujours En stock</option>
+                  <option value="force_out_of_stock">Toujours En rupture</option>
+                </select>
+              </div>
+            );
+          })}
         </div>
       </Panel>
 

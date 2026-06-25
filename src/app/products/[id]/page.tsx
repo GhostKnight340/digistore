@@ -105,19 +105,31 @@ export default async function ProductDetailPage({
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              className="h-3 w-3"
-              aria-hidden
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                className="h-3 w-3"
+                aria-hidden
+              >
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+              Livraison instantanée
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+                product.stockStatus === "out_of_stock"
+                  ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-400"
+                  : "border-green-500/30 bg-green-500/10 text-green-400"
+              }`}
             >
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-            Livraison instantanée
-          </span>
+              <span className={`h-1.5 w-1.5 rounded-full ${product.stockStatus === "out_of_stock" ? "bg-yellow-400" : "bg-green-400"}`} />
+              {product.stockStatus === "out_of_stock" ? "En rupture" : "En stock"}
+            </span>
+          </div>
 
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-text">
             {displayName}
@@ -132,7 +144,11 @@ export default async function ProductDetailPage({
           </div>
 
           <div className="mt-7 rounded-2xl border border-border bg-surface p-6">
-            <AddToCartForm productId={product.id} price={product.price} />
+            <AddToCartForm
+              productId={product.id}
+              price={product.price}
+              outOfStock={product.stockStatus === "out_of_stock"}
+            />
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
               <svg
                 viewBox="0 0 24 24"
