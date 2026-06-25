@@ -1,5 +1,33 @@
--- Karta dev seed — run in Supabase SQL editor
--- Safe to run multiple times (ON CONFLICT DO UPDATE)
+-- Karta — full setup SQL for Supabase SQL editor
+-- Applies all pending migrations then seeds sample data.
+-- Safe to run multiple times.
+
+-- ── Migration 2: product variants columns ─────────────────────────────────────
+
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "parentSlug"   TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "faceValue"    DOUBLE PRECISION;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "faceCurrency" TEXT NOT NULL DEFAULT 'MAD';
+
+-- ── Migration 3: ParentProduct table + featured column ───────────────────────
+
+CREATE TABLE IF NOT EXISTS "ParentProduct" (
+  "slug"             TEXT NOT NULL PRIMARY KEY,
+  "name"             TEXT NOT NULL,
+  "category"         TEXT NOT NULL,
+  "brand"            TEXT,
+  "region"           TEXT NOT NULL DEFAULT '',
+  "deliveryType"     TEXT NOT NULL DEFAULT '',
+  "description"      TEXT NOT NULL DEFAULT '',
+  "shortDescription" TEXT,
+  "longDescription"  TEXT,
+  "instructions"     TEXT,
+  "thumbnail"        TEXT,
+  "active"           BOOLEAN NOT NULL DEFAULT true,
+  "createdAt"        TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updatedAt"        TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false;
 
 -- ── 1. Parent products ────────────────────────────────────────────────────────
 
@@ -60,45 +88,34 @@ VALUES
     true
   )
 ON CONFLICT (slug) DO UPDATE SET
-  name             = EXCLUDED.name,
-  category         = EXCLUDED.category,
-  brand            = EXCLUDED.brand,
-  region           = EXCLUDED.region,
-  "deliveryType"   = EXCLUDED."deliveryType",
-  description      = EXCLUDED.description,
+  name               = EXCLUDED.name,
+  category           = EXCLUDED.category,
+  brand              = EXCLUDED.brand,
+  region             = EXCLUDED.region,
+  "deliveryType"     = EXCLUDED."deliveryType",
+  description        = EXCLUDED.description,
   "shortDescription" = EXCLUDED."shortDescription",
   "longDescription"  = EXCLUDED."longDescription",
-  instructions     = EXCLUDED.instructions,
-  active           = EXCLUDED.active,
-  "updatedAt"      = NOW();
+  instructions       = EXCLUDED.instructions,
+  active             = EXCLUDED.active,
+  "updatedAt"        = NOW();
 
 -- ── 2. Variants (Product rows) ────────────────────────────────────────────────
 
 INSERT INTO "Product" (slug, name, "parentSlug", category, "priceMad", "faceValue", "faceCurrency", region, "deliveryType", active, featured, "stockControl")
 VALUES
-  -- Steam Wallet
-  ('steam-50',  'Steam Wallet 5 EUR',  'steam-wallet', 'steam', 60,  5,   'EUR', 'Maroc / Global', 'Code numérique instantané', true, true,  'manual'),
-  ('steam-100', 'Steam Wallet 10 EUR', 'steam-wallet', 'steam', 120, 10,  'EUR', 'Maroc / Global', 'Code numérique instantané', true, true,  'manual'),
-  ('steam-200', 'Steam Wallet 20 EUR', 'steam-wallet', 'steam', 240, 20,  'EUR', 'Maroc / Global', 'Code numérique instantané', true, false, 'manual'),
-
-  -- PlayStation Store
-  ('psn-100', 'PlayStation Store 100 MAD', 'playstation-store', 'playstation', 100, 100, 'MAD', 'Maroc', 'Code numérique instantané', true, true,  'manual'),
-  ('psn-250', 'PlayStation Store 250 MAD', 'playstation-store', 'playstation', 250, 250, 'MAD', 'Maroc', 'Code numérique instantané', true, false, 'manual'),
-
-  -- Xbox
-  ('xbox-100', 'Xbox Gift Card 100 MAD', 'xbox-gift-card', 'xbox', 100, 100, 'MAD', 'Maroc / Global', 'Code numérique instantané', true, true,  'manual'),
-  ('xbox-200', 'Xbox Gift Card 200 MAD', 'xbox-gift-card', 'xbox', 200, 200, 'MAD', 'Maroc / Global', 'Code numérique instantané', true, false, 'manual'),
-
-  -- Nintendo
-  ('nintendo-150', 'Nintendo eShop 150 MAD', 'nintendo-eshop', 'nintendo', 150, 150, 'MAD', 'Maroc / EU', 'Code numérique instantané', true, false, 'manual'),
-
-  -- Roblox
-  ('roblox-100', 'Roblox Gift Card 100 MAD', 'roblox', 'roblox', 100, 100, 'MAD', 'Global', 'Code numérique instantané', true, true,  'manual'),
-  ('roblox-200', 'Roblox Gift Card 200 MAD', 'roblox', 'roblox', 200, 200, 'MAD', 'Global', 'Code numérique instantané', true, false, 'manual'),
-
-  -- Valorant
-  ('valorant-100', 'Valorant Points 100 MAD', 'valorant-points', 'valorant', 100, 100, 'MAD', 'MENA', 'Code numérique instantané', true, true,  'manual'),
-  ('valorant-200', 'Valorant Points 200 MAD', 'valorant-points', 'valorant', 200, 200, 'MAD', 'MENA', 'Code numérique instantané', true, false, 'manual')
+  ('steam-50',      'Steam Wallet 5 EUR',        'steam-wallet',      'steam',       60,  5,   'EUR', 'Maroc / Global', 'Code numérique instantané', true, true,  'manual'),
+  ('steam-100',     'Steam Wallet 10 EUR',        'steam-wallet',      'steam',      120, 10,   'EUR', 'Maroc / Global', 'Code numérique instantané', true, true,  'manual'),
+  ('steam-200',     'Steam Wallet 20 EUR',        'steam-wallet',      'steam',      240, 20,   'EUR', 'Maroc / Global', 'Code numérique instantané', true, false, 'manual'),
+  ('psn-100',       'PlayStation Store 100 MAD',  'playstation-store', 'playstation',100, 100,  'MAD', 'Maroc',          'Code numérique instantané', true, true,  'manual'),
+  ('psn-250',       'PlayStation Store 250 MAD',  'playstation-store', 'playstation',250, 250,  'MAD', 'Maroc',          'Code numérique instantané', true, false, 'manual'),
+  ('xbox-100',      'Xbox Gift Card 100 MAD',     'xbox-gift-card',    'xbox',       100, 100,  'MAD', 'Maroc / Global', 'Code numérique instantané', true, true,  'manual'),
+  ('xbox-200',      'Xbox Gift Card 200 MAD',     'xbox-gift-card',    'xbox',       200, 200,  'MAD', 'Maroc / Global', 'Code numérique instantané', true, false, 'manual'),
+  ('nintendo-150',  'Nintendo eShop 150 MAD',     'nintendo-eshop',    'nintendo',   150, 150,  'MAD', 'Maroc / EU',     'Code numérique instantané', true, false, 'manual'),
+  ('roblox-100',    'Roblox Gift Card 100 MAD',   'roblox',            'roblox',     100, 100,  'MAD', 'Global',         'Code numérique instantané', true, true,  'manual'),
+  ('roblox-200',    'Roblox Gift Card 200 MAD',   'roblox',            'roblox',     200, 200,  'MAD', 'Global',         'Code numérique instantané', true, false, 'manual'),
+  ('valorant-100',  'Valorant Points 100 MAD',    'valorant-points',   'valorant',   100, 100,  'MAD', 'MENA',           'Code numérique instantané', true, true,  'manual'),
+  ('valorant-200',  'Valorant Points 200 MAD',    'valorant-points',   'valorant',   200, 200,  'MAD', 'MENA',           'Code numérique instantané', true, false, 'manual')
 ON CONFLICT (slug) DO UPDATE SET
   name           = EXCLUDED.name,
   "parentSlug"   = EXCLUDED."parentSlug",
@@ -117,26 +134,26 @@ ON CONFLICT (slug) DO UPDATE SET
 INSERT INTO "DigitalCode" ("productId", code, status)
 SELECT p.id, c.code, 'unused'
 FROM (VALUES
-  ('steam-50',      'STEAM-TEST-50-001'),
-  ('steam-50',      'STEAM-TEST-50-002'),
-  ('steam-100',     'STEAM-TEST-100-001'),
-  ('steam-100',     'STEAM-TEST-100-002'),
-  ('steam-100',     'STEAM-TEST-100-003'),
-  ('steam-200',     'STEAM-TEST-200-001'),
-  ('steam-200',     'STEAM-TEST-200-002'),
-  ('psn-100',       'PSN-TEST-100-001'),
-  ('psn-100',       'PSN-TEST-100-002'),
-  ('psn-250',       'PSN-TEST-250-001'),
-  ('xbox-100',      'XBOX-TEST-100-001'),
-  ('xbox-100',      'XBOX-TEST-100-002'),
-  ('xbox-200',      'XBOX-TEST-200-001'),
-  ('nintendo-150',  'NINTENDO-TEST-150-001'),
-  ('roblox-100',    'ROBLOX-TEST-100-001'),
-  ('roblox-100',    'ROBLOX-TEST-100-002'),
-  ('roblox-200',    'ROBLOX-TEST-200-001'),
-  ('valorant-100',  'VALORANT-TEST-100-001'),
-  ('valorant-100',  'VALORANT-TEST-100-002'),
-  ('valorant-200',  'VALORANT-TEST-200-001')
+  ('steam-50',     'STEAM-TEST-50-001'),
+  ('steam-50',     'STEAM-TEST-50-002'),
+  ('steam-100',    'STEAM-TEST-100-001'),
+  ('steam-100',    'STEAM-TEST-100-002'),
+  ('steam-100',    'STEAM-TEST-100-003'),
+  ('steam-200',    'STEAM-TEST-200-001'),
+  ('steam-200',    'STEAM-TEST-200-002'),
+  ('psn-100',      'PSN-TEST-100-001'),
+  ('psn-100',      'PSN-TEST-100-002'),
+  ('psn-250',      'PSN-TEST-250-001'),
+  ('xbox-100',     'XBOX-TEST-100-001'),
+  ('xbox-100',     'XBOX-TEST-100-002'),
+  ('xbox-200',     'XBOX-TEST-200-001'),
+  ('nintendo-150', 'NINTENDO-TEST-150-001'),
+  ('roblox-100',   'ROBLOX-TEST-100-001'),
+  ('roblox-100',   'ROBLOX-TEST-100-002'),
+  ('roblox-200',   'ROBLOX-TEST-200-001'),
+  ('valorant-100', 'VALORANT-TEST-100-001'),
+  ('valorant-100', 'VALORANT-TEST-100-002'),
+  ('valorant-200', 'VALORANT-TEST-200-001')
 ) AS c(slug, code)
 JOIN "Product" p ON p.slug = c.slug
 ON CONFLICT ("productId", code) DO NOTHING;
