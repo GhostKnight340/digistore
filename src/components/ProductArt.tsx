@@ -24,7 +24,7 @@ export default function ProductArt({
           "repeating-linear-gradient(135deg,rgba(255,255,255,0.018) 0 8px,transparent 8px 16px)",
       }}
     >
-      <div className="absolute h-40 w-56 rounded-[30px] bg-[radial-gradient(circle,rgba(62,123,250,0.2),transparent_64%)] blur-3xl" />
+      <div className="absolute h-24 w-36 rounded-[30px] bg-[radial-gradient(circle,rgba(62,123,250,0.055),transparent_60%)] blur-xl" />
       <span className="relative font-mono text-sm tracking-[0.18em] text-[#5a6070] sm:text-lg">
         {code}
       </span>
