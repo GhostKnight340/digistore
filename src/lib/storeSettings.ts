@@ -34,6 +34,10 @@ export type StoreSettings = {
     showWhyChooseUs: boolean;
     showFooter: boolean;
   };
+  trust: {
+    title: string;
+    subtitle: string;
+  };
   trustItems: TrustItemSetting[];
   featuredProductIds: string[];
   paymentMethods: Record<PaymentMethod, boolean>;
@@ -83,6 +87,10 @@ export const defaultStoreSettings: StoreSettings = {
       { title: "Paiement sécurisé", description: "Entrez votre email et payez simplement." },
       { title: "Recevez le code", description: "Votre code apparaît instantanément." },
     ],
+  },
+  trust: {
+    title: "Pourquoi choisir Karta ?",
+    subtitle: "Une boutique pensée pour les clients marocains.",
   },
   trustItems: [
     {
@@ -173,6 +181,12 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
             : defaultStoreSettings.howItWorks.steps,
         }
       : defaultStoreSettings.howItWorks,
+    trust: isObject(value.trust)
+      ? {
+          title: typeof value.trust.title === "string" ? value.trust.title : defaultStoreSettings.trust.title,
+          subtitle: typeof value.trust.subtitle === "string" ? value.trust.subtitle : defaultStoreSettings.trust.subtitle,
+        }
+      : defaultStoreSettings.trust,
     trustItems: Array.isArray(value.trustItems)
       ? value.trustItems.map((item, index) => ({
           ...defaultStoreSettings.trustItems[index % defaultStoreSettings.trustItems.length],

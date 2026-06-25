@@ -47,10 +47,10 @@ export default function TrustStrip() {
     <section className="mt-16">
       <div className="rounded-[20px] border border-border bg-gradient-to-b from-surface to-surface/40 px-6 py-10 sm:px-11 sm:py-12">
         <h2 className="text-center text-2xl font-semibold tracking-tight text-text">
-          Pourquoi choisir Karta&nbsp;?
+          {settings.trust.title}
         </h2>
         <p className="mx-auto mt-1 max-w-md text-center text-sm text-muted">
-          Une boutique pensée pour les clients marocains.
+          {settings.trust.subtitle}
         </p>
         <div className="mt-10 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {items.map((item, index) => (
