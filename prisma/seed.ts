@@ -41,6 +41,8 @@ async function main() {
         region: product.region,
         deliveryType: product.deliveryType,
         active: true,
+        featured: product.featured ?? false,
+        sourceType: "manual",
       },
       create: {
         slug: product.id,
@@ -50,6 +52,8 @@ async function main() {
         region: product.region,
         deliveryType: product.deliveryType,
         active: true,
+        featured: product.featured ?? false,
+        sourceType: "manual",
       },
     });
 

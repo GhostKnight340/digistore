@@ -1,24 +1,25 @@
-// Prisma schema for the Karta digital store.
+// Prisma schema for the Karta digital store — PostgreSQL (Supabase / Neon).
 //
-// SQLite is used for local development so the project has a real database
-// structure that can later be migrated to PostgreSQL (Supabase / Neon) by
-// swapping the datasource `provider` and `DATABASE_URL`.
-//
-// NOTE: SQLite has no native enum type, so status fields are stored as
-// strings. The allowed values are documented next to each field and mirrored
+// NOTE: Status fields are stored as TEXT strings because PostgreSQL enums
+// require migrations to alter; string columns are more flexible for a
+// prototype. Allowed values are documented next to each field and mirrored
 // by the TypeScript unions in src/lib/types.ts.
+//
+// All `id` fields use `dbgenerated("gen_random_uuid()::text")` so that
+// raw SQL inserts (e.g. from Supabase Studio or psql scripts) receive an
+// auto-generated ID even when the column is omitted from the INSERT.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Product {
-  id           String   @id @default(cuid())
+  id           String   @id @default(dbgenerated("gen_random_uuid()::text"))
   name         String
   slug         String   @unique
   category     String
@@ -28,14 +29,20 @@ model Product {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // sourceType: "manual" | "api"
+  sourceType   String   @default("manual")
+  featured     Boolean  @default(false)
+  brand        String?
+  faceValue    Int?
+  currency     String?
 
-  digitalCodes DigitalCode[]
-  orderItems   OrderItem[]
+  digitalCodes   DigitalCode[]
+  orderItems     OrderItem[]
   deliveredCodes DeliveredCode[]
 }
 
 model DigitalCode {
-  id              String    @id @default(cuid())
+  id              String    @id @default(dbgenerated("gen_random_uuid()::text"))
   productId       String
   code            String
   // status: "unused" | "reserved" | "used" | "disabled"
@@ -55,7 +62,7 @@ model DigitalCode {
 }
 
 model Order {
-  id            String   @id @default(cuid())
+  id            String   @id @default(dbgenerated("gen_random_uuid()::text"))
   customerName  String
   customerEmail String
   // status: "pending_payment" | "payment_confirmed" | "delivered" | "cancelled"
@@ -71,7 +78,7 @@ model Order {
 }
 
 model OrderItem {
-  id           String @id @default(cuid())
+  id           String @id @default(dbgenerated("gen_random_uuid()::text"))
   orderId      String
   productId    String
   quantity     Int
@@ -83,7 +90,7 @@ model OrderItem {
 }
 
 model DeliveredCode {
-  id            String   @id @default(cuid())
+  id            String   @id @default(dbgenerated("gen_random_uuid()::text"))
   orderId       String
   orderItemId   String
   productId     String
@@ -101,7 +108,7 @@ model DeliveredCode {
 }
 
 model EmailLog {
-  id        String   @id @default(cuid())
+  id        String   @id @default(dbgenerated("gen_random_uuid()::text"))
   orderId   String
   // type: "order_received" | "payment_confirmed" | "code_delivered"
   type      String
