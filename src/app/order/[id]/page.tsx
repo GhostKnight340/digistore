@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatMAD, formatDate } from "@/lib/format";
 import { isDelivered, orderStatusLabel } from "@/lib/orderStatus";
 import { getCustomerOrder } from "@/lib/db/orders";
+import AutoRefresh from "@/components/AutoRefresh";
 
 const methodLabels: Record<string, string> = {
   test: "Paiement test",
@@ -57,6 +58,8 @@ export default async function OrderConfirmationPage({
   const delivered = isDelivered(order.status);
 
   return (
+    <>
+      {!delivered && <AutoRefresh />}
     <div className="container-page py-10">
       <div className="mx-auto max-w-3xl">
         <section className="text-center">
@@ -180,6 +183,7 @@ export default async function OrderConfirmationPage({
         </section>
       </div>
     </div>
+    </>
   );
 }
 
