@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
 import {
@@ -14,9 +15,10 @@ import InventoryPanel from "@/components/admin/InventoryPanel";
 import ProductsPanel from "@/components/admin/ProductsPanel";
 import CustomersPanel from "@/components/admin/CustomersPanel";
 
-const navItems = [
+const navItems: { id: string; label: string; icon: string; href?: string }[] = [
   { id: "overview", label: "Overview", icon: "📊" },
   { id: "settings", label: "Settings", icon: "⚙️" },
+  { id: "editor", label: "Homepage editor", icon: "🎨", href: "/admin/editor" },
   { id: "products", label: "Products", icon: "🛍️" },
   { id: "inventory", label: "Inventory", icon: "🔑" },
   { id: "fulfillment", label: "Manual fulfillment", icon: "📦" },
@@ -65,21 +67,32 @@ export default function AdminPage() {
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
         <aside className="h-fit">
           <nav className="card space-y-1 p-3 text-sm">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveTab(item.id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left ${
-                  activeTab === item.id
-                    ? "bg-accent/10 font-medium text-white"
-                    : "text-muted"
-                }`}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
+            {navItems.map((item) =>
+              item.href ? (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-muted hover:text-white"
+                >
+                  <span>{item.icon}</span>
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left ${
+                    activeTab === item.id
+                      ? "bg-accent/10 font-medium text-white"
+                      : "text-muted"
+                  }`}
+                >
+                  <span>{item.icon}</span>
+                  {item.label}
+                </button>
+              )
+            )}
           </nav>
         </aside>
 
