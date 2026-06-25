@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { formatDate } from "@/lib/format";
 import {
   getInventoryAction,
@@ -17,20 +17,44 @@ const STATUS_STYLES: Record<string, string> = {
   disabled: "bg-red-500/15 text-red-400",
 };
 
-export default function InventoryPanel() {
-  const [groups, setGroups] = useState<InventoryGroupDTO[]>([]);
-  const [loaded, setLoaded] = useState(false);
+type InventoryPanelProps = {
+  initialGroups?: InventoryGroupDTO[];
+};
+
+const LOAD_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(
+        () => reject(new Error(`${label} took too long to respond.`)),
+        LOAD_TIMEOUT_MS,
+      );
+    }),
+  ]);
+}
+
+export default function InventoryPanel({
+  initialGroups = [],
+}: InventoryPanelProps) {
+  const [groups, setGroups] = useState<InventoryGroupDTO[]>(initialGroups);
+  const [loaded, setLoaded] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [openSlug, setOpenSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await getInventoryAction();
-    setGroups(data);
-    setLoaded(true);
+    setLoadError("");
+    try {
+      const data = await withTimeout(getInventoryAction(), "Inventory");
+      setGroups(data);
+    } catch (error) {
+      console.error("Failed to load inventory", error);
+      setLoadError("Inventory could not be refreshed. Showing the latest loaded data.");
+    } finally {
+      setLoaded(true);
+    }
   }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   return (
     <div className="space-y-6">
@@ -42,8 +66,18 @@ export default function InventoryPanel() {
         </p>
       </div>
 
+      {loadError ? (
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+          {loadError}
+        </div>
+      ) : null}
+
       {!loaded ? (
         <p className="text-sm text-muted">Loading...</p>
+      ) : groups.length === 0 ? (
+        <p className="card p-6 text-sm text-muted">
+          No inventory codes yet. Add stock after products are seeded.
+        </p>
       ) : (
         <div className="space-y-3">
           {groups.map((group) => (

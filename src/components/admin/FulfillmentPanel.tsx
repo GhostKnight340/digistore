@@ -22,21 +22,45 @@ import type {
 
 type Filter = "todo" | "all";
 
-export default function FulfillmentPanel() {
-  const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
-  const [loaded, setLoaded] = useState(false);
+type FulfillmentPanelProps = {
+  initialOrders?: AdminOrderDTO[];
+};
+
+const LOAD_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(
+        () => reject(new Error(`${label} took too long to respond.`)),
+        LOAD_TIMEOUT_MS,
+      );
+    }),
+  ]);
+}
+
+export default function FulfillmentPanel({
+  initialOrders = [],
+}: FulfillmentPanelProps) {
+  const [orders, setOrders] = useState<AdminOrderDTO[]>(initialOrders);
+  const [loaded, setLoaded] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState<Filter>("todo");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await getAdminOrdersAction();
-    setOrders(data);
-    setLoaded(true);
+    setLoadError("");
+    try {
+      const data = await withTimeout(getAdminOrdersAction(), "Orders");
+      setOrders(data);
+    } catch (error) {
+      console.error("Failed to load fulfillment orders", error);
+      setLoadError("Orders could not be refreshed. Showing the latest loaded data.");
+    } finally {
+      setLoaded(true);
+    }
   }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const visibleOrders = useMemo(
     () =>
@@ -80,6 +104,12 @@ export default function FulfillmentPanel() {
           </button>
         </div>
       </div>
+
+      {loadError ? (
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+          {loadError}
+        </div>
+      ) : null}
 
       <section className="card overflow-hidden">
         {!loaded ? (

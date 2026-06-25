@@ -1,14 +1,8 @@
-"use client";
-
-import { useCallback, useEffect, useState } from "react";
-import { products } from "@/lib/products";
-import { formatMAD, formatDate } from "@/lib/format";
-import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
-import {
-  getAdminOrdersAction,
-  getInventoryAction,
-} from "@/app/actions/admin";
+import AdminDashboard from "@/components/admin/AdminDashboard";
+import { getInventoryGroups } from "@/lib/db/inventory";
+import { getAdminOrders } from "@/lib/db/orders";
 import type { AdminOrderDTO, InventoryGroupDTO } from "@/lib/dto";
+<<<<<<< ours
 import SettingsPanel from "@/components/admin/SettingsPanel";
 import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
@@ -116,173 +110,40 @@ export default function AdminPage() {
                 value={loaded ? String(customers) : "-"}
               />
             </div>
+=======
 
-            <section className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <h2 className="font-bold text-white">Recent orders</h2>
-                <span className="text-xs text-muted">Manual fulfillment</span>
-              </div>
-              {!loaded ? (
-                <p className="px-5 py-8 text-sm text-muted">Loading...</p>
-              ) : orders.length === 0 ? (
-                <p className="px-5 py-8 text-sm text-muted">
-                  No orders yet. Place a test order to see it here.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="text-xs uppercase text-muted">
-                      <tr className="border-b border-border">
-                        <th className="px-5 py-3 font-medium">Order</th>
-                        <th className="px-5 py-3 font-medium">Customer</th>
-                        <th className="px-5 py-3 font-medium">Date</th>
-                        <th className="px-5 py-3 font-medium">Total</th>
-                        <th className="px-5 py-3 font-medium">Status</th>
-                        <th className="px-5 py-3 font-medium">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.slice(0, 10).map((order) => (
-                        <tr key={order.id} className="border-b border-border/60">
-                          <td className="px-5 py-3 font-mono text-xs text-white">
-                            {order.id}
-                          </td>
-                          <td className="px-5 py-3 text-muted">
-                            {order.customerEmail}
-                          </td>
-                          <td className="px-5 py-3 text-muted">
-                            {formatDate(order.createdAt)}
-                          </td>
-                          <td className="px-5 py-3 text-white">
-                            {formatMAD(order.totalMad)}
-                          </td>
-                          <td className="px-5 py-3">
-                            <span
-                              className={`chip ${orderStatusBadgeClass(
-                                order.status,
-                              )}`}
-                            >
-                              {orderStatusShort(order.status)}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3">
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab("fulfillment")}
-                              className="text-xs font-medium text-accent hover:text-accent-hover"
-                            >
-                              {order.status === "delivered" ? "View" : "Fulfill"}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+export const dynamic = "force-dynamic";
+>>>>>>> theirs
 
-            <section className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <h2 className="font-bold text-white">Inventory summary</h2>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("inventory")}
-                  className="text-xs font-medium text-accent hover:text-accent-hover"
-                >
-                  Manage codes
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="text-xs uppercase text-muted">
-                    <tr className="border-b border-border">
-                      <th className="px-5 py-3 font-medium">Product</th>
-                      <th className="px-5 py-3 font-medium">Unused</th>
-                      <th className="px-5 py-3 font-medium">Used</th>
-                      <th className="px-5 py-3 font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inventory.map((row) => (
-                      <tr
-                        key={row.productId}
-                        className="border-b border-border/60"
-                      >
-                        <td className="px-5 py-3 font-mono text-xs text-white">
-                          {row.productId}
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="font-semibold text-green-400">
-                            {row.unused}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-muted">{row.used}</td>
-                        <td className="px-5 py-3 text-muted">{row.total}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+export default async function AdminPage() {
+  const [ordersResult, inventoryResult] = await Promise.allSettled([
+    getAdminOrders(),
+    getInventoryGroups(),
+  ]);
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Placeholder
-                icon="🔌"
-                title="Supplier API"
-                text="Connect automated code suppliers to auto-restock inventory. Not connected in Phase 1."
-              />
-              <Placeholder
-                icon="↩"
-                title="Refunds"
-                text="Review and process customer refund requests. Coming in a later phase."
-              />
-              <Placeholder
-                icon="🛍️"
-                title="Products"
-                text={`${products.length} products in the catalog. Editing UI coming later.`}
-              />
-              <Placeholder
-                icon="👥"
-                title="Customers"
-                text="Browse customer profiles and order history. Placeholder for now."
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+  const initialOrders: AdminOrderDTO[] =
+    ordersResult.status === "fulfilled" ? ordersResult.value : [];
+  const initialInventory: InventoryGroupDTO[] =
+    inventoryResult.status === "fulfilled" ? inventoryResult.value : [];
 
-function Stat({ label, value }: { label: string; value: string }) {
+  const failures = [ordersResult, inventoryResult].filter(
+    (result) => result.status === "rejected",
+  ).length;
+
+  const initialLoadError =
+    failures === 0
+      ? null
+      : failures === 2
+        ? "Orders and inventory could not be loaded. Check the server logs and database connection."
+        : ordersResult.status === "rejected"
+          ? "Orders could not be loaded. Inventory is still available below."
+          : "Inventory could not be loaded. Recent orders are still available below.";
+
   return (
-    <div className="card p-5">
-      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-2 text-2xl font-extrabold text-white">{value}</p>
-    </div>
-  );
-}
-
-function Placeholder({
-  icon,
-  title,
-  text,
-}: {
-  icon: string;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="card p-5">
-      <div className="flex items-center gap-2">
-        <span className="text-xl">{icon}</span>
-        <h3 className="font-semibold text-white">{title}</h3>
-        <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-[10px] font-bold uppercase text-muted">
-          Soon
-        </span>
-      </div>
-      <p className="mt-2 text-sm text-muted">{text}</p>
-    </div>
+    <AdminDashboard
+      initialOrders={initialOrders}
+      initialInventory={initialInventory}
+      initialLoadError={initialLoadError}
+    />
   );
 }

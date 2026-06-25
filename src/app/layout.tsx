@@ -1,22 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import { StoreSettingsProvider } from "@/context/StoreSettingsContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
-const geistSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Karta - Cartes de jeu instantanées au Maroc",
@@ -30,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en">
       <body className="min-h-screen font-sans antialiased">
         <StoreSettingsProvider>
           <StoreProvider>
