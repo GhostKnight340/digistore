@@ -37,9 +37,13 @@ export default function HomePage() {
   const { settings } = useStoreSettings();
   const [featured, setFeatured] = useState<Product[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  const [countsReady, setCountsReady] = useState(false);
 
   useEffect(() => {
-    getCategoryCountsAction().then(setCategoryCounts);
+    getCategoryCountsAction().then((counts) => {
+      setCategoryCounts(counts);
+      setCountsReady(true);
+    });
 
     if (settings.featuredProductIds.length > 0) {
       getStorefrontProductsByIdsAction(settings.featuredProductIds).then(setFeatured);
@@ -131,7 +135,10 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="mt-8 grid grid-cols-2 gap-[18px] md:grid-cols-4">
-            {categories.slice(0, 4).map((category) => (
+            {(countsReady
+              ? categories.filter((cat) => (categoryCounts[cat.id] ?? 0) > 0)
+              : categories
+            ).slice(0, 4).map((category) => (
               <CategoryCard
                 key={category.id}
                 category={category}

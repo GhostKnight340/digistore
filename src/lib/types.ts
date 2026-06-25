@@ -18,6 +18,8 @@ export interface Category {
 export interface Product {
   id: string;
   name: string;
+  /** Name of the parent product group (e.g. "PlayStation Store"). */
+  parentName?: string;
   category: CategoryId;
   region: string;
   /** Price in Moroccan Dirham. */
@@ -27,6 +29,10 @@ export interface Product {
   featured?: boolean;
   /** URL of the product thumbnail image set in the admin panel. */
   thumbnail?: string | null;
+  /** Denomination value on the card face (e.g. 10, 50, 100). */
+  faceValue?: number | null;
+  /** Currency of the face value (e.g. "USD", "EUR", "MAD"). */
+  faceCurrency?: string;
 }
 
 export interface CartItem {

@@ -4,8 +4,16 @@ import { getCategory } from "@/lib/products";
 import { formatMAD } from "@/lib/format";
 import ProductArt from "./ProductArt";
 
+function displayTitle(product: Product): string {
+  if (product.parentName && product.faceValue != null) {
+    return `${product.parentName} ${product.faceValue} ${product.faceCurrency ?? "MAD"}`;
+  }
+  return product.name;
+}
+
 export default function ProductCard({ product }: { product: Product }) {
   const cat = getCategory(product.category);
+  const title = displayTitle(product);
   return (
     <Link
       href={`/products/${product.id}`}
@@ -15,7 +23,7 @@ export default function ProductCard({ product }: { product: Product }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={product.thumbnail}
-          alt={product.name}
+          alt={title}
           className="aspect-[3/2] w-full object-cover"
         />
       ) : (
@@ -36,7 +44,7 @@ export default function ProductCard({ product }: { product: Product }) {
           Instantané
         </span>
         <h3 className="line-clamp-2 text-[14.5px] font-medium leading-snug text-text">
-          {product.name}
+          {title}
         </h3>
         <div className="mt-3 flex items-baseline justify-between">
           <span className="font-mono text-lg font-semibold tracking-tight text-text">

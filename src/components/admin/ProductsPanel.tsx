@@ -6,6 +6,7 @@ import {
   getParentProductsAction,
   saveParentProductAction,
   saveVariantAction,
+  deleteVariantAction,
 } from "@/app/actions/admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -67,6 +68,8 @@ export default function ProductsPanel() {
   const [editingVariant, setEditingVariant] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [isAddingVariant, setIsAddingVariant] = useState(false);
+  const [newVariantDraft, setNewVariantDraft] = useState<VariantDTO | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +92,8 @@ export default function ProductsPanel() {
     setDraft({ ...p, variants: p.variants.map((v) => ({ ...v })) });
     setVariantDrafts(Object.fromEntries(p.variants.map((v) => [v.slug, { ...v }])));
     setEditingVariant(null);
+    setIsAddingVariant(false);
+    setNewVariantDraft(null);
     setActiveTab("details");
     setMsg(null);
   }
@@ -148,6 +153,77 @@ export default function ProductsPanel() {
     if (result.ok) {
       setMsg({ text: "Saved.", ok: true });
       setIsNew(false);
+      await load();
+    } else {
+      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  function startAddVariant() {
+    if (!draft) return;
+    setIsAddingVariant(true);
+    setEditingVariant(null);
+    setNewVariantDraft({
+      id: "",
+      slug: `${draft.slug}-`,
+      name: draft.name,
+      priceMad: 0,
+      faceValue: null,
+      faceCurrency: "MAD",
+      active: true,
+      featured: false,
+      stockControl: "manual",
+      inventoryUnused: 0,
+    });
+    setMsg(null);
+  }
+
+  function cancelAddVariant() {
+    setIsAddingVariant(false);
+    setNewVariantDraft(null);
+  }
+
+  async function saveNewVariant() {
+    if (!draft || !newVariantDraft) return;
+    if (!newVariantDraft.slug.trim() || !newVariantDraft.name.trim()) {
+      setMsg({ text: "Slug and name are required for the new variant.", ok: false });
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const input: SaveVariantInput = {
+      slug: newVariantDraft.slug.trim(),
+      name: newVariantDraft.name.trim(),
+      parentSlug: draft.slug,
+      category: draft.category,
+      priceMad: newVariantDraft.priceMad,
+      faceValue: newVariantDraft.faceValue,
+      faceCurrency: newVariantDraft.faceCurrency,
+      region: draft.region,
+      deliveryType: draft.deliveryType,
+      active: newVariantDraft.active,
+      featured: newVariantDraft.featured,
+      stockControl: newVariantDraft.stockControl,
+    };
+    const result = await saveVariantAction(input);
+    if (result.ok) {
+      setMsg({ text: "Variant added.", ok: true });
+      setIsAddingVariant(false);
+      setNewVariantDraft(null);
+      await load();
+    } else {
+      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  async function deleteVariantHandler(slug: string) {
+    setSaving(true);
+    setMsg(null);
+    const result = await deleteVariantAction(slug);
+    if (result.ok) {
+      setMsg({ text: "Variant deleted.", ok: true });
       await load();
     } else {
       setMsg({ text: result.error ?? "Unknown error.", ok: false });
@@ -309,6 +385,13 @@ export default function ProductsPanel() {
                   updateVariant={updateVariant}
                   onSaveVariant={saveVariant}
                   saving={saving}
+                  isAddingVariant={isAddingVariant}
+                  newVariantDraft={newVariantDraft}
+                  onAddVariant={startAddVariant}
+                  onNewVariantChange={setNewVariantDraft}
+                  onSaveNewVariant={saveNewVariant}
+                  onCancelNewVariant={cancelAddVariant}
+                  onDeleteVariant={deleteVariantHandler}
                 />
               )}
               {activeTab === "media" && <MediaTab draft={draft} update={updateDraft} />}
@@ -445,6 +528,89 @@ function ContentTab({
 
 // ─── Variants tab ────────────────────────────────────────────────────────────
 
+function VariantForm({
+  v,
+  slugEditable,
+  onChange,
+}: {
+  v: VariantDTO;
+  slugEditable?: boolean;
+  onChange: <K extends keyof VariantDTO>(k: K, val: VariantDTO[K]) => void;
+}) {
+  return (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {slugEditable && (
+          <Field label="Slug *">
+            <input
+              className="input font-mono"
+              value={v.slug}
+              onChange={(e) => onChange("slug", e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+              placeholder="steam-wallet-50-eur"
+            />
+          </Field>
+        )}
+        <Field label="Variant name *">
+          <input
+            className="input"
+            value={v.name}
+            onChange={(e) => onChange("name", e.target.value)}
+            placeholder="Steam Wallet 50 EUR"
+          />
+        </Field>
+        <Field label="Face value">
+          <input
+            className="input"
+            type="number"
+            min="0"
+            step="0.01"
+            value={v.faceValue ?? ""}
+            onChange={(e) =>
+              onChange("faceValue", e.target.value === "" ? null : Number(e.target.value))
+            }
+          />
+        </Field>
+        <Field label="Face currency">
+          <select
+            className="input"
+            value={v.faceCurrency}
+            onChange={(e) => onChange("faceCurrency", e.target.value)}
+          >
+            {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Price (MAD)">
+          <input
+            className="input"
+            type="number"
+            min="0"
+            value={v.priceMad}
+            onChange={(e) => onChange("priceMad", Number(e.target.value))}
+          />
+        </Field>
+        <Field label="Stock control">
+          <select
+            className="input"
+            value={v.stockControl}
+            onChange={(e) => onChange("stockControl", e.target.value)}
+          >
+            {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </Field>
+        {!slugEditable && (
+          <Field label="Inventory (unused codes)">
+            <input className="input" value={v.inventoryUnused} disabled readOnly />
+          </Field>
+        )}
+      </div>
+      <div className="mt-4 flex gap-6">
+        <Toggle label="Active" checked={v.active} onChange={(val) => onChange("active", val)} />
+        <Toggle label="Featured" checked={v.featured} onChange={(val) => onChange("featured", val)} />
+      </div>
+    </>
+  );
+}
+
 function VariantsTab({
   draft,
   variantDrafts,
@@ -453,6 +619,13 @@ function VariantsTab({
   updateVariant,
   onSaveVariant,
   saving,
+  isAddingVariant,
+  newVariantDraft,
+  onAddVariant,
+  onNewVariantChange,
+  onSaveNewVariant,
+  onCancelNewVariant,
+  onDeleteVariant,
 }: {
   draft: ParentProductDTO;
   variantDrafts: Record<string, VariantDTO>;
@@ -461,27 +634,74 @@ function VariantsTab({
   updateVariant: <K extends keyof VariantDTO>(slug: string, k: K, v: VariantDTO[K]) => void;
   onSaveVariant: (slug: string) => Promise<void>;
   saving: boolean;
+  isAddingVariant: boolean;
+  newVariantDraft: VariantDTO | null;
+  onAddVariant: () => void;
+  onNewVariantChange: (draft: VariantDTO) => void;
+  onSaveNewVariant: () => Promise<void>;
+  onCancelNewVariant: () => void;
+  onDeleteVariant: (slug: string) => Promise<void>;
 }) {
-  if (draft.variants.length === 0) {
-    return (
-      <div className="rounded-xl border border-border bg-base px-6 py-10 text-center text-sm text-muted">
-        <p>No variants yet.</p>
-        <p className="mt-1 text-xs">Add variants via the Supabase SQL editor or INSERT into the Product table with <code className="font-mono">parentSlug = &apos;{draft.slug}&apos;</code>.</p>
-      </div>
-    );
-  }
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   return (
     <div className="space-y-3">
+      {/* Add variant button */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onAddVariant}
+          disabled={isAddingVariant || saving}
+          className="btn-primary py-1.5 text-xs"
+        >
+          + Add variant
+        </button>
+      </div>
+
+      {/* New variant form */}
+      {isAddingVariant && newVariantDraft && (
+        <div className="rounded-xl border border-accent/40 bg-base p-4">
+          <p className="mb-4 text-sm font-semibold text-white">New variant</p>
+          <VariantForm
+            v={newVariantDraft}
+            slugEditable
+            onChange={(k, val) => onNewVariantChange({ ...newVariantDraft, [k]: val })}
+          />
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={onCancelNewVariant}
+              className="btn-ghost py-1.5 text-xs"
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onSaveNewVariant}
+              className="btn-primary py-1.5 text-xs"
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save variant"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {draft.variants.length === 0 && !isAddingVariant && (
+        <div className="rounded-xl border border-border bg-base px-6 py-10 text-center text-sm text-muted">
+          <p>No variants yet.</p>
+          <p className="mt-1 text-xs">Click &ldquo;+ Add variant&rdquo; above to create the first variant.</p>
+        </div>
+      )}
+
       {draft.variants.map((orig) => {
         const v = variantDrafts[orig.slug] ?? orig;
         const isEditing = editingVariant === orig.slug;
+        const isConfirming = confirmDelete === orig.slug;
 
         return (
-          <div
-            key={orig.slug}
-            className="rounded-xl border border-border bg-base"
-          >
+          <div key={orig.slug} className="rounded-xl border border-border bg-base">
             {/* Row header */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
               <div className="flex items-center gap-3">
@@ -491,39 +711,61 @@ function VariantsTab({
                 </span>
                 {orig.featured && <span className="chip border-accent/30 text-accent">Featured</span>}
               </div>
-              <div className="flex items-center gap-4 text-sm text-muted">
+              <div className="flex items-center gap-3 text-sm text-muted">
                 {orig.faceValue != null && (
-                  <span>{orig.faceValue} {orig.faceCurrency}</span>
+                  <span className="font-medium text-white">{orig.faceValue} {orig.faceCurrency}</span>
                 )}
                 <span className="font-semibold text-white">{orig.priceMad} MAD</span>
                 <span className="text-xs">{orig.inventoryUnused} in stock</span>
                 {isEditing ? (
                   <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setEditingVariant(null)}
-                      className="btn-ghost py-1 text-xs"
-                      disabled={saving}
-                    >
+                    <button type="button" onClick={() => setEditingVariant(null)} className="btn-ghost py-1 text-xs" disabled={saving}>
                       Cancel
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onSaveVariant(orig.slug)}
-                      className="btn-primary py-1 text-xs"
-                      disabled={saving}
-                    >
+                    <button type="button" onClick={() => onSaveVariant(orig.slug)} className="btn-primary py-1 text-xs" disabled={saving}>
                       {saving ? "…" : "Save"}
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditingVariant(orig.slug)}
-                    className="text-xs font-medium text-accent hover:text-accent-hover"
-                  >
-                    Edit
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingVariant(orig.slug); setConfirmDelete(null); }}
+                      className="text-xs font-medium text-accent hover:text-accent-hover"
+                      disabled={saving}
+                    >
+                      Edit
+                    </button>
+                    {isConfirming ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-red-400">Delete?</span>
+                        <button
+                          type="button"
+                          onClick={async () => { setConfirmDelete(null); await onDeleteVariant(orig.slug); }}
+                          className="text-xs font-semibold text-red-400 hover:text-red-300"
+                          disabled={saving}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(null)}
+                          className="text-xs text-muted hover:text-white"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(orig.slug)}
+                        className="text-xs text-red-500/70 hover:text-red-400"
+                        disabled={saving}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -531,74 +773,10 @@ function VariantsTab({
             {/* Inline editor */}
             {isEditing && (
               <div className="border-t border-border px-4 py-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Field label="Variant name">
-                    <input
-                      className="input"
-                      value={v.name}
-                      onChange={(e) => updateVariant(orig.slug, "name", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Face value">
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={v.faceValue ?? ""}
-                      onChange={(e) =>
-                        updateVariant(orig.slug, "faceValue", e.target.value === "" ? null : Number(e.target.value))
-                      }
-                    />
-                  </Field>
-                  <Field label="Face currency">
-                    <select
-                      className="input"
-                      value={v.faceCurrency}
-                      onChange={(e) => updateVariant(orig.slug, "faceCurrency", e.target.value)}
-                    >
-                      {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Price (MAD)">
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      value={v.priceMad}
-                      onChange={(e) => updateVariant(orig.slug, "priceMad", Number(e.target.value))}
-                    />
-                  </Field>
-                  <Field label="Stock control">
-                    <select
-                      className="input"
-                      value={v.stockControl}
-                      onChange={(e) => updateVariant(orig.slug, "stockControl", e.target.value)}
-                    >
-                      {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Inventory (unused codes)">
-                    <input
-                      className="input"
-                      value={orig.inventoryUnused}
-                      disabled
-                      readOnly
-                    />
-                  </Field>
-                </div>
-                <div className="mt-4 flex gap-6">
-                  <Toggle
-                    label="Active"
-                    checked={v.active}
-                    onChange={(val) => updateVariant(orig.slug, "active", val)}
-                  />
-                  <Toggle
-                    label="Featured"
-                    checked={v.featured}
-                    onChange={(val) => updateVariant(orig.slug, "featured", val)}
-                  />
-                </div>
+                <VariantForm
+                  v={v}
+                  onChange={(k, val) => updateVariant(orig.slug, k, val)}
+                />
               </div>
             )}
           </div>

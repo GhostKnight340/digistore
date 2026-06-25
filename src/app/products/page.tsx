@@ -18,6 +18,7 @@ export default async function ProductsPage({
   const query = (q ?? "").trim().toLowerCase();
 
   const allProducts = await getStorefrontProducts();
+  const categoryIdsWithProducts = new Set(allProducts.map((p) => p.category));
 
   let filtered = allProducts;
   if (category) {
@@ -59,7 +60,7 @@ export default async function ProductsPage({
         >
           Tous
         </Link>
-        {categories.map((item) => (
+        {categories.filter((item) => categoryIdsWithProducts.has(item.id)).map((item) => (
           <Link
             key={item.id}
             href={`/products?category=${item.id}`}

@@ -105,6 +105,26 @@ export async function saveParentProduct(
   }
 }
 
+export async function deleteVariant(slug: string): Promise<ActionResult> {
+  const variant = await prisma.product.findUnique({ where: { slug } });
+  if (!variant) return { ok: false, error: "Variant not found." };
+
+  const [orderCount, codeCount] = await Promise.all([
+    prisma.orderItem.count({ where: { productId: variant.id } }),
+    prisma.digitalCode.count({ where: { productId: variant.id } }),
+  ]);
+
+  if (orderCount > 0 || codeCount > 0) {
+    return {
+      ok: false,
+      error: `Cannot delete: this variant has ${orderCount} order(s) and ${codeCount} inventory code(s). Deactivate it instead.`,
+    };
+  }
+
+  await prisma.product.delete({ where: { slug } });
+  return { ok: true };
+}
+
 export async function saveVariant(data: SaveVariantInput): Promise<ActionResult> {
   if (!data.slug.trim() || !data.name.trim()) {
     return { ok: false, error: "Slug and name are required." };

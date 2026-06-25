@@ -19,6 +19,7 @@ import {
   getParentProducts,
   saveParentProduct,
   saveVariant,
+  deleteVariant,
 } from "@/lib/db/products";
 import type {
   ActionResult,
@@ -92,4 +93,8 @@ export async function saveVariantAction(
   data: SaveVariantInput,
 ): Promise<ActionResult> {
   return saveVariant(data);
+}
+
+export async function deleteVariantAction(slug: string): Promise<ActionResult> {
+  return deleteVariant(slug);
 }

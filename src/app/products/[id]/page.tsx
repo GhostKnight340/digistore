@@ -43,6 +43,11 @@ export default async function ProductDetailPage({
     .filter((item) => item.id !== product.id)
     .slice(0, 4);
 
+  const displayName =
+    product.parentName && product.faceValue != null
+      ? `${product.parentName} ${product.faceValue} ${product.faceCurrency ?? "MAD"}`
+      : product.name;
+
   return (
     <div className="container-page py-8 sm:py-10">
       <nav className="mb-9 flex flex-wrap items-center gap-2 text-[13.5px] text-faint">
@@ -54,7 +59,7 @@ export default async function ProductDetailPage({
           Produits
         </Link>
         <span>/</span>
-        <span className="text-text">{product.name}</span>
+        <span className="text-text">{displayName}</span>
       </nav>
 
       <div className="grid gap-10 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
@@ -63,7 +68,7 @@ export default async function ProductDetailPage({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={product.thumbnail}
-              alt={product.name}
+              alt={displayName}
               className="aspect-[1.4] w-full rounded-[18px] border border-border object-cover"
             />
           ) : (
@@ -115,7 +120,7 @@ export default async function ProductDetailPage({
           </span>
 
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-text">
-            {product.name}
+            {displayName}
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-muted">
             {product.description}
