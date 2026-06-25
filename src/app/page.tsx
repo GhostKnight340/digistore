@@ -59,16 +59,18 @@ export default function HomePage() {
   }, [settings.featuredProductIds]);
 
   return (
-    <div className="container-page">
+    <>
       {settings.homepage.showHero && (
-        <section className="relative overflow-hidden py-16 sm:py-24">
+        <div className="relative overflow-hidden">
           <div
-            className="pointer-events-none absolute right-0 top-0 h-[680px] w-[680px]"
+            className="pointer-events-none absolute inset-0"
             style={{
               background:
                 "radial-gradient(circle at top right, rgba(59,130,246,0.16) 0%, rgba(59,130,246,0.10) 20%, rgba(59,130,246,0.05) 40%, rgba(59,130,246,0.02) 60%, transparent 80%)",
             }}
           />
+          <div className="container-page">
+            <section className="relative py-16 sm:py-24">
           <div className="relative grid items-center gap-12 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
             <div>
               <span className="chip">
@@ -125,9 +127,12 @@ export default function HomePage() {
 
             <HeroDeliveryCard />
           </div>
-        </section>
+            </section>
+          </div>
+        </div>
       )}
 
+      <div className="container-page">
       {settings.homepage.showCategories && (
         <section className="mt-10">
           <div className="flex items-end justify-between gap-6">
@@ -240,6 +245,7 @@ export default function HomePage() {
           </Link>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
