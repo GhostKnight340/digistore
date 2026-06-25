@@ -6,6 +6,7 @@ import {
   getOrderSummaries,
   lookupOrder,
 } from "@/lib/db/orders";
+import { getStorefrontStockStatus } from "@/lib/db/inventory";
 import type { CustomerOrderDTO } from "@/lib/dto";
 
 /** Checkout: create a pending order in the database. Returns the new order id. */
@@ -46,6 +47,17 @@ export async function lookupOrderAction(
   } catch (e) {
     console.error("[lookupOrderAction]", e);
     return null;
+  }
+}
+
+/** Storefront: stock status for all active products. */
+export async function getStockStatusAction(): Promise<
+  Record<string, { unused: number; stockControl: string }>
+> {
+  try {
+    return await getStorefrontStockStatus();
+  } catch {
+    return {};
   }
 }
 

@@ -3,6 +3,34 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { ActionResult, AdminCodeDTO, InventoryGroupDTO } from "@/lib/dto";
 
+/** Storefront: unused code count + stockControl mode for every active product. */
+export async function getStorefrontStockStatus(): Promise<
+  Record<string, { unused: number; stockControl: string }>
+> {
+  const rows = await prisma.product.findMany({
+    where: { active: true },
+    select: {
+      slug: true,
+      stockControl: true,
+      digitalCodes: { where: { status: "unused" }, select: { id: true } },
+    },
+  });
+  return Object.fromEntries(
+    rows.map((p) => [p.slug, { unused: p.digitalCodes.length, stockControl: p.stockControl }]),
+  );
+}
+
+/** Admin: set stockControl mode for a product. */
+export async function setStockControl(
+  productSlug: string,
+  mode: "auto" | "manual",
+): Promise<ActionResult> {
+  const product = await prisma.product.findUnique({ where: { slug: productSlug } });
+  if (!product) return { ok: false, error: "Product not found." };
+  await prisma.product.update({ where: { slug: productSlug }, data: { stockControl: mode } });
+  return { ok: true };
+}
+
 /** Admin: full inventory grouped by product with status counts. */
 export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
   const products = await prisma.product.findMany({
@@ -12,6 +40,7 @@ export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
 
   return products.map((p) => {
     const codes: AdminCodeDTO[] = p.digitalCodes.map((c) => ({
+
       id: c.id,
       code: c.code,
       status: c.status,
@@ -23,6 +52,7 @@ export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
     return {
       productId: p.slug,
       productName: p.name,
+      stockControl: p.stockControl,
       total: codes.length,
       unused: count("unused"),
       reserved: count("reserved"),

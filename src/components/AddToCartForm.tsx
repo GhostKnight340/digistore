@@ -8,9 +8,11 @@ import { formatMAD } from "@/lib/format";
 export default function AddToCartForm({
   productId,
   price,
+  outOfStock = false,
 }: {
   productId: string;
   price?: number;
+  outOfStock?: boolean;
 }) {
   const { addToCart } = useStore();
   const router = useRouter();
@@ -36,7 +38,8 @@ export default function AddToCartForm({
           <button
             type="button"
             onClick={() => setQty((q) => Math.max(1, q - 1))}
-            className="h-10 w-10 text-lg text-muted transition hover:text-white"
+            disabled={outOfStock}
+            className="h-10 w-10 text-lg text-muted transition hover:text-white disabled:opacity-40"
             aria-label="Decrease quantity"
           >
             -
@@ -47,7 +50,8 @@ export default function AddToCartForm({
           <button
             type="button"
             onClick={() => setQty((q) => Math.min(10, q + 1))}
-            className="h-10 w-10 text-lg text-muted transition hover:text-white"
+            disabled={outOfStock}
+            className="h-10 w-10 text-lg text-muted transition hover:text-white disabled:opacity-40"
             aria-label="Increase quantity"
           >
             +
@@ -58,20 +62,37 @@ export default function AddToCartForm({
       {typeof price === "number" && (
         <div className="mb-5">
           <div className="mb-1 text-sm text-faint">Total</div>
-          <div className="text-3xl font-semibold tracking-[-0.03em] text-text">
+          <div className={`text-3xl font-semibold tracking-[-0.03em] ${outOfStock ? "text-muted" : "text-text"}`}>
             {formatMAD(price * qty)}
           </div>
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <button onClick={handleBuyNow} className="btn-primary h-[52px] w-full text-base">
-          Acheter maintenant
-        </button>
-        <button onClick={handleAdd} className="btn-ghost h-11 w-full">
-          {added ? "Ajouté au panier" : "Ajouter au panier"}
-        </button>
-      </div>
+      {outOfStock ? (
+        <div className="flex flex-col gap-3">
+          <button
+            disabled
+            className="h-[52px] w-full cursor-not-allowed rounded-xl bg-surface2 text-base font-semibold text-muted"
+          >
+            Rupture de stock
+          </button>
+          <button
+            disabled
+            className="h-11 w-full cursor-not-allowed rounded-xl border border-border text-sm text-faint"
+          >
+            Ajouter au panier
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <button onClick={handleBuyNow} className="btn-primary h-[52px] w-full text-base">
+            Acheter maintenant
+          </button>
+          <button onClick={handleAdd} className="btn-ghost h-11 w-full">
+            {added ? "Ajouté au panier" : "Ajouter au panier"}
+          </button>
+        </div>
+      )}
 
       {added && (
         <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-accent-soft px-3.5 py-3 text-[13.5px] text-accent-strong">

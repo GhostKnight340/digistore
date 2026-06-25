@@ -14,6 +14,7 @@ import {
   addCodesBulk,
   disableCode,
   resetCode,
+  setStockControl,
 } from "@/lib/db/inventory";
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
 import type {
@@ -84,6 +85,18 @@ export async function disableCodeAction(
     return await disableCode(codeId);
   } catch (e) {
     console.error("[disableCodeAction]", e);
+    return { ok: false, error: "Base de données non configurée." };
+  }
+}
+
+export async function setStockControlAction(
+  productSlug: string,
+  mode: "auto" | "manual",
+): Promise<ActionResult> {
+  try {
+    return await setStockControl(productSlug, mode);
+  } catch (e) {
+    console.error("[setStockControlAction]", e);
     return { ok: false, error: "Base de données non configurée." };
   }
 }

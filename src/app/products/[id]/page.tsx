@@ -6,9 +6,12 @@ import {
   getProductsByCategory,
   products,
 } from "@/lib/products";
+import { getStorefrontStockStatus } from "@/lib/db/inventory";
 import ProductArt from "@/components/ProductArt";
 import ProductCard from "@/components/ProductCard";
 import AddToCartForm from "@/components/AddToCartForm";
+
+export const dynamic = "force-dynamic";
 
 export function generateStaticParams() {
   return products.map((product) => ({ id: product.id }));
@@ -45,6 +48,14 @@ export default async function ProductDetailPage({
   const related = getProductsByCategory(product.category)
     .filter((item) => item.id !== product.id)
     .slice(0, 4);
+
+  let stockStatus: Record<string, { unused: number; stockControl: string }> = {};
+  try { stockStatus = await getStorefrontStockStatus(); } catch { /* DB not configured */ }
+
+  function isOutOfStock(slug: string) {
+    const s = stockStatus[slug];
+    return !!s && s.stockControl === "auto" && s.unused === 0;
+  }
 
   return (
     <div className="container-page py-8 sm:py-10">
@@ -121,7 +132,7 @@ export default async function ProductDetailPage({
           </div>
 
           <div className="mt-7 rounded-2xl border border-border bg-surface p-6">
-            <AddToCartForm productId={product.id} price={product.price} />
+            <AddToCartForm productId={product.id} price={product.price} outOfStock={isOutOfStock(product.id)} />
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
               <svg
                 viewBox="0 0 24 24"
@@ -162,7 +173,7 @@ export default async function ProductDetailPage({
           </h2>
           <div className="mt-6 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
             {related.map((item) => (
-              <ProductCard key={item.id} product={item} />
+              <ProductCard key={item.id} product={item} outOfStock={isOutOfStock(item.id)} />
             ))}
           </div>
         </section>

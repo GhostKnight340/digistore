@@ -8,6 +8,7 @@ import {
   addCodesBulkAction,
   disableCodeAction,
   resetCodeAction,
+  setStockControlAction,
 } from "@/app/actions/admin";
 import type { InventoryGroupDTO } from "@/lib/dto";
 
@@ -93,6 +94,13 @@ function ProductInventory({
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
+  async function handleStockControl(mode: "auto" | "manual") {
+    setBusy(true);
+    await setStockControlAction(group.productId, mode);
+    await onChanged();
+    setBusy(false);
+  }
+
   async function handleAddSingle() {
     if (!single.trim()) return;
     setBusy(true);
@@ -140,22 +148,42 @@ function ProductInventory({
 
   return (
     <section className="card overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
-      >
-        <span className="font-mono text-sm text-white">{group.productId}</span>
-        <span className="flex items-center gap-3 text-xs">
-          <Count label="unused" value={group.unused} tone="text-green-400" />
-          <Count label="reserved" value={group.reserved} tone="text-amber-400" />
-          <Count label="used" value={group.used} tone="text-muted" />
-          {group.disabled > 0 && (
-            <Count label="disabled" value={group.disabled} tone="text-red-400" />
-          )}
-          <span className="text-faint">{open ? "▲" : "▼"}</span>
-        </span>
-      </button>
+      <div className="flex items-center justify-between gap-3 px-5 py-4">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <span className="font-mono text-sm text-white">{group.productId}</span>
+          <span className="flex items-center gap-3 text-xs">
+            <Count label="unused" value={group.unused} tone="text-green-400" />
+            <Count label="reserved" value={group.reserved} tone="text-amber-400" />
+            <Count label="used" value={group.used} tone="text-muted" />
+            {group.disabled > 0 && (
+              <Count label="disabled" value={group.disabled} tone="text-red-400" />
+            )}
+            <span className="text-faint">{open ? "▲" : "▼"}</span>
+          </span>
+        </button>
+        <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-base p-0.5 text-[11px] font-medium">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleStockControl("manual")}
+            className={`rounded-md px-2.5 py-1 transition ${group.stockControl === "manual" ? "bg-surface2 text-white" : "text-faint hover:text-muted"}`}
+          >
+            Manual
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleStockControl("auto")}
+            className={`rounded-md px-2.5 py-1 transition ${group.stockControl === "auto" ? "bg-surface2 text-white" : "text-faint hover:text-muted"}`}
+          >
+            Auto
+          </button>
+        </div>
+      </div>
 
       {open && (
         <div className="space-y-5 border-t border-border px-5 py-5">

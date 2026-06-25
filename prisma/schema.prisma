@@ -27,6 +27,8 @@ model Product {
   region       String
   deliveryType String
   active       Boolean  @default(true)
+  // stockControl: "auto" = disable add-to-cart when unused=0; "manual" = always allow
+  stockControl String   @default("manual")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

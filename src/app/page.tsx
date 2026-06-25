@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { categories, products } from "@/lib/products";
 import CategoryCard from "@/components/CategoryCard";
@@ -7,6 +8,7 @@ import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
 import HeroDeliveryCard from "@/components/HeroDeliveryCard";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { getStockStatusAction } from "@/app/actions/orders";
 
 const steps = [
   {
@@ -28,6 +30,17 @@ const steps = [
 
 export default function HomePage() {
   const { settings } = useStoreSettings();
+  const [stockStatus, setStockStatus] = useState<Record<string, { unused: number; stockControl: string }>>({});
+
+  useEffect(() => {
+    getStockStatusAction().then(setStockStatus);
+  }, []);
+
+  function isOutOfStock(slug: string) {
+    const s = stockStatus[slug];
+    return !!s && s.stockControl === "auto" && s.unused === 0;
+  }
+
   const featured =
     settings.featuredProductIds.length > 0
       ? settings.featuredProductIds
@@ -147,7 +160,7 @@ export default function HomePage() {
           </div>
           <div className="mt-8 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
             {featured.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product.id} product={product} outOfStock={isOutOfStock(product.id)} />
             ))}
           </div>
         </section>

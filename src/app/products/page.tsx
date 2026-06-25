@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { categories, products } from "@/lib/products";
+import { getStorefrontStockStatus } from "@/lib/db/inventory";
 import ProductCard from "@/components/ProductCard";
 
 export const metadata = {
@@ -13,6 +14,13 @@ export default async function ProductsPage({
 }) {
   const { category, q } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
+
+  let stockStatus: Record<string, { unused: number; stockControl: string }> = {};
+  try { stockStatus = await getStorefrontStockStatus(); } catch { /* DB not configured */ }
+  function isOutOfStock(slug: string) {
+    const s = stockStatus[slug];
+    return !!s && s.stockControl === "auto" && s.unused === 0;
+  }
 
   let filtered = products;
   if (category) {
@@ -82,7 +90,7 @@ export default async function ProductsPage({
       ) : (
         <div className="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
           {filtered.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard key={product.id} product={product} outOfStock={isOutOfStock(product.id)} />
           ))}
         </div>
       )}

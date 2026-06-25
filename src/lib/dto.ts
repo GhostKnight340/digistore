@@ -57,6 +57,7 @@ export interface AdminCodeDTO {
 export interface InventoryGroupDTO {
   productId: string;
   productName: string;
+  stockControl: string;
   total: number;
   unused: number;
   reserved: number;
