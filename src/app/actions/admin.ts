@@ -17,6 +17,13 @@ import {
   setStockControl,
 } from "@/lib/db/inventory";
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
+import {
+  getCatalogFromDB,
+  upsertParentProduct,
+  upsertVariant,
+  deleteVariant,
+  deactivateParentProduct,
+} from "@/lib/db/catalog";
 import type {
   ActionResult,
   AdminCodeDTO,
@@ -24,6 +31,7 @@ import type {
   InventoryGroupDTO,
   ItemAssignment,
 } from "@/lib/dto";
+import type { CatalogParent } from "@/lib/db/catalog";
 
 export async function getAdminOrdersAction(): Promise<AdminOrderDTO[]> {
   try {
@@ -130,5 +138,89 @@ export async function deliverOrderAction(
   } catch (e) {
     console.error("[deliverOrderAction]", e);
     return { ok: false, error: "Base de données non configurée." };
+  }
+}
+
+// ── Catalog management actions ────────────────────────────────────────────────
+
+export async function getCatalogAction(): Promise<CatalogParent[]> {
+  try {
+    return await getCatalogFromDB();
+  } catch (e) {
+    console.error("[getCatalogAction]", e);
+    return [];
+  }
+}
+
+export async function saveParentProductAction(data: {
+  slug: string;
+  name: string;
+  category: string;
+  brand: string;
+  region: string;
+  deliveryType: string;
+  description: string;
+  shortDescription: string;
+  longDescription: string;
+  instructions: string;
+  thumbnail: string;
+  active: boolean;
+}): Promise<ActionResult & { slug?: string }> {
+  try {
+    const slug = await upsertParentProduct({
+      slug:             data.slug,
+      name:             data.name,
+      category:         data.category,
+      brand:            data.brand || undefined,
+      region:           data.region,
+      deliveryType:     data.deliveryType,
+      description:      data.description,
+      shortDescription: data.shortDescription || undefined,
+      longDescription:  data.longDescription || undefined,
+      instructions:     data.instructions || undefined,
+      thumbnail:        data.thumbnail || undefined,
+      active:           data.active,
+    });
+    return { ok: true, slug };
+  } catch (e) {
+    console.error("[saveParentProductAction]", e);
+    return { ok: false, error: "Erreur lors de la sauvegarde du produit." };
+  }
+}
+
+export async function saveVariantAction(data: {
+  variantSlug: string;
+  parentSlug: string;
+  faceValue: number;
+  faceCurrency: string;
+  priceMad: number;
+  featured: boolean;
+  active: boolean;
+}): Promise<ActionResult & { slug?: string }> {
+  try {
+    const slug = await upsertVariant(data);
+    return { ok: true, slug };
+  } catch (e) {
+    console.error("[saveVariantAction]", e);
+    return { ok: false, error: "Erreur lors de la sauvegarde de la variante." };
+  }
+}
+
+export async function deleteCatalogVariantAction(slug: string): Promise<ActionResult> {
+  try {
+    return await deleteVariant(slug);
+  } catch (e) {
+    console.error("[deleteCatalogVariantAction]", e);
+    return { ok: false, error: "Erreur lors de la suppression de la variante." };
+  }
+}
+
+export async function deactivateParentAction(slug: string): Promise<ActionResult> {
+  try {
+    await deactivateParentProduct(slug);
+    return { ok: true };
+  } catch (e) {
+    console.error("[deactivateParentAction]", e);
+    return { ok: false, error: "Erreur lors de la désactivation du produit." };
   }
 }

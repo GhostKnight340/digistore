@@ -6,7 +6,7 @@
  * Run with: npm run prisma:seed
  */
 import { PrismaClient } from "@prisma/client";
-import { products, getParentByVariant } from "../src/lib/products";
+import { products, parentProducts, getParentByVariant } from "../src/lib/products";
 
 const prisma = new PrismaClient();
 
@@ -26,8 +26,45 @@ const seedCodes: Record<string, string[]> = {
 };
 
 async function main() {
+  // Upsert ParentProduct rows
+  for (const parent of parentProducts) {
+    await prisma.parentProduct.upsert({
+      where: { slug: parent.id },
+      update: {
+        name:             parent.name,
+        category:         parent.category,
+        brand:            parent.brand ?? null,
+        region:           parent.region,
+        deliveryType:     parent.deliveryType,
+        description:      parent.description,
+        shortDescription: parent.shortDescription ?? null,
+        longDescription:  parent.longDescription ?? null,
+        instructions:     parent.instructions ?? null,
+        thumbnail:        parent.thumbnail ?? null,
+        active:           parent.active !== false,
+      },
+      create: {
+        slug:             parent.id,
+        name:             parent.name,
+        category:         parent.category,
+        brand:            parent.brand ?? null,
+        region:           parent.region,
+        deliveryType:     parent.deliveryType,
+        description:      parent.description,
+        shortDescription: parent.shortDescription ?? null,
+        longDescription:  parent.longDescription ?? null,
+        instructions:     parent.instructions ?? null,
+        thumbnail:        parent.thumbnail ?? null,
+        active:           true,
+      },
+    });
+  }
+
+  // Upsert Product (variant) rows
   for (const product of products) {
     const parent = getParentByVariant(product.id);
+    // Find the original variant to get the featured flag
+    const variant = parent?.variants.find((v) => v.id === product.id);
 
     const record = await prisma.product.upsert({
       where: { slug: product.id },
@@ -41,6 +78,7 @@ async function main() {
         region:       product.region,
         deliveryType: product.deliveryType,
         active:       product.active !== false,
+        featured:     variant?.featured ?? false,
       },
       create: {
         slug:         product.id,
@@ -53,6 +91,7 @@ async function main() {
         region:       product.region,
         deliveryType: product.deliveryType,
         active:       product.active !== false,
+        featured:     variant?.featured ?? false,
       },
     });
 
@@ -69,7 +108,7 @@ async function main() {
   }
 
   console.log(
-    `Seed complete: ${await prisma.product.count()} variants, ${await prisma.digitalCode.count()} codes.`,
+    `Seed complete: ${await prisma.parentProduct.count()} parents, ${await prisma.product.count()} variants, ${await prisma.digitalCode.count()} codes.`,
   );
 }
 
