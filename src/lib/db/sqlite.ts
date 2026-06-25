@@ -2,11 +2,6 @@ import "server-only";
 import path from "path";
 import { randomUUID } from "crypto";
 
-/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
-const { DatabaseSync } = require("node:sqlite") as {
-  DatabaseSync: new (p: string) => Db;
-};
-
 const DB_PATH = path.join(process.cwd(), "prisma", "dev.db");
 
 export type Row = Record<string, unknown>;
@@ -26,6 +21,10 @@ let _db: Db | null = null;
 
 export function getDb(): Db {
   if (!_db) {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const { DatabaseSync } = require("node:sqlite") as {
+      DatabaseSync: new (p: string) => Db;
+    };
     _db = new DatabaseSync(DB_PATH);
     _db.exec("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
   }
