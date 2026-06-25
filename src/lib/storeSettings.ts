@@ -24,6 +24,16 @@ export type StoreSettings = {
     showHowItWorks: boolean;
     showWhyChooseUs: boolean;
     showFooter: boolean;
+    categoriesTitle: string;
+    categoriesSubtitle: string;
+    featuredTitle: string;
+    featuredSubtitle: string;
+    howItWorksTitle: string;
+    howItWorksSubtitle: string;
+    whyChooseUsTitle: string;
+    whyChooseUsSubtitle: string;
+    ctaTitle: string;
+    ctaSubtitle: string;
   };
   /** Map of category id → custom image URL (overrides the ProductArt placeholder). */
   categoryMedia: Record<string, string | null>;
@@ -72,6 +82,16 @@ export const defaultStoreSettings: StoreSettings = {
     showHowItWorks: true,
     showWhyChooseUs: true,
     showFooter: true,
+    categoriesTitle: "Catégories populaires",
+    categoriesSubtitle: "Les plateformes les plus demandées au Maroc.",
+    featuredTitle: "Produits populaires",
+    featuredSubtitle: "Sélection vérifiée, codes livrés par email.",
+    howItWorksTitle: "Comment ça marche",
+    howItWorksSubtitle: "Trois étapes, en moins d'une minute.",
+    whyChooseUsTitle: "Pourquoi nous choisir",
+    whyChooseUsSubtitle: "Une expérience d'achat pensée pour la confiance.",
+    ctaTitle: "Prêt à jouer?",
+    ctaSubtitle: "Choisissez une carte et recevez votre code en quelques secondes.",
   },
   categoryMedia: {},
   categoryStockModes: {},
@@ -152,7 +172,7 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
     homepage: {
       ...defaultStoreSettings.homepage,
       ...(isObject(value.homepage) ? value.homepage : {}),
-    },
+    } as StoreSettings["homepage"],
     trustItems: Array.isArray(value.trustItems)
       ? value.trustItems.map((item, index) => ({
           ...defaultStoreSettings.trustItems[index % defaultStoreSettings.trustItems.length],

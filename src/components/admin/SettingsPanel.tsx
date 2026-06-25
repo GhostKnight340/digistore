@@ -14,7 +14,11 @@ const paymentLabels: Record<PaymentMethod, string> = {
   paypal: "PayPal",
 };
 
-const sectionLabels: Record<keyof StoreSettings["homepage"], string> = {
+type HomepageBoolKey = {
+  [K in keyof StoreSettings["homepage"]]: StoreSettings["homepage"][K] extends boolean ? K : never;
+}[keyof StoreSettings["homepage"]];
+
+const sectionLabels: Record<HomepageBoolKey, string> = {
   showHero: "Hero",
   showTrustStrip: "Indicateurs de confiance",
   showCategories: "Catégories populaires",
@@ -158,18 +162,16 @@ export default function SettingsPanel() {
 
       <Panel title="Homepage sections">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(Object.keys(draft.homepage) as Array<keyof StoreSettings["homepage"]>).map(
-            (key) => (
-              <Toggle
-                key={key}
-                label={sectionLabels[key]}
-                checked={draft.homepage[key]}
-                onChange={(checked) =>
-                  update("homepage", { ...draft.homepage, [key]: checked })
-                }
-              />
-            ),
-          )}
+          {(Object.keys(sectionLabels) as HomepageBoolKey[]).map((key) => (
+            <Toggle
+              key={key}
+              label={sectionLabels[key]}
+              checked={draft.homepage[key] as boolean}
+              onChange={(checked) =>
+                update("homepage", { ...draft.homepage, [key]: checked })
+              }
+            />
+          ))}
         </div>
       </Panel>
 
