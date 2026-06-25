@@ -1,13 +1,11 @@
 // Prisma schema for the Karta digital store — PostgreSQL (Supabase / Neon).
 //
-// NOTE: Status fields are stored as TEXT strings because PostgreSQL enums
-// require migrations to alter; string columns are more flexible for a
-// prototype. Allowed values are documented next to each field and mirrored
-// by the TypeScript unions in src/lib/types.ts.
+// Status fields are stored as TEXT strings; allowed values are documented
+// next to each field and mirrored by the TypeScript unions in src/lib/types.ts.
 //
-// All `id` fields use `dbgenerated("gen_random_uuid()::text")` so that
-// raw SQL inserts (e.g. from Supabase Studio or psql scripts) receive an
-// auto-generated ID even when the column is omitted from the INSERT.
+// All `id` fields use `dbgenerated("gen_random_uuid()::text")` so that raw
+// SQL inserts (e.g. from Supabase Studio) receive an auto-generated ID even
+// when the column is omitted from the INSERT statement.
 
 generator client {
   provider = "prisma-client-js"
@@ -18,23 +16,42 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Top-level product group (e.g. "Steam Wallet"). Variants are in Product.
+model ParentProduct {
+  slug             String  @id
+  name             String
+  category         String
+  brand            String?
+  region           String  @default("")
+  deliveryType     String  @default("")
+  description      String  @default("")
+  shortDescription String?
+  longDescription  String?
+  instructions     String?
+  thumbnail        String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// A purchasable variant (e.g. "Steam Wallet 5 EUR"). Belongs to a ParentProduct.
 model Product {
-  id           String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  id           String  @id @default(dbgenerated("gen_random_uuid()::text"))
   name         String
-  slug         String   @unique
+  slug         String  @unique
+  parentSlug   String  @default("")
   category     String
   priceMad     Int
+  faceValue    Float?
+  faceCurrency String  @default("MAD")
   region       String
   deliveryType String
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  // sourceType: "manual" | "api"
-  sourceType   String   @default("manual")
   featured     Boolean  @default(false)
-  brand        String?
-  faceValue    Int?
-  currency     String?
+  // stockControl: "manual" | "api"
+  stockControl String   @default("manual")
 
   digitalCodes   DigitalCode[]
   orderItems     OrderItem[]
@@ -56,7 +73,6 @@ model DigitalCode {
   product        Product         @relation(fields: [productId], references: [id])
   deliveredCodes DeliveredCode[]
 
-  // A given code string is unique per product.
   @@unique([productId, code])
   @@index([productId, status])
 }
@@ -94,7 +110,6 @@ model DeliveredCode {
   orderId       String
   orderItemId   String
   productId     String
-  // Either a code drawn from inventory (digitalCodeId) or a manually typed one.
   digitalCodeId String?
   manualCode    String?
   deliveredAt   DateTime @default(now())

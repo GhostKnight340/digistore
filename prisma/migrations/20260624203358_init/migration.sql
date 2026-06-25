@@ -1,91 +1,109 @@
--- PostgreSQL migration (replaces the original SQLite-only version).
--- gen_random_uuid() is built into PostgreSQL 13+ and available on all
--- modern managed providers (Supabase, Neon, Railway, etc.).
--- The ::text cast keeps the column type as TEXT so existing CUID references
--- from Prisma client calls remain compatible.
+-- PostgreSQL migration for Karta digital store.
+-- gen_random_uuid() is built into PostgreSQL 13+ (Supabase, Neon, Railway, etc.).
+-- The ::text cast keeps the column as TEXT for compatibility with application code.
 
--- CreateTable
+-- CreateTable: ParentProduct
+CREATE TABLE "ParentProduct" (
+    "slug"             TEXT NOT NULL,
+    "name"             TEXT NOT NULL,
+    "category"         TEXT NOT NULL,
+    "brand"            TEXT,
+    "region"           TEXT NOT NULL DEFAULT '',
+    "deliveryType"     TEXT NOT NULL DEFAULT '',
+    "description"      TEXT NOT NULL DEFAULT '',
+    "shortDescription" TEXT,
+    "longDescription"  TEXT,
+    "instructions"     TEXT,
+    "thumbnail"        TEXT,
+    "active"           BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ParentProduct_pkey" PRIMARY KEY ("slug")
+);
+
+-- CreateTable: Product
 CREATE TABLE "Product" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-    "name" TEXT NOT NULL,
-    "slug" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
-    "priceMad" INTEGER NOT NULL,
-    "region" TEXT NOT NULL,
+    "id"           TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "name"         TEXT NOT NULL,
+    "slug"         TEXT NOT NULL,
+    "parentSlug"   TEXT NOT NULL DEFAULT '',
+    "category"     TEXT NOT NULL,
+    "priceMad"     INTEGER NOT NULL,
+    "faceValue"    DOUBLE PRECISION,
+    "faceCurrency" TEXT NOT NULL DEFAULT 'MAD',
+    "region"       TEXT NOT NULL,
     "deliveryType" TEXT NOT NULL,
-    "active" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "sourceType" TEXT NOT NULL DEFAULT 'manual',
-    "featured" BOOLEAN NOT NULL DEFAULT false,
-    "brand" TEXT,
-    "faceValue" INTEGER,
-    "currency" TEXT,
+    "active"       BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "featured"     BOOLEAN NOT NULL DEFAULT false,
+    "stockControl" TEXT NOT NULL DEFAULT 'manual',
 
     CONSTRAINT "Product_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: DigitalCode
 CREATE TABLE "DigitalCode" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-    "productId" TEXT NOT NULL,
-    "code" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'unused',
+    "id"              TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "productId"       TEXT NOT NULL,
+    "code"            TEXT NOT NULL,
+    "status"          TEXT NOT NULL DEFAULT 'unused',
     "assignedOrderId" TEXT,
-    "reservedAt" TIMESTAMP(3),
-    "usedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reservedAt"      TIMESTAMP(3),
+    "usedAt"          TIMESTAMP(3),
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DigitalCode_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: Order
 CREATE TABLE "Order" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-    "customerName" TEXT NOT NULL,
+    "id"            TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "customerName"  TEXT NOT NULL,
     "customerEmail" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'pending_payment',
+    "status"        TEXT NOT NULL DEFAULT 'pending_payment',
     "paymentMethod" TEXT NOT NULL,
-    "totalMad" INTEGER NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "totalMad"      INTEGER NOT NULL,
+    "createdAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Order_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: OrderItem
 CREATE TABLE "OrderItem" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-    "orderId" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
-    "quantity" INTEGER NOT NULL,
+    "id"           TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "orderId"      TEXT NOT NULL,
+    "productId"    TEXT NOT NULL,
+    "quantity"     INTEGER NOT NULL,
     "unitPriceMad" INTEGER NOT NULL,
 
     CONSTRAINT "OrderItem_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: DeliveredCode
 CREATE TABLE "DeliveredCode" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-    "orderId" TEXT NOT NULL,
-    "orderItemId" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
+    "id"            TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "orderId"       TEXT NOT NULL,
+    "orderItemId"   TEXT NOT NULL,
+    "productId"     TEXT NOT NULL,
     "digitalCodeId" TEXT,
-    "manualCode" TEXT,
-    "deliveredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "manualCode"    TEXT,
+    "deliveredAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DeliveredCode_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+-- CreateTable: EmailLog
 CREATE TABLE "EmailLog" (
-    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-    "orderId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
+    "id"        TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "orderId"   TEXT NOT NULL,
+    "type"      TEXT NOT NULL,
     "recipient" TEXT NOT NULL,
-    "subject" TEXT NOT NULL,
-    "body" TEXT NOT NULL,
+    "subject"   TEXT NOT NULL,
+    "body"      TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "EmailLog_pkey" PRIMARY KEY ("id")
