@@ -116,9 +116,21 @@ export async function addCodesBulk(
 }
 
 /**
- * Admin: disable a code so it can no longer be assigned. Only safe to disable
- * codes that have not been used — used codes are kept for the audit trail.
+ * Admin: reset a used/reserved code back to unused so it can be reassigned.
+ * Clears assignedOrderId, reservedAt, and usedAt. Does NOT touch DeliveredCode
+ * records — the audit trail of what was delivered to the customer is preserved.
  */
+export async function resetCode(codeId: string): Promise<ActionResult> {
+  const code = await prisma.digitalCode.findUnique({ where: { id: codeId } });
+  if (!code) return { ok: false, error: "Code not found." };
+  if (code.status === "unused") return { ok: false, error: "Code is already unused." };
+  if (code.status === "disabled") return { ok: false, error: "Re-enable the code before resetting." };
+  await prisma.digitalCode.update({
+    where: { id: codeId },
+    data: { status: "unused", assignedOrderId: null, reservedAt: null, usedAt: null },
+  });
+  return { ok: true };
+}
 export async function disableCode(codeId: string): Promise<ActionResult> {
   const code = await prisma.digitalCode.findUnique({ where: { id: codeId } });
   if (!code) return { ok: false, error: "Code not found." };

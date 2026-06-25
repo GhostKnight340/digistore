@@ -7,6 +7,7 @@ import {
   addCodeAction,
   addCodesBulkAction,
   disableCodeAction,
+  resetCodeAction,
 } from "@/app/actions/admin";
 import type { InventoryGroupDTO } from "@/lib/dto";
 
@@ -127,6 +128,16 @@ function ProductInventory({
     setBusy(false);
   }
 
+  async function handleReset(codeId: string) {
+    if (!confirm("Reset this code to unused? It can be assigned to a new order.")) return;
+    setBusy(true);
+    setMsg("");
+    const res = await resetCodeAction(codeId);
+    setMsg(res.ok ? "Code reset to unused." : res.error ?? "Failed.");
+    await onChanged();
+    setBusy(false);
+  }
+
   return (
     <section className="card overflow-hidden">
       <button
@@ -237,9 +248,14 @@ function ProductInventory({
                       </td>
                       <td className="py-2">
                         {c.status === "used" ? (
-                          <span className="text-[11px] text-faint">
-                            locked
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleReset(c.id)}
+                            disabled={busy}
+                            className="text-[11px] font-medium text-amber-400 hover:text-amber-300 disabled:opacity-50"
+                          >
+                            Unassign
+                          </button>
                         ) : c.status === "disabled" ? (
                           <span className="text-[11px] text-faint">
                             disabled

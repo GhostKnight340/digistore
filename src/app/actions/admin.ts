@@ -13,6 +13,7 @@ import {
   addCode,
   addCodesBulk,
   disableCode,
+  resetCode,
 } from "@/lib/db/inventory";
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
 import type {
@@ -83,6 +84,15 @@ export async function disableCodeAction(
     return await disableCode(codeId);
   } catch (e) {
     console.error("[disableCodeAction]", e);
+    return { ok: false, error: "Base de données non configurée." };
+  }
+}
+
+export async function resetCodeAction(codeId: string): Promise<ActionResult> {
+  try {
+    return await resetCode(codeId);
+  } catch (e) {
+    console.error("[resetCodeAction]", e);
     return { ok: false, error: "Base de données non configurée." };
   }
 }
