@@ -713,25 +713,31 @@ function VariantsTab({
         const v = variantDrafts[orig.slug] ?? orig;
         const isEditing = editingVariant === orig.slug;
         const isConfirming = confirmDelete === orig.slug;
+        const variantTitle = v.faceValue != null
+          ? `${draft.name} ${v.faceValue} ${v.faceCurrency}`
+          : v.name;
 
         return (
           <div key={orig.slug} className="rounded-xl border border-border bg-base">
             {/* Row header */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
               <div className="flex items-center gap-3">
-                <span className="font-mono text-xs text-muted">{orig.slug}</span>
-                <span className={`chip ${orig.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
-                  {orig.active ? "Active" : "Hidden"}
+                <div>
+                  <p className="text-sm font-medium text-white">{variantTitle}</p>
+                  <p className="font-mono text-[11px] text-muted">SKU: {orig.slug}</p>
+                </div>
+                <span className={`chip ${v.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
+                  {v.active ? "Active" : "Hidden"}
                 </span>
-                {orig.featured && <span className="chip border-accent/30 text-accent">Featured</span>}
+                {v.featured && <span className="chip border-accent/30 text-accent">Featured</span>}
               </div>
               <div className="flex items-center gap-3 text-sm text-muted">
-                {orig.faceValue != null && (
-                  <span className="font-medium text-white">{orig.faceValue} {orig.faceCurrency}</span>
+                {v.faceValue != null && (
+                  <span className="font-medium text-white">{v.faceValue} {v.faceCurrency}</span>
                 )}
-                <span className="font-semibold text-white">{orig.priceMad} MAD</span>
-                <span className={`text-xs ${orig.stockMode === "force_out_of_stock" ? "text-yellow-500" : orig.stockMode === "force_in_stock" ? "text-green-400" : "text-muted"}`}>
-                  {orig.stockMode === "force_in_stock" ? "↑ En stock" : orig.stockMode === "force_out_of_stock" ? "↓ En rupture" : `${orig.inventoryUnused} codes`}
+                <span className="font-semibold text-white">{v.priceMad} MAD</span>
+                <span className={`text-xs ${v.stockMode === "force_out_of_stock" ? "text-yellow-500" : v.stockMode === "force_in_stock" ? "text-green-400" : "text-muted"}`}>
+                  {v.stockMode === "force_in_stock" ? "↑ En stock" : v.stockMode === "force_out_of_stock" ? "↓ En rupture" : `${v.inventoryUnused} codes`}
                 </span>
                 {isEditing ? (
                   <div className="flex gap-1">
