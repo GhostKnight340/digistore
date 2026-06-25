@@ -62,7 +62,13 @@ export default function HomePage() {
     <div className="container-page">
       {settings.homepage.showHero && (
         <section className="relative overflow-hidden py-16 sm:py-24">
-          <div className="pointer-events-none absolute right-[5%] top-[8%] h-[440px] w-[440px] rounded-full bg-accent/[0.05] blur-[110px]" />
+          <div
+            className="pointer-events-none absolute right-0 top-0 h-[680px] w-[680px]"
+            style={{
+              background:
+                "radial-gradient(circle at top right, rgba(59,130,246,0.16) 0%, rgba(59,130,246,0.10) 20%, rgba(59,130,246,0.05) 40%, rgba(59,130,246,0.02) 60%, transparent 80%)",
+            }}
+          />
           <div className="relative grid items-center gap-12 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
             <div>
               <span className="chip">
