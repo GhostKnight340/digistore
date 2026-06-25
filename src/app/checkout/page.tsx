@@ -4,46 +4,49 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
-import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getProduct } from "@/lib/products";
 import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
+import { getPaymentConfigAction } from "@/app/actions/payments";
 import type { PaymentMethod } from "@/lib/types";
+import type { PaymentConfigDTO } from "@/lib/dto";
 
-const methods: {
-  id: PaymentMethod;
-  label: string;
-  hint: string;
-  badge?: string;
-}[] = [
-  {
-    id: "test",
-    label: "Paiement test",
-    hint: "Valide la commande instantanément",
-    badge: "Recommandé",
-  },
-  { id: "bank", label: "Virement bancaire", hint: "Bientôt disponible" },
-  { id: "crypto", label: "Crypto", hint: "Bientôt disponible" },
-  { id: "paypal", label: "PayPal", hint: "Bientôt disponible" },
-];
+const METHOD_META: Record<
+  string,
+  { label: string; hint: string; badge?: string }
+> = {
+  bank: { label: "Virement bancaire", hint: "RIB / IBAN affiché à l'étape suivante" },
+  usdt: { label: "USDT Crypto", hint: "TRC20 / BEP20 uniquement" },
+  paypal: { label: "PayPal", hint: "Vous serez guidé à l'étape suivante" },
+  card: { label: "Carte bancaire", hint: "Disponible prochainement" },
+};
 
 export default function CheckoutPage() {
   const { cart, ready, cartTotal, rememberOrder } = useStore();
-  const { settings } = useStoreSettings();
   const router = useRouter();
 
+  const [config, setConfig] = useState<PaymentConfigDTO | null>(null);
+  const [method, setMethod] = useState<PaymentMethod | "">("");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [method, setMethod] = useState<PaymentMethod>("test");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const enabledMethods = methods.filter((item) => settings.paymentMethods[item.id]);
 
   useEffect(() => {
-    if (!settings.paymentMethods[method] && enabledMethods[0]) {
-      setMethod(enabledMethods[0].id);
-    }
-  }, [enabledMethods, method, settings.paymentMethods]);
+    getPaymentConfigAction().then((cfg) => {
+      setConfig(cfg);
+      // Pick the first enabled method as default
+      const order: PaymentMethod[] = ["bank", "usdt", "paypal", "card"];
+      const first = order.find((m) => cfg.methods[m]?.enabled);
+      if (first) setMethod(first);
+    });
+  }, []);
+
+  const enabledMethods = config
+    ? (["bank", "usdt", "paypal", "card"] as PaymentMethod[]).filter(
+        (m) => config.methods[m]?.enabled,
+      )
+    : [];
 
   if (ready && cart.length === 0) {
     return (
@@ -72,10 +75,13 @@ export default function CheckoutPage() {
       setError("Veuillez entrer une adresse email valide.");
       return;
     }
+    if (!method) {
+      setError("Veuillez choisir une méthode de paiement.");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      // Order + prices are created in the database (server action).
       const order = await createOrderAction({
         customerName: fullName.trim(),
         customerEmail: email.trim(),
@@ -93,7 +99,7 @@ export default function CheckoutPage() {
       }
 
       rememberOrder(order.id);
-      router.push(`/order/${order.id}`);
+      router.push(`/payment/${order.id}`);
     } catch {
       setSubmitting(false);
       setError("Une erreur est survenue. Veuillez réessayer.");
@@ -104,8 +110,7 @@ export default function CheckoutPage() {
     <div className="container-page py-10">
       <h1 className="text-3xl font-bold text-white">Paiement</h1>
       <p className="mt-1 text-sm text-muted">
-        Prototype phase 1: il s'agit d'une commande test. Aucun paiement réel
-        n'est effectué.
+        Choisissez votre méthode de paiement et complétez votre commande.
       </p>
 
       {/* Progress indicator */}
@@ -185,44 +190,55 @@ export default function CheckoutPage() {
             <h2 className="text-lg font-bold text-white">
               Méthode de paiement
             </h2>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {enabledMethods.map((m) => {
-                const active = method === m.id;
-                return (
-                  <button
-                    type="button"
-                    key={m.id}
-                    onClick={() => setMethod(m.id)}
-                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
-                      active
-                        ? "border-accent bg-accent/10"
-                        : "border-border bg-surface hover:border-accent/50"
-                    }`}
-                  >
-                    <span
-                      className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
-                        active ? "border-accent bg-accent" : "border-border"
+            {!config ? (
+              <p className="mt-4 text-sm text-muted">Chargement...</p>
+            ) : enabledMethods.length === 0 ? (
+              <p className="mt-4 text-sm text-muted">
+                Aucune méthode de paiement disponible pour le moment.
+              </p>
+            ) : (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {enabledMethods.map((m) => {
+                  const meta = METHOD_META[m] ?? { label: m, hint: "" };
+                  const active = method === m;
+                  return (
+                    <button
+                      type="button"
+                      key={m}
+                      onClick={() => setMethod(m)}
+                      className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
+                        active
+                          ? "border-accent bg-accent/10"
+                          : "border-border bg-surface hover:border-accent/50"
                       }`}
                     >
-                      {active && (
-                        <span className="h-2 w-2 rounded-full bg-white" />
-                      )}
-                    </span>
-                    <span>
-                      <span className="flex items-center gap-2 font-semibold text-white">
-                        {m.label}
-                        {m.badge && (
-                          <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
-                            {m.badge}
-                          </span>
+                      <span
+                        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
+                          active ? "border-accent bg-accent" : "border-border"
+                        }`}
+                      >
+                        {active && (
+                          <span className="h-2 w-2 rounded-full bg-white" />
                         )}
                       </span>
-                      <span className="block text-xs text-muted">{m.hint}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                      <span>
+                        <span className="flex items-center gap-2 font-semibold text-white">
+                          {meta.label}
+                          {meta.badge && (
+                            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
+                              {meta.badge}
+                            </span>
+                          )}
+                        </span>
+                        <span className="block text-xs text-muted">
+                          {meta.hint}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </section>
         </div>
 
@@ -265,21 +281,19 @@ export default function CheckoutPage() {
 
             <button
               type="submit"
-              disabled={submitting}
-              className="btn-primary mt-6 w-full"
+              disabled={submitting || !config || enabledMethods.length === 0}
+              className="btn-primary mt-6 w-full disabled:opacity-50"
             >
-              {submitting
-                ? "Commande en cours..."
-                : "Passer une commande test"}
+              {submitting ? "Commande en cours..." : "Passer la commande"}
             </button>
             <p className="mt-3 text-center text-xs text-muted">
-              Paiement test · Vérification manuelle avant livraison
+              Instructions de paiement affichées à l'étape suivante
             </p>
           </div>
         </aside>
       </form>
 
-      {/* What happens next (post-payment preview) */}
+      {/* What happens next */}
       <div className="mt-12 rounded-2xl border border-border bg-gradient-to-b from-surface to-surface2/40 px-6 py-7">
         <p className="mb-5 text-center text-xs uppercase tracking-wide text-faint">
           Ce qui se passe ensuite
@@ -320,7 +334,7 @@ export default function CheckoutPage() {
               <rect x="4" y="4" width="16" height="16" rx="3" />
               <path d="M9 9h6M9 13h6M9 17h3" />
             </svg>
-            Vérification du paiement
+            Effectuez le paiement
           </span>
           <svg
             viewBox="0 0 24 24"

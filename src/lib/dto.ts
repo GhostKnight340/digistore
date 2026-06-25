@@ -17,6 +17,15 @@ export interface DeliveredCodeDTO {
   code: string;
 }
 
+export interface PaymentEventDTO {
+  id: string;
+  type: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
 /** Customer-safe order view — only this order's delivered codes, no inventory. */
 export interface CustomerOrderDTO {
   id: string;
@@ -28,6 +37,8 @@ export interface CustomerOrderDTO {
   createdAt: string;
   items: OrderItemDTO[];
   deliveredCodes: DeliveredCodeDTO[];
+  proofUploaded: boolean;
+  paymentEvents: PaymentEventDTO[];
 }
 
 export interface EmailLogDTO {
@@ -42,6 +53,7 @@ export interface EmailLogDTO {
 /** Admin order view — adds simulated email logs. */
 export interface AdminOrderDTO extends CustomerOrderDTO {
   emailLogs: EmailLogDTO[];
+  proofMimeType: string | null;
 }
 
 export interface AdminCodeDTO {
@@ -78,4 +90,52 @@ export interface ItemAssignment {
 export interface ActionResult {
   ok: boolean;
   error?: string;
+}
+
+// ─── Payment settings DTOs ────────────────────────────────────────────────────
+
+export interface BankDTO {
+  id: string;
+  name: string;
+  accountHolder: string;
+  accountNumber: string;
+  rib: string;
+  iban: string;
+  swift: string;
+  instructions: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface CryptoWalletDTO {
+  id: string;
+  coin: string;
+  network: string;
+  address: string;
+  label: string;
+  instructions: string;
+  enabled: boolean;
+}
+
+export interface PaymentMethodConfigDTO {
+  method: string;
+  enabled: boolean;
+  proofRequired: boolean;
+  paypalEmail: string;
+  cardMessage: string;
+  instructions: string;
+}
+
+export interface SupportConfigDTO {
+  id: string;
+  whatsappNumber: string;
+  supportEmail: string;
+  instructions: string;
+}
+
+export interface PaymentConfigDTO {
+  methods: Record<string, PaymentMethodConfigDTO>;
+  banks: BankDTO[];
+  wallets: CryptoWalletDTO[];
+  support: SupportConfigDTO;
 }

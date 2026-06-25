@@ -18,6 +18,8 @@ function loadOrderRecord(id: string) {
       items: { include: { product: true } },
       deliveredCodes: { include: { product: true, digitalCode: true } },
       emailLogs: true,
+      paymentProof: true,
+      paymentEvents: { orderBy: { createdAt: "asc" } },
     },
   });
 }
@@ -38,10 +40,18 @@ function toCustomerDTO(order: NonNullable<DbOrderWithRelations>): CustomerOrderD
       quantity: it.quantity,
       unitPriceMad: it.unitPriceMad,
     })),
-    // Only delivered codes are exposed to the customer — never raw inventory.
     deliveredCodes: order.deliveredCodes.map((dc) => ({
       productId: dc.product.slug,
       code: dc.digitalCode?.code ?? dc.manualCode ?? "",
+    })),
+    proofUploaded: order.paymentProof !== null,
+    paymentEvents: order.paymentEvents.map((ev) => ({
+      id: ev.id,
+      type: ev.type,
+      fromStatus: ev.fromStatus,
+      toStatus: ev.toStatus,
+      note: ev.note,
+      createdAt: ev.createdAt.toISOString(),
     })),
   };
 }
@@ -66,6 +76,8 @@ export async function getOrderSummaries(
       items: { include: { product: true } },
       deliveredCodes: { include: { product: true, digitalCode: true } },
       emailLogs: true,
+      paymentProof: true,
+      paymentEvents: { orderBy: { createdAt: "asc" } },
     },
   });
   return orders.map(toCustomerDTO);
@@ -79,6 +91,8 @@ export async function getAdminOrders(): Promise<AdminOrderDTO[]> {
       items: { include: { product: true } },
       deliveredCodes: { include: { product: true, digitalCode: true } },
       emailLogs: { orderBy: { createdAt: "asc" } },
+      paymentProof: true,
+      paymentEvents: { orderBy: { createdAt: "asc" } },
     },
   });
   return orders.map((order) => ({
@@ -91,6 +105,7 @@ export async function getAdminOrders(): Promise<AdminOrderDTO[]> {
       body: e.body,
       createdAt: e.createdAt.toISOString(),
     })),
+    proofMimeType: order.paymentProof?.mimeType ?? null,
   }));
 }
 
@@ -115,8 +130,6 @@ export async function createOrder(
   const bySlug = new Map(products.map((p) => [p.slug, p]));
 
   if (products.length === 0) {
-    // Almost always means the database has not been seeded yet.
-    // Run: npm run prisma:migrate && npm run prisma:seed
     console.warn(
       `[createOrder] No active products found for slugs ${JSON.stringify(
         slugs,
@@ -155,8 +168,16 @@ export async function createOrder(
         create: {
           type: "order_received",
           recipient: input.customerEmail,
-          subject: "Paiement en cours de vérification",
-          body: "We received your order and are verifying the payment.",
+          subject: "Commande reçue — en attente de paiement",
+          body: "We received your order. Please complete your payment to proceed.",
+        },
+      },
+      paymentEvents: {
+        create: {
+          type: "status_change",
+          fromStatus: null,
+          toStatus: "pending_payment",
+          note: "Order created.",
         },
       },
     },

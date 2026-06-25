@@ -102,8 +102,9 @@ export const defaultStoreSettings: StoreSettings = {
   paymentMethods: {
     test: true,
     bank: true,
-    crypto: true,
+    usdt: true,
     paypal: true,
+    card: false,
   },
   footer: {
     contactEmail: "support@karta.ma",

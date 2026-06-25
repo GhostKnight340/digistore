@@ -9,8 +9,9 @@ import type { PaymentMethod } from "@/lib/types";
 const paymentLabels: Record<PaymentMethod, string> = {
   test: "Paiement test",
   bank: "Virement bancaire",
-  crypto: "Crypto",
+  usdt: "USDT Crypto",
   paypal: "PayPal",
+  card: "Carte bancaire",
 };
 
 const sectionLabels: Record<keyof StoreSettings["homepage"], string> = {

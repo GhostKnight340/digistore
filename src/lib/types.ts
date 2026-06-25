@@ -45,22 +45,31 @@ export interface OrderItem {
 }
 
 export type PaymentMethod =
-  | "test"
   | "bank"
-  | "crypto"
-  | "paypal";
+  | "usdt"
+  | "paypal"
+  | "card"
+  | "test"; // legacy — kept for backward-compat with old DB records
 
 /**
- * Manual fulfillment lifecycle:
- *  pending_payment   -> order placed, awaiting admin payment review
- *  payment_confirmed -> admin verified payment, code not yet assigned
+ * Full payment lifecycle:
+ *  pending_payment   -> order placed, customer must send payment
+ *  payment_submitted -> customer submitted proof, awaiting admin review
+ *  payment_confirmed -> admin verified payment, awaiting delivery
+ *  payment_issue     -> admin flagged an issue with payment
+ *  rejected          -> admin rejected the payment
  *  delivered         -> code(s) assigned and visible to the customer
- *  cancelled         -> placeholder for refunds/cancellations
+ *  refunded          -> future: customer refunded
+ *  cancelled         -> order cancelled
  */
 export type OrderStatus =
   | "pending_payment"
+  | "payment_submitted"
   | "payment_confirmed"
+  | "payment_issue"
+  | "rejected"
   | "delivered"
+  | "refunded"
   | "cancelled";
 
 export interface Order {
@@ -77,7 +86,13 @@ export interface Order {
 }
 
 /** Simulated transactional emails — logged only, never actually sent. */
-export type EmailType = "order_received" | "code_delivered";
+export type EmailType =
+  | "order_received"
+  | "payment_submitted"
+  | "payment_confirmed"
+  | "payment_rejected"
+  | "payment_issue"
+  | "code_delivered";
 
 export interface EmailLog {
   id: string;

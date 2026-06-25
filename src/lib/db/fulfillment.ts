@@ -3,18 +3,29 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
 
-/** Admin: mark payment confirmed and log a simulated payment_confirmed email. */
+/** Admin: mark payment confirmed (works from any non-delivered status). */
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Order not found." };
-  if (order.status !== "pending_payment") {
-    return { ok: false, error: "Payment is not pending." };
+  if (order.status === "payment_confirmed" || order.status === "delivered") {
+    return { ok: false, error: "Payment already confirmed." };
   }
+
+  const fromStatus = order.status;
 
   await prisma.$transaction([
     prisma.order.update({
       where: { id: orderId },
       data: { status: "payment_confirmed" },
+    }),
+    prisma.paymentEvent.create({
+      data: {
+        orderId,
+        type: "status_change",
+        fromStatus,
+        toStatus: "payment_confirmed",
+        note: "Admin confirmed payment.",
+      },
     }),
     prisma.emailLog.create({
       data: {
@@ -30,7 +41,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
 }
 
 /**
- * Admin: confirm-and-deliver. In one transaction:
+ * Admin: deliver codes. In one transaction:
  *  - validates each order item has `quantity` codes (inventory or manual),
  *  - marks selected DigitalCodes as used,
  *  - creates DeliveredCode records,
@@ -50,8 +61,10 @@ export async function deliverOrder(
     if (order.status === "delivered") {
       return { ok: false, error: "Order is already delivered." };
     }
+    if (order.status !== "payment_confirmed") {
+      return { ok: false, error: "Payment must be confirmed before delivery." };
+    }
 
-    // Validate every item has enough non-empty code entries.
     for (const item of order.items) {
       const entries = (
         assignments.find((a) => a.orderItemId === item.id)?.codes ?? []
@@ -82,7 +95,6 @@ export async function deliverOrder(
             where: { id: entry.digitalCodeId },
           });
           if (!code || code.status === "used" || code.status === "disabled") {
-            // Abort the whole transaction — code no longer available.
             throw new Error("Selected code is no longer available.");
           }
           await tx.digitalCode.update({
@@ -111,13 +123,23 @@ export async function deliverOrder(
       data: { status: "delivered" },
     });
 
+    await tx.paymentEvent.create({
+      data: {
+        orderId,
+        type: "status_change",
+        fromStatus: "payment_confirmed",
+        toStatus: "delivered",
+        note: "Admin delivered code(s).",
+      },
+    });
+
     await tx.emailLog.create({
       data: {
         orderId,
         type: "code_delivered",
         recipient: order.customerEmail,
-        subject: "Paiement confirmé — votre code est disponible",
-        body: "Your payment was confirmed. Here is your code. Thank you for your purchase and we hope to see you again.",
+        subject: "Votre code est disponible",
+        body: "Your payment was confirmed. Your code is now available. Thank you for your purchase.",
       },
     });
 

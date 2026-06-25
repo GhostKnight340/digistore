@@ -171,6 +171,8 @@ function OrderDrawer({
   const delivered = isDelivered(order.status);
   const paymentConfirmed =
     order.status === "payment_confirmed" || delivered;
+  const isRejectedOrCancelled =
+    order.status === "rejected" || order.status === "cancelled";
 
   // Initialize per-unit entries and load available codes when the order opens.
   useEffect(() => {
@@ -406,7 +408,7 @@ function OrderDrawer({
             })}
           </section>
 
-          {!delivered && (
+          {!delivered && !isRejectedOrCancelled && (
             <section className="space-y-3">
               {error && (
                 <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
@@ -427,6 +429,12 @@ function OrderDrawer({
                 </p>
               )}
             </section>
+          )}
+
+          {isRejectedOrCancelled && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              This order was {order.status}. No further action available.
+            </div>
           )}
 
           {delivered && (

@@ -15,6 +15,16 @@ import {
   disableCode,
 } from "@/lib/db/inventory";
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
+import {
+  updateMethodConfig,
+  updateSupportConfig,
+  addBank,
+  updateBank,
+  deleteBank,
+  addWallet,
+  updateWallet,
+  deleteWallet,
+} from "@/lib/db/paymentSettings";
 import type {
   ActionResult,
   AdminCodeDTO,
@@ -68,4 +78,86 @@ export async function deliverOrderAction(
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
   return deliverOrder(orderId, assignments);
+}
+
+// ─── Payment settings admin actions ───────────────────────────────────────────
+
+export async function updateMethodConfigAction(
+  method: string,
+  data: Partial<{
+    enabled: boolean;
+    proofRequired: boolean;
+    paypalEmail: string;
+    cardMessage: string;
+    instructions: string;
+  }>,
+): Promise<ActionResult> {
+  return updateMethodConfig(method, data);
+}
+
+export async function updateSupportConfigAction(data: {
+  whatsappNumber: string;
+  supportEmail: string;
+  instructions: string;
+}): Promise<ActionResult> {
+  return updateSupportConfig(data);
+}
+
+export async function addBankAction(data: {
+  name: string;
+  accountHolder: string;
+  accountNumber: string;
+  rib: string;
+  iban: string;
+  swift: string;
+  instructions: string;
+}): Promise<ActionResult & { id?: string }> {
+  return addBank(data);
+}
+
+export async function updateBankAction(
+  id: string,
+  data: Partial<{
+    name: string;
+    accountHolder: string;
+    accountNumber: string;
+    rib: string;
+    iban: string;
+    swift: string;
+    instructions: string;
+    enabled: boolean;
+    sortOrder: number;
+  }>,
+): Promise<ActionResult> {
+  return updateBank(id, data);
+}
+
+export async function deleteBankAction(id: string): Promise<ActionResult> {
+  return deleteBank(id);
+}
+
+export async function addWalletAction(data: {
+  network: string;
+  address: string;
+  label: string;
+  instructions: string;
+}): Promise<ActionResult & { id?: string }> {
+  return addWallet(data);
+}
+
+export async function updateWalletAction(
+  id: string,
+  data: Partial<{
+    network: string;
+    address: string;
+    label: string;
+    instructions: string;
+    enabled: boolean;
+  }>,
+): Promise<ActionResult> {
+  return updateWallet(id, data);
+}
+
+export async function deleteWalletAction(id: string): Promise<ActionResult> {
+  return deleteWallet(id);
 }

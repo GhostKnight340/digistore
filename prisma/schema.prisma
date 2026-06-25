@@ -29,8 +29,8 @@ model Product {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  digitalCodes DigitalCode[]
-  orderItems   OrderItem[]
+  digitalCodes   DigitalCode[]
+  orderItems     OrderItem[]
   deliveredCodes DeliveredCode[]
 }
 
@@ -49,7 +49,6 @@ model DigitalCode {
   product        Product         @relation(fields: [productId], references: [id])
   deliveredCodes DeliveredCode[]
 
-  // A given code string is unique per product.
   @@unique([productId, code])
   @@index([productId, status])
 }
@@ -58,7 +57,8 @@ model Order {
   id            String   @id @default(cuid())
   customerName  String
   customerEmail String
-  // status: "pending_payment" | "payment_confirmed" | "delivered" | "cancelled"
+  // status: "pending_payment" | "payment_submitted" | "payment_confirmed"
+  //       | "payment_issue" | "rejected" | "delivered" | "refunded" | "cancelled"
   status        String   @default("pending_payment")
   paymentMethod String
   totalMad      Int
@@ -68,6 +68,8 @@ model Order {
   items          OrderItem[]
   deliveredCodes DeliveredCode[]
   emailLogs      EmailLog[]
+  paymentProof   PaymentProof?
+  paymentEvents  PaymentEvent[]
 }
 
 model OrderItem {
@@ -87,7 +89,6 @@ model DeliveredCode {
   orderId       String
   orderItemId   String
   productId     String
-  // Either a code drawn from inventory (digitalCodeId) or a manually typed one.
   digitalCodeId String?
   manualCode    String?
   deliveredAt   DateTime @default(now())
@@ -103,7 +104,8 @@ model DeliveredCode {
 model EmailLog {
   id        String   @id @default(cuid())
   orderId   String
-  // type: "order_received" | "payment_confirmed" | "code_delivered"
+  // type: "order_received" | "payment_submitted" | "payment_confirmed"
+  //      | "payment_rejected" | "payment_issue" | "code_delivered"
   type      String
   recipient String
   subject   String
@@ -113,4 +115,82 @@ model EmailLog {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+}
+
+// Customer-uploaded payment proof (PNG / JPG / JPEG / PDF).
+// Stored as base64 string for prototype; swap to object storage (S3/R2) in production.
+model PaymentProof {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  fileName   String
+  mimeType   String
+  data       String   // base64-encoded file content
+  uploadedAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+// Audit trail for payment lifecycle events.
+model PaymentEvent {
+  id         String   @id @default(cuid())
+  orderId    String
+  type       String   // "status_change" | "proof_uploaded" | "admin_note"
+  fromStatus String?
+  toStatus   String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// Bank account for bank-transfer payment method.
+model Bank {
+  id            String   @id @default(cuid())
+  name          String
+  accountHolder String
+  accountNumber String   @default("")
+  rib           String   @default("")
+  iban          String   @default("")
+  swift         String   @default("")
+  instructions  String   @default("")
+  enabled       Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// USDT wallet configuration (TRC20 / BEP20).
+model CryptoWallet {
+  id           String   @id @default(cuid())
+  coin         String   @default("USDT")
+  network      String   // "TRC20" | "BEP20"
+  address      String
+  label        String   @default("")
+  instructions String   @default("")
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Per-method configuration (enabled, proof required, method-specific fields).
+model PaymentMethodConfig {
+  id            String   @id @default(cuid())
+  method        String   @unique // "bank" | "usdt" | "paypal" | "card"
+  enabled       Boolean  @default(true)
+  proofRequired Boolean  @default(true)
+  paypalEmail   String   @default("")
+  cardMessage   String   @default("Paiement par carte bientôt disponible.")
+  instructions  String   @default("")
+  updatedAt     DateTime @default(now()) @updatedAt
+}
+
+// Global support contact info.
+model SupportConfig {
+  id             String   @id @default(cuid())
+  whatsappNumber String   @default("+212 600 000 000")
+  supportEmail   String   @default("support@karta.ma")
+  instructions   String   @default("")
+  updatedAt      DateTime @default(now()) @updatedAt
 }

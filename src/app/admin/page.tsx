@@ -12,13 +12,17 @@ import type { AdminOrderDTO, InventoryGroupDTO } from "@/lib/dto";
 import SettingsPanel from "@/components/admin/SettingsPanel";
 import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
+import PaymentsPanel from "@/components/admin/PaymentsPanel";
+import PaymentSettingsPanel from "@/components/admin/PaymentSettingsPanel";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: "📊" },
-  { id: "settings", label: "Settings", icon: "⚙️" },
-  { id: "products", label: "Products", icon: "🛍️" },
+  { id: "payments", label: "Payments", icon: "💳" },
+  { id: "payment-settings", label: "Payment settings", icon: "⚙️" },
   { id: "inventory", label: "Inventory", icon: "🔑" },
   { id: "fulfillment", label: "Manual fulfillment", icon: "📦" },
+  { id: "settings", label: "Store settings", icon: "🛠️" },
+  { id: "products", label: "Products", icon: "🛍️" },
   { id: "customers", label: "Customers", icon: "👥" },
   { id: "suppliers", label: "Supplier API", icon: "🔌" },
   { id: "refunds", label: "Refunds", icon: "↩" },
@@ -82,7 +86,11 @@ export default function AdminPage() {
           </nav>
         </aside>
 
-        {activeTab === "settings" ? (
+        {activeTab === "payments" ? (
+          <PaymentsPanel />
+        ) : activeTab === "payment-settings" ? (
+          <PaymentSettingsPanel />
+        ) : activeTab === "settings" ? (
           <SettingsPanel />
         ) : activeTab === "fulfillment" ? (
           <FulfillmentPanel />
