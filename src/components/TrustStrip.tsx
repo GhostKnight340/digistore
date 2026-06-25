@@ -14,17 +14,23 @@ const iconProps = {
 };
 
 const icons = [
-  <svg key="bolt" {...iconProps}>
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  // Prix clairs en MAD — tag/price icon
+  <svg key="tag" {...iconProps}>
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
   </svg>,
-  <svg key="lock" {...iconProps}>
-    <rect x="4" y="11" width="16" height="10" rx="2" />
-    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  // Vérification manuelle — shield with checkmark
+  <svg key="shield" {...iconProps}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <polyline points="9 12 11 14 15 10" />
   </svg>,
-  <svg key="save" {...iconProps}>
-    <rect x="3" y="5" width="18" height="14" rx="2" />
-    <path d="m3 7 9 6 9-6" />
+  // Codes conservés — archive/bookmark
+  <svg key="archive" {...iconProps}>
+    <rect x="3" y="3" width="18" height="4" rx="1" />
+    <path d="M4 7v12a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7" />
+    <path d="M10 12h4" />
   </svg>,
+  // Support local — headphones
   <svg key="support" {...iconProps}>
     <path d="M4 18v-6a8 8 0 0 1 16 0v6" />
     <path d="M20 18a2 2 0 0 1-2 2h-1v-5h3zM4 18a2 2 0 0 0 2 2h1v-5H4z" />
@@ -41,10 +47,10 @@ export default function TrustStrip() {
     <section className="mt-16">
       <div className="rounded-[20px] border border-border bg-gradient-to-b from-surface to-surface/40 px-6 py-10 sm:px-11 sm:py-12">
         <h2 className="text-center text-2xl font-semibold tracking-tight text-text">
-          Pourquoi nous choisir
+          Pourquoi choisir Karta&nbsp;?
         </h2>
         <p className="mx-auto mt-1 max-w-md text-center text-sm text-muted">
-          Une expérience d'achat pensée pour la confiance.
+          Une boutique pensée pour les clients marocains.
         </p>
         <div className="mt-10 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
           {items.map((item, index) => (
