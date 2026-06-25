@@ -6,6 +6,42 @@ export type CategoryId =
   | "roblox"
   | "valorant";
 
+// ── Variant / parent product types ────────────────────────────────────────────
+
+export interface ProductVariant {
+  /** Slug used as cart key and DB Product.slug, e.g. "steam-50" */
+  id: string;
+  /** Parent product id, e.g. "steam-wallet" */
+  productId: string;
+  faceValue: number;
+  /** ISO currency code or token name: "MAD" | "EUR" | "USD" | "GBP" | "TRY" | "Robux" | "VP" */
+  faceCurrency: string;
+  /** Selling price in MAD — what the customer pays */
+  price: number;
+  supplierCost?: number;
+  supplierCurrency?: string;
+  active?: boolean;
+  featured?: boolean;
+  sku?: string;
+}
+
+export interface ParentProduct {
+  id: string;
+  name: string;
+  category: CategoryId;
+  brand?: string;
+  region: string;
+  deliveryType: string;
+  description: string;
+  shortDescription?: string;
+  longDescription?: string;
+  instructions?: string;
+  thumbnail?: string;
+  galleryImages?: string[];
+  active?: boolean;
+  variants: ProductVariant[];
+}
+
 export interface Category {
   id: CategoryId;
   name: string;
@@ -15,40 +51,31 @@ export interface Category {
   icon: string;
 }
 
+/**
+ * Flat "variant as product" shape used throughout cart/checkout/cards.
+ * `id` = variant slug (same as DB Product.slug), `variantOf` = parent product id.
+ */
 export interface Product {
-  // ── Identity ──────────────────────────────────────────────────────────
   id: string;
+  /** Parent product id — used to build the correct href /products/{variantOf}?v={id} */
+  variantOf?: string;
   name: string;
   category: CategoryId;
   brand?: string;
   region: string;
   deliveryType: string;
-
-  // ── Visibility ────────────────────────────────────────────────────────
   active?: boolean;
   featured?: boolean;
-
-  // ── Face value (what the card is worth in its original currency) ───────
   faceValue?: number;
-  faceCurrency?: string; // "EUR" | "USD" | "GBP" | "MAD" | "TRY" | "Robux" | "VP" | …
-
-  // ── Customer pricing ──────────────────────────────────────────────────
-  /** Selling price in MAD — what the customer pays. Used by cart/checkout. */
+  faceCurrency?: string;
+  /** Selling price in MAD */
   price: number;
-
-  // ── Supplier cost (admin-only, never shown publicly) ──────────────────
   supplierCost?: number;
   supplierCurrency?: string;
-
-  // ── Descriptions ──────────────────────────────────────────────────────
-  description: string;       // kept for backwards compat (= shortDescription)
+  description: string;
   shortDescription?: string;
   longDescription?: string;
-
-  // ── Redemption instructions ────────────────────────────────────────────
   instructions?: string;
-
-  // ── Media ─────────────────────────────────────────────────────────────
   thumbnail?: string;
   galleryImages?: string[];
 }

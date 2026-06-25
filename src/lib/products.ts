@@ -1,4 +1,5 @@
-import type { Category, Product } from "./types";
+import { variantTitle } from "./format";
+import type { Category, ParentProduct, Product, ProductVariant } from "./types";
 
 export const categories: Category[] = [
   {
@@ -49,7 +50,7 @@ export function getCategory(id: string): Category | undefined {
   return categories.find((c) => c.id === id);
 }
 
-// ── Platform instructions ────────────────────────────────────────────────────
+// ── Platform instructions ─────────────────────────────────────────────────────
 
 const steamInstructions = `1. Ouvrez Steam et connectez-vous à votre compte.
 2. Cliquez sur votre nom en haut à droite, puis sur "Utiliser un code produit Steam".
@@ -81,255 +82,179 @@ const valorantInstructions = `1. Connectez-vous sur playvalorant.com ou ouvrez l
 3. Sélectionnez "Utiliser un code prépayé Riot".
 4. Saisissez votre code et confirmez pour recevoir vos VP.`;
 
-// ── Products ─────────────────────────────────────────────────────────────────
+// ── Parent products with variants ─────────────────────────────────────────────
 
-export const products: Product[] = [
-  // ── Steam Wallet ──────────────────────────────────────────────────────────
+export const parentProducts: ParentProduct[] = [
+  // ── Steam Wallet ────────────────────────────────────────────────────────────
   {
-    id: "steam-50",
-    name: "Steam Wallet 50 MAD",
+    id: "steam-wallet",
+    name: "Steam Wallet",
     category: "steam",
     brand: "Valve",
     region: "Maroc / Global",
     deliveryType: "Code numérique instantané",
-    active: true,
-    featured: true,
-    faceValue: 50,
-    faceCurrency: "MAD",
-    price: 50,
-    description:
-      "Ajoutez 50 MAD à votre Steam Wallet et utilisez votre solde pour acheter jeux, DLC et contenus en jeu sur Steam.",
-    shortDescription:
-      "Ajoutez 50 MAD à votre Steam Wallet pour vos achats sur Steam.",
+    description: "Rechargez votre portefeuille Steam pour acheter jeux, DLC et contenus en jeu.",
+    shortDescription: "Rechargez votre Steam Wallet et accédez à des milliers de jeux.",
     longDescription:
-      "Avec cette carte Steam Wallet de 50 MAD, rechargez votre compte Steam et accédez à des milliers de jeux, DLC, extensions et contenus en jeu. Compatible avec tous les comptes Steam actifs au Maroc. Les fonds sont crédités immédiatement et n'expirent pas.",
+      "Avec une carte Steam Wallet, rechargez votre compte Steam et accédez à des milliers de jeux, DLC, extensions et contenus en jeu. Compatible avec tous les comptes Steam actifs. Les fonds sont crédités immédiatement et n'expirent pas.",
     instructions: steamInstructions,
-  },
-  {
-    id: "steam-100",
-    name: "Steam Wallet 100 MAD",
-    category: "steam",
-    brand: "Valve",
-    region: "Maroc / Global",
-    deliveryType: "Code numérique instantané",
-    active: true,
-    featured: true,
-    faceValue: 100,
-    faceCurrency: "MAD",
-    price: 100,
-    description:
-      "Ajoutez 100 MAD à votre Steam Wallet et profitez de vos jeux, DLC et contenus préférés sur Steam.",
-    shortDescription:
-      "Ajoutez 100 MAD à votre Steam Wallet pour vos achats sur Steam.",
-    longDescription:
-      "Carte Steam Wallet de 100 MAD. Idéale pour les jeux indépendants, les DLC populaires et les promotions saisonnières sur Steam. Valable sur tous les produits du catalogue Steam.",
-    instructions: steamInstructions,
-  },
-  {
-    id: "steam-200",
-    name: "Steam Wallet 200 MAD",
-    category: "steam",
-    brand: "Valve",
-    region: "Maroc / Global",
-    deliveryType: "Code numérique instantané",
-    active: true,
-    faceValue: 200,
-    faceCurrency: "MAD",
-    price: 200,
-    description:
-      "Ajoutez 200 MAD à votre Steam Wallet pour vos achats plus importants et les promotions saisonnières.",
-    shortDescription:
-      "Ajoutez 200 MAD à votre Steam Wallet.",
-    longDescription:
-      "Carte Steam Wallet de 200 MAD pour les achats plus importants. Parfaite pour les jeux AAA en promotion ou plusieurs jeux indépendants. Fonds crédités immédiatement, sans date d'expiration.",
-    instructions: steamInstructions,
+    variants: [
+      { id: "steam-50",  productId: "steam-wallet", faceValue: 50,  faceCurrency: "MAD", price: 50,  featured: true,  active: true },
+      { id: "steam-100", productId: "steam-wallet", faceValue: 100, faceCurrency: "MAD", price: 100, featured: true,  active: true },
+      { id: "steam-200", productId: "steam-wallet", faceValue: 200, faceCurrency: "MAD", price: 200, featured: false, active: true },
+    ],
   },
 
-  // ── PlayStation Store ─────────────────────────────────────────────────────
+  // ── PlayStation Store ───────────────────────────────────────────────────────
   {
-    id: "psn-100",
-    name: "PlayStation Store 100 MAD",
+    id: "playstation-store",
+    name: "PlayStation Store",
     category: "playstation",
     brand: "Sony",
     region: "Maroc",
     deliveryType: "Code numérique instantané",
-    active: true,
-    featured: true,
-    faceValue: 100,
-    faceCurrency: "MAD",
-    price: 100,
-    description:
-      "Rechargez votre portefeuille PlayStation Store pour acheter jeux, extensions et abonnements.",
-    shortDescription:
-      "Rechargez votre PSN de 100 MAD pour jeux et extensions.",
+    description: "Rechargez votre portefeuille PlayStation Store pour acheter jeux, extensions et abonnements.",
+    shortDescription: "Rechargez votre PSN pour jeux, extensions et PS Plus.",
     longDescription:
-      "Carte PlayStation Store de 100 MAD. Valable pour acheter des jeux PS4/PS5, du contenu additionnel, des abonnements PS Plus et des films sur le PlayStation Store. Région Maroc — utilisez-la uniquement avec un compte PSN créé au Maroc.",
+      "Carte PlayStation Store valable pour acheter des jeux PS4/PS5, du contenu additionnel, des abonnements PS Plus et des films. Région Maroc — utilisez-la uniquement avec un compte PSN créé au Maroc.",
     instructions: psnInstructions,
-  },
-  {
-    id: "psn-250",
-    name: "PlayStation Store 250 MAD",
-    category: "playstation",
-    brand: "Sony",
-    region: "Maroc",
-    deliveryType: "Code numérique instantané",
-    active: true,
-    faceValue: 250,
-    faceCurrency: "MAD",
-    price: 250,
-    description:
-      "Ajoutez 250 MAD à votre portefeuille PlayStation Store pour vos jeux complets et contenus favoris.",
-    shortDescription:
-      "Rechargez votre PSN de 250 MAD.",
-    longDescription:
-      "Carte PlayStation Store de 250 MAD. Suffisant pour les jeux complets à prix réduit ou une combinaison d'extensions et abonnements. Compatible PS4 et PS5, région Maroc.",
-    instructions: psnInstructions,
+    variants: [
+      { id: "psn-100", productId: "playstation-store", faceValue: 100, faceCurrency: "MAD", price: 100, featured: true,  active: true },
+      { id: "psn-250", productId: "playstation-store", faceValue: 250, faceCurrency: "MAD", price: 250, featured: false, active: true },
+    ],
   },
 
-  // ── Xbox ──────────────────────────────────────────────────────────────────
+  // ── Xbox Gift Card ──────────────────────────────────────────────────────────
   {
-    id: "xbox-100",
-    name: "Xbox Gift Card 100 MAD",
+    id: "xbox-gift-card",
+    name: "Xbox Gift Card",
     category: "xbox",
     brand: "Microsoft",
     region: "Maroc / Global",
     deliveryType: "Code numérique instantané",
-    active: true,
-    featured: true,
-    faceValue: 100,
-    faceCurrency: "MAD",
-    price: 100,
-    description:
-      "Utilisez cette carte sur Microsoft Store et Xbox pour acheter jeux, applications et divertissement.",
-    shortDescription:
-      "100 MAD sur votre compte Xbox et Microsoft Store.",
+    description: "Utilisez cette carte sur Microsoft Store et Xbox pour acheter jeux, applications et divertissement.",
+    shortDescription: "Créditez votre compte Xbox et Microsoft Store.",
     longDescription:
-      "Carte Xbox Gift Card de 100 MAD. Valable sur le Microsoft Store, Xbox Game Pass, et pour l'achat de jeux et contenus Xbox. Fonctionne sur Xbox Series X/S, Xbox One et PC Windows.",
+      "Carte Xbox Gift Card valable sur le Microsoft Store, Xbox Game Pass, et pour l'achat de jeux et contenus Xbox. Fonctionne sur Xbox Series X/S, Xbox One et PC Windows.",
     instructions: xboxInstructions,
-  },
-  {
-    id: "xbox-200",
-    name: "Xbox Gift Card 200 MAD",
-    category: "xbox",
-    brand: "Microsoft",
-    region: "Maroc / Global",
-    deliveryType: "Code numérique instantané",
-    active: true,
-    faceValue: 200,
-    faceCurrency: "MAD",
-    price: 200,
-    description:
-      "Ajoutez 200 MAD à votre compte Xbox pour jeux, abonnements et contenus numériques.",
-    shortDescription:
-      "200 MAD sur votre compte Xbox et Microsoft Store.",
-    longDescription:
-      "Carte Xbox Gift Card de 200 MAD. Idéale pour acheter des jeux complets sur le Microsoft Store ou renouveler Xbox Game Pass Ultimate. Compatible Xbox Series, Xbox One et Windows.",
-    instructions: xboxInstructions,
+    variants: [
+      { id: "xbox-100", productId: "xbox-gift-card", faceValue: 100, faceCurrency: "MAD", price: 100, featured: true,  active: true },
+      { id: "xbox-200", productId: "xbox-gift-card", faceValue: 200, faceCurrency: "MAD", price: 200, featured: false, active: true },
+    ],
   },
 
-  // ── Nintendo eShop ────────────────────────────────────────────────────────
+  // ── Nintendo eShop ──────────────────────────────────────────────────────────
   {
-    id: "nintendo-150",
-    name: "Nintendo eShop 150 MAD",
+    id: "nintendo-eshop",
+    name: "Nintendo eShop",
     category: "nintendo",
     brand: "Nintendo",
     region: "Maroc / EU",
     deliveryType: "Code numérique instantané",
-    active: true,
-    faceValue: 150,
-    faceCurrency: "MAD",
-    price: 150,
-    description:
-      "Ajoutez des fonds à votre compte Nintendo pour acheter jeux Switch et contenus depuis le Nintendo eShop.",
-    shortDescription:
-      "150 MAD pour vos achats sur le Nintendo eShop.",
+    description: "Ajoutez des fonds à votre compte Nintendo pour acheter jeux Switch et contenus depuis le Nintendo eShop.",
+    shortDescription: "Fonds pour vos achats sur le Nintendo eShop.",
     longDescription:
-      "Carte Nintendo eShop de 150 MAD. Utilisable pour acheter des jeux Nintendo Switch, des DLC, des applications et du contenu additionnel. Fonds disponibles immédiatement sur votre compte Nintendo.",
+      "Carte Nintendo eShop utilisable pour acheter des jeux Nintendo Switch, des DLC, des applications et du contenu additionnel. Fonds disponibles immédiatement sur votre compte Nintendo.",
     instructions: nintendoInstructions,
+    variants: [
+      { id: "nintendo-150", productId: "nintendo-eshop", faceValue: 150, faceCurrency: "MAD", price: 150, featured: false, active: true },
+    ],
   },
 
-  // ── Roblox ────────────────────────────────────────────────────────────────
+  // ── Roblox ──────────────────────────────────────────────────────────────────
   {
-    id: "roblox-100",
-    name: "Roblox Gift Card 100 MAD",
+    id: "roblox",
+    name: "Roblox Gift Card",
     category: "roblox",
     brand: "Roblox Corporation",
     region: "Global",
     deliveryType: "Code numérique instantané",
-    active: true,
-    featured: true,
-    faceValue: 100,
-    faceCurrency: "MAD",
-    price: 100,
-    description:
-      "Échangez cette carte contre des Robux ou un abonnement Premium sur Roblox.",
-    shortDescription:
-      "Obtenez des Robux ou Premium sur Roblox.",
+    description: "Échangez cette carte contre des Robux ou un abonnement Premium sur Roblox.",
+    shortDescription: "Obtenez des Robux ou Premium sur Roblox.",
     longDescription:
-      "Carte Roblox de 100 MAD à échanger contre des Robux ou des jours d'abonnement Roblox Premium. Les Robux vous permettent d'acheter des accessoires, avatars, passes de jeu et objets exclusifs dans l'univers Roblox.",
+      "Carte Roblox à échanger contre des Robux ou des jours d'abonnement Roblox Premium. Les Robux vous permettent d'acheter des accessoires, avatars, passes de jeu et objets exclusifs dans l'univers Roblox.",
     instructions: robloxInstructions,
-  },
-  {
-    id: "roblox-200",
-    name: "Roblox Gift Card 200 MAD",
-    category: "roblox",
-    brand: "Roblox Corporation",
-    region: "Global",
-    deliveryType: "Code numérique instantané",
-    active: true,
-    faceValue: 200,
-    faceCurrency: "MAD",
-    price: 200,
-    description:
-      "Échangez 200 MAD contre des Robux ou un abonnement Premium sur Roblox.",
-    shortDescription:
-      "Obtenez plus de Robux ou Premium sur Roblox.",
-    longDescription:
-      "Carte Roblox de 200 MAD. Idéale pour les joueurs qui veulent maximiser leurs Robux et accéder à plus de contenu premium. Compatible avec tous les comptes Roblox dans le monde.",
-    instructions: robloxInstructions,
+    variants: [
+      { id: "roblox-100", productId: "roblox", faceValue: 100, faceCurrency: "MAD", price: 100, featured: true,  active: true },
+      { id: "roblox-200", productId: "roblox", faceValue: 200, faceCurrency: "MAD", price: 200, featured: false, active: true },
+    ],
   },
 
-  // ── Valorant ──────────────────────────────────────────────────────────────
+  // ── Valorant Points ─────────────────────────────────────────────────────────
   {
-    id: "valorant-100",
-    name: "Valorant Points 100 MAD",
+    id: "valorant-points",
+    name: "Valorant Points",
     category: "valorant",
     brand: "Riot Games",
     region: "MENA",
     deliveryType: "Code numérique instantané",
-    active: true,
-    featured: true,
-    faceValue: 100,
-    faceCurrency: "MAD",
-    price: 100,
-    description:
-      "Échangez des Valorant Points pour skins, passes de combat et agents.",
-    shortDescription:
-      "Achetez des VP pour skins et passes de combat Valorant.",
+    description: "Échangez des Valorant Points pour skins, passes de combat et agents.",
+    shortDescription: "Achetez des VP pour skins et passes de combat Valorant.",
     longDescription:
-      "Carte Valorant Points de 100 MAD pour la région MENA. Utilisez vos VP pour acheter des skins d'armes, des passes de combat, des cartes de visite et des agents dans Valorant. Les VP sont crédités instantanément sur votre compte Riot Games.",
+      "Carte Valorant Points pour la région MENA. Utilisez vos VP pour acheter des skins d'armes, des passes de combat, des cartes de visite et des agents dans Valorant. Les VP sont crédités instantanément sur votre compte Riot Games.",
     instructions: valorantInstructions,
-  },
-  {
-    id: "valorant-200",
-    name: "Valorant Points 200 MAD",
-    category: "valorant",
-    brand: "Riot Games",
-    region: "MENA",
-    deliveryType: "Code numérique instantané",
-    active: true,
-    faceValue: 200,
-    faceCurrency: "MAD",
-    price: 200,
-    description:
-      "Échangez 200 MAD de Valorant Points pour skins et passes de combat.",
-    shortDescription:
-      "Plus de VP pour skins et passes de combat Valorant.",
-    longDescription:
-      "Carte Valorant Points de 200 MAD pour la région MENA. Suffisant pour un pass de combat complet ou plusieurs skins d'armes. Compatible avec tous les comptes Riot MENA.",
-    instructions: valorantInstructions,
+    variants: [
+      { id: "valorant-100", productId: "valorant-points", faceValue: 100, faceCurrency: "MAD", price: 100, featured: true,  active: true },
+      { id: "valorant-200", productId: "valorant-points", faceValue: 200, faceCurrency: "MAD", price: 200, featured: false, active: true },
+    ],
   },
 ];
+
+// ── Lookup helpers ────────────────────────────────────────────────────────────
+
+export function getParentProduct(id: string): ParentProduct | undefined {
+  return parentProducts.find((p) => p.id === id);
+}
+
+export function getVariantById(variantId: string): ProductVariant | undefined {
+  for (const parent of parentProducts) {
+    const v = parent.variants.find((v) => v.id === variantId);
+    if (v) return v;
+  }
+  return undefined;
+}
+
+export function getParentByVariant(variantId: string): ParentProduct | undefined {
+  return parentProducts.find((p) => p.variants.some((v) => v.id === variantId));
+}
+
+export function getParentsByCategory(categoryId: string): ParentProduct[] {
+  return parentProducts.filter(
+    (p) => p.category === categoryId && p.active !== false,
+  );
+}
+
+// ── Flat product list (backwards-compatible with cart / checkout / cards) ─────
+
+function toFlatProduct(parent: ParentProduct, variant: ProductVariant): Product {
+  return {
+    id: variant.id,
+    variantOf: parent.id,
+    name: variantTitle(parent.name, variant.faceValue, variant.faceCurrency),
+    category: parent.category,
+    brand: parent.brand,
+    region: parent.region,
+    deliveryType: parent.deliveryType,
+    active: variant.active !== false && parent.active !== false,
+    featured: variant.featured,
+    faceValue: variant.faceValue,
+    faceCurrency: variant.faceCurrency,
+    price: variant.price,
+    supplierCost: variant.supplierCost,
+    supplierCurrency: variant.supplierCurrency,
+    description: parent.description,
+    shortDescription: parent.shortDescription,
+    longDescription: parent.longDescription,
+    instructions: parent.instructions,
+    thumbnail: parent.thumbnail,
+    galleryImages: parent.galleryImages,
+  };
+}
+
+/** All variants as flat Product objects. Used by cart, checkout, stock status. */
+export const products: Product[] = parentProducts.flatMap((parent) =>
+  parent.variants.map((v) => toFlatProduct(parent, v)),
+);
 
 export function getProduct(id: string): Product | undefined {
   return products.find((p) => p.id === id);
@@ -339,6 +264,7 @@ export function getFeatured(): Product[] {
   return products.filter((p) => p.featured);
 }
 
+/** @deprecated Use getParentsByCategory for the new grouped architecture. */
 export function getProductsByCategory(category: string): Product[] {
   return products.filter((p) => p.category === category);
 }

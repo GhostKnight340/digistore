@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import type { CartItem } from "@/lib/types";
-import { getProduct } from "@/lib/products";
+import { getProduct, getVariantById } from "@/lib/products";
 
 const CART_KEY = "digitalshop.cart.v1";
 // Without real auth we remember which order ids belong to this browser so the
@@ -111,8 +111,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const cartTotal = useMemo(
     () =>
       cart.reduce((sum, i) => {
-        const product = getProduct(i.productId);
-        return sum + (product ? product.price * i.quantity : 0);
+        const price =
+          getVariantById(i.productId)?.price ?? getProduct(i.productId)?.price ?? 0;
+        return sum + price * i.quantity;
       }, 0),
     [cart],
   );

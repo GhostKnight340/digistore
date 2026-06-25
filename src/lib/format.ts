@@ -9,6 +9,18 @@ export function formatFaceValue(value: number, currency: string): string {
   return `${new Intl.NumberFormat("en-US").format(value)} ${currency}`;
 }
 
+/**
+ * Builds the canonical display title for a product variant.
+ * e.g. variantTitle("Steam Wallet", 10, "EUR") → "Steam Wallet 10 EUR"
+ */
+export function variantTitle(
+  parentName: string,
+  faceValue: number,
+  faceCurrency: string,
+): string {
+  return `${parentName} ${new Intl.NumberFormat("en-US").format(faceValue)} ${faceCurrency}`;
+}
+
 /** Short, human-friendly date used across order views. */
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", {

@@ -2,23 +2,28 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { products, getCategory } from "@/lib/products";
+import { parentProducts, getCategory } from "@/lib/products";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
-import { formatMAD, formatFaceValue } from "@/lib/format";
-import type { Product } from "@/lib/types";
+import { formatMAD, formatFaceValue, variantTitle } from "@/lib/format";
+import type { ParentProduct, ProductVariant } from "@/lib/types";
 
 export default function ProductsPanel() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const { overrides } = useProductCatalog();
 
-  const filtered = products.filter(
-    (p) =>
-      search.trim() === "" ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.category.toLowerCase().includes(search.toLowerCase()) ||
-      (p.brand?.toLowerCase().includes(search.toLowerCase()) ?? false),
-  );
+  const filtered = parentProducts.filter((p) => {
+    if (search.trim() === "") return true;
+    const q = search.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      (p.brand?.toLowerCase().includes(q) ?? false) ||
+      p.variants.some((v) => v.id.toLowerCase().includes(q))
+    );
+  });
+
+  const totalVariants = parentProducts.reduce((s, p) => s + p.variants.length, 0);
 
   return (
     <div className="space-y-6">
@@ -26,7 +31,7 @@ export default function ProductsPanel() {
         <div>
           <h2 className="text-xl font-bold text-white">Products</h2>
           <p className="mt-1 text-sm text-muted">
-            {products.length} products defined in{" "}
+            {parentProducts.length} parent products · {totalVariants} variants defined in{" "}
             <code className="font-mono text-xs text-accent">src/lib/products.ts</code>.
           </p>
         </div>
@@ -43,14 +48,17 @@ export default function ProductsPanel() {
         <p className="text-sm text-muted">No products match "{search}".</p>
       ) : (
         <div className="space-y-2">
-          {filtered.map((product) => (
-            <ProductRow
-              key={product.id}
-              product={product}
-              hasOverrides={!!overrides[product.id]}
-              open={openId === product.id}
+          {filtered.map((parent) => (
+            <ParentProductRow
+              key={parent.id}
+              parent={parent}
+              variantOverrides={parent.variants.reduce(
+                (acc, v) => ({ ...acc, [v.id]: !!overrides[v.id] }),
+                {} as Record<string, boolean>,
+              )}
+              open={openId === parent.id}
               onToggle={() =>
-                setOpenId((id) => (id === product.id ? null : product.id))
+                setOpenId((id) => (id === parent.id ? null : parent.id))
               }
             />
           ))}
@@ -60,22 +68,20 @@ export default function ProductsPanel() {
   );
 }
 
-function ProductRow({
-  product,
-  hasOverrides,
+function ParentProductRow({
+  parent,
+  variantOverrides,
   open,
   onToggle,
 }: {
-  product: Product;
-  hasOverrides: boolean;
+  parent: ParentProduct;
+  variantOverrides: Record<string, boolean>;
   open: boolean;
   onToggle: () => void;
 }) {
-  const cat = getCategory(product.category);
-  const hasForeignFaceValue =
-    product.faceValue !== undefined &&
-    product.faceCurrency !== undefined &&
-    product.faceCurrency !== "MAD";
+  const cat = getCategory(parent.category);
+  const activeCount = parent.variants.filter((v) => v.active !== false).length;
+  const anyOverride = Object.values(variantOverrides).some(Boolean);
 
   return (
     <section className="card overflow-hidden">
@@ -88,194 +94,181 @@ function ProductRow({
         >
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-white">{product.name}</span>
-              {product.brand && (
+              <span className="font-medium text-white">{parent.name}</span>
+              {parent.brand && (
                 <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-faint">
-                  {product.brand}
+                  {parent.brand}
                 </span>
               )}
-              {product.featured && (
-                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
-                  Featured
-                </span>
-              )}
-              {product.active === false && (
+              {parent.active === false && (
                 <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
                   Inactive
                 </span>
               )}
-              {hasOverrides && (
+              {anyOverride && (
                 <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
                   Modified
                 </span>
               )}
             </div>
             <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
-              <span className="font-mono">{product.id}</span>
+              <span className="font-mono">{parent.id}</span>
               <span>{cat?.name}</span>
-              <span>{product.region}</span>
+              <span>{parent.region}</span>
+              <span>
+                {activeCount}/{parent.variants.length} variants active
+              </span>
             </div>
           </div>
 
-          {/* Pricing summary */}
-          <div className="shrink-0 text-right">
-            {hasForeignFaceValue ? (
-              <div className="text-xs text-muted">
-                <span className="text-white">
-                  {formatFaceValue(product.faceValue!, product.faceCurrency!)}
-                </span>
-                {" → "}
-                <span className="font-semibold text-accent">{formatMAD(product.price)}</span>
-              </div>
-            ) : (
-              <span className="text-sm font-semibold text-white">{formatMAD(product.price)}</span>
-            )}
+          <div className="shrink-0 text-right text-xs text-faint">
+            {parent.variants
+              .filter((v) => v.active !== false)
+              .map((v) => formatMAD(v.price))
+              .join(" · ")}
           </div>
 
-          <span className="shrink-0 text-faint text-xs">{open ? "▲" : "▼"}</span>
+          <span className="shrink-0 text-xs text-faint">{open ? "▲" : "▼"}</span>
         </button>
-
-        <Link
-          href={`/admin/products/${product.id}`}
-          className="btn-ghost shrink-0 h-8 px-3 text-xs"
-          onClick={(e) => e.stopPropagation()}
-        >
-          Edit
-        </Link>
       </div>
 
-      {/* Expanded detail */}
+      {/* Expanded: variants list */}
       {open && (
-        <div className="space-y-6 border-t border-border px-5 py-5">
-          {/* Pricing breakdown */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <InfoCard
-              title="Face Value"
-              value={
-                product.faceValue !== undefined && product.faceCurrency
-                  ? formatFaceValue(product.faceValue, product.faceCurrency)
-                  : "—"
-              }
-              note="Original card denomination"
-            />
-            <div className="hidden place-items-center sm:grid">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                className="h-6 w-6 text-muted"
-                aria-hidden
-              >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </div>
-            <InfoCard
-              title="Customer pays"
-              value={formatMAD(product.price)}
-              note="Selling price in MAD"
-              highlight
-            />
+        <div className="border-t border-border px-5 py-5 space-y-4">
+          {/* Parent info */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Meta label="Parent ID" value={parent.id} mono />
+            <Meta label="Category" value={cat?.name ?? parent.category} />
+            <Meta label="Brand" value={parent.brand ?? "—"} />
+            <Meta label="Region" value={parent.region} />
+            <Meta label="Delivery" value={parent.deliveryType} />
           </div>
 
-          {/* Supplier cost — admin only */}
-          <div className="rounded-xl border border-border bg-base p-4">
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-muted">
-              Supplier cost (admin only — never shown publicly)
+          {/* Variants */}
+          <div>
+            <p className="mb-2.5 text-[11px] font-bold uppercase tracking-widest text-faint">
+              Variants
             </p>
-            {product.supplierCost !== undefined && product.supplierCurrency ? (
-              <span className="text-sm font-medium text-white">
-                {product.supplierCost} {product.supplierCurrency}
-              </span>
-            ) : (
-              <span className="text-sm text-faint">Not set</span>
-            )}
+            <div className="space-y-2">
+              {parent.variants.map((v) => (
+                <VariantRow
+                  key={v.id}
+                  variant={v}
+                  parentName={parent.name}
+                  hasOverride={variantOverrides[v.id] ?? false}
+                />
+              ))}
+            </div>
           </div>
 
-          {/* Description fields */}
+          {/* Descriptions */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
                 Short description
               </p>
               <p className="text-[13.5px] text-text">
-                {product.shortDescription ?? product.description}
+                {parent.shortDescription ?? parent.description}
               </p>
             </div>
-            {product.longDescription && (
+            {parent.longDescription && (
               <div>
                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
                   Long description
                 </p>
-                <p className="text-[13.5px] text-text">{product.longDescription}</p>
+                <p className="text-[13.5px] text-text">{parent.longDescription}</p>
               </div>
             )}
           </div>
 
           {/* Instructions */}
-          {product.instructions && (
+          {parent.instructions && (
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
                 Comment utiliser (Instructions)
               </p>
               <div className="space-y-1.5">
-                {product.instructions.split("\n").filter(Boolean).map((line, i) => (
-                  <div
-                    key={i}
-                    className="flex gap-3 rounded-lg border border-border bg-base px-3.5 py-2.5"
-                  >
-                    <span className="shrink-0 font-mono text-[11px] text-accent">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <p className="text-[13px] text-muted">
-                      {line.replace(/^\d+\.\s*/, "")}
-                    </p>
-                  </div>
-                ))}
+                {parent.instructions
+                  .split("\n")
+                  .filter(Boolean)
+                  .map((line, i) => (
+                    <div
+                      key={i}
+                      className="flex gap-3 rounded-lg border border-border bg-base px-3.5 py-2.5"
+                    >
+                      <span className="shrink-0 font-mono text-[11px] text-accent">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <p className="text-[13px] text-muted">
+                        {line.replace(/^\d+\.\s*/, "")}
+                      </p>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
-
-          {/* General info */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Meta label="Slug" value={product.id} mono />
-            <Meta label="Category" value={cat?.name ?? product.category} />
-            <Meta label="Brand" value={product.brand ?? "—"} />
-            <Meta label="Region" value={product.region} />
-            <Meta label="Delivery" value={product.deliveryType} />
-            <Meta label="Featured" value={product.featured ? "Yes" : "No"} />
-            <Meta label="Active" value={product.active === false ? "No" : "Yes"} />
-            <Meta
-              label="Face currency"
-              value={product.faceCurrency ?? "MAD"}
-            />
-          </div>
         </div>
       )}
     </section>
   );
 }
 
-function InfoCard({
-  title,
-  value,
-  note,
-  highlight = false,
+function VariantRow({
+  variant,
+  parentName,
+  hasOverride,
 }: {
-  title: string;
-  value: string;
-  note: string;
-  highlight?: boolean;
+  variant: ProductVariant;
+  parentName: string;
+  hasOverride: boolean;
 }) {
+  const title = variantTitle(parentName, variant.faceValue, variant.faceCurrency);
+  const hasForeignFace = variant.faceCurrency !== "MAD";
+
   return (
-    <div
-      className={`rounded-xl border p-4 ${highlight ? "border-accent/30 bg-accent/5" : "border-border bg-base"}`}
-    >
-      <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{title}</p>
-      <p className={`mt-1.5 text-xl font-semibold ${highlight ? "text-accent" : "text-white"}`}>
-        {value}
-      </p>
-      <p className="mt-0.5 text-[11px] text-faint">{note}</p>
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-base px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-white">{title}</span>
+          {variant.featured && (
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
+              Featured
+            </span>
+          )}
+          {variant.active === false && (
+            <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+              Inactive
+            </span>
+          )}
+          {hasOverride && (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+              Modified
+            </span>
+          )}
+        </div>
+        <span className="font-mono text-[11px] text-faint">{variant.id}</span>
+      </div>
+
+      <div className="shrink-0 text-right">
+        {hasForeignFace ? (
+          <div className="text-xs text-muted">
+            <span className="text-white">
+              {formatFaceValue(variant.faceValue, variant.faceCurrency)}
+            </span>
+            {" → "}
+            <span className="font-semibold text-accent">{formatMAD(variant.price)}</span>
+          </div>
+        ) : (
+          <span className="text-sm font-semibold text-white">{formatMAD(variant.price)}</span>
+        )}
+      </div>
+
+      <Link
+        href={`/admin/products/${variant.id}`}
+        className="btn-ghost shrink-0 h-8 px-3 text-xs"
+      >
+        Edit
+      </Link>
     </div>
   );
 }

@@ -1,61 +1,62 @@
 /**
- * Seeds the database with the current catalog products and a handful of
- * sample UNUSED test codes per product. Safe to run repeatedly — products
- * are upserted by slug and codes are created only if missing.
+ * Seeds the database with the current catalog products and sample codes.
+ * Products are represented as variant rows — one DB row per variant.
+ * Safe to run repeatedly — products are upserted by slug.
  *
  * Run with: npm run prisma:seed
  */
 import { PrismaClient } from "@prisma/client";
-import { products } from "../src/lib/products";
+import { products, getParentByVariant } from "../src/lib/products";
 
 const prisma = new PrismaClient();
 
-// Sample test codes per product slug (fake — no real gift cards involved).
 const seedCodes: Record<string, string[]> = {
-  "steam-50": ["STEAM-TEST-50-001", "STEAM-TEST-50-002"],
-  "steam-100": [
-    "STEAM-TEST-100-001",
-    "STEAM-TEST-100-002",
-    "STEAM-TEST-100-003",
-  ],
-  "steam-200": ["STEAM-TEST-200-001", "STEAM-TEST-200-002"],
-  "psn-100": ["PSN-TEST-100-001", "PSN-TEST-100-002"],
-  "psn-250": ["PSN-TEST-250-001"],
-  "xbox-100": ["XBOX-TEST-100-001", "XBOX-TEST-100-002"],
-  "xbox-200": ["XBOX-TEST-200-001"],
-  "nintendo-150": ["NINTENDO-TEST-150-001"],
-  "roblox-100": ["ROBLOX-TEST-100-001", "ROBLOX-TEST-100-002"],
-  "roblox-200": ["ROBLOX-TEST-200-001"],
-  "valorant-100": ["VALORANT-TEST-100-001", "VALORANT-TEST-100-002"],
-  "valorant-200": ["VALORANT-TEST-200-001"],
+  "steam-50":      ["STEAM-TEST-50-001", "STEAM-TEST-50-002"],
+  "steam-100":     ["STEAM-TEST-100-001", "STEAM-TEST-100-002", "STEAM-TEST-100-003"],
+  "steam-200":     ["STEAM-TEST-200-001", "STEAM-TEST-200-002"],
+  "psn-100":       ["PSN-TEST-100-001", "PSN-TEST-100-002"],
+  "psn-250":       ["PSN-TEST-250-001"],
+  "xbox-100":      ["XBOX-TEST-100-001", "XBOX-TEST-100-002"],
+  "xbox-200":      ["XBOX-TEST-200-001"],
+  "nintendo-150":  ["NINTENDO-TEST-150-001"],
+  "roblox-100":    ["ROBLOX-TEST-100-001", "ROBLOX-TEST-100-002"],
+  "roblox-200":    ["ROBLOX-TEST-200-001"],
+  "valorant-100":  ["VALORANT-TEST-100-001", "VALORANT-TEST-100-002"],
+  "valorant-200":  ["VALORANT-TEST-200-001"],
 };
 
 async function main() {
   for (const product of products) {
+    const parent = getParentByVariant(product.id);
+
     const record = await prisma.product.upsert({
       where: { slug: product.id },
       update: {
-        name: product.name,
-        category: product.category,
-        priceMad: product.price,
-        region: product.region,
+        name:         product.name,
+        parentSlug:   parent?.id ?? product.id,
+        category:     product.category,
+        priceMad:     product.price,
+        faceValue:    product.faceValue ?? null,
+        faceCurrency: product.faceCurrency ?? "MAD",
+        region:       product.region,
         deliveryType: product.deliveryType,
-        active: true,
+        active:       product.active !== false,
       },
       create: {
-        slug: product.id,
-        name: product.name,
-        category: product.category,
-        priceMad: product.price,
-        region: product.region,
+        slug:         product.id,
+        name:         product.name,
+        parentSlug:   parent?.id ?? product.id,
+        category:     product.category,
+        priceMad:     product.price,
+        faceValue:    product.faceValue ?? null,
+        faceCurrency: product.faceCurrency ?? "MAD",
+        region:       product.region,
         deliveryType: product.deliveryType,
-        active: true,
+        active:       product.active !== false,
       },
     });
 
-    const codes = seedCodes[product.id] ?? [];
-    for (const code of codes) {
-      // Skip if this code already exists for the product (idempotent seed).
+    for (const code of seedCodes[product.id] ?? []) {
       const existing = await prisma.digitalCode.findUnique({
         where: { productId_code: { productId: record.id, code } },
       });
@@ -67,16 +68,11 @@ async function main() {
     }
   }
 
-  const productCount = await prisma.product.count();
-  const codeCount = await prisma.digitalCode.count();
-  console.log(`Seed complete: ${productCount} products, ${codeCount} codes.`);
+  console.log(
+    `Seed complete: ${await prisma.product.count()} variants, ${await prisma.digitalCode.count()} codes.`,
+  );
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch((e) => { console.error(e); process.exit(1); })
+  .finally(() => prisma.$disconnect());

@@ -22,8 +22,12 @@ model Product {
   id           String   @id @default(cuid())
   name         String
   slug         String   @unique
+  // parentSlug groups variants under a parent product (e.g. "steam-wallet")
+  parentSlug   String   @default("")
   category     String
   priceMad     Int
+  faceValue    Float?
+  faceCurrency String   @default("MAD")
   region       String
   deliveryType String
   active       Boolean  @default(true)

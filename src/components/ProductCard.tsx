@@ -12,9 +12,21 @@ export default function ProductCard({
   outOfStock?: boolean;
 }) {
   const cat = getCategory(product.category);
+
+  // If the product is a variant, link to the parent page with variant pre-selected.
+  const href = product.variantOf
+    ? `/products/${product.variantOf}?v=${product.id}`
+    : `/products/${product.id}`;
+
+  // Show face value label only when the face currency is NOT MAD.
+  const showFaceValue =
+    product.faceValue !== undefined &&
+    product.faceCurrency !== undefined &&
+    product.faceCurrency !== "MAD";
+
   return (
     <Link
-      href={`/products/${product.id}`}
+      href={href}
       className="group relative flex flex-col overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-border-strong hover:shadow-soft"
     >
       <ProductArt category={product.category} className="aspect-[3/2] w-full" />
@@ -45,14 +57,16 @@ export default function ProductCard({
             Instantané
           </span>
         )}
+
         <h3 className={`line-clamp-2 text-[14.5px] font-medium leading-snug ${outOfStock ? "text-muted" : "text-text"}`}>
           {product.name}
         </h3>
+
         <div className="mt-3 flex items-baseline justify-between">
           <div>
-            {product.faceValue && product.faceCurrency && product.faceCurrency !== "MAD" && (
+            {showFaceValue && (
               <div className="mb-0.5 text-[11px] text-faint">
-                {formatFaceValue(product.faceValue, product.faceCurrency)}
+                {formatFaceValue(product.faceValue!, product.faceCurrency!)}
               </div>
             )}
             <span className={`font-mono text-lg font-semibold tracking-tight ${outOfStock ? "text-muted" : "text-text"}`}>
