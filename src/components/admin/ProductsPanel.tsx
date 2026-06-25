@@ -1,0 +1,724 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import type { ParentProductDTO, VariantDTO, SaveVariantInput } from "@/lib/dto";
+import {
+  getParentProductsAction,
+  saveParentProductAction,
+  saveVariantAction,
+} from "@/app/actions/admin";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CATEGORIES = ["steam", "playstation", "xbox", "nintendo", "roblox", "valorant"] as const;
+
+const BG_PRESETS: Record<string, { label: string; from: string; to: string }> = {
+  steam:       { label: "Steam Dark",       from: "#1b2838", to: "#2a475e" },
+  playstation: { label: "PlayStation Blue", from: "#0033a0", to: "#0a6bff" },
+  xbox:        { label: "Xbox Green",       from: "#0e7a0d", to: "#16c60c" },
+  nintendo:    { label: "Nintendo Red",     from: "#b30000", to: "#ff4554" },
+  roblox:      { label: "Roblox Dark",      from: "#2b2b2b", to: "#5a5a5a" },
+  valorant:    { label: "Valorant Red",     from: "#7a1320", to: "#ff4655" },
+};
+
+const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
+const STOCK_CONTROLS = ["manual", "api"];
+type EditorTab = "details" | "content" | "variants" | "media";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function gradientStyle(category: string) {
+  const p = BG_PRESETS[category];
+  return p
+    ? { background: `linear-gradient(135deg, ${p.from}, ${p.to})` }
+    : { background: "#1e2029" };
+}
+
+function emptyParent(): ParentProductDTO {
+  return {
+    slug: "",
+    name: "",
+    category: "steam",
+    brand: null,
+    region: "",
+    deliveryType: "Code numérique instantané",
+    description: "",
+    shortDescription: null,
+    longDescription: null,
+    instructions: null,
+    thumbnail: null,
+    active: true,
+    createdAt: new Date().toISOString(),
+    variants: [],
+  };
+}
+
+// ─── Main panel ──────────────────────────────────────────────────────────────
+
+export default function ProductsPanel() {
+  const [parents, setParents] = useState<ParentProductDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ParentProductDTO | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [activeTab, setActiveTab] = useState<EditorTab>("details");
+  const [variantDrafts, setVariantDrafts] = useState<Record<string, VariantDTO>>({});
+  const [editingVariant, setEditingVariant] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await getParentProductsAction();
+      setParents(data);
+    } catch (e) {
+      setLoadError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openParent(p: ParentProductDTO) {
+    setSelectedSlug(p.slug);
+    setIsNew(false);
+    setDraft({ ...p, variants: p.variants.map((v) => ({ ...v })) });
+    setVariantDrafts(Object.fromEntries(p.variants.map((v) => [v.slug, { ...v }])));
+    setEditingVariant(null);
+    setActiveTab("details");
+    setMsg(null);
+  }
+
+  function openNew() {
+    const blank = emptyParent();
+    setSelectedSlug("__new__");
+    setIsNew(true);
+    setDraft(blank);
+    setVariantDrafts({});
+    setEditingVariant(null);
+    setActiveTab("details");
+    setMsg(null);
+  }
+
+  function updateDraft<K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) {
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
+  }
+
+  function updateVariant<K extends keyof VariantDTO>(slug: string, k: K, v: VariantDTO[K]) {
+    setVariantDrafts((prev) => ({ ...prev, [slug]: { ...prev[slug], [k]: v } }));
+  }
+
+  function cancel() {
+    if (isNew) {
+      setSelectedSlug(null);
+      setDraft(null);
+    } else {
+      const original = parents.find((p) => p.slug === selectedSlug);
+      if (original) openParent(original);
+    }
+    setMsg(null);
+  }
+
+  async function save() {
+    if (!draft) return;
+    if (!draft.slug.trim() || !draft.name.trim()) {
+      setMsg({ text: "Slug and name are required.", ok: false });
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const result = await saveParentProductAction({
+      slug: draft.slug.trim(),
+      name: draft.name.trim(),
+      category: draft.category,
+      brand: draft.brand?.trim() || null,
+      region: draft.region,
+      deliveryType: draft.deliveryType,
+      description: draft.description,
+      shortDescription: draft.shortDescription?.trim() || null,
+      longDescription: draft.longDescription?.trim() || null,
+      instructions: draft.instructions?.trim() || null,
+      thumbnail: draft.thumbnail?.trim() || null,
+      active: draft.active,
+    });
+    if (result.ok) {
+      setMsg({ text: "Saved.", ok: true });
+      setIsNew(false);
+      await load();
+    } else {
+      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  async function saveVariant(slug: string) {
+    if (!draft) return;
+    const v = variantDrafts[slug];
+    if (!v) return;
+    setSaving(true);
+    const input: SaveVariantInput = {
+      slug: v.slug,
+      name: v.name,
+      parentSlug: draft.slug,
+      category: draft.category,
+      priceMad: v.priceMad,
+      faceValue: v.faceValue,
+      faceCurrency: v.faceCurrency,
+      region: draft.region,
+      deliveryType: draft.deliveryType,
+      active: v.active,
+      featured: v.featured,
+      stockControl: v.stockControl,
+    };
+    const result = await saveVariantAction(input);
+    if (result.ok) {
+      setMsg({ text: `Variant "${v.name}" saved.`, ok: true });
+      setEditingVariant(null);
+      await load();
+    } else {
+      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="grid h-full gap-6 lg:grid-cols-[260px_1fr]">
+      {/* ── Left: parent list ── */}
+      <aside className="h-fit">
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Products</h2>
+              <p className="text-xs text-muted">{parents.length} parent product{parents.length !== 1 ? "s" : ""}</p>
+            </div>
+            <button type="button" onClick={openNew} className="btn-primary py-1 text-xs">
+              + New
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="px-4 py-6 text-sm text-muted">Loading…</p>
+          ) : loadError ? (
+            <p className="px-4 py-6 text-sm text-red-400 break-all">{loadError}</p>
+          ) : parents.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted">
+              <p className="font-medium text-white">No products yet.</p>
+              <p className="mt-1 text-xs">Run the Supabase setup SQL to seed parent products, or click + New.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {parents.map((p) => (
+                <li key={p.slug}>
+                  <button
+                    type="button"
+                    onClick={() => openParent(p)}
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface ${
+                      selectedSlug === p.slug ? "bg-accent/10" : ""
+                    }`}
+                  >
+                    <div
+                      className="h-8 w-8 flex-shrink-0 rounded-lg"
+                      style={gradientStyle(p.category)}
+                    />
+                    <div className="min-w-0">
+                      <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
+                        {p.name}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
+                        {" · "}
+                        {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
+                      </p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
+
+      {/* ── Right: editor ── */}
+      {!draft ? (
+        <div className="card flex items-center justify-center p-16 text-center">
+          <div>
+            <p className="text-3xl">🛍️</p>
+            <p className="mt-2 text-sm text-muted">Select a product to edit, or click + New</p>
+          </div>
+        </div>
+      ) : (
+        <section className="space-y-4">
+          {/* Header */}
+          <div className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div>
+              <h2 className="font-bold text-white">{draft.name || "New product"}</h2>
+              <p className="text-xs text-muted">{isNew ? "Unsaved" : draft.slug}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {msg && (
+                <span className={`text-xs ${msg.ok ? "text-green-400" : "text-red-400"}`}>
+                  {msg.text}
+                </span>
+              )}
+              <button type="button" onClick={cancel} className="btn-ghost text-sm" disabled={saving}>
+                Cancel
+              </button>
+              <button type="button" onClick={save} className="btn-primary text-sm" disabled={saving}>
+                {saving ? "Saving…" : "Save product"}
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="card overflow-hidden">
+            <div className="flex border-b border-border overflow-x-auto">
+              {(["details", "content", "variants", "media"] as EditorTab[]).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`whitespace-nowrap px-5 py-3 text-sm font-medium capitalize transition-colors ${
+                    activeTab === tab
+                      ? "border-b-2 border-accent text-white"
+                      : "text-muted hover:text-white"
+                  }`}
+                >
+                  {tab}
+                  {tab === "variants" && draft.variants.length > 0 && (
+                    <span className="ml-1.5 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-bold text-muted">
+                      {draft.variants.length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-5">
+              {activeTab === "details" && <DetailsTab draft={draft} update={updateDraft} />}
+              {activeTab === "content" && <ContentTab draft={draft} update={updateDraft} />}
+              {activeTab === "variants" && (
+                <VariantsTab
+                  draft={draft}
+                  variantDrafts={variantDrafts}
+                  editingVariant={editingVariant}
+                  setEditingVariant={setEditingVariant}
+                  updateVariant={updateVariant}
+                  onSaveVariant={saveVariant}
+                  saving={saving}
+                />
+              )}
+              {activeTab === "media" && <MediaTab draft={draft} update={updateDraft} />}
+            </div>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ─── Details tab ─────────────────────────────────────────────────────────────
+
+function DetailsTab({
+  draft,
+  update,
+}: {
+  draft: ParentProductDTO;
+  update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Product name *">
+          <input
+            className="input"
+            value={draft.name}
+            onChange={(e) => update("name", e.target.value)}
+            placeholder="Steam Wallet"
+          />
+        </Field>
+        <Field label="Slug *">
+          <input
+            className="input font-mono"
+            value={draft.slug}
+            onChange={(e) => update("slug", e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+            placeholder="steam-wallet"
+          />
+        </Field>
+        <Field label="Category">
+          <select
+            className="input"
+            value={draft.category}
+            onChange={(e) => update("category", e.target.value)}
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Brand / Platform">
+          <input
+            className="input"
+            value={draft.brand ?? ""}
+            onChange={(e) => update("brand", e.target.value || null)}
+            placeholder="Valve"
+          />
+        </Field>
+        <Field label="Region">
+          <input
+            className="input"
+            value={draft.region}
+            onChange={(e) => update("region", e.target.value)}
+            placeholder="Maroc / Global"
+          />
+        </Field>
+        <Field label="Delivery type">
+          <input
+            className="input"
+            value={draft.deliveryType}
+            onChange={(e) => update("deliveryType", e.target.value)}
+            placeholder="Code numérique instantané"
+          />
+        </Field>
+      </div>
+
+      <div className="flex items-center gap-6">
+        <Toggle
+          label="Active (visible in store)"
+          checked={draft.active}
+          onChange={(v) => update("active", v)}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Content tab ─────────────────────────────────────────────────────────────
+
+function ContentTab({
+  draft,
+  update,
+}: {
+  draft: ParentProductDTO;
+  update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <Field label="Short description">
+        <input
+          className="input"
+          value={draft.shortDescription ?? ""}
+          onChange={(e) => update("shortDescription", e.target.value || null)}
+          placeholder="One-line tagline shown on category pages"
+        />
+      </Field>
+      <Field label="Long description">
+        <textarea
+          className="input min-h-[100px] resize-y"
+          value={draft.longDescription ?? ""}
+          onChange={(e) => update("longDescription", e.target.value || null)}
+          placeholder="Full product description shown on the product page"
+        />
+      </Field>
+      <Field label="Description (meta / fallback)">
+        <textarea
+          className="input min-h-[80px] resize-y"
+          value={draft.description}
+          onChange={(e) => update("description", e.target.value)}
+          placeholder="Short description used as meta description and fallback"
+        />
+      </Field>
+      <Field label="Redemption instructions">
+        <textarea
+          className="input min-h-[120px] resize-y font-mono text-xs"
+          value={draft.instructions ?? ""}
+          onChange={(e) => update("instructions", e.target.value || null)}
+          placeholder={"1. Open Steam…\n2. Click…"}
+        />
+      </Field>
+    </div>
+  );
+}
+
+// ─── Variants tab ────────────────────────────────────────────────────────────
+
+function VariantsTab({
+  draft,
+  variantDrafts,
+  editingVariant,
+  setEditingVariant,
+  updateVariant,
+  onSaveVariant,
+  saving,
+}: {
+  draft: ParentProductDTO;
+  variantDrafts: Record<string, VariantDTO>;
+  editingVariant: string | null;
+  setEditingVariant: (slug: string | null) => void;
+  updateVariant: <K extends keyof VariantDTO>(slug: string, k: K, v: VariantDTO[K]) => void;
+  onSaveVariant: (slug: string) => Promise<void>;
+  saving: boolean;
+}) {
+  if (draft.variants.length === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-base px-6 py-10 text-center text-sm text-muted">
+        <p>No variants yet.</p>
+        <p className="mt-1 text-xs">Add variants via the Supabase SQL editor or INSERT into the Product table with <code className="font-mono">parentSlug = &apos;{draft.slug}&apos;</code>.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {draft.variants.map((orig) => {
+        const v = variantDrafts[orig.slug] ?? orig;
+        const isEditing = editingVariant === orig.slug;
+
+        return (
+          <div
+            key={orig.slug}
+            className="rounded-xl border border-border bg-base"
+          >
+            {/* Row header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs text-muted">{orig.slug}</span>
+                <span className={`chip ${orig.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
+                  {orig.active ? "Active" : "Hidden"}
+                </span>
+                {orig.featured && <span className="chip border-accent/30 text-accent">Featured</span>}
+              </div>
+              <div className="flex items-center gap-4 text-sm text-muted">
+                {orig.faceValue != null && (
+                  <span>{orig.faceValue} {orig.faceCurrency}</span>
+                )}
+                <span className="font-semibold text-white">{orig.priceMad} MAD</span>
+                <span className="text-xs">{orig.inventoryUnused} in stock</span>
+                {isEditing ? (
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditingVariant(null)}
+                      className="btn-ghost py-1 text-xs"
+                      disabled={saving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSaveVariant(orig.slug)}
+                      className="btn-primary py-1 text-xs"
+                      disabled={saving}
+                    >
+                      {saving ? "…" : "Save"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingVariant(orig.slug)}
+                    className="text-xs font-medium text-accent hover:text-accent-hover"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Inline editor */}
+            {isEditing && (
+              <div className="border-t border-border px-4 py-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Variant name">
+                    <input
+                      className="input"
+                      value={v.name}
+                      onChange={(e) => updateVariant(orig.slug, "name", e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Face value">
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={v.faceValue ?? ""}
+                      onChange={(e) =>
+                        updateVariant(orig.slug, "faceValue", e.target.value === "" ? null : Number(e.target.value))
+                      }
+                    />
+                  </Field>
+                  <Field label="Face currency">
+                    <select
+                      className="input"
+                      value={v.faceCurrency}
+                      onChange={(e) => updateVariant(orig.slug, "faceCurrency", e.target.value)}
+                    >
+                      {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Price (MAD)">
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      value={v.priceMad}
+                      onChange={(e) => updateVariant(orig.slug, "priceMad", Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="Stock control">
+                    <select
+                      className="input"
+                      value={v.stockControl}
+                      onChange={(e) => updateVariant(orig.slug, "stockControl", e.target.value)}
+                    >
+                      {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Inventory (unused codes)">
+                    <input
+                      className="input"
+                      value={orig.inventoryUnused}
+                      disabled
+                      readOnly
+                    />
+                  </Field>
+                </div>
+                <div className="mt-4 flex gap-6">
+                  <Toggle
+                    label="Active"
+                    checked={v.active}
+                    onChange={(val) => updateVariant(orig.slug, "active", val)}
+                  />
+                  <Toggle
+                    label="Featured"
+                    checked={v.featured}
+                    onChange={(val) => updateVariant(orig.slug, "featured", val)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Media tab ───────────────────────────────────────────────────────────────
+
+function MediaTab({
+  draft,
+  update,
+}: {
+  draft: ParentProductDTO;
+  update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
+}) {
+  const preset = BG_PRESETS[draft.category];
+
+  return (
+    <div className="space-y-6">
+      <Field label="Thumbnail / artwork URL">
+        <input
+          className="input"
+          value={draft.thumbnail ?? ""}
+          onChange={(e) => update("thumbnail", e.target.value || null)}
+          placeholder="https://example.com/art/steam-wallet.png"
+        />
+        <p className="mt-1 text-xs text-muted">
+          Used as the product card image. Leave blank to show the background gradient only.
+        </p>
+      </Field>
+
+      <div>
+        <p className="mb-2 text-sm font-medium text-white">Background preset</p>
+        <p className="mb-3 text-xs text-muted">
+          Auto-selected from the category set in Details. Change the category to update the preset.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {Object.entries(BG_PRESETS).map(([key, p]) => (
+            <button
+              key={key}
+              type="button"
+              title={p.label}
+              onClick={() => update("category", key)}
+              className={`relative h-14 w-24 rounded-xl transition-all ${
+                draft.category === key ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : "opacity-60 hover:opacity-100"
+              }`}
+              style={{ background: `linear-gradient(135deg, ${p.from}, ${p.to})` }}
+            >
+              <span className="absolute bottom-1 left-0 right-0 text-center text-[9px] font-semibold uppercase tracking-wide text-white/70">
+                {key}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Preview card */}
+      <div>
+        <p className="mb-2 text-sm font-medium text-white">Preview</p>
+        <div
+          className="relative h-36 w-56 overflow-hidden rounded-2xl"
+          style={gradientStyle(draft.category)}
+        >
+          {draft.thumbnail && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={draft.thumbnail}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover opacity-30"
+            />
+          )}
+          <div className="absolute inset-0 flex flex-col justify-end p-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-white/60">
+              {draft.category}
+            </p>
+            <p className="text-sm font-bold text-white">{draft.name || "Product name"}</p>
+          </div>
+        </div>
+        {preset && (
+          <p className="mt-2 text-xs text-muted">
+            Active preset: <span className="text-white">{preset.label}</span>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared sub-components ────────────────────────────────────────────────────
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-white">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 accent-[#3e7bfa]"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}

@@ -12,6 +12,8 @@ import type { AdminOrderDTO, InventoryGroupDTO } from "@/lib/dto";
 import SettingsPanel from "@/components/admin/SettingsPanel";
 import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
+import ProductsPanel from "@/components/admin/ProductsPanel";
+import CustomersPanel from "@/components/admin/CustomersPanel";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: "📊" },
@@ -88,6 +90,10 @@ export default function AdminPage() {
           <FulfillmentPanel />
         ) : activeTab === "inventory" ? (
           <InventoryPanel />
+        ) : activeTab === "products" ? (
+          <ProductsPanel />
+        ) : activeTab === "customers" ? (
+          <CustomersPanel />
         ) : (
           <div className="space-y-8">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

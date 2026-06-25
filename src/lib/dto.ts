@@ -64,6 +64,80 @@ export interface InventoryGroupDTO {
   codes: AdminCodeDTO[];
 }
 
+// ─── Product management ───────────────────────────────────────────────────────
+
+export interface VariantDTO {
+  id: string;
+  slug: string;
+  name: string;
+  priceMad: number;
+  faceValue: number | null;
+  faceCurrency: string;
+  active: boolean;
+  featured: boolean;
+  stockControl: string;
+  inventoryUnused: number;
+}
+
+export interface ParentProductDTO {
+  slug: string;
+  name: string;
+  category: string;
+  brand: string | null;
+  region: string;
+  deliveryType: string;
+  description: string;
+  shortDescription: string | null;
+  longDescription: string | null;
+  instructions: string | null;
+  thumbnail: string | null;
+  active: boolean;
+  createdAt: string;
+  variants: VariantDTO[];
+}
+
+export interface SaveParentProductInput {
+  slug: string;
+  name: string;
+  category: string;
+  brand: string | null;
+  region: string;
+  deliveryType: string;
+  description: string;
+  shortDescription: string | null;
+  longDescription: string | null;
+  instructions: string | null;
+  thumbnail: string | null;
+  active: boolean;
+}
+
+export interface SaveVariantInput {
+  slug: string;
+  name: string;
+  parentSlug: string;
+  category: string;
+  priceMad: number;
+  faceValue: number | null;
+  faceCurrency: string;
+  region: string;
+  deliveryType: string;
+  active: boolean;
+  featured: boolean;
+  stockControl: string;
+}
+
+// ─── Customer summaries ───────────────────────────────────────────────────────
+
+export interface CustomerDTO {
+  email: string;
+  name: string;
+  orderCount: number;
+  totalSpent: number;
+  lastOrderAt: string;
+}
+
+// ─── Fulfillment ──────────────────────────────────────────────────────────────
+
 /** A single delivery assignment entry: either an inventory code or a manual one. */
 export interface AssignmentEntry {
   digitalCodeId?: string;

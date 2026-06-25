@@ -15,12 +15,20 @@ import {
   disableCode,
 } from "@/lib/db/inventory";
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
+import {
+  getParentProducts,
+  saveParentProduct,
+  saveVariant,
+} from "@/lib/db/products";
 import type {
   ActionResult,
   AdminCodeDTO,
   AdminOrderDTO,
   InventoryGroupDTO,
   ItemAssignment,
+  ParentProductDTO,
+  SaveParentProductInput,
+  SaveVariantInput,
 } from "@/lib/dto";
 
 export async function getAdminOrdersAction(): Promise<AdminOrderDTO[]> {
@@ -68,4 +76,20 @@ export async function deliverOrderAction(
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
   return deliverOrder(orderId, assignments);
+}
+
+export async function getParentProductsAction(): Promise<ParentProductDTO[]> {
+  return getParentProducts();
+}
+
+export async function saveParentProductAction(
+  data: SaveParentProductInput,
+): Promise<ActionResult> {
+  return saveParentProduct(data);
+}
+
+export async function saveVariantAction(
+  data: SaveVariantInput,
+): Promise<ActionResult> {
+  return saveVariant(data);
 }
