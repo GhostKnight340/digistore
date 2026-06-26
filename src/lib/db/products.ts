@@ -1,5 +1,6 @@
 import "server-only";
 
+import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import type {
   ActionResult,
@@ -10,7 +11,7 @@ import type {
   VariantDTO,
 } from "@/lib/dto";
 
-function productDetailQuery(where: Parameters<typeof prisma.product.findMany>[0]["where"]) {
+function productDetailQuery(where?: Prisma.ProductWhereInput) {
   return prisma.product.findMany({
     where,
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
