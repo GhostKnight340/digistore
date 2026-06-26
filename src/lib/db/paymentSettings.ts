@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getDb, newId, nowIso, toBool, fromBool } from "./sqlite";
+import { ensureDatabaseReady, prisma } from "./prisma";
 import type {
   BankDTO,
   CryptoWalletDTO,
@@ -17,7 +17,7 @@ const DEFAULT_METHODS: PaymentMethodConfigDTO[] = [
     proofRequired: true,
     paypalEmail: "",
     cardMessage: "",
-    instructions: "Veuillez effectuer le virement et télécharger le justificatif.",
+    instructions: "Veuillez effectuer le virement et telecharger le justificatif.",
   },
   {
     method: "usdt",
@@ -25,7 +25,7 @@ const DEFAULT_METHODS: PaymentMethodConfigDTO[] = [
     proofRequired: true,
     paypalEmail: "",
     cardMessage: "",
-    instructions: "Envoyez exactement le montant indiqué et téléchargez la capture d'écran.",
+    instructions: "Envoyez exactement le montant indique et telechargez la capture d'ecran.",
   },
   {
     method: "paypal",
@@ -40,121 +40,162 @@ const DEFAULT_METHODS: PaymentMethodConfigDTO[] = [
     enabled: false,
     proofRequired: false,
     paypalEmail: "",
-    cardMessage: "Paiement par carte bientôt disponible.",
+    cardMessage: "Paiement par carte bientot disponible.",
     instructions: "",
   },
 ];
 
-function ensureDefaults(): void {
-  const db = getDb();
-  const count = (db.prepare("SELECT COUNT(*) as n FROM PaymentMethodConfig").get() as { n: number }).n;
+async function ensureDefaults(): Promise<void> {
+  await ensureDatabaseReady();
+  const count = await prisma.paymentMethodConfig.count();
   if (count === 0) {
-    const ts = nowIso();
-    const stmt = db.prepare(
-      `INSERT INTO PaymentMethodConfig (id, method, enabled, proofRequired, paypalEmail, cardMessage, instructions, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-    for (const m of DEFAULT_METHODS) {
-      stmt.run(newId(), m.method, fromBool(m.enabled), fromBool(m.proofRequired), m.paypalEmail, m.cardMessage, m.instructions, ts);
-    }
+    await prisma.paymentMethodConfig.createMany({
+      data: DEFAULT_METHODS,
+      skipDuplicates: true,
+    });
   }
 
-  const support = db.prepare("SELECT id FROM SupportConfig LIMIT 1").get();
+  const support = await prisma.supportConfig.findFirst();
   if (!support) {
-    db.prepare(
-      `INSERT INTO SupportConfig (id, whatsappNumber, supportEmail, instructions, updatedAt)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(newId(), "+212 600 000 000", "support@karta.ma", "", nowIso());
+    await prisma.supportConfig.create({
+      data: {
+        whatsappNumber: "+212 600 000 000",
+        supportEmail: "support@karta.ma",
+        instructions: "",
+      },
+    });
   }
 }
 
-function rowToMethod(r: Record<string, unknown>): PaymentMethodConfigDTO {
+function rowToMethod(row: {
+  method: string;
+  enabled: boolean;
+  proofRequired: boolean;
+  paypalEmail: string;
+  cardMessage: string;
+  instructions: string;
+}): PaymentMethodConfigDTO {
   return {
-    method: r.method as string,
-    enabled: toBool(r.enabled),
-    proofRequired: toBool(r.proofRequired),
-    paypalEmail: (r.paypalEmail as string) ?? "",
-    cardMessage: (r.cardMessage as string) ?? "",
-    instructions: (r.instructions as string) ?? "",
+    method: row.method,
+    enabled: row.enabled,
+    proofRequired: row.proofRequired,
+    paypalEmail: row.paypalEmail,
+    cardMessage: row.cardMessage,
+    instructions: row.instructions,
   };
 }
 
-function rowToBank(r: Record<string, unknown>): BankDTO {
+function rowToBank(row: {
+  id: string;
+  name: string;
+  accountHolder: string;
+  accountNumber: string;
+  rib: string;
+  iban: string;
+  swift: string;
+  instructions: string;
+  enabled: boolean;
+  sortOrder: number;
+}): BankDTO {
   return {
-    id: r.id as string,
-    name: r.name as string,
-    accountHolder: r.accountHolder as string,
-    accountNumber: (r.accountNumber as string) ?? "",
-    rib: (r.rib as string) ?? "",
-    iban: (r.iban as string) ?? "",
-    swift: (r.swift as string) ?? "",
-    instructions: (r.instructions as string) ?? "",
-    enabled: toBool(r.enabled),
-    sortOrder: r.sortOrder as number,
+    id: row.id,
+    name: row.name,
+    accountHolder: row.accountHolder,
+    accountNumber: row.accountNumber,
+    rib: row.rib,
+    iban: row.iban,
+    swift: row.swift,
+    instructions: row.instructions,
+    enabled: row.enabled,
+    sortOrder: row.sortOrder,
   };
 }
 
-function rowToWallet(r: Record<string, unknown>): CryptoWalletDTO {
+function rowToWallet(row: {
+  id: string;
+  coin: string;
+  network: string;
+  address: string;
+  label: string;
+  instructions: string;
+  enabled: boolean;
+}): CryptoWalletDTO {
   return {
-    id: r.id as string,
-    coin: (r.coin as string) ?? "USDT",
-    network: r.network as string,
-    address: r.address as string,
-    label: (r.label as string) ?? "",
-    instructions: (r.instructions as string) ?? "",
-    enabled: toBool(r.enabled),
+    id: row.id,
+    coin: row.coin,
+    network: row.network,
+    address: row.address,
+    label: row.label,
+    instructions: row.instructions,
+    enabled: row.enabled,
   };
+}
+
+function rowToSupport(row: {
+  id: string;
+  whatsappNumber: string;
+  supportEmail: string;
+  instructions: string;
+} | null): SupportConfigDTO {
+  return row
+    ? {
+        id: row.id,
+        whatsappNumber: row.whatsappNumber,
+        supportEmail: row.supportEmail,
+        instructions: row.instructions,
+      }
+    : {
+        id: "",
+        whatsappNumber: "+212 600 000 000",
+        supportEmail: "support@karta.ma",
+        instructions: "",
+      };
 }
 
 export async function getPaymentConfig(): Promise<PaymentConfigDTO> {
-  ensureDefaults();
-  const db = getDb();
+  await ensureDefaults();
 
-  const methods = db.prepare("SELECT * FROM PaymentMethodConfig ORDER BY method ASC").all();
-  const banks = db.prepare("SELECT * FROM Bank WHERE enabled = 1 ORDER BY sortOrder ASC").all();
-  const wallets = db.prepare("SELECT * FROM CryptoWallet WHERE enabled = 1").all();
-  const support = db.prepare("SELECT * FROM SupportConfig LIMIT 1").get();
+  const [methods, banks, wallets, support] = await Promise.all([
+    prisma.paymentMethodConfig.findMany({ orderBy: { method: "asc" } }),
+    prisma.bank.findMany({
+      where: { enabled: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.cryptoWallet.findMany({ where: { enabled: true } }),
+    prisma.supportConfig.findFirst(),
+  ]);
 
   const methodsMap: Record<string, PaymentMethodConfigDTO> = {};
-  for (const m of methods) methodsMap[m.method as string] = rowToMethod(m);
+  for (const method of methods) methodsMap[method.method] = rowToMethod(method);
 
-  const supportDTO: SupportConfigDTO = support
-    ? {
-        id: support.id as string,
-        whatsappNumber: support.whatsappNumber as string,
-        supportEmail: support.supportEmail as string,
-        instructions: (support.instructions as string) ?? "",
-      }
-    : { id: "", whatsappNumber: "+212 600 000 000", supportEmail: "support@karta.ma", instructions: "" };
-
-  return { methods: methodsMap, banks: banks.map(rowToBank), wallets: wallets.map(rowToWallet), support: supportDTO };
+  return {
+    methods: methodsMap,
+    banks: banks.map(rowToBank),
+    wallets: wallets.map(rowToWallet),
+    support: rowToSupport(support),
+  };
 }
 
 export async function getAdminPaymentConfig(): Promise<PaymentConfigDTO> {
-  ensureDefaults();
-  const db = getDb();
+  await ensureDefaults();
 
-  const methods = db.prepare("SELECT * FROM PaymentMethodConfig ORDER BY method ASC").all();
-  const banks = db.prepare("SELECT * FROM Bank ORDER BY sortOrder ASC").all();
-  const wallets = db.prepare("SELECT * FROM CryptoWallet").all();
-  const support = db.prepare("SELECT * FROM SupportConfig LIMIT 1").get();
+  const [methods, banks, wallets, support] = await Promise.all([
+    prisma.paymentMethodConfig.findMany({ orderBy: { method: "asc" } }),
+    prisma.bank.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.cryptoWallet.findMany(),
+    prisma.supportConfig.findFirst(),
+  ]);
 
   const methodsMap: Record<string, PaymentMethodConfigDTO> = {};
-  for (const m of methods) methodsMap[m.method as string] = rowToMethod(m);
+  for (const method of methods) methodsMap[method.method] = rowToMethod(method);
 
-  const supportDTO: SupportConfigDTO = support
-    ? {
-        id: support.id as string,
-        whatsappNumber: support.whatsappNumber as string,
-        supportEmail: support.supportEmail as string,
-        instructions: (support.instructions as string) ?? "",
-      }
-    : { id: "", whatsappNumber: "+212 600 000 000", supportEmail: "support@karta.ma", instructions: "" };
-
-  return { methods: methodsMap, banks: banks.map(rowToBank), wallets: wallets.map(rowToWallet), support: supportDTO };
+  return {
+    methods: methodsMap,
+    banks: banks.map(rowToBank),
+    wallets: wallets.map(rowToWallet),
+    support: rowToSupport(support),
+  };
 }
-
-// ─── Method config ────────────────────────────────────────────────────────────
 
 export async function updateMethodConfig(
   method: string,
@@ -167,40 +208,26 @@ export async function updateMethodConfig(
   }>,
 ): Promise<ActionResult> {
   try {
-    const db = getDb();
-    const ts = nowIso();
-    const existing = db.prepare("SELECT id FROM PaymentMethodConfig WHERE method = ?").get(method);
-    if (existing) {
-      const sets: string[] = ["updatedAt = ?"];
-      const vals: unknown[] = [ts];
-      if (data.enabled !== undefined) { sets.push("enabled = ?"); vals.push(fromBool(data.enabled)); }
-      if (data.proofRequired !== undefined) { sets.push("proofRequired = ?"); vals.push(fromBool(data.proofRequired)); }
-      if (data.paypalEmail !== undefined) { sets.push("paypalEmail = ?"); vals.push(data.paypalEmail); }
-      if (data.cardMessage !== undefined) { sets.push("cardMessage = ?"); vals.push(data.cardMessage); }
-      if (data.instructions !== undefined) { sets.push("instructions = ?"); vals.push(data.instructions); }
-      vals.push(method);
-      db.prepare(`UPDATE PaymentMethodConfig SET ${sets.join(", ")} WHERE method = ?`).run(...vals);
-    } else {
-      db.prepare(
-        `INSERT INTO PaymentMethodConfig (id, method, enabled, proofRequired, paypalEmail, cardMessage, instructions, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        newId(), method,
-        fromBool(data.enabled ?? true),
-        fromBool(data.proofRequired ?? true),
-        data.paypalEmail ?? "",
-        data.cardMessage ?? "",
-        data.instructions ?? "",
-        ts,
-      );
-    }
+    await prisma.paymentMethodConfig.upsert({
+      where: { method },
+      update: data,
+      create: {
+        method,
+        enabled: data.enabled ?? true,
+        proofRequired: data.proofRequired ?? true,
+        paypalEmail: data.paypalEmail ?? "",
+        cardMessage: data.cardMessage ?? "",
+        instructions: data.instructions ?? "",
+      },
+    });
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Update failed." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Update failed.",
+    };
   }
 }
-
-// ─── Support config ───────────────────────────────────────────────────────────
 
 export async function updateSupportConfig(data: {
   whatsappNumber: string;
@@ -208,25 +235,20 @@ export async function updateSupportConfig(data: {
   instructions: string;
 }): Promise<ActionResult> {
   try {
-    const db = getDb();
-    const ts = nowIso();
-    const existing = db.prepare("SELECT id FROM SupportConfig LIMIT 1").get();
+    const existing = await prisma.supportConfig.findFirst();
     if (existing) {
-      db.prepare(
-        "UPDATE SupportConfig SET whatsappNumber = ?, supportEmail = ?, instructions = ?, updatedAt = ? WHERE id = ?",
-      ).run(data.whatsappNumber, data.supportEmail, data.instructions, ts, existing.id as string);
+      await prisma.supportConfig.update({ where: { id: existing.id }, data });
     } else {
-      db.prepare(
-        "INSERT INTO SupportConfig (id, whatsappNumber, supportEmail, instructions, updatedAt) VALUES (?, ?, ?, ?, ?)",
-      ).run(newId(), data.whatsappNumber, data.supportEmail, data.instructions, ts);
+      await prisma.supportConfig.create({ data });
     }
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Update failed." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Update failed.",
+    };
   }
 }
-
-// ─── Banks ────────────────────────────────────────────────────────────────────
 
 export async function addBank(data: {
   name: string;
@@ -238,16 +260,16 @@ export async function addBank(data: {
   instructions: string;
 }): Promise<ActionResult & { id?: string }> {
   try {
-    const db = getDb();
-    const id = newId();
-    const count = (db.prepare("SELECT COUNT(*) as n FROM Bank").get() as { n: number }).n;
-    db.prepare(
-      `INSERT INTO Bank (id, name, accountHolder, accountNumber, rib, iban, swift, instructions, enabled, sortOrder, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-    ).run(id, data.name, data.accountHolder, data.accountNumber, data.rib, data.iban, data.swift, data.instructions, count, nowIso(), nowIso());
-    return { ok: true, id };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Add failed." };
+    const count = await prisma.bank.count();
+    const bank = await prisma.bank.create({
+      data: { ...data, enabled: true, sortOrder: count },
+    });
+    return { ok: true, id: bank.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Add failed.",
+    };
   }
 }
 
@@ -266,36 +288,27 @@ export async function updateBank(
   }>,
 ): Promise<ActionResult> {
   try {
-    const db = getDb();
-    const sets: string[] = ["updatedAt = ?"];
-    const vals: unknown[] = [nowIso()];
-    if (data.name !== undefined) { sets.push("name = ?"); vals.push(data.name); }
-    if (data.accountHolder !== undefined) { sets.push("accountHolder = ?"); vals.push(data.accountHolder); }
-    if (data.accountNumber !== undefined) { sets.push("accountNumber = ?"); vals.push(data.accountNumber); }
-    if (data.rib !== undefined) { sets.push("rib = ?"); vals.push(data.rib); }
-    if (data.iban !== undefined) { sets.push("iban = ?"); vals.push(data.iban); }
-    if (data.swift !== undefined) { sets.push("swift = ?"); vals.push(data.swift); }
-    if (data.instructions !== undefined) { sets.push("instructions = ?"); vals.push(data.instructions); }
-    if (data.enabled !== undefined) { sets.push("enabled = ?"); vals.push(fromBool(data.enabled)); }
-    if (data.sortOrder !== undefined) { sets.push("sortOrder = ?"); vals.push(data.sortOrder); }
-    vals.push(id);
-    db.prepare(`UPDATE Bank SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    await prisma.bank.update({ where: { id }, data });
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Update failed." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Update failed.",
+    };
   }
 }
 
 export async function deleteBank(id: string): Promise<ActionResult> {
   try {
-    getDb().prepare("DELETE FROM Bank WHERE id = ?").run(id);
+    await prisma.bank.delete({ where: { id } });
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Delete failed." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Delete failed.",
+    };
   }
 }
-
-// ─── Crypto wallets ───────────────────────────────────────────────────────────
 
 export async function addWallet(data: {
   network: string;
@@ -304,16 +317,15 @@ export async function addWallet(data: {
   instructions: string;
 }): Promise<ActionResult & { id?: string }> {
   try {
-    const db = getDb();
-    const id = newId();
-    const ts = nowIso();
-    db.prepare(
-      `INSERT INTO CryptoWallet (id, coin, network, address, label, instructions, enabled, createdAt, updatedAt)
-       VALUES (?, 'USDT', ?, ?, ?, ?, 1, ?, ?)`,
-    ).run(id, data.network, data.address, data.label, data.instructions, ts, ts);
-    return { ok: true, id };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Add failed." };
+    const wallet = await prisma.cryptoWallet.create({
+      data: { ...data, coin: "USDT", enabled: true },
+    });
+    return { ok: true, id: wallet.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Add failed.",
+    };
   }
 }
 
@@ -328,27 +340,24 @@ export async function updateWallet(
   }>,
 ): Promise<ActionResult> {
   try {
-    const db = getDb();
-    const sets: string[] = ["updatedAt = ?"];
-    const vals: unknown[] = [nowIso()];
-    if (data.network !== undefined) { sets.push("network = ?"); vals.push(data.network); }
-    if (data.address !== undefined) { sets.push("address = ?"); vals.push(data.address); }
-    if (data.label !== undefined) { sets.push("label = ?"); vals.push(data.label); }
-    if (data.instructions !== undefined) { sets.push("instructions = ?"); vals.push(data.instructions); }
-    if (data.enabled !== undefined) { sets.push("enabled = ?"); vals.push(fromBool(data.enabled)); }
-    vals.push(id);
-    db.prepare(`UPDATE CryptoWallet SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    await prisma.cryptoWallet.update({ where: { id }, data });
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Update failed." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Update failed.",
+    };
   }
 }
 
 export async function deleteWallet(id: string): Promise<ActionResult> {
   try {
-    getDb().prepare("DELETE FROM CryptoWallet WHERE id = ?").run(id);
+    await prisma.cryptoWallet.delete({ where: { id } });
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Delete failed." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Delete failed.",
+    };
   }
 }

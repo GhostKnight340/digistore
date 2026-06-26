@@ -1,32 +1,46 @@
 import "server-only";
 
-import { getDb, newId, nowIso } from "./sqlite";
+import { Prisma } from "@prisma/client";
+import { ensureDatabaseReady, prisma } from "./prisma";
 import type { ActionResult, AdminCodeDTO, InventoryGroupDTO } from "@/lib/dto";
 
-function rowToCode(c: Record<string, unknown>): AdminCodeDTO {
+type CodeRecord = {
+  id: string;
+  code: string;
+  status: string;
+  assignedOrderId: string | null;
+  usedAt: Date | null;
+  createdAt: Date;
+};
+
+function rowToCode(code: CodeRecord): AdminCodeDTO {
   return {
-    id: c.id as string,
-    code: c.code as string,
-    status: c.status as string,
-    assignedOrderId: (c.assignedOrderId as string) ?? null,
-    usedAt: (c.usedAt as string) ?? null,
-    createdAt: c.createdAt as string,
+    id: code.id,
+    code: code.code,
+    status: code.status,
+    assignedOrderId: code.assignedOrderId,
+    usedAt: code.usedAt?.toISOString() ?? null,
+    createdAt: code.createdAt.toISOString(),
   };
 }
 
 export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
-  const db = getDb();
-  const products = db.prepare("SELECT id, slug, name FROM Product ORDER BY slug ASC").all();
+  await ensureDatabaseReady();
+  const products = await prisma.product.findMany({
+    orderBy: { slug: "asc" },
+    include: {
+      digitalCodes: { orderBy: { createdAt: "asc" } },
+    },
+  });
 
-  return products.map((p) => {
-    const codes = db.prepare(
-      "SELECT * FROM DigitalCode WHERE productId = ? ORDER BY createdAt ASC",
-    ).all(p.id as string).map(rowToCode);
+  return products.map((product) => {
+    const codes = product.digitalCodes.map(rowToCode);
+    const count = (status: string) =>
+      codes.filter((code) => code.status === status).length;
 
-    const count = (s: string) => codes.filter((c) => c.status === s).length;
     return {
-      productId: p.slug as string,
-      productName: p.name as string,
+      productId: product.slug,
+      productName: product.name,
       total: codes.length,
       unused: count("unused"),
       reserved: count("reserved"),
@@ -37,29 +51,51 @@ export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
   });
 }
 
-export async function getAvailableCodes(productSlug: string): Promise<AdminCodeDTO[]> {
-  const db = getDb();
-  const product = db.prepare("SELECT id FROM Product WHERE slug = ?").get(productSlug);
-  if (!product) return [];
-  return db.prepare(
-    "SELECT * FROM DigitalCode WHERE productId = ? AND status = 'unused' ORDER BY createdAt ASC",
-  ).all(product.id as string).map(rowToCode);
+export async function getAvailableCodes(
+  productSlug: string,
+): Promise<AdminCodeDTO[]> {
+  await ensureDatabaseReady();
+  const product = await prisma.product.findUnique({
+    where: { slug: productSlug },
+    include: {
+      digitalCodes: {
+        where: { status: "unused" },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  return product?.digitalCodes.map(rowToCode) ?? [];
 }
 
-export async function addCode(productSlug: string, code: string): Promise<ActionResult> {
+export async function addCode(
+  productSlug: string,
+  code: string,
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
   const trimmed = code.trim();
   if (!trimmed) return { ok: false, error: "Code is empty." };
-  const db = getDb();
-  const product = db.prepare("SELECT id FROM Product WHERE slug = ?").get(productSlug);
+
+  const product = await prisma.product.findUnique({ where: { slug: productSlug } });
   if (!product) return { ok: false, error: "Unknown product." };
+
   try {
-    const ts = nowIso();
-    db.prepare(
-      "INSERT INTO DigitalCode (id, productId, code, status, createdAt, updatedAt) VALUES (?, ?, ?, 'unused', ?, ?)",
-    ).run(newId(), product.id as string, trimmed, ts, ts);
+    await prisma.digitalCode.create({
+      data: {
+        productId: product.id,
+        code: trimmed,
+        status: "unused",
+      },
+    });
     return { ok: true };
-  } catch {
-    return { ok: false, error: "Code already exists for this product." };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return { ok: false, error: "Code already exists for this product." };
+    }
+    return { ok: false, error: "Code could not be added." };
   }
 }
 
@@ -67,39 +103,43 @@ export async function addCodesBulk(
   productSlug: string,
   raw: string,
 ): Promise<ActionResult & { added?: number; skipped?: number }> {
-  const db = getDb();
-  const product = db.prepare("SELECT id FROM Product WHERE slug = ?").get(productSlug);
+  await ensureDatabaseReady();
+  const product = await prisma.product.findUnique({ where: { slug: productSlug } });
   if (!product) return { ok: false, error: "Unknown product." };
 
   const codes = Array.from(
-    new Set(
-      raw.split(/\r?\n/).map((c) => c.trim()).filter(Boolean),
-    ),
+    new Set(raw.split(/\r?\n/).map((code) => code.trim()).filter(Boolean)),
   );
   if (codes.length === 0) return { ok: false, error: "No codes provided." };
 
-  let added = 0;
-  let skipped = 0;
-  const ts = nowIso();
+  const result = await prisma.digitalCode.createMany({
+    data: codes.map((code) => ({
+      productId: product.id,
+      code,
+      status: "unused",
+    })),
+    skipDuplicates: true,
+  });
 
-  for (const code of codes) {
-    try {
-      db.prepare(
-        "INSERT INTO DigitalCode (id, productId, code, status, createdAt, updatedAt) VALUES (?, ?, ?, 'unused', ?, ?)",
-      ).run(newId(), product.id as string, code, ts, ts);
-      added += 1;
-    } catch {
-      skipped += 1;
-    }
-  }
-  return { ok: true, added, skipped };
+  return {
+    ok: true,
+    added: result.count,
+    skipped: codes.length - result.count,
+  };
 }
 
 export async function disableCode(codeId: string): Promise<ActionResult> {
-  const db = getDb();
-  const code = db.prepare("SELECT id, status FROM DigitalCode WHERE id = ?").get(codeId);
+  await ensureDatabaseReady();
+  const code = await prisma.digitalCode.findUnique({ where: { id: codeId } });
   if (!code) return { ok: false, error: "Code not found." };
-  if (code.status === "used") return { ok: false, error: "Cannot disable a code that has been used." };
-  db.prepare("UPDATE DigitalCode SET status = 'disabled', updatedAt = ? WHERE id = ?").run(nowIso(), codeId);
+  if (code.status === "used") {
+    return { ok: false, error: "Cannot disable a code that has been used." };
+  }
+
+  await prisma.digitalCode.update({
+    where: { id: codeId },
+    data: { status: "disabled" },
+  });
+
   return { ok: true };
 }
