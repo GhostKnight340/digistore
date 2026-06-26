@@ -77,7 +77,7 @@ function toVariantProduct(row: ProductWithCategory, variant: ProductWithCategory
     price: variant.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,
-    featured: row.featured || variant.featured,
+    featured: variant.featured,
     stockStatus: variantStockStatus(row, variant),
   };
 }
@@ -98,7 +98,7 @@ function toParentProduct(row: ProductWithCategory, selectedVariantId?: string): 
     price: row.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,
-    featured: row.featured || variants.some((variant) => variant.featured),
+    featured: row.featured,
     stockStatus: selectedVariant?.stockStatus,
     variants,
     selectedVariantId: selectedVariant?.id,
@@ -135,6 +135,7 @@ function getActiveProductRows(options: {
     where: {
       active: true,
       category: options.category,
+      variants: { some: {} },
       ...(options.query
         ? {
             OR: [
@@ -207,7 +208,13 @@ export async function getCatalogPage(options: {
     prisma.category.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      include: { _count: { select: { products: { where: { active: true } } } } },
+      include: {
+        _count: {
+          select: {
+            products: { where: { active: true, variants: { some: {} } } },
+          },
+        },
+      },
     }),
     getActiveProductRows({
       category: options.category,
@@ -238,7 +245,7 @@ export async function getProductCatalog(): Promise<Product[]> {
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   await ensureDatabaseReady();
   const product = await prisma.product.findFirst({
-    where: { slug, active: true },
+    where: { slug, active: true, variants: { some: {} } },
     include: productCatalogInclude,
   });
   return product ? toParentProduct(product) : null;
@@ -247,7 +254,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 export async function getParentProductSlugs(): Promise<string[]> {
   await ensureDatabaseReady();
   const products = await prisma.product.findMany({
-    where: { active: true },
+    where: { active: true, variants: { some: {} } },
     select: { slug: true },
   });
   return products.map((product) => product.slug);
@@ -258,7 +265,7 @@ export async function getProductsByCategorySlug(
 ): Promise<Product[]> {
   await ensureDatabaseReady();
   const products = await prisma.product.findMany({
-    where: { category, active: true },
+    where: { category, active: true, variants: { some: {} } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: productCatalogInclude,
   });

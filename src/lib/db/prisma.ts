@@ -1,7 +1,7 @@
 import "server-only";
 
 import { PrismaClient } from "@prisma/client";
-import { categories, products } from "@/lib/products";
+import { categories } from "@/lib/products";
 import { defaultStoreSettings } from "@/lib/storeSettings";
 
 const globalForPrisma = globalThis as unknown as {
@@ -17,7 +17,9 @@ if (process.env.NODE_ENV !== "production") {
 let ensurePromise: Promise<void> | null = null;
 
 export function ensureDatabaseReady(): Promise<void> {
-  ensurePromise ??= ensureDatabaseSchema().then(seedCatalogProducts);
+  ensurePromise ??= ensureDatabaseSchema()
+    .then(seedCatalogProducts)
+    .then(cleanupEmptyParentProducts);
   return ensurePromise;
 }
 
@@ -273,33 +275,61 @@ async function seedCatalogProducts(): Promise<void> {
     });
   }
 
-  for (const [index, product] of products.entries()) {
-    const existing = await prisma.product.findUnique({
-      where: { slug: product.id },
-      select: { id: true },
-    });
-
-    if (!existing) {
-      await prisma.product.create({
-        data: {
-          slug: product.id,
-          name: product.name,
-          category: product.category,
-          description: product.description,
-          priceMad: product.price,
-          region: product.region,
-          deliveryType: product.deliveryType,
-          featured: Boolean(product.featured),
-          active: true,
-          sortOrder: index,
-        },
-      });
-    }
-  }
-
   await prisma.storeSetting.upsert({
     where: { id: "default" },
     update: {},
     create: { id: "default", value: defaultStoreSettings },
   });
+}
+
+async function cleanupEmptyParentProducts(): Promise<void> {
+  const products = await prisma.product.findMany({
+    where: { variants: { none: {} } },
+    select: {
+      id: true,
+      slug: true,
+      active: true,
+      _count: {
+        select: {
+          digitalCodes: true,
+          orderItems: true,
+          deliveredCodes: true,
+        },
+      },
+    },
+  });
+
+  let deleted = 0;
+  let archived = 0;
+  let skipped = 0;
+
+  for (const product of products) {
+    const hasProtectedReferences =
+      product._count.digitalCodes > 0 ||
+      product._count.orderItems > 0 ||
+      product._count.deliveredCodes > 0;
+
+    if (hasProtectedReferences) {
+      if (product.active) {
+        await prisma.product.update({
+          where: { id: product.id },
+          data: { active: false, featured: false },
+        });
+        archived += 1;
+      } else {
+        skipped += 1;
+      }
+      continue;
+    }
+
+    await prisma.productMedia.deleteMany({ where: { productId: product.id } });
+    await prisma.product.delete({ where: { id: product.id } });
+    deleted += 1;
+  }
+
+  if (deleted > 0 || archived > 0 || skipped > 0) {
+    console.info(
+      `[product-cleanup] empty parents deleted=${deleted} archived=${archived} skipped=${skipped}`,
+    );
+  }
 }
