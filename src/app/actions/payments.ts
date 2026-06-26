@@ -11,6 +11,15 @@ import { getPaymentConfig, getAdminPaymentConfig } from "@/lib/db/paymentSetting
 import { getCustomerOrder } from "@/lib/db/orders";
 import type { ActionResult, PaymentConfigDTO, CustomerOrderDTO } from "@/lib/dto";
 
+const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PROOF_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "application/pdf"]);
+const PROOF_TYPE_BY_EXTENSION: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  pdf: "application/pdf",
+};
+
 export interface PaymentPageDataDTO {
   order: CustomerOrderDTO;
   config: PaymentConfigDTO;
@@ -37,15 +46,29 @@ export async function submitPaymentAction(formData: FormData): Promise<ActionRes
   let proof: { fileName: string; mimeType: string; dataBase64: string } | undefined;
 
   if (file && file.size > 0) {
+    const mimeType = normalizeProofMimeType(file);
+    if (!mimeType) {
+      return { ok: false, error: "Format non supporte. Utilisez PNG, JPG, JPEG ou PDF." };
+    }
+    if (file.size > MAX_PROOF_SIZE_BYTES) {
+      return { ok: false, error: "Fichier trop volumineux. Taille maximum: 5 Mo." };
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     proof = {
       fileName: file.name,
-      mimeType: file.type,
+      mimeType,
       dataBase64: buffer.toString("base64"),
     };
   }
 
   return submitPayment(orderId, proof);
+}
+
+function normalizeProofMimeType(file: File): string | null {
+  if (file.type && ALLOWED_PROOF_TYPES.has(file.type)) return file.type;
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return PROOF_TYPE_BY_EXTENSION[extension] ?? null;
 }
 
 // ─── Admin payment review actions ─────────────────────────────────────────────

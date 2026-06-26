@@ -17,6 +17,10 @@ import { useProductCatalog } from "@/context/ProductCatalogContext";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
 import type { BankDTO, CryptoWalletDTO, PaymentMethodConfigDTO } from "@/lib/dto";
 
+const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PROOF_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "application/pdf"]);
+const ALLOWED_PROOF_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf"]);
+
 const METHOD_LABELS: Record<string, string> = {
   bank: "Virement bancaire",
   usdt: "USDT",
@@ -250,6 +254,7 @@ function PendingPaymentSection({
     wallets.find((w) => w.network === "TRC20") ? "TRC20" : wallets[0]?.network ?? "TRC20",
   );
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofError, setProofError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -257,8 +262,65 @@ function PendingPaymentSection({
   const selectedWallet = wallets.find((w) => w.network === selectedNetwork);
   const orderRef = orderId.slice(-8).toUpperCase();
   const proofRequired = methodConfig?.proofRequired ?? true;
+  const configurationError =
+    !methodConfig?.enabled
+      ? "Cette methode de paiement n'est pas disponible pour le moment."
+      : paymentMethod === "bank" && banks.length === 0
+        ? "Les coordonnees bancaires ne sont pas configurees. Contactez l'administrateur."
+        : paymentMethod === "usdt" && wallets.length === 0
+          ? "Les adresses USDT ne sont pas configurees. Contactez l'administrateur."
+          : "";
+  const proofMissing = proofRequired && !proofFile;
+  const disabledReason =
+    configurationError ||
+    proofError ||
+    (proofMissing ? "Veuillez selectionner un justificatif de paiement avant de continuer." : "");
+  const submitDisabled = submitting || Boolean(disabledReason);
+
+  useEffect(() => {
+    setSelectedBank((current) =>
+      current && banks.some((bank) => bank.id === current.id) ? current : banks[0] ?? null,
+    );
+  }, [banks]);
+
+  useEffect(() => {
+    setSelectedNetwork((current) =>
+      wallets.some((wallet) => wallet.network === current)
+        ? current
+        : wallets.find((wallet) => wallet.network === "TRC20")?.network ?? wallets[0]?.network ?? "TRC20",
+    );
+  }, [wallets]);
+
+  function handleProofChange(file: File | null) {
+    if (!file) {
+      setProofFile(null);
+      setProofError("");
+      return;
+    }
+
+    const error = validateProofFile(file);
+    if (error) {
+      setProofFile(null);
+      setProofError(error);
+      setError(error);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
+    setProofFile(file);
+    setProofError("");
+    setError("");
+  }
 
   async function handleSubmit() {
+    if (configurationError) {
+      setError(configurationError);
+      return;
+    }
+    if (proofError) {
+      setError(proofError);
+      return;
+    }
     if (proofRequired && !proofFile) {
       setError("Veuillez télécharger un justificatif de paiement.");
       return;
@@ -282,11 +344,16 @@ function PendingPaymentSection({
     }
   }
 
-  function copyAddress(text: string) {
-    navigator.clipboard.writeText(text).then(() => {
+  async function copyAddress(text: string) {
+    try {
+      await copyToClipboard(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } catch (error) {
+      console.error("[payment] Copy failed", error);
+      setCopied(false);
+      setError("Impossible de copier automatiquement. Selectionnez le texte manuellement.");
+    }
   }
 
   return (
@@ -468,7 +535,7 @@ function PendingPaymentSection({
               type="file"
               accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
               className="hidden"
-              onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => handleProofChange(e.target.files?.[0] ?? null)}
             />
             <button
               type="button"
@@ -480,10 +547,15 @@ function PendingPaymentSection({
               </svg>
               {proofFile ? proofFile.name : "Sélectionner un fichier"}
             </button>
+            {proofError && <p className="mt-2 text-xs text-red-300">{proofError}</p>}
             {proofFile && (
               <button
                 type="button"
-                onClick={() => { setProofFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+                onClick={() => {
+                  setProofFile(null);
+                  setProofError("");
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
                 className="mt-1 text-xs text-muted hover:text-red-400"
               >
                 Supprimer le fichier
@@ -494,11 +566,14 @@ function PendingPaymentSection({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || (proofRequired && !proofFile)}
+            disabled={submitDisabled}
             className="btn-primary mt-5 w-full disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Envoi en cours..." : "J'ai effectué le paiement"}
           </button>
+          {disabledReason && !submitting && (
+            <p className="mt-2 text-xs text-muted">{disabledReason}</p>
+          )}
         </div>
       )}
     </div>
@@ -630,6 +705,7 @@ function BankField({
   copyable?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   return (
     <div className="flex items-center justify-between bg-surface px-4 py-3">
       <div>
@@ -639,19 +715,57 @@ function BankField({
       {copyable && (
         <button
           type="button"
-          onClick={() =>
-            navigator.clipboard.writeText(value).then(() => {
+          onClick={async () => {
+            try {
+              await copyToClipboard(value);
+              setCopyFailed(false);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
-            })
-          }
+            } catch {
+              setCopied(false);
+              setCopyFailed(true);
+              setTimeout(() => setCopyFailed(false), 2000);
+            }
+          }}
           className="shrink-0 text-xs text-muted hover:text-white"
         >
-          {copied ? "Copié ✓" : "Copier"}
+          {copyFailed ? "Erreur copie" : copied ? "Copié ✓" : "Copier"}
         </button>
       )}
     </div>
   );
+}
+
+function validateProofFile(file: File): string {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const validType = file.type ? ALLOWED_PROOF_TYPES.has(file.type) : ALLOWED_PROOF_EXTENSIONS.has(extension);
+  const validExtension = ALLOWED_PROOF_EXTENSIONS.has(extension);
+
+  if (!validType || !validExtension) {
+    return "Format non supporte. Utilisez PNG, JPG, JPEG ou PDF.";
+  }
+  if (file.size > MAX_PROOF_SIZE_BYTES) {
+    return "Fichier trop volumineux. Taille maximum: 5 Mo.";
+  }
+  return "";
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) throw new Error("Clipboard copy failed");
 }
 
 function VaultMeta({ label, value }: { label: string; value: string }) {

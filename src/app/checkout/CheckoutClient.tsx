@@ -21,15 +21,6 @@ const METHOD_META: Record<
   card: { label: "Carte bancaire", hint: "Disponible prochainement" },
 };
 
-function withTimeout<T>(promise: Promise<T>, ms = 6000): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      window.setTimeout(() => reject(new Error("Payment settings timed out.")), ms),
-    ),
-  ]);
-}
-
 export default function CheckoutClient({
   initialConfig = null,
 }: {
@@ -57,7 +48,7 @@ export default function CheckoutClient({
 
   useEffect(() => {
     if (initialConfig) return;
-    withTimeout(getPaymentConfigAction())
+    getPaymentConfigAction()
       .then((cfg) => {
         setConfig(cfg);
         const first = (["bank", "usdt", "paypal", "card"] as PaymentMethod[]).find(
