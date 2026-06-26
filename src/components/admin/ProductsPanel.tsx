@@ -31,6 +31,11 @@ const BG_PRESETS: Record<string, { label: string; from: string; to: string }> = 
 
 const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
 const STOCK_CONTROLS = ["manual", "api"];
+const STOCK_MODE_OPTIONS = [
+  { value: "automatic", label: "Automatic" },
+  { value: "force_in_stock", label: "Force in stock" },
+  { value: "force_out_of_stock", label: "Force out of stock" },
+] as const;
 type EditorTab = "details" | "content" | "variants" | "media";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -740,6 +745,42 @@ function DeleteParentDialog({
   );
 }
 
+function stockModeLabel(mode: string) {
+  return STOCK_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "Automatic";
+}
+
+function stockBadge(v: VariantDTO) {
+  if (v.stockMode === "force_in_stock") {
+    return { label: "En stock", className: "border-green-500/30 text-green-400" };
+  }
+  if (v.stockMode === "force_out_of_stock") {
+    return { label: "En rupture", className: "border-yellow-500/30 text-yellow-500" };
+  }
+  if (v.inventoryUnused > 0 && v.inventoryUnused <= 3) {
+    return { label: "Stock faible", className: "border-yellow-500/30 text-yellow-500" };
+  }
+  if (v.inventoryUnused > 0) {
+    return { label: "En stock", className: "border-green-500/30 text-green-400" };
+  }
+  return { label: "En rupture", className: "border-red-500/30 text-red-400" };
+}
+
+function isVariantDirty(original: VariantDTO, draft: VariantDTO) {
+  return (
+    original.slug !== draft.slug ||
+    original.name !== draft.name ||
+    original.priceMad !== draft.priceMad ||
+    original.faceValue !== draft.faceValue ||
+    original.faceCurrency !== draft.faceCurrency ||
+    original.supplierCost !== draft.supplierCost ||
+    original.supplierCurrency !== draft.supplierCurrency ||
+    original.active !== draft.active ||
+    original.featured !== draft.featured ||
+    original.stockControl !== draft.stockControl ||
+    original.stockMode !== draft.stockMode
+  );
+}
+
 function DetailsTab({
   draft,
   update,
@@ -964,9 +1005,11 @@ function VariantForm({
             value={v.stockMode}
             onChange={(e) => onChange("stockMode", e.target.value)}
           >
-            <option value="automatic">Automatique (inventaire)</option>
-            <option value="force_in_stock">Toujours En stock</option>
-            <option value="force_out_of_stock">Toujours En rupture</option>
+            {STOCK_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </Field>
         {!slugEditable && (
@@ -1126,6 +1169,8 @@ function VariantsTab({
         const v = variantDrafts[orig.slug] ?? orig;
         const isEditing = editingVariant === orig.slug;
         const isConfirming = confirmDelete === orig.slug;
+        const isDirty = isVariantDirty(orig, v);
+        const status = stockBadge(v);
         const variantTitle = v.faceValue != null
           ? `${draft.name} ${v.faceValue} ${v.faceCurrency}`
           : v.name;
@@ -1152,6 +1197,61 @@ function VariantsTab({
                 <span className={`text-xs ${v.stockMode === "force_out_of_stock" ? "text-yellow-500" : v.stockMode === "force_in_stock" ? "text-green-400" : "text-muted"}`}>
                   {v.stockMode === "force_in_stock" ? "↑ En stock" : v.stockMode === "force_out_of_stock" ? "↓ En rupture" : `${v.inventoryUnused} codes`}
                 </span>
+                <label className="inline-flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={v.active}
+                    onChange={(event) => updateVariant(orig.slug, "active", event.target.checked)}
+                    className="h-4 w-4 accent-[#3e7bfa]"
+                    disabled={saving}
+                  />
+                  Active
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={v.featured}
+                    onChange={(event) => updateVariant(orig.slug, "featured", event.target.checked)}
+                    className="h-4 w-4 accent-[#3e7bfa]"
+                    disabled={saving}
+                  />
+                  Featured
+                </label>
+                <select
+                  value={v.stockMode}
+                  onChange={(event) => updateVariant(orig.slug, "stockMode", event.target.value)}
+                  className="h-8 rounded-lg border border-border bg-surface px-2 text-xs text-white outline-none transition hover:border-border-strong focus:border-accent"
+                  disabled={saving}
+                  title={`Stock mode: ${stockModeLabel(v.stockMode)}`}
+                >
+                  {STOCK_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <label className="inline-flex items-center gap-1.5 text-xs">
+                  <span>MAD</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={v.priceMad}
+                    onChange={(event) => updateVariant(orig.slug, "priceMad", Number(event.target.value))}
+                    className="h-8 w-20 rounded-lg border border-border bg-surface px-2 text-xs text-white outline-none transition hover:border-border-strong focus:border-accent"
+                    disabled={saving}
+                  />
+                </label>
+                <span className={`chip ${status.className}`}>{status.label}</span>
+                {isDirty && (
+                  <button
+                    type="button"
+                    onClick={() => onSaveVariant(orig.slug)}
+                    className="btn-primary h-8 px-3 text-xs"
+                    disabled={saving}
+                  >
+                    {saving ? "Saving..." : "Save changes"}
+                  </button>
+                )}
                 {isEditing ? (
                   <div className="flex gap-1">
                     <button type="button" onClick={() => setEditingVariant(null)} className="btn-ghost py-1 text-xs" disabled={saving}>
