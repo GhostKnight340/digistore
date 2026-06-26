@@ -1,18 +1,24 @@
 import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { timeAdmin } from "./adminTiming";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
   await ensureDatabaseReady();
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  const order = await timeAdmin(
+    "admin.confirmPayment",
+    "order.findUnique",
+    () => prisma.order.findUnique({ where: { id: orderId } }),
+    (row) => (row ? 1 : 0),
+  );
   if (!order) return { ok: false, error: "Order not found." };
   if (order.status === "payment_confirmed" || order.status === "delivered") {
     return { ok: false, error: "Payment already confirmed." };
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await timeAdmin("admin.confirmPayment", "transaction.statusEmailEvent", () => prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: orderId },
         data: { status: "payment_confirmed" },
@@ -35,7 +41,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
           body: "Your payment has been confirmed. Your code will be delivered shortly.",
         },
       });
-    });
+    }), () => 3);
 
     return { ok: true };
   } catch (error) {
@@ -52,10 +58,27 @@ export async function deliverOrder(
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { items: true },
-  });
+  const order = await timeAdmin(
+    "admin.deliverOrder",
+    "order.findUnique.items",
+    () =>
+      prisma.order.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          status: true,
+          customerEmail: true,
+          items: {
+            select: {
+              id: true,
+              productId: true,
+              quantity: true,
+            },
+          },
+        },
+      }),
+    (row) => row?.items.length ?? 0,
+  );
   if (!order) return { ok: false, error: "Order not found." };
   if (order.status === "delivered") {
     return { ok: false, error: "Order is already delivered." };
@@ -78,7 +101,7 @@ export async function deliverOrder(
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await timeAdmin("admin.deliverOrder", "transaction.deliverCodes", () => prisma.$transaction(async (tx) => {
       for (const item of order.items) {
         const assignment = assignments.find((entry) => entry.orderItemId === item.id);
         const entries = (assignment?.codes ?? [])
@@ -147,7 +170,7 @@ export async function deliverOrder(
           body: "Your payment was confirmed. Your code is now available. Thank you for your purchase.",
         },
       });
-    });
+    }), () => assignments.length);
 
     return { ok: true };
   } catch (error) {

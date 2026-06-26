@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatDate } from "@/lib/format";
 import {
   getInventoryAction,
+  getInventoryCodesAction,
   addCodeAction,
   addCodesBulkAction,
   disableCodeAction,
@@ -109,8 +110,33 @@ function ProductInventory({
 }) {
   const [single, setSingle] = useState("");
   const [bulk, setBulk] = useState("");
+  const [codes, setCodes] = useState(group.codes);
+  const [codesLoaded, setCodesLoaded] = useState(group.codes.length > 0);
+  const [codesLoading, setCodesLoading] = useState(false);
+  const [codesError, setCodesError] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const loadCodes = useCallback(async () => {
+    setCodesLoading(true);
+    setCodesError("");
+    try {
+      const data = await getInventoryCodesAction(group.productId);
+      setCodes(data);
+      setCodesLoaded(true);
+    } catch (error) {
+      console.error("Failed to load inventory codes", error);
+      setCodesError("Codes could not be loaded.");
+    } finally {
+      setCodesLoading(false);
+    }
+  }, [group.productId]);
+
+  useEffect(() => {
+    if (open && !codesLoaded && !codesLoading) {
+      loadCodes();
+    }
+  }, [open, codesLoaded, codesLoading, loadCodes]);
 
   async function handleAddSingle() {
     if (!single.trim()) return;
@@ -120,6 +146,7 @@ function ProductInventory({
     setMsg(res.ok ? "Code added." : res.error ?? "Failed.");
     if (res.ok) setSingle("");
     await onChanged();
+    if (open) await loadCodes();
     setBusy(false);
   }
 
@@ -135,6 +162,7 @@ function ProductInventory({
     );
     if (res.ok) setBulk("");
     await onChanged();
+    if (open) await loadCodes();
     setBusy(false);
   }
 
@@ -144,6 +172,7 @@ function ProductInventory({
     const res = await disableCodeAction(codeId);
     if (!res.ok) setMsg(res.error ?? "Failed.");
     await onChanged();
+    await loadCodes();
     setBusy(false);
   }
 
@@ -228,14 +257,26 @@ function ProductInventory({
                 </tr>
               </thead>
               <tbody>
-                {group.codes.length === 0 ? (
+                {codesLoading ? (
+                  <tr>
+                    <td colSpan={5} className="py-4 text-muted">
+                      Loading codes...
+                    </td>
+                  </tr>
+                ) : codesError ? (
+                  <tr>
+                    <td colSpan={5} className="py-4 text-red-400">
+                      {codesError}
+                    </td>
+                  </tr>
+                ) : codes.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-4 text-muted">
                       No codes yet for this product.
                     </td>
                   </tr>
                 ) : (
-                  group.codes.map((c) => (
+                  codes.map((c) => (
                     <tr key={c.id} className="border-b border-border/60">
                       <td className="py-2 pr-4 font-mono text-xs text-white">
                         {c.code}

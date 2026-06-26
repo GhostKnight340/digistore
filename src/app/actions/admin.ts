@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import {
   getAdminCustomers,
+  getAdminOrderDetail,
   getAdminOrdersPage,
   getAdminOverview,
   getAdminStats,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/db/orders";
 import {
   getInventoryGroups,
+  getInventoryCodes,
   getInventorySummary,
   getAvailableCodes,
   addCode,
@@ -48,6 +50,7 @@ import type {
   AdminOverviewDTO,
   CustomerDTO,
   AdminOrderDTO,
+  AdminOrderSummaryDTO,
   AdminStatsDTO,
   EmailLogDTO,
   InventoryGroupDTO,
@@ -59,11 +62,11 @@ import type {
   SaveVariantInput,
 } from "@/lib/dto";
 
-export async function getAdminOrdersAction(): Promise<AdminOrderDTO[]> {
-  return getAdminOrdersPage();
+export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
+  return getAdminOrdersPage({ take: 10 });
 }
 
-export async function getAdminPaymentOrdersAction(): Promise<AdminOrderDTO[]> {
+export async function getAdminPaymentOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage({
     take: 50,
     statuses: [
@@ -76,7 +79,7 @@ export async function getAdminPaymentOrdersAction(): Promise<AdminOrderDTO[]> {
   });
 }
 
-export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderDTO[]> {
+export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage({
     take: 50,
     statuses: ["pending_payment", "payment_submitted", "payment_confirmed", "payment_issue"],
@@ -85,6 +88,10 @@ export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderDTO[]
 
 export async function getAdminOverviewAction(): Promise<AdminOverviewDTO> {
   return getAdminOverview();
+}
+
+export async function getAdminOrderDetailAction(orderId: string): Promise<AdminOrderDTO | null> {
+  return getAdminOrderDetail(orderId);
 }
 
 export async function getAdminCustomersAction(): Promise<CustomerDTO[]> {
@@ -101,6 +108,10 @@ export async function getAdminStatsAction(): Promise<AdminStatsDTO> {
 
 export async function getInventoryAction(): Promise<InventoryGroupDTO[]> {
   return getInventoryGroups();
+}
+
+export async function getInventoryCodesAction(productSlug: string): Promise<AdminCodeDTO[]> {
+  return getInventoryCodes(productSlug);
 }
 
 export async function getInventorySummaryAction(): Promise<InventorySummaryDTO[]> {

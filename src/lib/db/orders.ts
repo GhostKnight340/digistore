@@ -1,11 +1,12 @@
 import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { timeAdmin } from "./adminTiming";
 import type { OrderStatus } from "@/lib/types";
-import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO } from "@/lib/dto";
+import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
-type AdminOrderRecord = Awaited<ReturnType<typeof loadAdminOrders>>[number];
+type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
 
 function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
@@ -46,27 +47,90 @@ function buildCustomerDTO(data: OrderRecord): CustomerOrderDTO {
 function loadOrder(id: string) {
   return prisma.order.findUnique({
     where: { id },
-    include: {
-      items: { include: { product: true } },
-      deliveredCodes: { include: { product: true, digitalCode: true } },
-      paymentProof: { select: { id: true } },
-      paymentEvents: { orderBy: { createdAt: "asc" } },
+    select: {
+      id: true,
+      status: true,
+      customerName: true,
+      customerEmail: true,
+      paymentMethod: true,
+      totalMad: true,
+      createdAt: true,
+      items: {
+        select: {
+          id: true,
+          quantity: true,
+          unitPriceMad: true,
+          product: { select: { slug: true, name: true } },
+        },
+      },
+      deliveredCodes: {
+        select: {
+          manualCode: true,
+          product: { select: { slug: true } },
+          digitalCode: { select: { code: true } },
+        },
+      },
+      paymentProof: { select: { id: true, mimeType: true } },
+      paymentEvents: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          type: true,
+          fromStatus: true,
+          toStatus: true,
+          note: true,
+          createdAt: true,
+        },
+      },
     },
   });
 }
 
-function loadAdminOrders(options: { take?: number; statuses?: string[] } = {}) {
+function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] } = {}) {
   return prisma.order.findMany({
     take: options.take ?? 50,
     where: options.statuses?.length ? { status: { in: options.statuses } } : undefined,
     orderBy: { createdAt: "desc" },
-    include: {
-      items: { include: { product: true } },
-      deliveredCodes: { include: { product: true, digitalCode: true } },
+    select: {
+      id: true,
+      status: true,
+      customerName: true,
+      customerEmail: true,
+      paymentMethod: true,
+      totalMad: true,
+      createdAt: true,
+      items: {
+        select: {
+          id: true,
+          quantity: true,
+          unitPriceMad: true,
+          product: { select: { slug: true, name: true } },
+        },
+      },
       paymentProof: { select: { id: true, mimeType: true } },
-      paymentEvents: { orderBy: { createdAt: "asc" } },
     },
   });
+}
+
+function buildAdminSummaryDTO(order: AdminOrderSummaryRecord): AdminOrderSummaryDTO {
+  return {
+    id: order.id,
+    status: order.status as OrderStatus,
+    customerName: order.customerName,
+    customerEmail: order.customerEmail,
+    paymentMethod: order.paymentMethod,
+    totalMad: order.totalMad,
+    createdAt: iso(order.createdAt),
+    items: order.items.map((item) => ({
+      id: item.id,
+      productId: item.product.slug,
+      name: item.product.name,
+      quantity: item.quantity,
+      unitPriceMad: item.unitPriceMad,
+    })),
+    proofUploaded: !!order.paymentProof,
+    proofMimeType: order.paymentProof?.mimeType ?? null,
+  };
 }
 
 export async function getCustomerOrder(
@@ -88,37 +152,91 @@ export async function getOrderSummaries(
     include: {
       items: { include: { product: true } },
       deliveredCodes: { include: { product: true, digitalCode: true } },
-      paymentProof: { select: { id: true } },
+      paymentProof: { select: { id: true, mimeType: true } },
       paymentEvents: { orderBy: { createdAt: "asc" } },
     },
   });
   return orders.map(buildCustomerDTO);
 }
 
-export async function getAdminOrders(): Promise<AdminOrderDTO[]> {
+export async function getAdminOrders(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage();
 }
 
 export async function getAdminOrdersPage(options: {
   take?: number;
   statuses?: string[];
-} = {}): Promise<AdminOrderDTO[]> {
+} = {}): Promise<AdminOrderSummaryDTO[]> {
   await ensureDatabaseReady();
-  const orders = await loadAdminOrders(options);
+  const orders = await timeAdmin(
+    "admin.orders",
+    "order.findMany.summary",
+    () => loadAdminOrderSummaries(options),
+    (rows) => rows.length,
+  );
 
-  return orders.map((order: AdminOrderRecord) => ({
+  return orders.map(buildAdminSummaryDTO);
+}
+
+export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDTO | null> {
+  await ensureDatabaseReady();
+  const [order, emailLogs] = await Promise.all([
+    timeAdmin("admin.orderDetail", "order.findUnique.detail", () => loadOrder(orderId), (row) => (row ? 1 : 0)),
+    timeAdmin(
+      "admin.orderDetail",
+      "emailLog.findMany",
+      () =>
+        prisma.emailLog.findMany({
+          where: { orderId },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            type: true,
+            recipient: true,
+            subject: true,
+            body: true,
+            createdAt: true,
+          },
+        }),
+      (rows) => rows.length,
+    ),
+  ]);
+
+  if (!order) return null;
+  return {
     ...buildCustomerDTO(order),
-    emailLogs: [],
+    emailLogs: emailLogs.map((log) => ({
+      id: log.id,
+      type: log.type,
+      recipient: log.recipient,
+      subject: log.subject,
+      body: log.body,
+      createdAt: iso(log.createdAt),
+    })),
     proofMimeType: order.paymentProof?.mimeType ?? null,
-  }));
+  };
 }
 
 export async function getOrderEmailLogs(orderId: string): Promise<import("@/lib/dto").EmailLogDTO[]> {
   await ensureDatabaseReady();
-  const logs = await prisma.emailLog.findMany({
-    where: { orderId },
-    orderBy: { createdAt: "asc" },
-  });
+  const logs = await timeAdmin(
+    "admin.emailLogs",
+    "emailLog.findMany",
+    () =>
+      prisma.emailLog.findMany({
+        where: { orderId },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          type: true,
+          recipient: true,
+          subject: true,
+          body: true,
+          createdAt: true,
+        },
+      }),
+    (rows) => rows.length,
+  );
   return logs.map((log) => ({
     id: log.id,
     type: log.type,
@@ -137,10 +255,10 @@ export async function getAdminStats(): Promise<{
 }> {
   await ensureDatabaseReady();
   const [totalOrders, revenueResult, pendingCount, customerCount] = await Promise.all([
-    prisma.order.count(),
-    prisma.order.aggregate({ _sum: { totalMad: true } }),
-    prisma.order.count({ where: { status: { not: "delivered" } } }),
-    prisma.customer.count(),
+    timeAdmin("admin.stats", "order.count.total", () => prisma.order.count(), (count) => count),
+    timeAdmin("admin.stats", "order.aggregate.revenue", () => prisma.order.aggregate({ _sum: { totalMad: true } }), () => 1),
+    timeAdmin("admin.stats", "order.count.pending", () => prisma.order.count({ where: { status: { not: "delivered" } } }), (count) => count),
+    timeAdmin("admin.stats", "customer.count", () => prisma.customer.count(), (count) => count),
   ]);
   return {
     totalOrders,
@@ -154,10 +272,10 @@ export async function getAdminOverview(): Promise<AdminOverviewDTO> {
   await ensureDatabaseReady();
   const [totalOrders, pendingFulfillment, revenue, customers, recentOrders] =
     await Promise.all([
-      prisma.order.count(),
-      prisma.order.count({ where: { status: { not: "delivered" } } }),
-      prisma.order.aggregate({ _sum: { totalMad: true } }),
-      prisma.customer.count(),
+      timeAdmin("admin.overview", "order.count.total", () => prisma.order.count(), (count) => count),
+      timeAdmin("admin.overview", "order.count.pending", () => prisma.order.count({ where: { status: { not: "delivered" } } }), (count) => count),
+      timeAdmin("admin.overview", "order.aggregate.revenue", () => prisma.order.aggregate({ _sum: { totalMad: true } }), () => 1),
+      timeAdmin("admin.overview", "customer.count", () => prisma.customer.count(), (count) => count),
       getAdminOrdersPage({ take: 10 }),
     ]);
 
@@ -172,26 +290,40 @@ export async function getAdminOverview(): Promise<AdminOverviewDTO> {
 
 export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
   await ensureDatabaseReady();
-  const customers = await prisma.customer.findMany({
-    take,
-    orderBy: { updatedAt: "desc" },
-    select: {
-      name: true,
-      email: true,
-      orders: {
-        select: { totalMad: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      },
-    },
-  });
+  const groups = await timeAdmin(
+    "admin.customers",
+    "order.groupBy.customerEmail",
+    () =>
+      prisma.order.groupBy({
+        by: ["customerEmail"],
+        take,
+        _count: { _all: true },
+        _sum: { totalMad: true },
+        _max: { createdAt: true },
+        orderBy: { _max: { createdAt: "desc" } },
+      }),
+    (rows) => rows.length,
+  );
 
-  return customers.map((customer) => ({
-    name: customer.name,
-    email: customer.email,
-    orderCount: customer.orders.length,
-    totalSpent: customer.orders.reduce((sum, order) => sum + order.totalMad, 0),
-    lastOrderAt:
-      customer.orders[0]?.createdAt.toISOString() ?? new Date(0).toISOString(),
+  const emails = groups.map((group) => group.customerEmail);
+  const customers = await timeAdmin(
+    "admin.customers",
+    "customer.findMany.names",
+    () =>
+      prisma.customer.findMany({
+        where: { email: { in: emails } },
+        select: { name: true, email: true },
+      }),
+    (rows) => rows.length,
+  );
+  const names = new Map(customers.map((customer) => [customer.email, customer.name]));
+
+  return groups.map((group) => ({
+    name: names.get(group.customerEmail) ?? group.customerEmail,
+    email: group.customerEmail,
+    orderCount: group._count._all,
+    totalSpent: group._sum.totalMad ?? 0,
+    lastOrderAt: group._max.createdAt?.toISOString() ?? new Date(0).toISOString(),
   }));
 }
 

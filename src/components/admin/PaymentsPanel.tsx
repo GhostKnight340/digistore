@@ -5,6 +5,7 @@ import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass, isDelivered } from "@/lib/orderStatus";
 import {
   getAdminPaymentOrdersAction,
+  getAdminOrderDetailAction,
   getAvailableCodesAction,
   deliverOrderAction,
 } from "@/app/actions/admin";
@@ -14,7 +15,7 @@ import {
   markPaymentIssueAction,
   getPaymentProofAction,
 } from "@/app/actions/payments";
-import type { AdminOrderDTO, AdminCodeDTO, AssignmentEntry, ItemAssignment } from "@/lib/dto";
+import type { AdminOrderDTO, AdminOrderSummaryDTO, AdminCodeDTO, AssignmentEntry, ItemAssignment } from "@/lib/dto";
 
 type TabFilter = "submitted" | "confirmed" | "issue" | "rejected" | "delivered" | "all";
 
@@ -36,17 +37,20 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 export default function PaymentsPanel() {
-  const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
+  const [orders, setOrders] = useState<AdminOrderSummaryDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState<TabFilter>("submitted");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoadError("");
     try {
       const data = await getAdminPaymentOrdersAction();
       setOrders(data);
     } catch (error) {
       console.error("Failed to load payments", error);
+      setLoadError("Impossible de charger les paiements.");
     } finally {
       setLoaded(true);
     }
@@ -114,6 +118,12 @@ export default function PaymentsPanel() {
           );
         })}
       </div>
+
+      {loadError && (
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+          {loadError}
+        </div>
+      )}
 
       <section className="card overflow-hidden">
         {!loaded ? (
@@ -189,7 +199,7 @@ export default function PaymentsPanel() {
 
       {selected && (
         <PaymentDrawer
-          order={selected}
+          orderId={selected.id}
           onClose={() => setSelectedId(null)}
           onChanged={load}
         />
@@ -199,14 +209,16 @@ export default function PaymentsPanel() {
 }
 
 function PaymentDrawer({
-  order,
+  orderId,
   onClose,
   onChanged,
 }: {
-  order: AdminOrderDTO;
+  orderId: string;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
+  const [order, setOrder] = useState<AdminOrderDTO | null>(null);
+  const [detailLoading, setDetailLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [proof, setProof] = useState<{ data: string; mimeType: string; fileName: string } | null | "loading">("loading");
@@ -215,14 +227,34 @@ function PaymentDrawer({
   const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
   const [available, setAvailable] = useState<Record<string, AdminCodeDTO[]>>({});
 
-  const delivered = isDelivered(order.status);
-  const canApprove = order.status === "payment_submitted" || order.status === "payment_issue" || order.status === "pending_payment";
-  const canReject = order.status !== "delivered" && order.status !== "rejected";
-  const canIssue = order.status !== "delivered" && order.status !== "rejected" && order.status !== "payment_issue";
-  const canDeliver = order.status === "payment_confirmed";
+  useEffect(() => {
+    let cancelled = false;
+    setDetailLoading(true);
+    setError("");
+    getAdminOrderDetailAction(orderId)
+      .then((detail) => {
+        if (!cancelled) setOrder(detail);
+      })
+      .catch((err) => {
+        console.error("Failed to load payment detail", err);
+        if (!cancelled) setError("Impossible de charger le detail du paiement.");
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
+
+  const delivered = order ? isDelivered(order.status) : false;
+  const canApprove = order ? order.status === "payment_submitted" || order.status === "payment_issue" || order.status === "pending_payment" : false;
+  const canReject = order ? order.status !== "delivered" && order.status !== "rejected" : false;
+  const canIssue = order ? order.status !== "delivered" && order.status !== "rejected" && order.status !== "payment_issue" : false;
+  const canDeliver = order?.status === "payment_confirmed";
 
   useEffect(() => {
-    // Load proof
+    if (!order) return;
     getPaymentProofAction(order.id).then((p) => setProof(p)).catch(() => setProof(null));
 
     // Initialize delivery entries
@@ -240,7 +272,32 @@ function PaymentDrawer({
         setAvailable(map);
       });
     }
-  }, [order.id, order.status, canDeliver]);
+  }, [order, canDeliver]);
+
+  if (detailLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex justify-end">
+        <button type="button" aria-label="Fermer" onClick={onClose} className="absolute inset-0 bg-black/60" />
+        <div className="relative h-full w-full max-w-lg border-l border-border-strong bg-base px-5 py-5 shadow-card">
+          <p className="text-sm text-muted">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="fixed inset-0 z-50 flex justify-end">
+        <button type="button" aria-label="Fermer" onClick={onClose} className="absolute inset-0 bg-black/60" />
+        <div className="relative h-full w-full max-w-lg border-l border-border-strong bg-base px-5 py-5 shadow-card">
+          <p className="text-sm text-red-400">{error || "Paiement introuvable."}</p>
+          <button type="button" onClick={onClose} className="btn-ghost mt-4 h-9 px-3 text-xs">
+            Fermer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const chosenIds = useMemo(() => {
     const set = new Set<string>();
@@ -274,6 +331,7 @@ function PaymentDrawer({
   }
 
   async function handleDeliver() {
+    if (!order) return;
     const assignments: ItemAssignment[] = order.items.map((item) => ({
       orderItemId: item.id,
       codes: entries[item.id] ?? [],

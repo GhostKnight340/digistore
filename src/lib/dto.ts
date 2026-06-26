@@ -56,6 +56,19 @@ export interface AdminOrderDTO extends CustomerOrderDTO {
   proofMimeType: string | null;
 }
 
+export interface AdminOrderSummaryDTO {
+  id: string;
+  status: OrderStatus;
+  customerName: string;
+  customerEmail: string;
+  paymentMethod: string;
+  totalMad: number;
+  createdAt: string;
+  items: OrderItemDTO[];
+  proofUploaded: boolean;
+  proofMimeType: string | null;
+}
+
 export interface AdminStatsDTO {
   totalOrders: number;
   pendingCount: number;
@@ -183,7 +196,7 @@ export interface AdminOverviewDTO {
   pendingFulfillment: number;
   totalRevenue: number;
   customers: number;
-  recentOrders: AdminOrderDTO[];
+  recentOrders: AdminOrderSummaryDTO[];
 }
 
 /** A single delivery assignment entry: either an inventory code or a manual one. */

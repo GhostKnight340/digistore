@@ -9,13 +9,14 @@ import {
 } from "@/lib/orderStatus";
 import {
   getAdminFulfillmentOrdersAction,
-  getOrderEmailLogsAction,
+  getAdminOrderDetailAction,
   getAvailableCodesAction,
   confirmPaymentAction,
   deliverOrderAction,
 } from "@/app/actions/admin";
 import type {
   AdminOrderDTO,
+  AdminOrderSummaryDTO,
   AdminCodeDTO,
   AssignmentEntry,
   EmailLogDTO,
@@ -39,7 +40,7 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 }
 
 export default function FulfillmentPanel() {
-  const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
+  const [orders, setOrders] = useState<AdminOrderSummaryDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState<Filter>("todo");
@@ -173,7 +174,7 @@ export default function FulfillmentPanel() {
 
       {selected && (
         <OrderDrawer
-          order={selected}
+          orderId={selected.id}
           onClose={() => setSelectedId(null)}
           onChanged={load}
         />
@@ -183,14 +184,16 @@ export default function FulfillmentPanel() {
 }
 
 function OrderDrawer({
-  order,
+  orderId,
   onClose,
   onChanged,
 }: {
-  order: AdminOrderDTO;
+  orderId: string;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
+  const [order, setOrder] = useState<AdminOrderDTO | null>(null);
+  const [detailLoading, setDetailLoading] = useState(true);
   // Per-item entries: orderItemId -> array (length = quantity).
   const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
   const [available, setAvailable] = useState<Record<string, AdminCodeDTO[]>>({});
@@ -198,14 +201,35 @@ function OrderDrawer({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const delivered = isDelivered(order.status);
+  useEffect(() => {
+    let cancelled = false;
+    setDetailLoading(true);
+    setError("");
+    getAdminOrderDetailAction(orderId)
+      .then((detail) => {
+        if (!cancelled) setOrder(detail);
+      })
+      .catch((err) => {
+        console.error("Failed to load order detail", err);
+        if (!cancelled) setError("Order detail could not be loaded.");
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
+
+  const delivered = order ? isDelivered(order.status) : false;
   const paymentConfirmed =
-    order.status === "payment_confirmed" || delivered;
+    order?.status === "payment_confirmed" || delivered;
   const isRejectedOrCancelled =
-    order.status === "rejected" || order.status === "cancelled";
+    order?.status === "rejected" || order?.status === "cancelled";
 
   // Initialize per-unit entries and load available codes + email logs when the order opens.
   useEffect(() => {
+    if (!order) return;
     const init: Record<string, AssignmentEntry[]> = {};
     for (const item of order.items) {
       init[item.id] = Array.from({ length: item.quantity }, () => ({}));
@@ -220,8 +244,33 @@ function OrderDrawer({
       setAvailable(map);
     });
 
-    getOrderEmailLogsAction(order.id).then(setEmailLogs).catch(() => setEmailLogs([]));
-  }, [order.id, order.items]);
+    setEmailLogs(order.emailLogs);
+  }, [order]);
+
+  if (detailLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex justify-end">
+        <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60" />
+        <div className="relative h-full w-full max-w-lg border-l border-border-strong bg-base px-5 py-5 shadow-card">
+          <p className="text-sm text-muted">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="fixed inset-0 z-50 flex justify-end">
+        <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60" />
+        <div className="relative h-full w-full max-w-lg border-l border-border-strong bg-base px-5 py-5 shadow-card">
+          <p className="text-sm text-red-400">{error || "Order not found."}</p>
+          <button type="button" onClick={onClose} className="btn-ghost mt-4 h-9 px-3 text-xs">
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   function setEntry(itemId: string, index: number, entry: AssignmentEntry) {
     setEntries((prev) => {
@@ -240,13 +289,14 @@ function OrderDrawer({
     return set;
   }, [entries]);
 
-  const allFilled = order.items.every((item) =>
+  const allFilled = order?.items.every((item) =>
     (entries[item.id] ?? [])
       .slice(0, item.quantity)
       .every((e) => e.digitalCodeId || e.manualCode?.trim()),
-  );
+  ) ?? false;
 
   async function handleConfirmPayment() {
+    if (!order) return;
     setBusy(true);
     setError("");
     const res = await confirmPaymentAction(order.id);
@@ -256,6 +306,7 @@ function OrderDrawer({
   }
 
   async function handleDeliver() {
+    if (!order) return;
     setError("");
     if (!paymentConfirmed) {
       setError("Confirm the payment before delivering.");

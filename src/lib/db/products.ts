@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { timeAdmin } from "./adminTiming";
 import type {
   ActionResult,
   ParentProductDTO,
@@ -98,22 +99,34 @@ function toParent(product: ProductRow): ParentProductDTO {
 
 export async function getParentProducts(): Promise<ParentProductDTO[]> {
   await ensureDatabaseReady();
-  const products = await readProductRows();
+  const products = await timeAdmin(
+    "admin.products.fullList",
+    "product.findMany.detail",
+    readProductRows,
+    (rows) => rows.length,
+  );
   return products.map(toParent);
 }
 
 export async function getProductList(): Promise<ProductListItemDTO[]> {
   await ensureDatabaseReady();
-  const rows = await prisma.product.findMany({
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: {
-      slug: true,
-      name: true,
-      category: true,
-      active: true,
-      _count: { select: { variants: true } },
-    },
-  });
+  const rows = await timeAdmin(
+    "admin.products.list",
+    "product.findMany.summary",
+    () =>
+      prisma.product.findMany({
+        take: 200,
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: {
+          slug: true,
+          name: true,
+          category: true,
+          active: true,
+          _count: { select: { variants: true } },
+        },
+      }),
+    (result) => result.length,
+  );
   return rows.map((row) => ({
     slug: row.slug,
     name: row.name,
@@ -125,13 +138,23 @@ export async function getProductList(): Promise<ProductListItemDTO[]> {
 
 export async function getParentProductBySlug(slug: string): Promise<ParentProductDTO | null> {
   await ensureDatabaseReady();
-  const rows = await productDetailQuery({ slug });
+  const rows = await timeAdmin(
+    "admin.products.detail",
+    "product.findMany.detailBySlug",
+    () => productDetailQuery({ slug }),
+    (result) => result.length,
+  );
   return rows[0] ? toParent(rows[0]) : null;
 }
 
 export async function duplicateVariant(variantId: string): Promise<ActionResult & { slug?: string }> {
   await ensureDatabaseReady();
-  const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+  const variant = await timeAdmin(
+    "admin.products.duplicateVariant",
+    "productVariant.findUnique",
+    () => prisma.productVariant.findUnique({ where: { id: variantId } }),
+    (row) => (row ? 1 : 0),
+  );
   if (!variant) return { ok: false, error: "Variant not found." };
 
   const newId = `${variantId}-copy-${Date.now().toString(36)}`;
@@ -210,10 +233,20 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
   await ensureDatabaseReady();
 
   try {
-    const product = await prisma.product.findUnique({
-      where: { slug: data.parentSlug },
-      include: { variants: true },
-    });
+    const product = await timeAdmin(
+      "admin.products.saveVariant",
+      "product.findUnique.variants",
+      () =>
+        prisma.product.findUnique({
+          where: { slug: data.parentSlug },
+          select: {
+            id: true,
+            slug: true,
+            variants: { select: { id: true, name: true } },
+          },
+        }),
+      (row) => (row ? 1 : 0),
+    );
 
     if (!product) return { ok: false, error: "Product not found." };
 

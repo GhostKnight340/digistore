@@ -5,11 +5,10 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import {
-  getAdminOrdersAction,
-  getAdminStatsAction,
+  getAdminOverviewAction,
   getInventorySummaryAction,
 } from "@/app/actions/admin";
-import type { AdminOrderDTO, AdminStatsDTO, InventorySummaryDTO } from "@/lib/dto";
+import type { AdminOrderSummaryDTO, AdminStatsDTO, InventorySummaryDTO } from "@/lib/dto";
 
 const SettingsPanel = lazy(() => import("@/components/admin/SettingsPanel"));
 const ProductsPanel = lazy(() => import("@/components/admin/ProductsPanel"));
@@ -37,7 +36,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [orderQuery, setOrderQuery] = useState("");
   const [stats, setStats] = useState<AdminStatsDTO | null>(null);
-  const [recentOrders, setRecentOrders] = useState<AdminOrderDTO[]>([]);
+  const [recentOrders, setRecentOrders] = useState<AdminOrderSummaryDTO[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummaryDTO[]>([]);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -46,14 +45,18 @@ export default function AdminDashboard() {
     setOverviewLoading(true);
     setOverviewError(null);
     try {
-      const [orders, summary, statsData] = await Promise.all([
-        getAdminOrdersAction(),
+      const [overview, summary] = await Promise.all([
+        getAdminOverviewAction(),
         getInventorySummaryAction(),
-        getAdminStatsAction(),
       ]);
-      setRecentOrders(orders);
+      setRecentOrders(overview.recentOrders);
       setInventorySummary(summary);
-      setStats(statsData);
+      setStats({
+        totalOrders: overview.totalOrders,
+        pendingCount: overview.pendingFulfillment,
+        totalRevenue: overview.totalRevenue,
+        customerCount: overview.customers,
+      });
     } catch (error) {
       console.error("Failed to load admin overview", error);
       setOverviewError("Admin overview could not be loaded.");

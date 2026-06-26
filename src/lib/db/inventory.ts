@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { timeAdmin } from "./adminTiming";
 import type { ActionResult, AdminCodeDTO, InventoryGroupDTO, InventorySummaryDTO } from "@/lib/dto";
 
 type CodeRecord = {
@@ -27,14 +28,26 @@ function rowToCode(code: CodeRecord): AdminCodeDTO {
 export async function getInventorySummary(): Promise<InventorySummaryDTO[]> {
   await ensureDatabaseReady();
   const [productRows, statusGroups] = await Promise.all([
-    prisma.product.findMany({
-      select: { id: true, slug: true, name: true },
-      orderBy: { slug: "asc" },
-    }),
-    prisma.digitalCode.groupBy({
-      by: ["productId", "status"],
-      _count: { _all: true },
-    }),
+    timeAdmin(
+      "admin.inventorySummary",
+      "product.findMany.summary",
+      () =>
+        prisma.product.findMany({
+          select: { id: true, slug: true, name: true },
+          orderBy: { slug: "asc" },
+        }),
+      (rows) => rows.length,
+    ),
+    timeAdmin(
+      "admin.inventorySummary",
+      "digitalCode.groupBy.status",
+      () =>
+        prisma.digitalCode.groupBy({
+          by: ["productId", "status"],
+          _count: { _all: true },
+        }),
+      (rows) => rows.length,
+    ),
   ]);
 
   const productMap = new Map(productRows.map((p) => [p.id, p]));
@@ -68,15 +81,34 @@ export async function getInventorySummary(): Promise<InventorySummaryDTO[]> {
 
 export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
   await ensureDatabaseReady();
-  const products = await prisma.product.findMany({
-    take: 100,
-    orderBy: { slug: "asc" },
-    select: {
-      id: true,
-      slug: true,
-      name: true,
-      digitalCodes: {
-        take: 100,
+  const summaries = await getInventorySummary();
+  return summaries.map((summary) => ({ ...summary, codes: [] }));
+}
+
+export async function getInventoryCodes(
+  productSlug: string,
+  take = 100,
+): Promise<AdminCodeDTO[]> {
+  await ensureDatabaseReady();
+  const product = await timeAdmin(
+    "admin.inventoryCodes",
+    "product.findUnique.id",
+    () =>
+      prisma.product.findUnique({
+        where: { slug: productSlug },
+        select: { id: true },
+      }),
+    (row) => (row ? 1 : 0),
+  );
+  if (!product) return [];
+
+  const codes = await timeAdmin(
+    "admin.inventoryCodes",
+    "digitalCode.findMany.product",
+    () =>
+      prisma.digitalCode.findMany({
+        where: { productId: product.id },
+        take,
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
@@ -86,53 +118,50 @@ export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
           usedAt: true,
           createdAt: true,
         },
-      },
-    },
-  });
-  const counts = await prisma.digitalCode.groupBy({
-    by: ["productId", "status"],
-    where: { productId: { in: products.map((product) => product.id) } },
-    _count: { _all: true },
-  });
-  const countByProduct = new Map<string, Record<string, number>>();
-  for (const row of counts) {
-    const current = countByProduct.get(row.productId) ?? {};
-    current[row.status] = row._count._all;
-    countByProduct.set(row.productId, current);
-  }
+      }),
+    (rows) => rows.length,
+  );
 
-  return products.map((product) => {
-    const codes = product.digitalCodes.map(rowToCode);
-    const count = (status: string) => countByProduct.get(product.id)?.[status] ?? 0;
-
-    return {
-      productId: product.slug,
-      productName: product.name,
-      total: codes.length,
-      unused: count("unused"),
-      reserved: count("reserved"),
-      used: count("used"),
-      disabled: count("disabled"),
-      codes,
-    };
-  });
+  return codes.map(rowToCode);
 }
 
 export async function getAvailableCodes(
   productSlug: string,
 ): Promise<AdminCodeDTO[]> {
   await ensureDatabaseReady();
-  const product = await prisma.product.findUnique({
-    where: { slug: productSlug },
-    include: {
-      digitalCodes: {
-        where: { status: "unused" },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
+  const product = await timeAdmin(
+    "admin.availableCodes",
+    "product.findUnique.id",
+    () =>
+      prisma.product.findUnique({
+        where: { slug: productSlug },
+        select: { id: true },
+      }),
+    (row) => (row ? 1 : 0),
+  );
+  if (!product) return [];
 
-  return product?.digitalCodes.map(rowToCode) ?? [];
+  const codes = await timeAdmin(
+    "admin.availableCodes",
+    "digitalCode.findMany.unused",
+    () =>
+      prisma.digitalCode.findMany({
+        where: { productId: product.id, status: "unused" },
+        take: 200,
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          code: true,
+          status: true,
+          assignedOrderId: true,
+          usedAt: true,
+          createdAt: true,
+        },
+      }),
+    (rows) => rows.length,
+  );
+
+  return codes.map(rowToCode);
 }
 
 export async function addCode(

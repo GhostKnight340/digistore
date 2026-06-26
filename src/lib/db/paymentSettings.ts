@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { timeAdmin } from "./adminTiming";
 import type {
   BankDTO,
   CryptoWalletDTO,
@@ -187,10 +188,30 @@ export async function getAdminPaymentConfig(): Promise<PaymentConfigDTO> {
   await ensureDefaults();
 
   const [methods, banks, wallets, support] = await Promise.all([
-    prisma.paymentMethodConfig.findMany({ orderBy: { method: "asc" } }),
-    prisma.bank.findMany({ orderBy: { sortOrder: "asc" } }),
-    prisma.cryptoWallet.findMany(),
-    prisma.supportConfig.findFirst(),
+    timeAdmin(
+      "admin.paymentSettings",
+      "paymentMethodConfig.findMany",
+      () => prisma.paymentMethodConfig.findMany({ orderBy: { method: "asc" } }),
+      (rows) => rows.length,
+    ),
+    timeAdmin(
+      "admin.paymentSettings",
+      "bank.findMany",
+      () => prisma.bank.findMany({ orderBy: { sortOrder: "asc" } }),
+      (rows) => rows.length,
+    ),
+    timeAdmin(
+      "admin.paymentSettings",
+      "cryptoWallet.findMany",
+      () => prisma.cryptoWallet.findMany(),
+      (rows) => rows.length,
+    ),
+    timeAdmin(
+      "admin.paymentSettings",
+      "supportConfig.findFirst",
+      () => prisma.supportConfig.findFirst(),
+      (row) => (row ? 1 : 0),
+    ),
   ]);
 
   const methodsMap: Record<string, PaymentMethodConfigDTO> = {};

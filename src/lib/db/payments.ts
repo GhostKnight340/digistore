@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { timeAdmin } from "./adminTiming";
 import type { ActionResult } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
@@ -170,7 +171,12 @@ export async function getPaymentProof(
   orderId: string,
 ): Promise<{ data: string; mimeType: string; fileName: string } | null> {
   await ensureDatabaseReady();
-  const proof = await prisma.paymentProof.findUnique({ where: { orderId } });
+  const proof = await timeAdmin(
+    "admin.paymentProof",
+    "paymentProof.findUnique",
+    () => prisma.paymentProof.findUnique({ where: { orderId } }),
+    (row) => (row ? 1 : 0),
+  );
   if (!proof) return null;
   return {
     data: proof.data,
