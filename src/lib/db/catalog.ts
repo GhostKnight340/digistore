@@ -39,9 +39,27 @@ function toCategory(row: {
   };
 }
 
-function getActiveProductRows() {
+function getActiveProductRows(options: {
+  category?: string;
+  query?: string;
+  skip?: number;
+  take?: number;
+} = {}) {
   return prisma.product.findMany({
-    where: { active: true },
+    skip: options.skip,
+    take: options.take,
+    where: {
+      active: true,
+      category: options.category,
+      ...(options.query
+        ? {
+            OR: [
+              { name: { contains: options.query, mode: "insensitive" } },
+              { category: { contains: options.query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: { categoryRecord: true },
   });
@@ -51,21 +69,59 @@ export const getCatalogData = cache(async function getCatalogData(): Promise<{
   categories: Category[];
   products: Product[];
 }> {
+  return getCatalogPage({ take: 100 });
+});
+
+export async function getCatalogPage(options: {
+  category?: string;
+  query?: string;
+  page?: number;
+  take?: number;
+} = {}): Promise<{
+  categories: Category[];
+  products: Product[];
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
   await ensureDatabaseReady();
-  const [categoryRows, productRows] = await Promise.all([
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = Math.min(48, Math.max(1, options.take ?? 24));
+  const where = {
+    active: true,
+    category: options.category,
+    ...(options.query
+      ? {
+          OR: [
+            { name: { contains: options.query, mode: "insensitive" as const } },
+            { category: { contains: options.query, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+  const [categoryRows, productRows, total] = await Promise.all([
     prisma.category.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { _count: { select: { products: { where: { active: true } } } } },
     }),
-    getActiveProductRows(),
+    getActiveProductRows({
+      category: options.category,
+      query: options.query,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
   ]);
 
   return {
     categories: categoryRows.map(toCategory),
     products: productRows.map(toProduct),
+    total,
+    page,
+    pageSize,
   };
-});
+}
 
 export async function getProductCatalog(): Promise<Product[]> {
   const { products } = await getCatalogData();

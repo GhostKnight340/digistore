@@ -1,0 +1,11 @@
+CREATE INDEX IF NOT EXISTS "Product_active_sortOrder_idx" ON "Product"("active", "sortOrder");
+CREATE INDEX IF NOT EXISTS "Product_category_active_idx" ON "Product"("category", "active");
+CREATE INDEX IF NOT EXISTS "ProductVariant_productId_active_idx" ON "ProductVariant"("productId", "active");
+CREATE INDEX IF NOT EXISTS "Order_status_idx" ON "Order"("status");
+CREATE INDEX IF NOT EXISTS "Order_customerEmail_idx" ON "Order"("customerEmail");
+CREATE INDEX IF NOT EXISTS "Order_createdAt_idx" ON "Order"("createdAt");
+CREATE INDEX IF NOT EXISTS "Order_paymentMethod_idx" ON "Order"("paymentMethod");
+CREATE INDEX IF NOT EXISTS "Order_paymentMethod_createdAt_idx" ON "Order"("paymentMethod", "createdAt");
+CREATE INDEX IF NOT EXISTS "PaymentProof_uploadedAt_idx" ON "PaymentProof"("uploadedAt");
+CREATE INDEX IF NOT EXISTS "PaymentEvent_createdAt_idx" ON "PaymentEvent"("createdAt");
+CREATE INDEX IF NOT EXISTS "Customer_updatedAt_idx" ON "Customer"("updatedAt");

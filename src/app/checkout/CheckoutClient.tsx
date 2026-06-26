@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
+import { getPaymentConfigAction } from "@/app/actions/payments";
 import type { PaymentMethod } from "@/lib/types";
 import type { PaymentConfigDTO } from "@/lib/dto";
 
@@ -20,14 +21,31 @@ const METHOD_META: Record<
   card: { label: "Carte bancaire", hint: "Disponible prochainement" },
 };
 
-export default function CheckoutClient({ config }: { config: PaymentConfigDTO }) {
+function withTimeout<T>(promise: Promise<T>, ms = 6000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      window.setTimeout(() => reject(new Error("Payment settings timed out.")), ms),
+    ),
+  ]);
+}
+
+export default function CheckoutClient({
+  initialConfig = null,
+}: {
+  initialConfig?: PaymentConfigDTO | null;
+}) {
   const { cart, ready, cartTotal, clearCart } = useStore();
   const { getProduct } = useProductCatalog();
   const router = useRouter();
 
-  const enabledMethods = (["bank", "usdt", "paypal", "card"] as PaymentMethod[]).filter(
-    (m) => config.methods[m]?.enabled,
-  );
+  const [config, setConfig] = useState<PaymentConfigDTO | null>(initialConfig);
+  const [configError, setConfigError] = useState(false);
+  const enabledMethods = config
+    ? (["bank", "usdt", "paypal", "card"] as PaymentMethod[]).filter(
+        (m) => config.methods[m]?.enabled,
+      )
+    : [];
 
   const [method, setMethod] = useState<PaymentMethod | "">(
     () => enabledMethods[0] ?? "",
@@ -36,6 +54,22 @@ export default function CheckoutClient({ config }: { config: PaymentConfigDTO })
   const [fullName, setFullName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (initialConfig) return;
+    withTimeout(getPaymentConfigAction())
+      .then((cfg) => {
+        setConfig(cfg);
+        const first = (["bank", "usdt", "paypal", "card"] as PaymentMethod[]).find(
+          (m) => cfg.methods[m]?.enabled,
+        );
+        if (first) setMethod(first);
+      })
+      .catch((err: unknown) => {
+        console.error("[checkout] Failed to load payment config:", err);
+        setConfigError(true);
+      });
+  }, [initialConfig]);
 
   if (ready && cart.length === 0) {
     return (
@@ -179,7 +213,13 @@ export default function CheckoutClient({ config }: { config: PaymentConfigDTO })
             <h2 className="text-lg font-bold text-white">
               Méthode de paiement
             </h2>
-            {enabledMethods.length === 0 ? (
+            {configError ? (
+              <p className="mt-4 text-sm text-red-400">
+                Impossible de charger les méthodes de paiement.
+              </p>
+            ) : !config ? (
+              <p className="mt-4 text-sm text-muted">Chargement...</p>
+            ) : enabledMethods.length === 0 ? (
               <p className="mt-4 text-sm text-muted">
                 Aucune méthode de paiement disponible pour le moment.
               </p>
@@ -268,7 +308,7 @@ export default function CheckoutClient({ config }: { config: PaymentConfigDTO })
 
             <button
               type="submit"
-              disabled={submitting || enabledMethods.length === 0}
+              disabled={submitting || configError || !config || enabledMethods.length === 0}
               className="btn-primary mt-6 w-full disabled:opacity-50"
             >
               {submitting ? "Commande en cours..." : "Passer la commande"}

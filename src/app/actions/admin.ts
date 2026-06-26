@@ -7,7 +7,13 @@
 // visitor could read inventory or deliver orders.
 
 import { revalidatePath } from "next/cache";
-import { getAdminOrders, getOrderEmailLogs, getAdminStats } from "@/lib/db/orders";
+import {
+  getAdminCustomers,
+  getAdminOrdersPage,
+  getAdminOverview,
+  getAdminStats,
+  getOrderEmailLogs,
+} from "@/lib/db/orders";
 import {
   getInventoryGroups,
   getInventorySummary,
@@ -39,6 +45,8 @@ import {
 import type {
   ActionResult,
   AdminCodeDTO,
+  AdminOverviewDTO,
+  CustomerDTO,
   AdminOrderDTO,
   AdminStatsDTO,
   EmailLogDTO,
@@ -52,7 +60,35 @@ import type {
 } from "@/lib/dto";
 
 export async function getAdminOrdersAction(): Promise<AdminOrderDTO[]> {
-  return getAdminOrders();
+  return getAdminOrdersPage();
+}
+
+export async function getAdminPaymentOrdersAction(): Promise<AdminOrderDTO[]> {
+  return getAdminOrdersPage({
+    take: 50,
+    statuses: [
+      "payment_submitted",
+      "payment_confirmed",
+      "payment_issue",
+      "rejected",
+      "delivered",
+    ],
+  });
+}
+
+export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderDTO[]> {
+  return getAdminOrdersPage({
+    take: 50,
+    statuses: ["pending_payment", "payment_submitted", "payment_confirmed", "payment_issue"],
+  });
+}
+
+export async function getAdminOverviewAction(): Promise<AdminOverviewDTO> {
+  return getAdminOverview();
+}
+
+export async function getAdminCustomersAction(): Promise<CustomerDTO[]> {
+  return getAdminCustomers();
 }
 
 export async function getOrderEmailLogsAction(orderId: string): Promise<EmailLogDTO[]> {

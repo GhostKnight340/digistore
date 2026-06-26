@@ -1,6 +1,6 @@
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
-import { getCatalogData } from "@/lib/db/catalog";
+import { getCatalogPage } from "@/lib/db/catalog";
 
 export const revalidate = 3600;
 
@@ -11,23 +11,18 @@ export const metadata = {
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; q?: string }>;
+  searchParams: Promise<{ category?: string; q?: string; page?: string }>;
 }) {
-  const { category, q } = await searchParams;
+  const { category, q, page: rawPage } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
-  const { categories, products } = await getCatalogData();
-
-  let filtered = products;
-  if (category) {
-    filtered = filtered.filter((product) => product.category === category);
-  }
-  if (query) {
-    filtered = filtered.filter(
-      (product) =>
-        product.name.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query),
-    );
-  }
+  const page = Math.max(1, Number(rawPage ?? 1) || 1);
+  const { categories, products: filtered, total, pageSize } = await getCatalogPage({
+    category,
+    query,
+    page,
+    take: 24,
+  });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="container-page py-10">
@@ -111,10 +106,42 @@ export default async function ProductsPage({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
-          {filtered.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+            {filtered.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+      )}
+
+      {totalPages > 1 && (
+        <nav className="mt-8 flex items-center justify-center gap-3 text-sm">
+          {page > 1 && (
+            <Link
+              href={`/products?${new URLSearchParams({
+                ...(category ? { category } : {}),
+                ...(q ? { q } : {}),
+                page: String(page - 1),
+              })}`}
+              className="btn-ghost h-10 px-4"
+            >
+              Precedent
+            </Link>
+          )}
+          <span className="text-muted">
+            Page {page} / {totalPages}
+          </span>
+          {page < totalPages && (
+            <Link
+              href={`/products?${new URLSearchParams({
+                ...(category ? { category } : {}),
+                ...(q ? { q } : {}),
+                page: String(page + 1),
+              })}`}
+              className="btn-ghost h-10 px-4"
+            >
+              Suivant
+            </Link>
+          )}
+        </nav>
       )}
     </div>
   );

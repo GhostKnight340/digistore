@@ -38,6 +38,9 @@ model Product {
   deliveredCodes DeliveredCode[]
   media          ProductMedia[]
   variants       ProductVariant[]
+
+  @@index([active, sortOrder])
+  @@index([category, active])
 }
 
 model Category {
@@ -87,6 +90,7 @@ model ProductVariant {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+  @@index([productId, active])
 }
 
 model DigitalCode {
@@ -127,6 +131,12 @@ model Order {
   paymentProof   PaymentProof?
   paymentEvents  PaymentEvent[]
   customer       Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([customerEmail])
+  @@index([createdAt])
+  @@index([paymentMethod])
+  @@index([paymentMethod, createdAt])
 }
 
 model Customer {
@@ -137,6 +147,8 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   orders Order[]
+
+  @@index([updatedAt])
 }
 
 model OrderItem {
@@ -196,6 +208,8 @@ model PaymentProof {
   uploadedAt DateTime @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([uploadedAt])
 }
 
 // Audit trail for payment lifecycle events.
@@ -211,6 +225,7 @@ model PaymentEvent {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+  @@index([createdAt])
 }
 
 // Bank account for bank-transfer payment method.

@@ -2,51 +2,39 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
-import { getAdminOrdersAction } from "@/app/actions/admin";
+import { getAdminCustomersAction } from "@/app/actions/admin";
 import type { CustomerDTO } from "@/lib/dto";
-
-function deriveCustomers(orders: Awaited<ReturnType<typeof getAdminOrdersAction>>): CustomerDTO[] {
-  const map = new Map<string, CustomerDTO>();
-  for (const o of orders) {
-    const existing = map.get(o.customerEmail);
-    if (existing) {
-      existing.orderCount += 1;
-      existing.totalSpent += o.totalMad;
-      if (o.createdAt > existing.lastOrderAt) existing.lastOrderAt = o.createdAt;
-    } else {
-      map.set(o.customerEmail, {
-        email: o.customerEmail,
-        name: o.customerName,
-        orderCount: 1,
-        totalSpent: o.totalMad,
-        lastOrderAt: o.createdAt,
-      });
-    }
-  }
-  return Array.from(map.values()).sort((a, b) =>
-    b.lastOrderAt.localeCompare(a.lastOrderAt),
-  );
-}
 
 export default function CustomersPanel() {
   const [customers, setCustomers] = useState<CustomerDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
-    const orders = await getAdminOrdersAction();
-    setCustomers(deriveCustomers(orders));
-    setLoading(false);
+    setError("");
+    try {
+      setCustomers(await getAdminCustomersAction());
+    } catch (err) {
+      console.error("Failed to load customers", err);
+      setError("Customers could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <section className="card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
           <h2 className="font-bold text-white">Customers</h2>
-          <p className="mt-0.5 text-xs text-muted">Unique buyers derived from order history</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Latest 100 buyers from customer records.
+          </p>
         </div>
         <button type="button" onClick={load} className="btn-ghost py-1 text-xs">
           Refresh
@@ -54,7 +42,9 @@ export default function CustomersPanel() {
       </div>
 
       {loading ? (
-        <p className="px-5 py-8 text-sm text-muted">Loading…</p>
+        <p className="px-5 py-8 text-sm text-muted">Loading...</p>
+      ) : error ? (
+        <p className="px-5 py-8 text-sm text-red-400">{error}</p>
       ) : customers.length === 0 ? (
         <p className="px-5 py-8 text-sm text-muted">
           No customers yet. Orders will appear here once placed.
@@ -71,15 +61,19 @@ export default function CustomersPanel() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((c) => (
-                <tr key={c.email} className="border-b border-border/60">
+              {customers.map((customer) => (
+                <tr key={customer.email} className="border-b border-border/60">
                   <td className="px-5 py-3">
-                    <p className="font-medium text-white">{c.name}</p>
-                    <p className="text-xs text-muted">{c.email}</p>
+                    <p className="font-medium text-white">{customer.name}</p>
+                    <p className="text-xs text-muted">{customer.email}</p>
                   </td>
-                  <td className="px-5 py-3 text-muted">{c.orderCount}</td>
-                  <td className="px-5 py-3 font-semibold text-white">{formatMAD(c.totalSpent)}</td>
-                  <td className="px-5 py-3 text-muted">{formatDate(c.lastOrderAt)}</td>
+                  <td className="px-5 py-3 text-muted">{customer.orderCount}</td>
+                  <td className="px-5 py-3 font-semibold text-white">
+                    {formatMAD(customer.totalSpent)}
+                  </td>
+                  <td className="px-5 py-3 text-muted">
+                    {formatDate(customer.lastOrderAt)}
+                  </td>
                 </tr>
               ))}
             </tbody>

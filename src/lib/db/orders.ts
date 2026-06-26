@@ -2,7 +2,7 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import type { OrderStatus } from "@/lib/types";
-import type { CustomerOrderDTO, AdminOrderDTO } from "@/lib/dto";
+import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO } from "@/lib/dto";
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderRecord = Awaited<ReturnType<typeof loadAdminOrders>>[number];
@@ -55,10 +55,11 @@ function loadOrder(id: string) {
   });
 }
 
-function loadAdminOrders() {
+function loadAdminOrders(options: { take?: number; statuses?: string[] } = {}) {
   return prisma.order.findMany({
+    take: options.take ?? 50,
+    where: options.statuses?.length ? { status: { in: options.statuses } } : undefined,
     orderBy: { createdAt: "desc" },
-    take: 100,
     include: {
       items: { include: { product: true } },
       deliveredCodes: { include: { product: true, digitalCode: true } },
@@ -95,8 +96,15 @@ export async function getOrderSummaries(
 }
 
 export async function getAdminOrders(): Promise<AdminOrderDTO[]> {
+  return getAdminOrdersPage();
+}
+
+export async function getAdminOrdersPage(options: {
+  take?: number;
+  statuses?: string[];
+} = {}): Promise<AdminOrderDTO[]> {
   await ensureDatabaseReady();
-  const orders = await loadAdminOrders();
+  const orders = await loadAdminOrders(options);
 
   return orders.map((order: AdminOrderRecord) => ({
     ...buildCustomerDTO(order),
@@ -140,6 +148,51 @@ export async function getAdminStats(): Promise<{
     pendingCount,
     customerCount,
   };
+}
+
+export async function getAdminOverview(): Promise<AdminOverviewDTO> {
+  await ensureDatabaseReady();
+  const [totalOrders, pendingFulfillment, revenue, customers, recentOrders] =
+    await Promise.all([
+      prisma.order.count(),
+      prisma.order.count({ where: { status: { not: "delivered" } } }),
+      prisma.order.aggregate({ _sum: { totalMad: true } }),
+      prisma.customer.count(),
+      getAdminOrdersPage({ take: 10 }),
+    ]);
+
+  return {
+    totalOrders,
+    pendingFulfillment,
+    totalRevenue: revenue._sum.totalMad ?? 0,
+    customers,
+    recentOrders,
+  };
+}
+
+export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
+  await ensureDatabaseReady();
+  const customers = await prisma.customer.findMany({
+    take,
+    orderBy: { updatedAt: "desc" },
+    select: {
+      name: true,
+      email: true,
+      orders: {
+        select: { totalMad: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  return customers.map((customer) => ({
+    name: customer.name,
+    email: customer.email,
+    orderCount: customer.orders.length,
+    totalSpent: customer.orders.reduce((sum, order) => sum + order.totalMad, 0),
+    lastOrderAt:
+      customer.orders[0]?.createdAt.toISOString() ?? new Date(0).toISOString(),
+  }));
 }
 
 interface CreateOrderInput {

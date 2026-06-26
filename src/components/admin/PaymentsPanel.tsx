@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass, isDelivered } from "@/lib/orderStatus";
 import {
-  getAdminOrdersAction,
+  getAdminPaymentOrdersAction,
   getAvailableCodesAction,
   deliverOrderAction,
 } from "@/app/actions/admin";
@@ -43,7 +43,7 @@ export default function PaymentsPanel() {
 
   const load = useCallback(async () => {
     try {
-      const data = await getAdminOrdersAction();
+      const data = await getAdminPaymentOrdersAction();
       setOrders(data);
     } catch (error) {
       console.error("Failed to load payments", error);

@@ -8,7 +8,7 @@ import {
   isDelivered,
 } from "@/lib/orderStatus";
 import {
-  getAdminOrdersAction,
+  getAdminFulfillmentOrdersAction,
   getOrderEmailLogsAction,
   getAvailableCodesAction,
   confirmPaymentAction,
@@ -47,8 +47,9 @@ export default function FulfillmentPanel() {
 
   const load = useCallback(async () => {
     setLoadError("");
+    setLoaded(false);
     try {
-      const data = await withTimeout(getAdminOrdersAction(), "Orders");
+      const data = await withTimeout(getAdminFulfillmentOrdersAction(), "Orders");
       setOrders(data);
     } catch (error) {
       console.error("Failed to load fulfillment orders", error);

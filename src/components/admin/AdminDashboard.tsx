@@ -1,31 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
-import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
+import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import {
   getAdminOrdersAction,
   getAdminStatsAction,
   getInventorySummaryAction,
 } from "@/app/actions/admin";
 import type { AdminOrderDTO, AdminStatsDTO, InventorySummaryDTO } from "@/lib/dto";
-import SettingsPanel from "@/components/admin/SettingsPanel";
-import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
-import InventoryPanel from "@/components/admin/InventoryPanel";
-import PaymentSettingsPanel from "@/components/admin/PaymentSettingsPanel";
-import PaymentsPanel from "@/components/admin/PaymentsPanel";
-import ProductsPanel from "@/components/admin/ProductsPanel";
-import CustomersPanel from "@/components/admin/CustomersPanel";
+
+const SettingsPanel = lazy(() => import("@/components/admin/SettingsPanel"));
+const ProductsPanel = lazy(() => import("@/components/admin/ProductsPanel"));
+const InventoryPanel = lazy(() => import("@/components/admin/InventoryPanel"));
+const PaymentsPanel = lazy(() => import("@/components/admin/PaymentsPanel"));
+const PaymentSettingsPanel = lazy(() => import("@/components/admin/PaymentSettingsPanel"));
+const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"));
+const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 
 const navItems = [
   { id: "overview", label: "Overview", icon: "[]" },
-  {
-    id: "homepage-editor",
-    label: "Homepage editor",
-    icon: "HE",
-    href: "/admin/editor",
-  },
+  { id: "homepage-editor", label: "Homepage editor", icon: "HE", href: "/admin/editor" },
   { id: "settings", label: "Store settings", icon: "SS" },
   { id: "products", label: "Products", icon: "PR" },
   { id: "inventory", label: "Inventory", icon: "IN" },
@@ -40,8 +36,6 @@ const navItems = [
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [orderQuery, setOrderQuery] = useState("");
-
-  // Overview state — loaded lazily when overview tab is active
   const [stats, setStats] = useState<AdminStatsDTO | null>(null);
   const [recentOrders, setRecentOrders] = useState<AdminOrderDTO[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummaryDTO[]>([]);
@@ -60,18 +54,17 @@ export default function AdminDashboard() {
       setRecentOrders(orders);
       setInventorySummary(summary);
       setStats(statsData);
-    } catch (e) {
-      setOverviewError(String(e));
+    } catch (error) {
+      console.error("Failed to load admin overview", error);
+      setOverviewError("Admin overview could not be loaded.");
     } finally {
       setOverviewLoading(false);
     }
   }, []);
 
-  // Reload overview every time the user navigates to it
   useEffect(() => {
     if (activeTab === "overview") loadOverview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, loadOverview]);
 
   const filteredOrders = useMemo(() => {
     const query = orderQuery.trim().toLowerCase();
@@ -93,6 +86,10 @@ export default function AdminDashboard() {
         .includes(query);
     });
   }, [recentOrders, orderQuery]);
+
+  const panelFallback = (
+    <section className="card p-6 text-sm text-muted">Loading section...</section>
+  );
 
   return (
     <div className="container-page py-10">
@@ -141,19 +138,33 @@ export default function AdminDashboard() {
         </aside>
 
         {activeTab === "settings" ? (
-          <SettingsPanel />
+          <Suspense fallback={panelFallback}>
+            <SettingsPanel />
+          </Suspense>
         ) : activeTab === "products" ? (
-          <ProductsPanel />
+          <Suspense fallback={panelFallback}>
+            <ProductsPanel />
+          </Suspense>
         ) : activeTab === "inventory" ? (
-          <InventoryPanel />
+          <Suspense fallback={panelFallback}>
+            <InventoryPanel />
+          </Suspense>
         ) : activeTab === "payments" ? (
-          <PaymentsPanel />
+          <Suspense fallback={panelFallback}>
+            <PaymentsPanel />
+          </Suspense>
         ) : activeTab === "payment-settings" ? (
-          <PaymentSettingsPanel />
+          <Suspense fallback={panelFallback}>
+            <PaymentSettingsPanel />
+          </Suspense>
         ) : activeTab === "fulfillment" ? (
-          <FulfillmentPanel />
+          <Suspense fallback={panelFallback}>
+            <FulfillmentPanel />
+          </Suspense>
         ) : activeTab === "customers" ? (
-          <CustomersPanel />
+          <Suspense fallback={panelFallback}>
+            <CustomersPanel />
+          </Suspense>
         ) : activeTab === "suppliers" ? (
           <RestoredPanel
             title="Supplier API"
@@ -185,19 +196,19 @@ export default function AdminDashboard() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Stat
                 label="Total orders"
-                value={overviewLoading ? "…" : stats ? String(stats.totalOrders) : "-"}
+                value={overviewLoading ? "..." : stats ? String(stats.totalOrders) : "-"}
               />
               <Stat
                 label="Pending fulfillment"
-                value={overviewLoading ? "…" : stats ? String(stats.pendingCount) : "-"}
+                value={overviewLoading ? "..." : stats ? String(stats.pendingCount) : "-"}
               />
               <Stat
                 label="Total revenue"
-                value={overviewLoading ? "…" : stats ? formatMAD(stats.totalRevenue) : "-"}
+                value={overviewLoading ? "..." : stats ? formatMAD(stats.totalRevenue) : "-"}
               />
               <Stat
                 label="Customers"
-                value={overviewLoading ? "…" : stats ? String(stats.customerCount) : "-"}
+                value={overviewLoading ? "..." : stats ? String(stats.customerCount) : "-"}
               />
             </div>
 
@@ -206,7 +217,7 @@ export default function AdminDashboard() {
                 <div>
                   <h2 className="font-bold text-white">Recent orders</h2>
                   <p className="mt-1 text-xs text-muted">
-                    Search by order ID, email, customer name, status, payment method, or item.
+                    Latest bounded orders. Open Payments or Fulfillment for work queues.
                   </p>
                 </div>
                 <div className="w-full sm:w-80">
@@ -246,16 +257,14 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredOrders.slice(0, 10).map((order) => (
+                      {filteredOrders.map((order) => (
                         <tr key={order.id} className="border-b border-border/60">
                           <td className="px-5 py-3 font-mono text-xs text-white">
                             {order.id}
                           </td>
                           <td className="px-5 py-3">
                             <p className="text-white">{order.customerName}</p>
-                            <p className="text-xs text-muted">
-                              {order.customerEmail}
-                            </p>
+                            <p className="text-xs text-muted">{order.customerEmail}</p>
                           </td>
                           <td className="px-5 py-3 text-muted">
                             {formatDate(order.createdAt)}
@@ -264,9 +273,7 @@ export default function AdminDashboard() {
                             {formatMAD(order.totalMad)}
                           </td>
                           <td className="px-5 py-3">
-                            <span
-                              className={`chip ${orderStatusBadgeClass(order.status)}`}
-                            >
+                            <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
                               {orderStatusShort(order.status)}
                             </span>
                           </td>
@@ -287,9 +294,14 @@ export default function AdminDashboard() {
               )}
             </section>
 
-            <section className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <h2 className="font-bold text-white">Inventory summary</h2>
+            <section className="card p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-bold text-white">Inventory summary</h2>
+                  <p className="mt-1 text-xs text-muted">
+                    Summary loads with the overview; full codes load only in the Inventory tab.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setActiveTab("inventory")}
@@ -298,7 +310,7 @@ export default function AdminDashboard() {
                   Manage codes
                 </button>
               </div>
-              <div className="overflow-x-auto">
+              <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs uppercase text-muted">
                     <tr className="border-b border-border">

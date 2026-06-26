@@ -69,16 +69,41 @@ export async function getInventorySummary(): Promise<InventorySummaryDTO[]> {
 export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
   await ensureDatabaseReady();
   const products = await prisma.product.findMany({
+    take: 100,
     orderBy: { slug: "asc" },
-    include: {
-      digitalCodes: { orderBy: { createdAt: "asc" } },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      digitalCodes: {
+        take: 100,
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          code: true,
+          status: true,
+          assignedOrderId: true,
+          usedAt: true,
+          createdAt: true,
+        },
+      },
     },
   });
+  const counts = await prisma.digitalCode.groupBy({
+    by: ["productId", "status"],
+    where: { productId: { in: products.map((product) => product.id) } },
+    _count: { _all: true },
+  });
+  const countByProduct = new Map<string, Record<string, number>>();
+  for (const row of counts) {
+    const current = countByProduct.get(row.productId) ?? {};
+    current[row.status] = row._count._all;
+    countByProduct.set(row.productId, current);
+  }
 
   return products.map((product) => {
     const codes = product.digitalCodes.map(rowToCode);
-    const count = (status: string) =>
-      codes.filter((code) => code.status === status).length;
+    const count = (status: string) => countByProduct.get(product.id)?.[status] ?? 0;
 
     return {
       productId: product.slug,

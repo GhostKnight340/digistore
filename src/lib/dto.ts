@@ -178,6 +178,14 @@ export interface CustomerDTO {
   lastOrderAt: string;
 }
 
+export interface AdminOverviewDTO {
+  totalOrders: number;
+  pendingFulfillment: number;
+  totalRevenue: number;
+  customers: number;
+  recentOrders: AdminOrderDTO[];
+}
+
 /** A single delivery assignment entry: either an inventory code or a manual one. */
 export interface AssignmentEntry {
   digitalCodeId?: string;

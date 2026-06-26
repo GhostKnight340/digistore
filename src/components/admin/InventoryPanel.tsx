@@ -39,6 +39,7 @@ export default function InventoryPanel() {
 
   const load = useCallback(async () => {
     setLoadError("");
+    setLoaded(false);
     try {
       const data = await withTimeout(getInventoryAction(), "Inventory");
       setGroups(data);

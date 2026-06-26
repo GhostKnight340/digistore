@@ -7,6 +7,8 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Karta - Cartes de jeu instantanées au Maroc",
   description:

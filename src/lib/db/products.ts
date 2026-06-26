@@ -14,6 +14,7 @@ import type {
 function productDetailQuery(where?: Prisma.ProductWhereInput) {
   return prisma.product.findMany({
     where,
+    take: where ? undefined : 100,
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: {
       variants: {
