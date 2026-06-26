@@ -5,6 +5,7 @@ import {
   getProductCatalog,
   getStoreSettings,
   saveStoreSettings,
+  updateProductCatalogItem,
 } from "@/lib/db/catalog";
 import type { Product } from "@/lib/types";
 import type { StoreSettings } from "@/lib/storeSettings";
@@ -31,6 +32,29 @@ export async function saveStoreSettingsAction(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Save failed.",
+    };
+  }
+}
+
+export async function updateProductCatalogItemAction(
+  slug: string,
+  data: {
+    name: string;
+    category: string;
+    price: number;
+    region: string;
+    deliveryType: string;
+    description: string;
+    featured: boolean;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await updateProductCatalogItem(slug, data);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Product save failed.",
     };
   }
 }

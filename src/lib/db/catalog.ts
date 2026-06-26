@@ -109,3 +109,30 @@ export async function saveStoreSettings(settings: StoreSettings): Promise<void> 
     create: { id: "default", value: merged },
   });
 }
+
+export async function updateProductCatalogItem(
+  slug: string,
+  data: {
+    name: string;
+    category: string;
+    price: number;
+    region: string;
+    deliveryType: string;
+    description: string;
+    featured: boolean;
+  },
+): Promise<void> {
+  await ensureDatabaseReady();
+  await prisma.product.update({
+    where: { slug },
+    data: {
+      name: data.name,
+      category: data.category,
+      priceMad: data.price,
+      region: data.region,
+      deliveryType: data.deliveryType,
+      description: data.description,
+      featured: data.featured,
+    },
+  });
+}

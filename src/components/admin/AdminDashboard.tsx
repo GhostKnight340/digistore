@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useProductCatalog } from "@/context/ProductCatalogContext";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
 import {
@@ -12,16 +12,27 @@ import type { AdminOrderDTO, InventoryGroupDTO } from "@/lib/dto";
 import SettingsPanel from "@/components/admin/SettingsPanel";
 import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
+import PaymentSettingsPanel from "@/components/admin/PaymentSettingsPanel";
+import PaymentsPanel from "@/components/admin/PaymentsPanel";
+import ProductsPanel from "@/components/admin/ProductsPanel";
 
 const navItems = [
-  { id: "overview", label: "Overview", icon: "📊" },
-  { id: "settings", label: "Settings", icon: "⚙️" },
-  { id: "products", label: "Products", icon: "🛍️" },
-  { id: "inventory", label: "Inventory", icon: "🔑" },
-  { id: "fulfillment", label: "Manual fulfillment", icon: "📦" },
-  { id: "customers", label: "Customers", icon: "👥" },
-  { id: "suppliers", label: "Supplier API", icon: "🔌" },
-  { id: "refunds", label: "Refunds", icon: "↩" },
+  { id: "overview", label: "Overview", icon: "[]" },
+  {
+    id: "homepage-editor",
+    label: "Homepage editor",
+    icon: "HE",
+    href: "/admin/editor",
+  },
+  { id: "settings", label: "Store settings", icon: "SS" },
+  { id: "products", label: "Products", icon: "PR" },
+  { id: "inventory", label: "Inventory", icon: "IN" },
+  { id: "payments", label: "Payments", icon: "PM" },
+  { id: "payment-settings", label: "Payment settings", icon: "PS" },
+  { id: "fulfillment", label: "Manual fulfillment", icon: "MF" },
+  { id: "customers", label: "Customers", icon: "CU" },
+  { id: "suppliers", label: "Supplier API", icon: "API" },
+  { id: "refunds", label: "Refunds", icon: "RF" },
 ];
 
 type AdminDashboardProps = {
@@ -49,13 +60,13 @@ export default function AdminDashboard({
   initialInventory,
   initialLoadError = null,
 }: AdminDashboardProps) {
-  const { products } = useProductCatalog();
   const [activeTab, setActiveTab] = useState("overview");
   const [orders, setOrders] = useState<AdminOrderDTO[]>(initialOrders);
   const [inventory, setInventory] =
     useState<InventoryGroupDTO[]>(initialInventory);
   const [loaded, setLoaded] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(initialLoadError);
+  const [orderQuery, setOrderQuery] = useState("");
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -94,9 +105,8 @@ export default function AdminDashboard({
     setLoaded(true);
   }, []);
 
-  // Refresh overview data when returning to the overview tab after using
-  // another admin section. Initial data is rendered by the server so the page
-  // never starts in a client-side loading-only state.
+  // Initial data is rendered by the server, then refreshed only after returning
+  // from another tab so the admin page never gets stuck on a client loading state.
   const [hasLeftOverview, setHasLeftOverview] = useState(false);
 
   useEffect(() => {
@@ -111,6 +121,29 @@ export default function AdminDashboard({
   const customers = new Set(orders.map((o) => o.customerEmail)).size;
   const pendingCount = orders.filter((o) => o.status !== "delivered").length;
 
+  const filteredOrders = useMemo(() => {
+    const query = orderQuery.trim().toLowerCase();
+    if (!query) return orders;
+
+    return orders.filter((order) => {
+      const itemText = order.items
+        .map((item) => `${item.productId} ${item.name} ${item.quantity}`)
+        .join(" ");
+      const searchable = [
+        order.id,
+        order.customerEmail,
+        order.customerName,
+        order.status,
+        order.paymentMethod,
+        itemText,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  }, [orders, orderQuery]);
+
   return (
     <div className="container-page py-10">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
@@ -120,36 +153,69 @@ export default function AdminDashboard({
             Database-backed inventory and manual fulfillment.
           </p>
         </div>
-        <span className="chip border-accent/40 text-accent">Prototype mode</span>
+        <span className="chip border-accent/40 text-accent">Production data</span>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
         <aside className="h-fit">
           <nav className="card space-y-1 p-3 text-sm">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveTab(item.id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left ${
-                  activeTab === item.id
-                    ? "bg-accent/10 font-medium text-white"
-                    : "text-muted"
-                }`}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
+            {navItems.map((item) => {
+              const className = `flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left ${
+                activeTab === item.id
+                  ? "bg-accent/10 font-medium text-white"
+                  : "text-muted hover:bg-surface hover:text-white"
+              }`;
+
+              if ("href" in item && item.href) {
+                return (
+                  <Link key={item.id} href={item.href} className={className}>
+                    <NavIcon value={item.icon} />
+                    {item.label}
+                  </Link>
+                );
+              }
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  className={className}
+                >
+                  <NavIcon value={item.icon} />
+                  {item.label}
+                </button>
+              );
+            })}
           </nav>
         </aside>
 
         {activeTab === "settings" ? (
           <SettingsPanel />
-        ) : activeTab === "fulfillment" ? (
-          <FulfillmentPanel initialOrders={orders} />
+        ) : activeTab === "products" ? (
+          <ProductsPanel />
         ) : activeTab === "inventory" ? (
           <InventoryPanel initialGroups={inventory} />
+        ) : activeTab === "payments" ? (
+          <PaymentsPanel />
+        ) : activeTab === "payment-settings" ? (
+          <PaymentSettingsPanel />
+        ) : activeTab === "fulfillment" ? (
+          <FulfillmentPanel initialOrders={orders} />
+        ) : activeTab === "customers" ? (
+          <CustomersPanel orders={orders} />
+        ) : activeTab === "suppliers" ? (
+          <RestoredPanel
+            title="Supplier API"
+            eyebrow="Admin section restored"
+            text="Supplier API controls are available from the admin navigation. Existing supplier automation remains untouched."
+          />
+        ) : activeTab === "refunds" ? (
+          <RestoredPanel
+            title="Refunds"
+            eyebrow="Admin section restored"
+            text="Refund review is back in the admin navigation. Payment and order records continue to come from Supabase."
+          />
         ) : (
           <div className="space-y-8">
             {loadError ? (
@@ -181,15 +247,35 @@ export default function AdminDashboard({
             </div>
 
             <section className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <h2 className="font-bold text-white">Recent orders</h2>
-                <span className="text-xs text-muted">Manual fulfillment</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+                <div>
+                  <h2 className="font-bold text-white">Recent orders</h2>
+                  <p className="mt-1 text-xs text-muted">
+                    Search by order ID, email, customer name, status, payment method, or item.
+                  </p>
+                </div>
+                <div className="w-full sm:w-80">
+                  <label className="sr-only" htmlFor="admin-order-search">
+                    Search orders
+                  </label>
+                  <input
+                    id="admin-order-search"
+                    className="input h-10 py-0 text-sm"
+                    value={orderQuery}
+                    onChange={(event) => setOrderQuery(event.target.value)}
+                    placeholder="Find an order..."
+                  />
+                </div>
               </div>
               {!loaded ? (
                 <p className="px-5 py-8 text-sm text-muted">Loading...</p>
               ) : orders.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-muted">
                   No orders yet. Place a test order to see it here.
+                </p>
+              ) : filteredOrders.length === 0 ? (
+                <p className="px-5 py-8 text-sm text-muted">
+                  No orders match your search.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -205,13 +291,16 @@ export default function AdminDashboard({
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.slice(0, 10).map((order) => (
+                      {filteredOrders.slice(0, 10).map((order) => (
                         <tr key={order.id} className="border-b border-border/60">
                           <td className="px-5 py-3 font-mono text-xs text-white">
                             {order.id}
                           </td>
-                          <td className="px-5 py-3 text-muted">
-                            {order.customerEmail}
+                          <td className="px-5 py-3">
+                            <p className="text-white">{order.customerName}</p>
+                            <p className="text-xs text-muted">
+                              {order.customerEmail}
+                            </p>
                           </td>
                           <td className="px-5 py-3 text-muted">
                             {formatDate(order.createdAt)}
@@ -308,33 +397,18 @@ export default function AdminDashboard({
                 </table>
               </div>
             </section>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Placeholder
-                icon="🔌"
-                title="Supplier API"
-                text="Connect automated code suppliers to auto-restock inventory. Not connected in Phase 1."
-              />
-              <Placeholder
-                icon="↩"
-                title="Refunds"
-                text="Review and process customer refund requests. Coming in a later phase."
-              />
-              <Placeholder
-                icon="🛍️"
-                title="Products"
-                text={`${products.length} products in the catalog. Editing UI coming later.`}
-              />
-              <Placeholder
-                icon="👥"
-                title="Customers"
-                text="Browse customer profiles and order history. Placeholder for now."
-              />
-            </div>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function NavIcon({ value }: { value: string }) {
+  return (
+    <span className="grid h-5 min-w-5 place-items-center rounded border border-border bg-base px-1 text-[10px] font-bold text-muted">
+      {value}
+    </span>
   );
 }
 
@@ -347,25 +421,85 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Placeholder({
-  icon,
+function CustomersPanel({ orders }: { orders: AdminOrderDTO[] }) {
+  const customers = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { name: string; email: string; orders: number; totalMad: number }
+    >();
+
+    for (const order of orders) {
+      const current = grouped.get(order.customerEmail) ?? {
+        name: order.customerName,
+        email: order.customerEmail,
+        orders: 0,
+        totalMad: 0,
+      };
+      current.name = order.customerName || current.name;
+      current.orders += 1;
+      current.totalMad += order.totalMad;
+      grouped.set(order.customerEmail, current);
+    }
+
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.email.localeCompare(b.email),
+    );
+  }, [orders]);
+
+  return (
+    <section className="card overflow-hidden">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="font-bold text-white">Customers</h2>
+        <p className="mt-1 text-xs text-muted">
+          Customer records derived from current Supabase-backed orders.
+        </p>
+      </div>
+      {customers.length === 0 ? (
+        <p className="px-5 py-8 text-sm text-muted">No customers yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase text-muted">
+              <tr className="border-b border-border">
+                <th className="px-5 py-3 font-medium">Customer</th>
+                <th className="px-5 py-3 font-medium">Email</th>
+                <th className="px-5 py-3 font-medium">Orders</th>
+                <th className="px-5 py-3 font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customers.map((customer) => (
+                <tr key={customer.email} className="border-b border-border/60">
+                  <td className="px-5 py-3 text-white">{customer.name}</td>
+                  <td className="px-5 py-3 text-muted">{customer.email}</td>
+                  <td className="px-5 py-3 text-muted">{customer.orders}</td>
+                  <td className="px-5 py-3 text-white">
+                    {formatMAD(customer.totalMad)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RestoredPanel({
   title,
+  eyebrow,
   text,
 }: {
-  icon: string;
   title: string;
+  eyebrow: string;
   text: string;
 }) {
   return (
-    <div className="card p-5">
-      <div className="flex items-center gap-2">
-        <span className="text-xl">{icon}</span>
-        <h3 className="font-semibold text-white">{title}</h3>
-        <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-[10px] font-bold uppercase text-muted">
-          Soon
-        </span>
-      </div>
-      <p className="mt-2 text-sm text-muted">{text}</p>
-    </div>
+    <section className="card p-6">
+      <p className="text-xs uppercase tracking-wide text-muted">{eyebrow}</p>
+      <h2 className="mt-2 text-xl font-bold text-white">{title}</h2>
+      <p className="mt-2 max-w-2xl text-sm text-muted">{text}</p>
+    </section>
   );
 }
