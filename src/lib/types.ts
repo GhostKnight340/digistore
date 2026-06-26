@@ -29,6 +29,7 @@ export interface Product {
   price: number;
   deliveryType: string;
   description: string;
+  imageUrl?: string | null;
   featured?: boolean;
   stockStatus?: StockStatus;
   variants?: ProductVariantOption[];

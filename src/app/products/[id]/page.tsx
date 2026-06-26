@@ -58,6 +58,7 @@ export default async function ProductDetailPage({
         <div>
           <ProductArt
             category={product.category}
+            imageUrl={product.imageUrl}
             label={product.categoryName}
             className="aspect-[1.4] w-full rounded-[18px] border border-border"
           />

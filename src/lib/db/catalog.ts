@@ -10,6 +10,10 @@ type ProductWithCategory = Awaited<ReturnType<typeof getActiveProductRows>>[numb
 
 const productCatalogInclude = {
   categoryRecord: true,
+  media: {
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    take: 1,
+  },
   variants: {
     where: { active: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -65,6 +69,7 @@ function toVariantOption(
 
 function toVariantProduct(row: ProductWithCategory, variant: ProductWithCategory["variants"][number]): Product {
   const title = variantTitle(row.name, variant);
+  const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
   return {
     id: variant.id,
     parentId: row.slug,
@@ -77,6 +82,7 @@ function toVariantProduct(row: ProductWithCategory, variant: ProductWithCategory
     price: variant.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,
+    imageUrl,
     featured: variant.featured,
     stockStatus: variantStockStatus(row, variant),
   };
@@ -88,6 +94,7 @@ function toParentProduct(row: ProductWithCategory, selectedVariantId?: string): 
     .map((variant) => toVariantOption(row, variant));
   const selectedVariant =
     variants.find((variant) => variant.id === selectedVariantId) ?? variants[0];
+  const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
 
   return {
     id: row.slug,
@@ -98,6 +105,7 @@ function toParentProduct(row: ProductWithCategory, selectedVariantId?: string): 
     price: row.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,
+    imageUrl,
     featured: row.featured,
     stockStatus: selectedVariant?.stockStatus,
     variants,

@@ -53,6 +53,8 @@ export default function CartPage() {
               <li key={item.productId} className="card flex gap-4 p-4">
                 <ProductArt
                   category={product.category}
+                  imageUrl={product.imageUrl}
+                  label={product.name}
                   className="h-20 w-28 shrink-0 rounded-xl"
                 />
                 <div className="flex flex-1 flex-col">

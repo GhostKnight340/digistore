@@ -609,6 +609,8 @@ function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
               {product && (
                 <ProductArt
                   category={product.category}
+                  imageUrl={product.imageUrl}
+                  label={product.name}
                   className="h-20 w-full rounded-xl sm:h-20 sm:w-24"
                 />
               )}
