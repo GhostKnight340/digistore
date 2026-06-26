@@ -1,5 +1,7 @@
 import "server-only";
 
+import { Prisma } from "@prisma/client";
+import { DENOMINATION_SLUGS } from "@/lib/products";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import type {
   ActionResult,
@@ -9,10 +11,9 @@ import type {
   VariantDTO,
 } from "@/lib/dto";
 
-type ProductRow = Awaited<ReturnType<typeof readProductRows>>[number];
-
-function readProductRows() {
+function productDetailQuery(where?: Prisma.ProductWhereInput) {
   return prisma.product.findMany({
+    where,
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: {
       variants: {
@@ -21,12 +22,18 @@ function readProductRows() {
       media: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
-      digitalCodes: {
-        select: { status: true },
+      _count: {
+        select: { digitalCodes: { where: { status: "unused" } } },
       },
     },
   });
 }
+
+function readProductRows() {
+  return productDetailQuery(undefined);
+}
+
+type ProductRow = Awaited<ReturnType<typeof readProductRows>>[number];
 
 function toVariant(product: ProductRow, variant: ProductRow["variants"][number]): VariantDTO {
   return {
@@ -34,13 +41,13 @@ function toVariant(product: ProductRow, variant: ProductRow["variants"][number])
     slug: variant.id,
     name: variant.name,
     priceMad: variant.priceMad,
-    faceValue: null,
-    faceCurrency: "MAD",
+    faceValue: variant.faceValue,
+    faceCurrency: variant.faceCurrency,
     active: variant.active,
-    featured: product.featured,
-    stockControl: "manual",
-    stockMode: "automatic",
-    inventoryUnused: product.digitalCodes.filter((code) => code.status === "unused").length,
+    featured: variant.featured,
+    stockControl: variant.stockControl,
+    stockMode: variant.stockMode,
+    inventoryUnused: product._count.digitalCodes,
   };
 }
 
@@ -56,7 +63,7 @@ function productAsFallbackVariant(product: ProductRow): VariantDTO {
     featured: product.featured,
     stockControl: "manual",
     stockMode: "automatic",
-    inventoryUnused: product.digitalCodes.filter((code) => code.status === "unused").length,
+    inventoryUnused: product._count.digitalCodes,
   };
 }
 
@@ -70,13 +77,13 @@ function toParent(product: ProductRow): ParentProductDTO {
     slug: product.slug,
     name: product.name,
     category: product.category,
-    brand: null,
+    brand: product.brand,
     region: product.region,
     deliveryType: product.deliveryType,
     description: product.description,
-    shortDescription: null,
-    longDescription: null,
-    instructions: null,
+    shortDescription: product.shortDescription,
+    longDescription: product.longDescription,
+    instructions: product.instructions,
     thumbnail: product.imageUrl ?? product.media[0]?.url ?? null,
     active: product.active,
     createdAt: product.createdAt.toISOString(),
@@ -86,8 +93,12 @@ function toParent(product: ProductRow): ParentProductDTO {
 
 export async function getParentProducts(): Promise<ParentProductDTO[]> {
   await ensureDatabaseReady();
-  const products = await readProductRows();
-  return products.map(toParent);
+  const rows = await readProductRows();
+  // Exclude legacy denomination products (steam-50, psn-100, etc.) that are
+  // preserved only for order history. Only parent platform products appear here.
+  return rows
+    .filter((row) => !DENOMINATION_SLUGS.has(row.slug))
+    .map(toParent);
 }
 
 export async function saveParentProduct(
@@ -105,9 +116,13 @@ export async function saveParentProduct(
       update: {
         name: data.name,
         category: data.category,
+        brand: data.brand,
         region: data.region,
         deliveryType: data.deliveryType,
         description: data.description,
+        shortDescription: data.shortDescription,
+        longDescription: data.longDescription,
+        instructions: data.instructions,
         imageUrl: data.thumbnail || null,
         active: data.active,
       },
@@ -115,9 +130,13 @@ export async function saveParentProduct(
         slug: data.slug,
         name: data.name,
         category: data.category,
+        brand: data.brand,
         region: data.region,
         deliveryType: data.deliveryType,
         description: data.description,
+        shortDescription: data.shortDescription,
+        longDescription: data.longDescription,
+        instructions: data.instructions,
         imageUrl: data.thumbnail || null,
         active: data.active,
         priceMad: 0,
@@ -164,23 +183,28 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       product.variants.find((variant) => variant.id === data.slug) ??
       product.variants.find((variant) => variant.name === data.name);
 
+    const variantFields = {
+      name: data.name,
+      priceMad: data.priceMad,
+      faceValue: data.faceValue,
+      faceCurrency: data.faceCurrency,
+      stockControl: data.stockControl,
+      stockMode: data.stockMode,
+      active: data.active,
+      featured: data.featured,
+    };
+
     if (existing) {
       await prisma.productVariant.update({
         where: { id: existing.id },
-        data: {
-          name: data.name,
-          priceMad: data.priceMad,
-          active: data.active,
-        },
+        data: variantFields,
       });
     } else {
       await prisma.productVariant.create({
         data: {
           id: data.slug,
           productId: product.id,
-          name: data.name,
-          priceMad: data.priceMad,
-          active: data.active,
+          ...variantFields,
           sortOrder: product.variants.length,
         },
       });

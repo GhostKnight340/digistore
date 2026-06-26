@@ -1,7 +1,7 @@
 import "server-only";
 
 import { PrismaClient } from "@prisma/client";
-import { categories, products } from "@/lib/products";
+import { categories, products, productGroups } from "@/lib/products";
 import { defaultStoreSettings } from "@/lib/storeSettings";
 
 const globalForPrisma = globalThis as unknown as {
@@ -270,6 +270,62 @@ async function seedCatalogProducts(): Promise<void> {
         sortOrder: index,
       },
     });
+  }
+
+  // Seed parent products (one per platform) and their denomination variants.
+  for (const group of productGroups) {
+    const parent = await prisma.product.upsert({
+      where: { slug: group.id },
+      update: {
+        name: group.name,
+        category: group.category,
+        description: group.description,
+        region: group.region,
+        deliveryType: group.deliveryType,
+        active: true,
+        sortOrder: group.sortOrder,
+      },
+      create: {
+        slug: group.id,
+        name: group.name,
+        category: group.category,
+        description: group.description,
+        priceMad: 0,
+        region: group.region,
+        deliveryType: group.deliveryType,
+        featured: false,
+        active: true,
+        sortOrder: group.sortOrder,
+      },
+    });
+
+    for (const denom of group.denominations) {
+      await prisma.productVariant.upsert({
+        where: { id: denom.id },
+        update: {
+          name: denom.name,
+          priceMad: denom.priceMad,
+          faceValue: denom.faceValue,
+          faceCurrency: denom.faceCurrency,
+          featured: denom.featured,
+          sortOrder: denom.sortOrder,
+          active: true,
+        },
+        create: {
+          id: denom.id,
+          productId: parent.id,
+          name: denom.name,
+          priceMad: denom.priceMad,
+          faceValue: denom.faceValue,
+          faceCurrency: denom.faceCurrency,
+          featured: denom.featured,
+          sortOrder: denom.sortOrder,
+          active: true,
+          stockControl: "manual",
+          stockMode: "automatic",
+        },
+      });
+    }
   }
 
   await prisma.storeSetting.upsert({
