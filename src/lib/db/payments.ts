@@ -22,6 +22,16 @@ export async function submitPayment(
     return { ok: false, error: "Order is not in pending_payment state." };
   }
 
+  const methodConfig = await prisma.paymentMethodConfig.findUnique({
+    where: { method: order.paymentMethod },
+    select: { proofRequired: true },
+  });
+  const proofRequired =
+    methodConfig?.proofRequired ?? !["paypal", "card", "test"].includes(order.paymentMethod);
+  if (proofRequired && !proof) {
+    return { ok: false, error: "Payment proof is required for this method." };
+  }
+
   if (proof) {
     if (!ALLOWED_PROOF_TYPES.includes(proof.mimeType)) {
       return {
@@ -36,10 +46,13 @@ export async function submitPayment(
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: "pending_payment" },
         data: { status: "payment_submitted" },
       });
+      if (updated.count !== 1) {
+        throw new Error("Payment was already submitted or the order status changed.");
+      }
 
       if (proof) {
         await tx.paymentProof.upsert({
