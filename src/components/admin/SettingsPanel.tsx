@@ -6,6 +6,7 @@ import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
 import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { uploadImageFile } from "@/lib/clientUpload";
+import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import type { PaymentMethod, Product, StockMode, StockStatus } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -173,8 +174,9 @@ export default function SettingsPanel() {
       <Panel title="Homepage sections">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {homepageSectionKeys.map((key) => (
-              <Toggle
+              <ToggleSwitch
                 key={key}
+                className="rounded-xl border border-border bg-base px-3 py-3"
                 label={sectionLabels[key]}
                 checked={draft.homepage[key]}
                 onChange={(checked) =>
@@ -211,8 +213,11 @@ export default function SettingsPanel() {
           {draft.trustItems.map((item, index) => (
             <div key={item.id} className="rounded-xl border border-border bg-base p-4">
               <div className="mb-3">
-                <Toggle
-                  label="Enabled"
+                <ToggleSwitch
+                  className="rounded-xl border border-border bg-base px-3 py-3"
+                  label="Trust item"
+                  checkedLabel="Activé"
+                  uncheckedLabel="Désactivé"
                   checked={item.enabled}
                   onChange={(checked) => {
                     const next = [...draft.trustItems];
@@ -249,9 +254,12 @@ export default function SettingsPanel() {
       <Panel title="Featured products">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (
-            <Toggle
+            <ToggleSwitch
               key={product.id}
+              className="rounded-xl border border-border bg-base px-3 py-3"
               label={`${product.name} (${product.id})`}
+              checkedLabel="Featured"
+              uncheckedLabel="Non featured"
               checked={draft.featuredProductIds.includes(product.id)}
               onChange={(checked) => {
                 const ids = checked
@@ -342,8 +350,9 @@ export default function SettingsPanel() {
       <Panel title="Payment methods">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {(Object.keys(draft.paymentMethods) as PaymentMethod[]).map((method) => (
-            <Toggle
+            <ToggleSwitch
               key={method}
+              className="rounded-xl border border-border bg-base px-3 py-3"
               label={paymentLabels[method]}
               checked={draft.paymentMethods[method]}
               onChange={(checked) =>
@@ -486,28 +495,6 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-    </label>
-  );
-}
-
-function Toggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-3 rounded-xl border border-border bg-base px-3 py-3 text-sm text-muted">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-[#3e7bfa]"
-      />
-      <span>{label}</span>
     </label>
   );
 }

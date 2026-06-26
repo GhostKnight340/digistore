@@ -12,6 +12,7 @@ import {
   updateWalletAction,
   deleteWalletAction,
 } from "@/app/actions/admin";
+import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import type { BankDTO, CryptoWalletDTO, SupportConfigDTO, PaymentMethodConfigDTO } from "@/lib/dto";
 
 interface AdminConfig {
@@ -48,19 +49,35 @@ export default function PaymentSettingsPanel() {
     setTimeout(() => setFeedback((prev) => ({ ...prev, [key]: "" })), 3000);
   }
 
+  function updateMethodLocal(method: string, data: Partial<PaymentMethodConfigDTO>) {
+    setConfig((prev) =>
+      prev
+        ? {
+            ...prev,
+            methods: {
+              ...prev.methods,
+              [method]: { ...prev.methods[method], ...data },
+            },
+          }
+        : prev,
+    );
+  }
+
   async function toggleMethod(method: string, enabled: boolean) {
+    updateMethodLocal(method, { enabled });
     setSaving(`method-${method}`);
     const res = await updateMethodConfigAction(method, { enabled });
     if (res.ok) { setMsg(`method-${method}`, "Sauvegardé"); await load(); }
-    else setMsg(`method-${method}`, res.error ?? "Erreur");
+    else { setMsg(`method-${method}`, res.error ?? "Erreur"); await load(); }
     setSaving(null);
   }
 
   async function saveMethodField(method: string, data: Record<string, string | boolean>) {
+    updateMethodLocal(method, data as Partial<PaymentMethodConfigDTO>);
     setSaving(`method-field-${method}`);
     const res = await updateMethodConfigAction(method, data);
     if (res.ok) { setMsg(`method-field-${method}`, "Sauvegardé"); await load(); }
-    else setMsg(`method-field-${method}`, res.error ?? "Erreur");
+    else { setMsg(`method-field-${method}`, res.error ?? "Erreur"); await load(); }
     setSaving(null);
   }
 
@@ -259,9 +276,11 @@ function BankSection({
           <p className="text-sm font-medium text-white">Activé</p>
           <p className="text-xs text-muted">Afficher le virement bancaire au checkout</p>
         </div>
-        <Toggle
+        <ToggleSwitch
           checked={method?.enabled ?? false}
           onChange={onToggle}
+          checkedLabel="Activé"
+          uncheckedLabel="Désactivé"
           disabled={saving === "method-bank"}
         />
       </div>
@@ -272,9 +291,11 @@ function BankSection({
           <p className="text-sm font-medium text-white">Preuve requise</p>
           <p className="text-xs text-muted">Le client doit uploader une preuve</p>
         </div>
-        <Toggle
+        <ToggleSwitch
           checked={method?.proofRequired ?? true}
           onChange={onToggleProof}
+          checkedLabel="Preuve requise"
+          uncheckedLabel="Preuve non requise"
           disabled={saving === "method-field-bank"}
         />
       </div>
@@ -375,7 +396,13 @@ function BankRow({
           {bank.iban && <p className="font-mono text-xs text-faint">IBAN: {bank.iban}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Toggle checked={bank.enabled} onChange={onToggle} small />
+          <ToggleSwitch
+            checked={bank.enabled}
+            onChange={onToggle}
+            checkedLabel="Activé"
+            uncheckedLabel="Désactivé"
+            small
+          />
           <button type="button" onClick={onEdit} className="text-xs text-accent hover:text-accent-hover">
             Modifier
           </button>
@@ -536,7 +563,13 @@ function WalletSection({
           <p className="text-sm font-medium text-white">Activé</p>
           <p className="text-xs text-muted">TRC20 / BEP20 uniquement</p>
         </div>
-        <Toggle checked={method?.enabled ?? false} onChange={onToggle} disabled={saving === "method-usdt"} />
+        <ToggleSwitch
+          checked={method?.enabled ?? false}
+          onChange={onToggle}
+          checkedLabel="Activé"
+          uncheckedLabel="Désactivé"
+          disabled={saving === "method-usdt"}
+        />
       </div>
       {feedback["method-usdt"] && <p className="text-xs text-accent">{feedback["method-usdt"]}</p>}
 
@@ -545,7 +578,13 @@ function WalletSection({
           <p className="text-sm font-medium text-white">Preuve requise</p>
           <p className="text-xs text-muted">Le client doit uploader un screenshot de transaction</p>
         </div>
-        <Toggle checked={method?.proofRequired ?? true} onChange={onToggleProof} disabled={saving === "method-field-usdt"} />
+        <ToggleSwitch
+          checked={method?.proofRequired ?? true}
+          onChange={onToggleProof}
+          checkedLabel="Preuve requise"
+          uncheckedLabel="Preuve non requise"
+          disabled={saving === "method-field-usdt"}
+        />
       </div>
       {feedback["method-field-usdt"] && <p className="text-xs text-accent">{feedback["method-field-usdt"]}</p>}
 
@@ -620,7 +659,13 @@ function WalletRow({
           <p className="mt-1 break-all font-mono text-xs text-muted">{wallet.address}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Toggle checked={wallet.enabled} onChange={onToggle} small />
+          <ToggleSwitch
+            checked={wallet.enabled}
+            onChange={onToggle}
+            checkedLabel="Activé"
+            uncheckedLabel="Désactivé"
+            small
+          />
           <button type="button" onClick={onEdit} className="text-xs text-accent hover:text-accent-hover">
             Modifier
           </button>
@@ -769,7 +814,13 @@ function PaypalSection({
         <div>
           <p className="text-sm font-medium text-white">Activé</p>
         </div>
-        <Toggle checked={method?.enabled ?? false} onChange={onToggle} disabled={saving === "method-paypal"} />
+        <ToggleSwitch
+          checked={method?.enabled ?? false}
+          onChange={onToggle}
+          checkedLabel="Activé"
+          uncheckedLabel="Désactivé"
+          disabled={saving === "method-paypal"}
+        />
       </div>
       {feedback["method-paypal"] && <p className="text-xs text-accent">{feedback["method-paypal"]}</p>}
 
@@ -777,7 +828,13 @@ function PaypalSection({
         <div>
           <p className="text-sm font-medium text-white">Preuve requise</p>
         </div>
-        <Toggle checked={method?.proofRequired ?? false} onChange={onToggleProof} disabled={saving === "method-field-paypal"} />
+        <ToggleSwitch
+          checked={method?.proofRequired ?? false}
+          onChange={onToggleProof}
+          checkedLabel="Preuve requise"
+          uncheckedLabel="Preuve non requise"
+          disabled={saving === "method-field-paypal"}
+        />
       </div>
 
       <div className="grid gap-4 border-t border-border pt-4">
@@ -821,7 +878,13 @@ function CardSection({
           <p className="text-sm font-medium text-white">Activé</p>
           <p className="text-xs text-muted">Affiche la carte comme option au checkout</p>
         </div>
-        <Toggle checked={method?.enabled ?? false} onChange={onToggle} disabled={saving === "method-card"} />
+        <ToggleSwitch
+          checked={method?.enabled ?? false}
+          onChange={onToggle}
+          checkedLabel="Activé"
+          uncheckedLabel="Désactivé"
+          disabled={saving === "method-card"}
+        />
       </div>
       {feedback["method-card"] && <p className="text-xs text-accent">{feedback["method-card"]}</p>}
 
@@ -862,37 +925,6 @@ function SectionCard({
       </div>
       <div className="space-y-4 px-6 py-5">{children}</div>
     </div>
-  );
-}
-
-function Toggle({
-  checked,
-  onChange,
-  disabled,
-  small,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  small?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative shrink-0 rounded-full transition disabled:opacity-50 ${
-        small ? "h-5 w-9" : "h-6 w-11"
-      } ${checked ? "bg-accent" : "bg-surface2 border border-border"}`}
-    >
-      <span
-        className={`absolute top-0.5 rounded-full bg-white shadow transition-transform ${
-          small ? "h-4 w-4" : "h-5 w-5"
-        } ${checked ? (small ? "translate-x-4" : "translate-x-5") : "translate-x-0.5"}`}
-      />
-    </button>
   );
 }
 
@@ -962,3 +994,4 @@ function SaveRow({
     </div>
   );
 }
+

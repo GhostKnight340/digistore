@@ -2,6 +2,7 @@
 
 import { useEditor } from "@/lib/editor/EditorContext";
 import type { StoreSettings } from "@/lib/storeSettings";
+import ToggleSwitch from "@/components/ui/ToggleSwitch";
 
 type HomepageBoolKey = {
   [K in keyof StoreSettings["homepage"]]: StoreSettings["homepage"][K] extends boolean ? K : never;
@@ -32,13 +33,14 @@ export default function SectionWrapper({ sectionKey, label, children }: Props) {
       <div className="my-3 flex items-center gap-3 rounded-xl border border-dashed border-border px-5 py-3.5 transition-opacity opacity-50 hover:opacity-80">
         <span className="text-xs font-medium text-muted">{label}</span>
         <span className="text-xs text-faint">— hidden</span>
-        <button
-          type="button"
-          onClick={() => toggle(true)}
-          className="ml-auto text-xs font-medium text-accent hover:text-accent-hover"
-        >
-          Show
-        </button>
+        <ToggleSwitch
+          className="ml-auto"
+          checked={visible}
+          onChange={toggle}
+          checkedLabel="Visible"
+          uncheckedLabel="Masqué"
+          size="sm"
+        />
       </div>
     );
   }
@@ -50,13 +52,13 @@ export default function SectionWrapper({ sectionKey, label, children }: Props) {
         <span className="rounded-full border border-border bg-background/95 px-2.5 py-0.5 text-[11px] font-medium text-muted backdrop-blur-sm">
           {label}
         </span>
-        <button
-          type="button"
-          onClick={() => toggle(false)}
-          className="rounded-full border border-border bg-background/95 px-2 py-0.5 text-[11px] font-medium text-muted backdrop-blur-sm hover:text-white"
-        >
-          Hide
-        </button>
+        <ToggleSwitch
+          checked={visible}
+          onChange={toggle}
+          checkedLabel="Visible"
+          uncheckedLabel="Masqué"
+          size="sm"
+        />
       </div>
       {children}
     </div>

@@ -15,6 +15,7 @@ import {
   duplicateVariantAction,
 } from "@/app/actions/admin";
 import { uploadImageFile } from "@/lib/clientUpload";
+import ToggleSwitch from "@/components/ui/ToggleSwitch";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -845,13 +846,17 @@ function DetailsTab({
       </div>
 
       <div className="flex items-center gap-6">
-        <Toggle
-          label="Active (visible in store)"
+        <ToggleSwitch
+          label="Store visibility"
+          checkedLabel="Visible"
+          uncheckedLabel="Masqué"
           checked={draft.active}
           onChange={(v) => update("active", v)}
         />
-        <Toggle
-          label="Featured (homepage popular products)"
+        <ToggleSwitch
+          label="Parent featured"
+          checkedLabel="Featured"
+          uncheckedLabel="Non featured"
           checked={draft.featured}
           onChange={(v) => update("featured", v)}
         />
@@ -1019,8 +1024,20 @@ function VariantForm({
         )}
       </div>
       <div className="mt-4 flex gap-6">
-        <Toggle label="Active" checked={v.active} onChange={(val) => onChange("active", val)} />
-        <Toggle label="Featured" checked={v.featured} onChange={(val) => onChange("featured", val)} />
+        <ToggleSwitch
+          label="Variant"
+          checkedLabel="Active"
+          uncheckedLabel="Hidden"
+          checked={v.active}
+          onChange={(val) => onChange("active", val)}
+        />
+        <ToggleSwitch
+          label="Homepage"
+          checkedLabel="Featured"
+          uncheckedLabel="Non featured"
+          checked={v.featured}
+          onChange={(val) => onChange("featured", val)}
+        />
       </div>
     </>
   );
@@ -1197,26 +1214,22 @@ function VariantsTab({
                 <span className={`text-xs ${v.stockMode === "force_out_of_stock" ? "text-yellow-500" : v.stockMode === "force_in_stock" ? "text-green-400" : "text-muted"}`}>
                   {v.stockMode === "force_in_stock" ? "↑ En stock" : v.stockMode === "force_out_of_stock" ? "↓ En rupture" : `${v.inventoryUnused} codes`}
                 </span>
-                <label className="inline-flex items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={v.active}
-                    onChange={(event) => updateVariant(orig.slug, "active", event.target.checked)}
-                    className="h-4 w-4 accent-[#3e7bfa]"
-                    disabled={saving}
-                  />
-                  Active
-                </label>
-                <label className="inline-flex items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={v.featured}
-                    onChange={(event) => updateVariant(orig.slug, "featured", event.target.checked)}
-                    className="h-4 w-4 accent-[#3e7bfa]"
-                    disabled={saving}
-                  />
-                  Featured
-                </label>
+                <ToggleSwitch
+                  checked={v.active}
+                  checkedLabel="Active"
+                  uncheckedLabel="Hidden"
+                  onChange={(checked) => updateVariant(orig.slug, "active", checked)}
+                  disabled={saving}
+                  size="sm"
+                />
+                <ToggleSwitch
+                  checked={v.featured}
+                  checkedLabel="Featured"
+                  uncheckedLabel="Non featured"
+                  onChange={(checked) => updateVariant(orig.slug, "featured", checked)}
+                  disabled={saving}
+                  size="sm"
+                />
                 <select
                   value={v.stockMode}
                   onChange={(event) => updateVariant(orig.slug, "stockMode", event.target.value)}
@@ -1506,24 +1519,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Toggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 accent-[#3e7bfa]"
-      />
-      <span>{label}</span>
-    </label>
-  );
-}
