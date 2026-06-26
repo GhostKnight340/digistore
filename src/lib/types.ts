@@ -27,6 +27,7 @@ export interface Product {
   deliveryType: string;
   description: string;
   featured?: boolean;
+  stockStatus?: StockStatus;
 }
 
 export interface CartItem {
@@ -41,7 +42,7 @@ export interface OrderItem {
   quantity: number;
   /**
    * Codes assigned by an admin during manual fulfillment. Empty until the
-   * order is delivered — checkout no longer auto-assigns codes.
+   * order is delivered.
    */
   codes: string[];
 }
@@ -49,9 +50,13 @@ export interface OrderItem {
 export type PaymentMethod =
   | "bank"
   | "usdt"
+  | "crypto"
   | "paypal"
   | "card"
-  | "test"; // legacy — kept for backward-compat with old DB records
+  | "test";
+
+export type StockMode = "automatic" | "force_in_stock" | "force_out_of_stock";
+export type StockStatus = "in_stock" | "out_of_stock";
 
 /**
  * Full payment lifecycle:
@@ -87,7 +92,7 @@ export interface Order {
   deliveredAt?: string;
 }
 
-/** Simulated transactional emails — logged only, never actually sent. */
+/** Simulated transactional emails are logged only, never actually sent. */
 export type EmailType =
   | "order_received"
   | "payment_submitted"

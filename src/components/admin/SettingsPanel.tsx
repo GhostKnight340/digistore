@@ -1,34 +1,52 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
-import { useProductCatalog } from "@/context/ProductCatalogContext";
-import type { PaymentMethod } from "@/lib/types";
+import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
+import { categories } from "@/lib/products";
+import type { PaymentMethod, Product, StockMode, StockStatus } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
   test: "Paiement test",
   bank: "Virement bancaire",
-  usdt: "USDT Crypto",
+  usdt: "USDT",
+  crypto: "Crypto",
   paypal: "PayPal",
   card: "Carte bancaire",
 };
 
-const sectionLabels: Record<keyof StoreSettings["homepage"], string> = {
-  showHero: "Afficher le hero",
-  showTrustStrip: "Afficher les indicateurs de confiance",
-  showCategories: "Afficher les catégories",
-  showFeaturedProducts: "Afficher les produits populaires",
-  showWhyChooseUs: "Afficher Pourquoi nous choisir",
-  showFooter: "Afficher le footer",
+const homepageSectionKeys = [
+  "showHero",
+  "showTrustStrip",
+  "showCategories",
+  "showFeaturedProducts",
+  "showHowItWorks",
+  "showWhyChooseUs",
+  "showFooter",
+] as const;
+
+const sectionLabels: Record<(typeof homepageSectionKeys)[number], string> = {
+  showHero: "Hero",
+  showTrustStrip: "Indicateurs de confiance",
+  showCategories: "Catégories populaires",
+  showFeaturedProducts: "Produits populaires",
+  showHowItWorks: "Comment ça marche",
+  showWhyChooseUs: "Pourquoi nous choisir",
+  showFooter: "Footer",
 };
 
 export default function SettingsPanel() {
   const { settings, ready, saveSettings, resetSettings } = useStoreSettings();
-  const { products } = useProductCatalog();
   const [draft, setDraft] = useState<StoreSettings>(settings);
   const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [autoStockStatuses, setAutoStockStatuses] = useState<Record<string, StockStatus>>({});
+
+  useEffect(() => {
+    getStorefrontProductsAction().then(setProducts);
+    getCategoryStockStatusesAction().then(setAutoStockStatuses);
+  }, []);
 
   useEffect(() => {
     setDraft(settings);
@@ -41,7 +59,7 @@ export default function SettingsPanel() {
     setDraft((current) => ({ ...current, [section]: value }));
   }
 
-  async function save() {
+  function save() {
     if (!draft.branding.siteName.trim() || !draft.branding.logoText.trim()) {
       setMessage("Le nom du site et le logo texte sont obligatoires.");
       return;
@@ -63,24 +81,14 @@ export default function SettingsPanel() {
       return;
     }
 
-    setSaving(true);
-    const result = await saveSettings(draft);
-    setSaving(false);
-    setMessage(
-      result.ok ? "Paramètres sauvegardés." : result.error ?? "Sauvegarde impossible.",
-    );
+    saveSettings(draft);
+    setMessage("Paramètres sauvegardés.");
   }
 
-  async function reset() {
-    setSaving(true);
-    const result = await resetSettings();
-    setSaving(false);
-    if (result.ok) {
-      setDraft(defaultStoreSettings);
-      setMessage("Paramètres réinitialisés.");
-    } else {
-      setMessage(result.error ?? "Réinitialisation impossible.");
-    }
+  function reset() {
+    resetSettings();
+    setDraft(defaultStoreSettings);
+    setMessage("Paramètres réinitialisés.");
   }
 
   if (!ready) {
@@ -98,11 +106,11 @@ export default function SettingsPanel() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={reset} className="btn-ghost" disabled={saving}>
+            <button type="button" onClick={reset} className="btn-ghost">
               Reset to defaults
             </button>
-            <button type="button" onClick={save} className="btn-primary" disabled={saving}>
-              {saving ? "Saving..." : "Save settings"}
+            <button type="button" onClick={save} className="btn-primary">
+              Save settings
             </button>
           </div>
         </div>
@@ -162,8 +170,7 @@ export default function SettingsPanel() {
 
       <Panel title="Homepage sections">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(Object.keys(draft.homepage) as Array<keyof StoreSettings["homepage"]>).map(
-            (key) => (
+          {homepageSectionKeys.map((key) => (
               <Toggle
                 key={key}
                 label={sectionLabels[key]}
@@ -172,8 +179,28 @@ export default function SettingsPanel() {
                   update("homepage", { ...draft.homepage, [key]: checked })
                 }
               />
-            ),
-          )}
+            ))}
+        </div>
+      </Panel>
+
+      <Panel title="Category images">
+        <p className="mb-4 text-sm text-muted">
+          Upload or link a custom image for each homepage category card. Leave blank to use the default placeholder.
+        </p>
+        <div className="space-y-4">
+          {categories.map((cat) => (
+            <CategoryMediaRow
+              key={cat.id}
+              label={cat.name}
+              value={draft.categoryMedia?.[cat.id] ?? null}
+              onChange={(url) =>
+                update("categoryMedia", {
+                  ...draft.categoryMedia,
+                  [cat.id]: url,
+                })
+              }
+            />
+          ))}
         </div>
       </Panel>
 
@@ -232,6 +259,81 @@ export default function SettingsPanel() {
               }}
             />
           ))}
+        </div>
+      </Panel>
+
+      <Panel title="Featured products behavior">
+        <p className="mb-4 text-sm text-muted">
+          Control what happens to out-of-stock products in the featured section.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(["show", "hide"] as const).map((opt) => (
+            <label
+              key={opt}
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
+                draft.featuredOutOfStock === opt
+                  ? "border-accent bg-accent/5"
+                  : "border-border bg-base hover:border-border-strong"
+              }`}
+            >
+              <input
+                type="radio"
+                name="featuredOutOfStock"
+                value={opt}
+                checked={draft.featuredOutOfStock === opt}
+                onChange={() => update("featuredOutOfStock", opt)}
+                className="mt-0.5 accent-[#3e7bfa]"
+              />
+              <div>
+                <p className="text-sm font-medium text-white">
+                  {opt === "show" ? "Afficher les produits en rupture" : "Masquer les produits en rupture"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {opt === "show"
+                    ? "Les produits en rupture restent visibles avec leur badge."
+                    : "Les produits en rupture sont masqués de la section produits populaires."}
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="Category stock modes">
+        <p className="mb-4 text-sm text-muted">
+          Override stock display for each category card on the homepage.
+        </p>
+        <div className="space-y-3">
+          {categories.map((cat) => {
+            const mode: StockMode = draft.categoryStockModes?.[cat.id] ?? "automatic";
+            const autoStatus = autoStockStatuses[cat.id];
+            return (
+              <div key={cat.id} className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-base p-4">
+                <div className="min-w-[120px]">
+                  <p className="text-sm font-medium text-white">{cat.name}</p>
+                  {autoStatus && (
+                    <p className={`mt-0.5 text-xs ${autoStatus === "in_stock" ? "text-green-400" : "text-yellow-500"}`}>
+                      Auto: {autoStatus === "in_stock" ? "En stock" : "En rupture"}
+                    </p>
+                  )}
+                </div>
+                <select
+                  className="input flex-1 text-sm"
+                  value={mode}
+                  onChange={(e) =>
+                    update("categoryStockModes", {
+                      ...draft.categoryStockModes,
+                      [cat.id]: e.target.value as StockMode,
+                    })
+                  }
+                >
+                  <option value="automatic">Automatique</option>
+                  <option value="force_in_stock">Toujours En stock</option>
+                  <option value="force_out_of_stock">Toujours En rupture</option>
+                </select>
+              </div>
+            );
+          })}
         </div>
       </Panel>
 
@@ -405,5 +507,98 @@ function Toggle({
       />
       <span>{label}</span>
     </label>
+  );
+}
+
+function CategoryMediaRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(file: File) {
+    setError("");
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const json = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !json.url) throw new Error(json.error ?? "Upload failed");
+      onChange(json.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-base p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-white">{label}</span>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-xs text-faint hover:text-white"
+          >
+            Supprimer
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={value}
+            alt={label}
+            className="h-20 w-32 shrink-0 rounded-lg border border-border object-cover"
+          />
+        ) : (
+          <div className="flex h-20 w-32 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-surface text-xs text-faint">
+            Aucune image
+          </div>
+        )}
+        <div className="flex flex-1 flex-col gap-2">
+          <input
+            type="text"
+            className="input text-sm"
+            placeholder="URL de l'image..."
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value || null)}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+              className="btn-ghost h-8 px-3 text-xs disabled:opacity-50"
+            >
+              {uploading ? "Envoi..." : "Choisir un fichier"}
+            </button>
+            {error && <span className="text-xs text-red-400">{error}</span>}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

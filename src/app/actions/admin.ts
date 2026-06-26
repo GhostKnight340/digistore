@@ -25,12 +25,21 @@ import {
   updateWallet,
   deleteWallet,
 } from "@/lib/db/paymentSettings";
+import {
+  deleteVariant,
+  getParentProducts,
+  saveParentProduct,
+  saveVariant,
+} from "@/lib/db/products";
 import type {
   ActionResult,
   AdminCodeDTO,
   AdminOrderDTO,
   InventoryGroupDTO,
   ItemAssignment,
+  ParentProductDTO,
+  SaveParentProductInput,
+  SaveVariantInput,
 } from "@/lib/dto";
 
 export async function getAdminOrdersAction(): Promise<AdminOrderDTO[]> {
@@ -78,6 +87,26 @@ export async function deliverOrderAction(
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
   return deliverOrder(orderId, assignments);
+}
+
+export async function getParentProductsAction(): Promise<ParentProductDTO[]> {
+  return getParentProducts();
+}
+
+export async function saveParentProductAction(
+  data: SaveParentProductInput,
+): Promise<ActionResult> {
+  return saveParentProduct(data);
+}
+
+export async function saveVariantAction(
+  data: SaveVariantInput,
+): Promise<ActionResult> {
+  return saveVariant(data);
+}
+
+export async function deleteVariantAction(slug: string): Promise<ActionResult> {
+  return deleteVariant(slug);
 }
 
 // ─── Payment settings admin actions ───────────────────────────────────────────

@@ -15,6 +15,7 @@ import InventoryPanel from "@/components/admin/InventoryPanel";
 import PaymentSettingsPanel from "@/components/admin/PaymentSettingsPanel";
 import PaymentsPanel from "@/components/admin/PaymentsPanel";
 import ProductsPanel from "@/components/admin/ProductsPanel";
+import CustomersPanel from "@/components/admin/CustomersPanel";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: "[]" },
@@ -203,7 +204,7 @@ export default function AdminDashboard({
         ) : activeTab === "fulfillment" ? (
           <FulfillmentPanel initialOrders={orders} />
         ) : activeTab === "customers" ? (
-          <CustomersPanel orders={orders} />
+          <CustomersPanel />
         ) : activeTab === "suppliers" ? (
           <RestoredPanel
             title="Supplier API"
@@ -418,71 +419,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-2 text-2xl font-extrabold text-white">{value}</p>
     </div>
-  );
-}
-
-function CustomersPanel({ orders }: { orders: AdminOrderDTO[] }) {
-  const customers = useMemo(() => {
-    const grouped = new Map<
-      string,
-      { name: string; email: string; orders: number; totalMad: number }
-    >();
-
-    for (const order of orders) {
-      const current = grouped.get(order.customerEmail) ?? {
-        name: order.customerName,
-        email: order.customerEmail,
-        orders: 0,
-        totalMad: 0,
-      };
-      current.name = order.customerName || current.name;
-      current.orders += 1;
-      current.totalMad += order.totalMad;
-      grouped.set(order.customerEmail, current);
-    }
-
-    return Array.from(grouped.values()).sort((a, b) =>
-      a.email.localeCompare(b.email),
-    );
-  }, [orders]);
-
-  return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Customers</h2>
-        <p className="mt-1 text-xs text-muted">
-          Customer records derived from current Supabase-backed orders.
-        </p>
-      </div>
-      {customers.length === 0 ? (
-        <p className="px-5 py-8 text-sm text-muted">No customers yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-muted">
-              <tr className="border-b border-border">
-                <th className="px-5 py-3 font-medium">Customer</th>
-                <th className="px-5 py-3 font-medium">Email</th>
-                <th className="px-5 py-3 font-medium">Orders</th>
-                <th className="px-5 py-3 font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((customer) => (
-                <tr key={customer.email} className="border-b border-border/60">
-                  <td className="px-5 py-3 text-white">{customer.name}</td>
-                  <td className="px-5 py-3 text-muted">{customer.email}</td>
-                  <td className="px-5 py-3 text-muted">{customer.orders}</td>
-                  <td className="px-5 py-3 text-white">
-                    {formatMAD(customer.totalMad)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
   );
 }
 

@@ -76,6 +76,78 @@ export interface InventoryGroupDTO {
   codes: AdminCodeDTO[];
 }
 
+// Product management DTOs restored from the historical admin editor. The
+// current DB maps parent fields to Product and variant fields to ProductVariant.
+export interface VariantDTO {
+  id: string;
+  slug: string;
+  name: string;
+  priceMad: number;
+  faceValue: number | null;
+  faceCurrency: string;
+  active: boolean;
+  featured: boolean;
+  stockControl: string;
+  stockMode: string;
+  inventoryUnused: number;
+}
+
+export interface ParentProductDTO {
+  slug: string;
+  name: string;
+  category: string;
+  brand: string | null;
+  region: string;
+  deliveryType: string;
+  description: string;
+  shortDescription: string | null;
+  longDescription: string | null;
+  instructions: string | null;
+  thumbnail: string | null;
+  active: boolean;
+  createdAt: string;
+  variants: VariantDTO[];
+}
+
+export interface SaveParentProductInput {
+  slug: string;
+  name: string;
+  category: string;
+  brand: string | null;
+  region: string;
+  deliveryType: string;
+  description: string;
+  shortDescription: string | null;
+  longDescription: string | null;
+  instructions: string | null;
+  thumbnail: string | null;
+  active: boolean;
+}
+
+export interface SaveVariantInput {
+  slug: string;
+  name: string;
+  parentSlug: string;
+  category: string;
+  priceMad: number;
+  faceValue: number | null;
+  faceCurrency: string;
+  region: string;
+  deliveryType: string;
+  active: boolean;
+  featured: boolean;
+  stockControl: string;
+  stockMode: string;
+}
+
+export interface CustomerDTO {
+  email: string;
+  name: string;
+  orderCount: number;
+  totalSpent: number;
+  lastOrderAt: string;
+}
+
 /** A single delivery assignment entry: either an inventory code or a manual one. */
 export interface AssignmentEntry {
   digitalCodeId?: string;
