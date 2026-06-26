@@ -4,15 +4,15 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import type {
   ActionResult,
   ParentProductDTO,
+  ProductListItemDTO,
   SaveParentProductInput,
   SaveVariantInput,
   VariantDTO,
 } from "@/lib/dto";
 
-type ProductRow = Awaited<ReturnType<typeof readProductRows>>[number];
-
-function readProductRows() {
+function productDetailQuery(where: Parameters<typeof prisma.product.findMany>[0]["where"]) {
   return prisma.product.findMany({
+    where,
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: {
       variants: {
@@ -21,12 +21,18 @@ function readProductRows() {
       media: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
-      digitalCodes: {
-        select: { status: true },
+      _count: {
+        select: { digitalCodes: { where: { status: "unused" } } },
       },
     },
   });
 }
+
+function readProductRows() {
+  return productDetailQuery(undefined);
+}
+
+type ProductRow = Awaited<ReturnType<typeof readProductRows>>[number];
 
 function toVariant(product: ProductRow, variant: ProductRow["variants"][number]): VariantDTO {
   return {
@@ -42,7 +48,7 @@ function toVariant(product: ProductRow, variant: ProductRow["variants"][number])
     featured: variant.featured,
     stockControl: variant.stockControl,
     stockMode: variant.stockMode,
-    inventoryUnused: product.digitalCodes.filter((code) => code.status === "unused").length,
+    inventoryUnused: product._count.digitalCodes,
   };
 }
 
@@ -60,7 +66,7 @@ function productAsFallbackVariant(product: ProductRow): VariantDTO {
     featured: product.featured,
     stockControl: "manual",
     stockMode: "automatic",
-    inventoryUnused: product.digitalCodes.filter((code) => code.status === "unused").length,
+    inventoryUnused: product._count.digitalCodes,
   };
 }
 
@@ -92,6 +98,63 @@ export async function getParentProducts(): Promise<ParentProductDTO[]> {
   await ensureDatabaseReady();
   const products = await readProductRows();
   return products.map(toParent);
+}
+
+export async function getProductList(): Promise<ProductListItemDTO[]> {
+  await ensureDatabaseReady();
+  const rows = await prisma.product.findMany({
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: {
+      slug: true,
+      name: true,
+      category: true,
+      active: true,
+      _count: { select: { variants: true } },
+    },
+  });
+  return rows.map((row) => ({
+    slug: row.slug,
+    name: row.name,
+    category: row.category,
+    active: row.active,
+    variantCount: row._count.variants,
+  }));
+}
+
+export async function getParentProductBySlug(slug: string): Promise<ParentProductDTO | null> {
+  await ensureDatabaseReady();
+  const rows = await productDetailQuery({ slug });
+  return rows[0] ? toParent(rows[0]) : null;
+}
+
+export async function duplicateVariant(variantId: string): Promise<ActionResult & { slug?: string }> {
+  await ensureDatabaseReady();
+  const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+  if (!variant) return { ok: false, error: "Variant not found." };
+
+  const newId = `${variantId}-copy-${Date.now().toString(36)}`;
+  try {
+    await prisma.productVariant.create({
+      data: {
+        id: newId,
+        productId: variant.productId,
+        name: `${variant.name} (copy)`,
+        priceMad: variant.priceMad,
+        faceValue: variant.faceValue,
+        faceCurrency: variant.faceCurrency,
+        stockControl: variant.stockControl,
+        stockMode: variant.stockMode,
+        active: variant.active,
+        featured: false,
+        supplierCost: variant.supplierCost,
+        supplierCurrency: variant.supplierCurrency,
+        sortOrder: variant.sortOrder + 1,
+      },
+    });
+    return { ok: true, slug: newId };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
 }
 
 export async function saveParentProduct(

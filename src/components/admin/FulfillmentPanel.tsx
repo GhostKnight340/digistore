@@ -9,6 +9,7 @@ import {
 } from "@/lib/orderStatus";
 import {
   getAdminOrdersAction,
+  getOrderEmailLogsAction,
   getAvailableCodesAction,
   confirmPaymentAction,
   deliverOrderAction,
@@ -17,14 +18,11 @@ import type {
   AdminOrderDTO,
   AdminCodeDTO,
   AssignmentEntry,
+  EmailLogDTO,
   ItemAssignment,
 } from "@/lib/dto";
 
 type Filter = "todo" | "all";
-
-type FulfillmentPanelProps = {
-  initialOrders?: AdminOrderDTO[];
-};
 
 const LOAD_TIMEOUT_MS = 8000;
 
@@ -40,11 +38,9 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
-export default function FulfillmentPanel({
-  initialOrders = [],
-}: FulfillmentPanelProps) {
-  const [orders, setOrders] = useState<AdminOrderDTO[]>(initialOrders);
-  const [loaded, setLoaded] = useState(true);
+export default function FulfillmentPanel() {
+  const [orders, setOrders] = useState<AdminOrderDTO[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState<Filter>("todo");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -61,6 +57,8 @@ export default function FulfillmentPanel({
       setLoaded(true);
     }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const visibleOrders = useMemo(
     () =>
@@ -195,6 +193,7 @@ function OrderDrawer({
   // Per-item entries: orderItemId -> array (length = quantity).
   const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
   const [available, setAvailable] = useState<Record<string, AdminCodeDTO[]>>({});
+  const [emailLogs, setEmailLogs] = useState<EmailLogDTO[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -204,7 +203,7 @@ function OrderDrawer({
   const isRejectedOrCancelled =
     order.status === "rejected" || order.status === "cancelled";
 
-  // Initialize per-unit entries and load available codes when the order opens.
+  // Initialize per-unit entries and load available codes + email logs when the order opens.
   useEffect(() => {
     const init: Record<string, AssignmentEntry[]> = {};
     for (const item of order.items) {
@@ -219,6 +218,8 @@ function OrderDrawer({
       slugs.forEach((s, i) => (map[s] = lists[i]));
       setAvailable(map);
     });
+
+    getOrderEmailLogsAction(order.id).then(setEmailLogs).catch(() => setEmailLogs([]));
   }, [order.id, order.items]);
 
   function setEntry(itemId: string, index: number, entry: AssignmentEntry) {
@@ -479,14 +480,14 @@ function OrderDrawer({
                 Simulated emails
               </h4>
               <span className="text-xs text-muted">
-                {order.emailLogs.length} logged · none actually sent
+                {emailLogs.length} logged · none actually sent
               </span>
             </div>
-            {order.emailLogs.length === 0 ? (
+            {emailLogs.length === 0 ? (
               <p className="mt-2 text-xs text-muted">No emails yet.</p>
             ) : (
               <ul className="mt-3 space-y-3">
-                {order.emailLogs.map((log) => (
+                {emailLogs.map((log) => (
                   <li
                     key={log.id}
                     className="rounded-lg border border-border bg-base px-3 py-2.5"

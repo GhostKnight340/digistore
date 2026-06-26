@@ -225,6 +225,12 @@ async function ensureDatabaseSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS "ProductMedia_productId_idx" ON "ProductMedia"("productId")`,
     `CREATE INDEX IF NOT EXISTS "ProductVariant_productId_idx" ON "ProductVariant"("productId")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "DeliveredCode_digitalCodeId_key" ON "DeliveredCode"("digitalCodeId") WHERE "digitalCodeId" IS NOT NULL`,
+    // ── Performance indexes ───────────────────────────────────────────────────
+    `CREATE INDEX IF NOT EXISTS "Order_createdAt_idx" ON "Order"("createdAt" DESC)`,
+    `CREATE INDEX IF NOT EXISTS "Order_status_idx" ON "Order"("status")`,
+    `CREATE INDEX IF NOT EXISTS "Order_customerId_idx" ON "Order"("customerId")`,
+    `CREATE INDEX IF NOT EXISTS "Order_customerEmail_idx" ON "Order"("customerEmail")`,
+    `CREATE INDEX IF NOT EXISTS "Product_active_idx" ON "Product"("active")`,
   ];
 
   for (const statement of statements) {

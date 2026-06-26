@@ -2,7 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
-import type { ActionResult, AdminCodeDTO, InventoryGroupDTO } from "@/lib/dto";
+import type { ActionResult, AdminCodeDTO, InventoryGroupDTO, InventorySummaryDTO } from "@/lib/dto";
 
 type CodeRecord = {
   id: string;
@@ -22,6 +22,48 @@ function rowToCode(code: CodeRecord): AdminCodeDTO {
     usedAt: code.usedAt?.toISOString() ?? null,
     createdAt: code.createdAt.toISOString(),
   };
+}
+
+export async function getInventorySummary(): Promise<InventorySummaryDTO[]> {
+  await ensureDatabaseReady();
+  const [productRows, statusGroups] = await Promise.all([
+    prisma.product.findMany({
+      select: { id: true, slug: true, name: true },
+      orderBy: { slug: "asc" },
+    }),
+    prisma.digitalCode.groupBy({
+      by: ["productId", "status"],
+      _count: { _all: true },
+    }),
+  ]);
+
+  const productMap = new Map(productRows.map((p) => [p.id, p]));
+  const result = new Map<string, InventorySummaryDTO>();
+
+  for (const row of statusGroups) {
+    const product = productMap.get(row.productId);
+    if (!product) continue;
+    if (!result.has(product.slug)) {
+      result.set(product.slug, {
+        productId: product.slug,
+        productName: product.name,
+        unused: 0,
+        reserved: 0,
+        used: 0,
+        disabled: 0,
+        total: 0,
+      });
+    }
+    const s = result.get(product.slug)!;
+    const count = row._count._all;
+    s.total += count;
+    if (row.status === "unused") s.unused = count;
+    else if (row.status === "reserved") s.reserved = count;
+    else if (row.status === "used") s.used = count;
+    else if (row.status === "disabled") s.disabled = count;
+  }
+
+  return [...result.values()];
 }
 
 export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {

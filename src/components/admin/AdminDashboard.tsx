@@ -6,9 +6,10 @@ import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
 import {
   getAdminOrdersAction,
-  getInventoryAction,
+  getAdminStatsAction,
+  getInventorySummaryAction,
 } from "@/app/actions/admin";
-import type { AdminOrderDTO, InventoryGroupDTO } from "@/lib/dto";
+import type { AdminOrderDTO, AdminStatsDTO, InventorySummaryDTO } from "@/lib/dto";
 import SettingsPanel from "@/components/admin/SettingsPanel";
 import FulfillmentPanel from "@/components/admin/FulfillmentPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
@@ -36,101 +37,50 @@ const navItems = [
   { id: "refunds", label: "Refunds", icon: "RF" },
 ];
 
-type AdminDashboardProps = {
-  initialOrders: AdminOrderDTO[];
-  initialInventory: InventoryGroupDTO[];
-  initialLoadError?: string | null;
-};
-
-const LOAD_TIMEOUT_MS = 8000;
-
-function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      window.setTimeout(
-        () => reject(new Error(`${label} took too long to respond.`)),
-        LOAD_TIMEOUT_MS,
-      );
-    }),
-  ]);
-}
-
-export default function AdminDashboard({
-  initialOrders,
-  initialInventory,
-  initialLoadError = null,
-}: AdminDashboardProps) {
+export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
-  const [orders, setOrders] = useState<AdminOrderDTO[]>(initialOrders);
-  const [inventory, setInventory] =
-    useState<InventoryGroupDTO[]>(initialInventory);
-  const [loaded, setLoaded] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(initialLoadError);
   const [orderQuery, setOrderQuery] = useState("");
 
-  const load = useCallback(async () => {
-    setLoadError(null);
+  // Overview state — loaded lazily when overview tab is active
+  const [stats, setStats] = useState<AdminStatsDTO | null>(null);
+  const [recentOrders, setRecentOrders] = useState<AdminOrderDTO[]>([]);
+  const [inventorySummary, setInventorySummary] = useState<InventorySummaryDTO[]>([]);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
 
-    const [ordersResult, inventoryResult] = await Promise.allSettled([
-      withTimeout(getAdminOrdersAction(), "Orders"),
-      withTimeout(getInventoryAction(), "Inventory"),
-    ]);
-
-    if (ordersResult.status === "fulfilled") {
-      setOrders(ordersResult.value);
-    } else {
-      console.error("Failed to load admin orders", ordersResult.reason);
+  const loadOverview = useCallback(async () => {
+    setOverviewLoading(true);
+    setOverviewError(null);
+    try {
+      const [orders, summary, statsData] = await Promise.all([
+        getAdminOrdersAction(),
+        getInventorySummaryAction(),
+        getAdminStatsAction(),
+      ]);
+      setRecentOrders(orders);
+      setInventorySummary(summary);
+      setStats(statsData);
+    } catch (e) {
+      setOverviewError(String(e));
+    } finally {
+      setOverviewLoading(false);
     }
-
-    if (inventoryResult.status === "fulfilled") {
-      setInventory(inventoryResult.value);
-    } else {
-      console.error("Failed to load inventory", inventoryResult.reason);
-    }
-
-    const failures = [ordersResult, inventoryResult].filter(
-      (result) => result.status === "rejected",
-    ).length;
-
-    if (failures > 0) {
-      setLoadError(
-        failures === 2
-          ? "Orders and inventory could not be refreshed. Showing the latest loaded data."
-          : ordersResult.status === "rejected"
-            ? "Orders could not be refreshed. Inventory is still available below."
-            : "Inventory could not be refreshed. Recent orders are still available below.",
-      );
-    }
-
-    setLoaded(true);
   }, []);
 
-  // Initial data is rendered by the server, then refreshed only after returning
-  // from another tab so the admin page never gets stuck on a client loading state.
-  const [hasLeftOverview, setHasLeftOverview] = useState(false);
-
+  // Reload overview every time the user navigates to it
   useEffect(() => {
-    if (activeTab !== "overview") {
-      setHasLeftOverview(true);
-      return;
-    }
-    if (hasLeftOverview) load();
-  }, [activeTab, hasLeftOverview, load]);
-
-  const totalRevenue = orders.reduce((sum, order) => sum + order.totalMad, 0);
-  const customers = new Set(orders.map((o) => o.customerEmail)).size;
-  const pendingCount = orders.filter((o) => o.status !== "delivered").length;
+    if (activeTab === "overview") loadOverview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const filteredOrders = useMemo(() => {
     const query = orderQuery.trim().toLowerCase();
-    if (!query) return orders;
-
-    return orders.filter((order) => {
+    if (!query) return recentOrders;
+    return recentOrders.filter((order) => {
       const itemText = order.items
         .map((item) => `${item.productId} ${item.name} ${item.quantity}`)
         .join(" ");
-      const searchable = [
+      return [
         order.id,
         order.customerEmail,
         order.customerName,
@@ -139,11 +89,10 @@ export default function AdminDashboard({
         itemText,
       ]
         .join(" ")
-        .toLowerCase();
-
-      return searchable.includes(query);
+        .toLowerCase()
+        .includes(query);
     });
-  }, [orders, orderQuery]);
+  }, [recentOrders, orderQuery]);
 
   return (
     <div className="container-page py-10">
@@ -196,13 +145,13 @@ export default function AdminDashboard({
         ) : activeTab === "products" ? (
           <ProductsPanel />
         ) : activeTab === "inventory" ? (
-          <InventoryPanel initialGroups={inventory} />
+          <InventoryPanel />
         ) : activeTab === "payments" ? (
           <PaymentsPanel />
         ) : activeTab === "payment-settings" ? (
           <PaymentSettingsPanel />
         ) : activeTab === "fulfillment" ? (
-          <FulfillmentPanel initialOrders={orders} />
+          <FulfillmentPanel />
         ) : activeTab === "customers" ? (
           <CustomersPanel />
         ) : activeTab === "suppliers" ? (
@@ -219,31 +168,36 @@ export default function AdminDashboard({
           />
         ) : (
           <div className="space-y-8">
-            {loadError ? (
+            {overviewError ? (
               <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
-                <p className="font-semibold text-red-50">
-                  Admin data refresh failed
-                </p>
-                <p className="mt-1">{loadError}</p>
+                <p className="font-semibold text-red-50">Admin data failed to load</p>
+                <p className="mt-1">{overviewError}</p>
+                <button
+                  type="button"
+                  onClick={loadOverview}
+                  className="mt-2 text-xs font-medium text-red-300 hover:text-white"
+                >
+                  Retry
+                </button>
               </div>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Stat
                 label="Total orders"
-                value={loaded ? String(orders.length) : "-"}
+                value={overviewLoading ? "…" : stats ? String(stats.totalOrders) : "-"}
               />
               <Stat
                 label="Pending fulfillment"
-                value={loaded ? String(pendingCount) : "-"}
+                value={overviewLoading ? "…" : stats ? String(stats.pendingCount) : "-"}
               />
               <Stat
                 label="Total revenue"
-                value={loaded ? formatMAD(totalRevenue) : "-"}
+                value={overviewLoading ? "…" : stats ? formatMAD(stats.totalRevenue) : "-"}
               />
               <Stat
                 label="Customers"
-                value={loaded ? String(customers) : "-"}
+                value={overviewLoading ? "…" : stats ? String(stats.customerCount) : "-"}
               />
             </div>
 
@@ -268,9 +222,9 @@ export default function AdminDashboard({
                   />
                 </div>
               </div>
-              {!loaded ? (
+              {overviewLoading ? (
                 <p className="px-5 py-8 text-sm text-muted">Loading...</p>
-              ) : orders.length === 0 ? (
+              ) : recentOrders.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-muted">
                   No orders yet. Place a test order to see it here.
                 </p>
@@ -311,9 +265,7 @@ export default function AdminDashboard({
                           </td>
                           <td className="px-5 py-3">
                             <span
-                              className={`chip ${orderStatusBadgeClass(
-                                order.status,
-                              )}`}
+                              className={`chip ${orderStatusBadgeClass(order.status)}`}
                             >
                               {orderStatusShort(order.status)}
                             </span>
@@ -357,30 +309,21 @@ export default function AdminDashboard({
                     </tr>
                   </thead>
                   <tbody>
-                    {!loaded ? (
+                    {overviewLoading ? (
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-5 py-8 text-sm text-muted"
-                        >
+                        <td colSpan={4} className="px-5 py-8 text-sm text-muted">
                           Loading...
                         </td>
                       </tr>
-                    ) : inventory.length === 0 ? (
+                    ) : inventorySummary.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-5 py-8 text-sm text-muted"
-                        >
+                        <td colSpan={4} className="px-5 py-8 text-sm text-muted">
                           No inventory codes yet. Use Manage codes to add stock.
                         </td>
                       </tr>
                     ) : (
-                      inventory.map((row) => (
-                        <tr
-                          key={row.productId}
-                          className="border-b border-border/60"
-                        >
+                      inventorySummary.map((row) => (
+                        <tr key={row.productId} className="border-b border-border/60">
                           <td className="px-5 py-3 font-mono text-xs text-white">
                             {row.productId}
                           </td>

@@ -7,9 +7,10 @@
 // visitor could read inventory or deliver orders.
 
 import { revalidatePath } from "next/cache";
-import { getAdminOrders } from "@/lib/db/orders";
+import { getAdminOrders, getOrderEmailLogs, getAdminStats } from "@/lib/db/orders";
 import {
   getInventoryGroups,
+  getInventorySummary,
   getAvailableCodes,
   addCode,
   addCodesBulk,
@@ -28,7 +29,10 @@ import {
 } from "@/lib/db/paymentSettings";
 import {
   deleteVariant,
+  duplicateVariant,
   getParentProducts,
+  getParentProductBySlug,
+  getProductList,
   saveParentProduct,
   saveVariant,
 } from "@/lib/db/products";
@@ -36,9 +40,13 @@ import type {
   ActionResult,
   AdminCodeDTO,
   AdminOrderDTO,
+  AdminStatsDTO,
+  EmailLogDTO,
   InventoryGroupDTO,
+  InventorySummaryDTO,
   ItemAssignment,
   ParentProductDTO,
+  ProductListItemDTO,
   SaveParentProductInput,
   SaveVariantInput,
 } from "@/lib/dto";
@@ -47,8 +55,20 @@ export async function getAdminOrdersAction(): Promise<AdminOrderDTO[]> {
   return getAdminOrders();
 }
 
+export async function getOrderEmailLogsAction(orderId: string): Promise<EmailLogDTO[]> {
+  return getOrderEmailLogs(orderId);
+}
+
+export async function getAdminStatsAction(): Promise<AdminStatsDTO> {
+  return getAdminStats();
+}
+
 export async function getInventoryAction(): Promise<InventoryGroupDTO[]> {
   return getInventoryGroups();
+}
+
+export async function getInventorySummaryAction(): Promise<InventorySummaryDTO[]> {
+  return getInventorySummary();
 }
 
 export async function getAvailableCodesAction(
@@ -94,6 +114,14 @@ export async function getParentProductsAction(): Promise<ParentProductDTO[]> {
   return getParentProducts();
 }
 
+export async function getProductListAction(): Promise<ProductListItemDTO[]> {
+  return getProductList();
+}
+
+export async function getParentProductBySlugAction(slug: string): Promise<ParentProductDTO | null> {
+  return getParentProductBySlug(slug);
+}
+
 export async function saveParentProductAction(
   data: SaveParentProductInput,
 ): Promise<ActionResult> {
@@ -112,6 +140,14 @@ export async function saveVariantAction(
 
 export async function deleteVariantAction(slug: string): Promise<ActionResult> {
   const result = await deleteVariant(slug);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function duplicateVariantAction(
+  variantId: string,
+): Promise<ActionResult & { slug?: string }> {
+  const result = await duplicateVariant(variantId);
   if (result.ok) revalidatePath("/", "layout");
   return result;
 }

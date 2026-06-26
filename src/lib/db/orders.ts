@@ -58,12 +58,12 @@ function loadOrder(id: string) {
 function loadAdminOrders() {
   return prisma.order.findMany({
     orderBy: { createdAt: "desc" },
+    take: 100,
     include: {
       items: { include: { product: true } },
       deliveredCodes: { include: { product: true, digitalCode: true } },
       paymentProof: { select: { id: true, mimeType: true } },
       paymentEvents: { orderBy: { createdAt: "asc" } },
-      emailLogs: { orderBy: { createdAt: "asc" } },
     },
   });
 }
@@ -100,16 +100,46 @@ export async function getAdminOrders(): Promise<AdminOrderDTO[]> {
 
   return orders.map((order: AdminOrderRecord) => ({
     ...buildCustomerDTO(order),
-    emailLogs: order.emailLogs.map((log) => ({
-      id: log.id,
-      type: log.type,
-      recipient: log.recipient,
-      subject: log.subject,
-      body: log.body,
-      createdAt: iso(log.createdAt),
-    })),
+    emailLogs: [],
     proofMimeType: order.paymentProof?.mimeType ?? null,
   }));
+}
+
+export async function getOrderEmailLogs(orderId: string): Promise<import("@/lib/dto").EmailLogDTO[]> {
+  await ensureDatabaseReady();
+  const logs = await prisma.emailLog.findMany({
+    where: { orderId },
+    orderBy: { createdAt: "asc" },
+  });
+  return logs.map((log) => ({
+    id: log.id,
+    type: log.type,
+    recipient: log.recipient,
+    subject: log.subject,
+    body: log.body,
+    createdAt: iso(log.createdAt),
+  }));
+}
+
+export async function getAdminStats(): Promise<{
+  totalOrders: number;
+  pendingCount: number;
+  totalRevenue: number;
+  customerCount: number;
+}> {
+  await ensureDatabaseReady();
+  const [totalOrders, revenueResult, pendingCount, customerCount] = await Promise.all([
+    prisma.order.count(),
+    prisma.order.aggregate({ _sum: { totalMad: true } }),
+    prisma.order.count({ where: { status: { not: "delivered" } } }),
+    prisma.customer.count(),
+  ]);
+  return {
+    totalOrders,
+    totalRevenue: revenueResult._sum.totalMad ?? 0,
+    pendingCount,
+    customerCount,
+  };
 }
 
 interface CreateOrderInput {

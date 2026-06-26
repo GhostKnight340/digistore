@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { ParentProductDTO, VariantDTO, SaveVariantInput } from "@/lib/dto";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ParentProductDTO, ProductListItemDTO, VariantDTO, SaveVariantInput } from "@/lib/dto";
 import {
-  getParentProductsAction,
+  getProductListAction,
+  getParentProductBySlugAction,
   saveParentProductAction,
   saveVariantAction,
   deleteVariantAction,
+  duplicateVariantAction,
 } from "@/app/actions/admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -57,11 +59,15 @@ function emptyParent(): ParentProductDTO {
 // ─── Main panel ──────────────────────────────────────────────────────────────
 
 export default function ProductsPanel() {
-  const [parents, setParents] = useState<ParentProductDTO[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Lean list for the sidebar
+  const [items, setItems] = useState<ProductListItemDTO[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+
+  // Full detail for the selected product
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [draft, setDraft] = useState<ParentProductDTO | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [activeTab, setActiveTab] = useState<EditorTab>("details");
   const [variantDrafts, setVariantDrafts] = useState<Record<string, VariantDTO>>({});
@@ -71,31 +77,54 @@ export default function ProductsPanel() {
   const [isAddingVariant, setIsAddingVariant] = useState(false);
   const [newVariantDraft, setNewVariantDraft] = useState<VariantDTO | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
+  // Cache: slug → ParentProductDTO so navigating between products is instant
+  const detailCache = useRef<Record<string, ParentProductDTO>>({});
+
+  const loadList = useCallback(async () => {
+    setListLoading(true);
+    setListError(null);
     try {
-      const data = await getParentProductsAction();
-      setParents(data);
+      const data = await getProductListAction();
+      setItems(data);
     } catch (e) {
-      setLoadError(String(e));
+      setListError(String(e));
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadList(); }, [loadList]);
 
-  function openParent(p: ParentProductDTO) {
-    setSelectedSlug(p.slug);
+  async function loadDetail(slug: string): Promise<ParentProductDTO | null> {
+    if (detailCache.current[slug]) return detailCache.current[slug];
+    setDetailLoading(true);
+    try {
+      const data = await getParentProductBySlugAction(slug);
+      if (data) detailCache.current[slug] = data;
+      return data;
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function invalidateCache(slug: string) {
+    delete detailCache.current[slug];
+  }
+
+  async function openParent(item: ProductListItemDTO) {
+    setSelectedSlug(item.slug);
     setIsNew(false);
-    setDraft({ ...p, variants: p.variants.map((v) => ({ ...v })) });
-    setVariantDrafts(Object.fromEntries(p.variants.map((v) => [v.slug, { ...v }])));
     setEditingVariant(null);
     setIsAddingVariant(false);
     setNewVariantDraft(null);
     setActiveTab("details");
     setMsg(null);
+
+    const detail = await loadDetail(item.slug);
+    if (detail) {
+      setDraft({ ...detail, variants: detail.variants.map((v) => ({ ...v })) });
+      setVariantDrafts(Object.fromEntries(detail.variants.map((v) => [v.slug, { ...v }])));
+    }
   }
 
   function openNew() {
@@ -121,9 +150,12 @@ export default function ProductsPanel() {
     if (isNew) {
       setSelectedSlug(null);
       setDraft(null);
-    } else {
-      const original = parents.find((p) => p.slug === selectedSlug);
-      if (original) openParent(original);
+    } else if (selectedSlug) {
+      const cached = detailCache.current[selectedSlug];
+      if (cached) {
+        setDraft({ ...cached, variants: cached.variants.map((v) => ({ ...v })) });
+        setVariantDrafts(Object.fromEntries(cached.variants.map((v) => [v.slug, { ...v }])));
+      }
     }
     setMsg(null);
   }
@@ -138,8 +170,6 @@ export default function ProductsPanel() {
     setMsg(null);
     const newSlug = draft.slug.trim();
     const result = await saveParentProductAction({
-      // Pass the current selectedSlug as originalSlug so slug renames don't
-      // create duplicates — the DB update uses originalSlug as the WHERE key.
       originalSlug: isNew ? undefined : selectedSlug ?? undefined,
       slug: newSlug,
       name: draft.name.trim(),
@@ -157,8 +187,15 @@ export default function ProductsPanel() {
     if (result.ok) {
       setMsg({ text: "Saved.", ok: true });
       setIsNew(false);
-      setSelectedSlug(newSlug); // keep selection in sync if slug was renamed
-      await load();
+      if (selectedSlug && selectedSlug !== newSlug) invalidateCache(selectedSlug);
+      invalidateCache(newSlug);
+      setSelectedSlug(newSlug);
+      await loadList();
+      const detail = await loadDetail(newSlug);
+      if (detail) {
+        setDraft({ ...detail, variants: detail.variants.map((v) => ({ ...v })) });
+        setVariantDrafts(Object.fromEntries(detail.variants.map((v) => [v.slug, { ...v }])));
+      }
     } else {
       setMsg({ text: result.error ?? "Unknown error.", ok: false });
     }
@@ -222,7 +259,7 @@ export default function ProductsPanel() {
       setMsg({ text: "Variant added.", ok: true });
       setIsAddingVariant(false);
       setNewVariantDraft(null);
-      await load();
+      await refreshDetail();
     } else {
       setMsg({ text: result.error ?? "Unknown error.", ok: false });
     }
@@ -235,7 +272,20 @@ export default function ProductsPanel() {
     const result = await deleteVariantAction(slug);
     if (result.ok) {
       setMsg({ text: "Variant deleted.", ok: true });
-      await load();
+      await refreshDetail();
+    } else {
+      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  async function duplicateVariantHandler(slug: string) {
+    setSaving(true);
+    setMsg(null);
+    const result = await duplicateVariantAction(slug);
+    if (result.ok) {
+      setMsg({ text: "Variant duplicated.", ok: true });
+      await refreshDetail();
     } else {
       setMsg({ text: result.error ?? "Unknown error.", ok: false });
     }
@@ -268,11 +318,22 @@ export default function ProductsPanel() {
     if (result.ok) {
       setMsg({ text: `Variant "${v.name}" saved.`, ok: true });
       setEditingVariant(null);
-      await load();
+      await refreshDetail();
     } else {
       setMsg({ text: result.error ?? "Unknown error.", ok: false });
     }
     setSaving(false);
+  }
+
+  async function refreshDetail() {
+    if (!selectedSlug || selectedSlug === "__new__") return;
+    invalidateCache(selectedSlug);
+    await loadList();
+    const detail = await loadDetail(selectedSlug);
+    if (detail) {
+      setDraft({ ...detail, variants: detail.variants.map((v) => ({ ...v })) });
+      setVariantDrafts(Object.fromEntries(detail.variants.map((v) => [v.slug, { ...v }])));
+    }
   }
 
   return (
@@ -283,18 +344,18 @@ export default function ProductsPanel() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
               <h2 className="text-sm font-bold text-white">Products</h2>
-              <p className="text-xs text-muted">{parents.length} parent product{parents.length !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-muted">{items.length} parent product{items.length !== 1 ? "s" : ""}</p>
             </div>
             <button type="button" onClick={openNew} className="btn-primary py-1 text-xs">
               + New
             </button>
           </div>
 
-          {loading ? (
+          {listLoading ? (
             <p className="px-4 py-6 text-sm text-muted">Loading…</p>
-          ) : loadError ? (
-            <p className="px-4 py-6 text-sm text-red-400 break-all">{loadError}</p>
-          ) : parents.length === 0 ? (
+          ) : listError ? (
+            <p className="px-4 py-6 text-sm text-red-400 break-all">{listError}</p>
+          ) : items.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted">
               <p className="font-medium text-white">No products yet.</p>
               <p className="mt-1 text-xs">Run the Supabase setup SQL to seed parent products, or click + New.</p>
@@ -302,7 +363,7 @@ export default function ProductsPanel() {
           ) : (
             <div className="divide-y divide-border">
               {CATEGORIES.map((catId) => {
-                const group = parents.filter((p) => p.category === catId);
+                const group = items.filter((p) => p.category === catId);
                 if (group.length === 0) return null;
                 return (
                   <div key={catId}>
@@ -329,7 +390,7 @@ export default function ProductsPanel() {
                             {p.name}
                           </p>
                           <p className="text-xs text-muted">
-                            {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
+                            {p.variantCount} variant{p.variantCount !== 1 ? "s" : ""}
                             {" · "}
                             {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
                           </p>
@@ -340,7 +401,7 @@ export default function ProductsPanel() {
                 );
               })}
               {/* Products with unknown/custom categories */}
-              {parents.filter((p) => !(CATEGORIES as readonly string[]).includes(p.category)).map((p) => (
+              {items.filter((p) => !(CATEGORIES as readonly string[]).includes(p.category)).map((p) => (
                 <button
                   key={p.slug}
                   type="button"
@@ -358,7 +419,7 @@ export default function ProductsPanel() {
                       {p.name}
                     </p>
                     <p className="text-xs text-muted">
-                      {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
+                      {p.variantCount} variant{p.variantCount !== 1 ? "s" : ""}
                       {" · "}
                       {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
                     </p>
@@ -371,7 +432,11 @@ export default function ProductsPanel() {
       </aside>
 
       {/* ── Right: editor ── */}
-      {!draft ? (
+      {detailLoading ? (
+        <div className="card flex items-center justify-center p-16 text-center">
+          <p className="text-sm text-muted">Loading…</p>
+        </div>
+      ) : !draft ? (
         <div className="card flex items-center justify-center p-16 text-center">
           <div>
             <p className="text-3xl">🛍️</p>
@@ -444,6 +509,7 @@ export default function ProductsPanel() {
                   onSaveNewVariant={saveNewVariant}
                   onCancelNewVariant={cancelAddVariant}
                   onDeleteVariant={deleteVariantHandler}
+                  onDuplicateVariant={duplicateVariantHandler}
                 />
               )}
               {activeTab === "media" && <MediaTab draft={draft} update={updateDraft} />}
@@ -710,6 +776,7 @@ function VariantsTab({
   onSaveNewVariant,
   onCancelNewVariant,
   onDeleteVariant,
+  onDuplicateVariant,
 }: {
   draft: ParentProductDTO;
   variantDrafts: Record<string, VariantDTO>;
@@ -725,6 +792,7 @@ function VariantsTab({
   onSaveNewVariant: () => Promise<void>;
   onCancelNewVariant: () => void;
   onDeleteVariant: (slug: string) => Promise<void>;
+  onDuplicateVariant: (slug: string) => Promise<void>;
 }) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -775,7 +843,7 @@ function VariantsTab({
       {draft.variants.length === 0 && !isAddingVariant && (
         <div className="rounded-xl border border-border bg-base px-6 py-10 text-center text-sm text-muted">
           <p>No variants yet.</p>
-          <p className="mt-1 text-xs">Click &ldquo;+ Add variant&rdquo; above to create the first variant.</p>
+          <p className="mt-1 text-xs">Click &ldquo;+ Add variant&rdquo; above to create the first denomination.</p>
         </div>
       )}
 
@@ -827,6 +895,14 @@ function VariantsTab({
                       disabled={saving}
                     >
                       Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDuplicateVariant(orig.slug)}
+                      className="text-xs font-medium text-muted hover:text-white"
+                      disabled={saving}
+                    >
+                      Duplicate
                     </button>
                     {isConfirming ? (
                       <div className="flex items-center gap-1">

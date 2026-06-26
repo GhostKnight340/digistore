@@ -56,6 +56,13 @@ export interface AdminOrderDTO extends CustomerOrderDTO {
   proofMimeType: string | null;
 }
 
+export interface AdminStatsDTO {
+  totalOrders: number;
+  pendingCount: number;
+  totalRevenue: number;
+  customerCount: number;
+}
+
 export interface AdminCodeDTO {
   id: string;
   code: string;
@@ -74,6 +81,24 @@ export interface InventoryGroupDTO {
   used: number;
   disabled: number;
   codes: AdminCodeDTO[];
+}
+
+export interface InventorySummaryDTO {
+  productId: string;
+  productName: string;
+  unused: number;
+  reserved: number;
+  used: number;
+  disabled: number;
+  total: number;
+}
+
+export interface ProductListItemDTO {
+  slug: string;
+  name: string;
+  category: string;
+  active: boolean;
+  variantCount: number;
 }
 
 // Product management DTOs restored from the historical admin editor. The

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatDate } from "@/lib/format";
 import {
   getInventoryAction,
@@ -17,10 +17,6 @@ const STATUS_STYLES: Record<string, string> = {
   disabled: "bg-red-500/15 text-red-400",
 };
 
-type InventoryPanelProps = {
-  initialGroups?: InventoryGroupDTO[];
-};
-
 const LOAD_TIMEOUT_MS = 8000;
 
 function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
@@ -35,11 +31,9 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
-export default function InventoryPanel({
-  initialGroups = [],
-}: InventoryPanelProps) {
-  const [groups, setGroups] = useState<InventoryGroupDTO[]>(initialGroups);
-  const [loaded, setLoaded] = useState(true);
+export default function InventoryPanel() {
+  const [groups, setGroups] = useState<InventoryGroupDTO[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [openSlug, setOpenSlug] = useState<string | null>(null);
 
@@ -55,6 +49,8 @@ export default function InventoryPanel({
       setLoaded(true);
     }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="space-y-6">

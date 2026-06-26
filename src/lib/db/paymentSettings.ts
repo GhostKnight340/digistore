@@ -45,7 +45,14 @@ const DEFAULT_METHODS: PaymentMethodConfigDTO[] = [
   },
 ];
 
+let defaultsPromise: Promise<void> | null = null;
+
 async function ensureDefaults(): Promise<void> {
+  defaultsPromise ??= runEnsureDefaults();
+  return defaultsPromise;
+}
+
+async function runEnsureDefaults(): Promise<void> {
   await ensureDatabaseReady();
   const count = await prisma.paymentMethodConfig.count();
   if (count === 0) {
