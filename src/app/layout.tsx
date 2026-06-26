@@ -6,6 +6,7 @@ import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export default async function RootLayout({
             </StoreProvider>
           </ProductCatalogProvider>
         </StoreSettingsProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
