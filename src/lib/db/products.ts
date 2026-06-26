@@ -103,38 +103,34 @@ export async function saveParentProduct(
 
   await ensureDatabaseReady();
 
+  const productData = {
+    name: data.name,
+    category: data.category,
+    brand: data.brand,
+    region: data.region,
+    deliveryType: data.deliveryType,
+    description: data.description,
+    shortDescription: data.shortDescription,
+    longDescription: data.longDescription,
+    instructions: data.instructions,
+    imageUrl: data.thumbnail || null,
+    active: data.active,
+  };
+
   try {
-    await prisma.product.upsert({
-      where: { slug: data.slug },
-      update: {
-        name: data.name,
-        category: data.category,
-        brand: data.brand,
-        region: data.region,
-        deliveryType: data.deliveryType,
-        description: data.description,
-        shortDescription: data.shortDescription,
-        longDescription: data.longDescription,
-        instructions: data.instructions,
-        imageUrl: data.thumbnail || null,
-        active: data.active,
-      },
-      create: {
-        slug: data.slug,
-        name: data.name,
-        category: data.category,
-        brand: data.brand,
-        region: data.region,
-        deliveryType: data.deliveryType,
-        description: data.description,
-        shortDescription: data.shortDescription,
-        longDescription: data.longDescription,
-        instructions: data.instructions,
-        imageUrl: data.thumbnail || null,
-        active: data.active,
-        priceMad: 0,
-      },
-    });
+    if (data.originalSlug) {
+      // Editing existing product — use original slug as the lookup key so
+      // renaming the slug doesn't create a duplicate.
+      await prisma.product.update({
+        where: { slug: data.originalSlug },
+        data: { ...productData, slug: data.slug },
+      });
+    } else {
+      // Creating a new product.
+      await prisma.product.create({
+        data: { ...productData, slug: data.slug, priceMad: 0 },
+      });
+    }
     return { ok: true };
   } catch (error) {
     return { ok: false, error: String(error) };
@@ -171,7 +167,6 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       });
       return { ok: true };
     }
-
 
     const existing =
       product.variants.find((variant) => variant.id === data.slug) ??

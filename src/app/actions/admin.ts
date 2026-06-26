@@ -6,6 +6,7 @@
 // Server Actions are publicly invokable endpoints, so without this check any
 // visitor could read inventory or deliver orders.
 
+import { revalidatePath } from "next/cache";
 import { getAdminOrders } from "@/lib/db/orders";
 import {
   getInventoryGroups,
@@ -96,17 +97,23 @@ export async function getParentProductsAction(): Promise<ParentProductDTO[]> {
 export async function saveParentProductAction(
   data: SaveParentProductInput,
 ): Promise<ActionResult> {
-  return saveParentProduct(data);
+  const result = await saveParentProduct(data);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
 }
 
 export async function saveVariantAction(
   data: SaveVariantInput,
 ): Promise<ActionResult> {
-  return saveVariant(data);
+  const result = await saveVariant(data);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
 }
 
 export async function deleteVariantAction(slug: string): Promise<ActionResult> {
-  return deleteVariant(slug);
+  const result = await deleteVariant(slug);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
 }
 
 // ─── Payment settings admin actions ───────────────────────────────────────────

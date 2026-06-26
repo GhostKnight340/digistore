@@ -136,8 +136,12 @@ export default function ProductsPanel() {
     }
     setSaving(true);
     setMsg(null);
+    const newSlug = draft.slug.trim();
     const result = await saveParentProductAction({
-      slug: draft.slug.trim(),
+      // Pass the current selectedSlug as originalSlug so slug renames don't
+      // create duplicates — the DB update uses originalSlug as the WHERE key.
+      originalSlug: isNew ? undefined : selectedSlug ?? undefined,
+      slug: newSlug,
       name: draft.name.trim(),
       category: draft.category,
       brand: draft.brand?.trim() || null,
@@ -153,6 +157,7 @@ export default function ProductsPanel() {
     if (result.ok) {
       setMsg({ text: "Saved.", ok: true });
       setIsNew(false);
+      setSelectedSlug(newSlug); // keep selection in sync if slug was renamed
       await load();
     } else {
       setMsg({ text: result.error ?? "Unknown error.", ok: false });

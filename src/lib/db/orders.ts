@@ -205,3 +205,15 @@ export async function createOrder(
     return null;
   }
 }
+
+export async function findOrderByEmailAndId(
+  id: string,
+  email: string,
+): Promise<{ id: string } | null> {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findFirst({
+    where: { id, customerEmail: email },
+    select: { id: true },
+  });
+  return order ?? null;
+}

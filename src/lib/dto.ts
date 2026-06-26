@@ -112,6 +112,7 @@ export interface ParentProductDTO {
 }
 
 export interface SaveParentProductInput {
+  originalSlug?: string; // WHERE key for updates; absent means create new
   slug: string;
   name: string;
   category: string;
