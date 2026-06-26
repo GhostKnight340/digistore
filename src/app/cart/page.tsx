@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
-import { getProduct } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
 
 export default function CartPage() {
   const { cart, ready, cartTotal, setQuantity, removeFromCart } = useStore();
+  const { getProduct } = useProductCatalog();
 
   if (!ready) {
     return (

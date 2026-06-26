@@ -7,18 +7,20 @@ export type CategoryId =
   | "valorant";
 
 export interface Category {
-  id: CategoryId;
+  id: string;
   name: string;
   tagline: string;
   /** Tailwind gradient classes used for the placeholder artwork. */
   gradient: string;
   icon: string;
+  productCount?: number;
 }
 
 export interface Product {
   id: string;
   name: string;
-  category: CategoryId;
+  category: string;
+  categoryName?: string;
   region: string;
   /** Price in Moroccan Dirham. */
   price: number;
@@ -104,7 +106,7 @@ export interface EmailLog {
   createdAt: string;
 }
 
-/** A single redeemable code tracked in the local mock inventory. */
+/** A single redeemable inventory code tracked in PostgreSQL. */
 export interface InventoryCode {
   id: string;
   productId: string;

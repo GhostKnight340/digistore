@@ -1,10 +1,9 @@
 import Link from "next/link";
 import type { Category } from "@/lib/types";
-import { getProductsByCategory } from "@/lib/products";
 import ProductArt from "./ProductArt";
 
 export default function CategoryCard({ category }: { category: Category }) {
-  const count = getProductsByCategory(category.id).length;
+  const count = category.productCount ?? 0;
   return (
     <Link
       href={`/products?category=${category.id}`}

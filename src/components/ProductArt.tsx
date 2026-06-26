@@ -1,5 +1,3 @@
-import { getCategory } from "@/lib/products";
-import type { CategoryId } from "@/lib/types";
 /**
  * Placeholder product/category artwork. Phase 1 ships no real images, so we
  * render a premium branded placeholder tile.
@@ -9,12 +7,11 @@ export default function ProductArt({
   label,
   className = "",
 }: {
-  category: CategoryId;
+  category: string;
   label?: string;
   className?: string;
 }) {
-  const cat = getCategory(category);
-  const code = (cat?.name ?? category).split(" ")[0].toUpperCase();
+  const code = category.split(" ")[0].toUpperCase();
 
   return (
     <div

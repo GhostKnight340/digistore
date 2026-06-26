@@ -13,7 +13,7 @@ import {
 import { getPaymentPageDataAction, submitPaymentAction } from "@/app/actions/payments";
 import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
-import { getProduct } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
 import type { BankDTO, CryptoWalletDTO, PaymentMethodConfigDTO } from "@/lib/dto";
 
@@ -36,9 +36,15 @@ export default function PaymentPage({
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
-    const result = await getPaymentPageDataAction(id);
-    setData(result);
-    setReady(true);
+    try {
+      const result = await getPaymentPageDataAction(id);
+      setData(result);
+    } catch (error) {
+      console.error("[payment] Failed to load order", error);
+      setError("Impossible de charger la commande. Veuillez reessayer.");
+    } finally {
+      setReady(true);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -71,7 +77,9 @@ export default function PaymentPage({
     return (
       <div className="container-page py-10">
         <div className="card grid place-items-center px-6 py-20 text-center">
-          <p className="text-lg font-semibold text-white">Commande introuvable</p>
+          <p className="text-lg font-semibold text-white">
+            {error || "Commande introuvable"}
+          </p>
           <Link href="/products" className="btn-primary mt-6">
             Parcourir le catalogue
           </Link>
@@ -500,6 +508,7 @@ function PendingPaymentSection({
 // ─── Section: Delivered ───────────────────────────────────────────────────────
 
 function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
+  const { getProduct } = useProductCatalog();
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-4 text-center">

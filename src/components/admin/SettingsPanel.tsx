@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
-import { products } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import type { PaymentMethod } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -25,8 +25,10 @@ const sectionLabels: Record<keyof StoreSettings["homepage"], string> = {
 
 export default function SettingsPanel() {
   const { settings, ready, saveSettings, resetSettings } = useStoreSettings();
+  const { products } = useProductCatalog();
   const [draft, setDraft] = useState<StoreSettings>(settings);
   const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraft(settings);
@@ -39,7 +41,7 @@ export default function SettingsPanel() {
     setDraft((current) => ({ ...current, [section]: value }));
   }
 
-  function save() {
+  async function save() {
     if (!draft.branding.siteName.trim() || !draft.branding.logoText.trim()) {
       setMessage("Le nom du site et le logo texte sont obligatoires.");
       return;
@@ -61,14 +63,24 @@ export default function SettingsPanel() {
       return;
     }
 
-    saveSettings(draft);
-    setMessage("Paramètres sauvegardés.");
+    setSaving(true);
+    const result = await saveSettings(draft);
+    setSaving(false);
+    setMessage(
+      result.ok ? "Paramètres sauvegardés." : result.error ?? "Sauvegarde impossible.",
+    );
   }
 
-  function reset() {
-    resetSettings();
-    setDraft(defaultStoreSettings);
-    setMessage("Paramètres réinitialisés.");
+  async function reset() {
+    setSaving(true);
+    const result = await resetSettings();
+    setSaving(false);
+    if (result.ok) {
+      setDraft(defaultStoreSettings);
+      setMessage("Paramètres réinitialisés.");
+    } else {
+      setMessage(result.error ?? "Réinitialisation impossible.");
+    }
   }
 
   if (!ready) {
@@ -86,11 +98,11 @@ export default function SettingsPanel() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={reset} className="btn-ghost">
+            <button type="button" onClick={reset} className="btn-ghost" disabled={saving}>
               Reset to defaults
             </button>
-            <button type="button" onClick={save} className="btn-primary">
-              Save settings
+            <button type="button" onClick={save} className="btn-primary" disabled={saving}>
+              {saving ? "Saving..." : "Save settings"}
             </button>
           </div>
         </div>

@@ -6,7 +6,7 @@
  * Run with: npm run prisma:seed
  */
 import { PrismaClient } from "@prisma/client";
-import { products } from "../src/lib/products";
+import { categories, products } from "../src/lib/products";
 
 const prisma = new PrismaClient();
 
@@ -31,25 +31,54 @@ const seedCodes: Record<string, string[]> = {
 };
 
 async function main() {
-  for (const product of products) {
+  for (const [index, category] of categories.entries()) {
+    await prisma.category.upsert({
+      where: { id: category.id },
+      update: {
+        name: category.name,
+        tagline: category.tagline,
+        gradient: category.gradient,
+        icon: category.icon,
+        active: true,
+        sortOrder: index,
+      },
+      create: {
+        id: category.id,
+        name: category.name,
+        tagline: category.tagline,
+        gradient: category.gradient,
+        icon: category.icon,
+        active: true,
+        sortOrder: index,
+      },
+    });
+  }
+
+  for (const [index, product] of products.entries()) {
     const record = await prisma.product.upsert({
       where: { slug: product.id },
       update: {
         name: product.name,
         category: product.category,
+        description: product.description,
         priceMad: product.price,
         region: product.region,
         deliveryType: product.deliveryType,
+        featured: Boolean(product.featured),
         active: true,
+        sortOrder: index,
       },
       create: {
         slug: product.id,
         name: product.name,
         category: product.category,
+        description: product.description,
         priceMad: product.price,
         region: product.region,
         deliveryType: product.deliveryType,
+        featured: Boolean(product.featured),
         active: true,
+        sortOrder: index,
       },
     });
 

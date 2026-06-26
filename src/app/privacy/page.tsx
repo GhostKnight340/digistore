@@ -16,8 +16,8 @@ export default function PrivacyPage() {
             Données stockées
           </h2>
           <p>
-            Dans ce prototype, votre panier et votre historique de commandes
-            sont stockés uniquement dans votre navigateur avec localStorage.
+            Votre panier avant checkout peut etre stocke dans votre navigateur.
+            Les commandes et paiements sont conserves dans notre base Supabase.
             Rien n'est envoyé à un serveur, et le nom ou l'email saisi au
             paiement ne quitte pas votre appareil.
           </p>

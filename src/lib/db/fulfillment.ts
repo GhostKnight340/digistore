@@ -97,14 +97,17 @@ export async function deliverOrder(
               throw new Error("Selected code is no longer available.");
             }
 
-            await tx.digitalCode.update({
-              where: { id: entry.digitalCodeId },
+            const claim = await tx.digitalCode.updateMany({
+              where: { id: entry.digitalCodeId, status: "unused" },
               data: {
                 status: "used",
                 assignedOrderId: orderId,
                 usedAt: new Date(),
               },
             });
+            if (claim.count !== 1) {
+              throw new Error("Selected code is no longer available.");
+            }
             digitalCodeId = entry.digitalCodeId;
           } else {
             manualCode = entry.manualCode!.trim();

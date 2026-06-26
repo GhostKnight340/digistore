@@ -150,8 +150,18 @@ export async function createOrder(
 
   try {
     const order = await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.upsert({
+        where: { email: input.customerEmail },
+        update: { name: input.customerName },
+        create: {
+          name: input.customerName,
+          email: input.customerEmail,
+        },
+      });
+
       const created = await tx.order.create({
         data: {
+          customerId: customer.id,
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           paymentMethod: input.paymentMethod,

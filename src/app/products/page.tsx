@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { categories, products } from "@/lib/products";
 import ProductCard from "@/components/ProductCard";
+import { getCatalogData } from "@/lib/db/catalog";
 
 export const metadata = {
   title: "Catalogue - Karta",
@@ -13,6 +13,7 @@ export default async function ProductsPage({
 }) {
   const { category, q } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
+  const { categories, products } = await getCatalogData();
 
   let filtered = products;
   if (category) {
@@ -71,12 +72,12 @@ export default async function ProductsPage({
 
       {filtered.length === 0 ? (
         <div className="card grid place-items-center px-6 py-20 text-center">
-          <p className="text-lg font-semibold text-white">Aucun produit trouvé</p>
+          <p className="text-lg font-semibold text-white">Aucun produit trouve</p>
           <p className="mt-1 text-sm text-muted">
-            Essayez une autre catégorie ou un autre terme.
+            Essayez une autre categorie ou un autre terme.
           </p>
           <Link href="/products" className="btn-primary mt-6">
-            Réinitialiser
+            Reinitialiser
           </Link>
         </div>
       ) : (

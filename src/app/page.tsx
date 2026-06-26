@@ -1,40 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { categories, products } from "@/lib/products";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
 import HeroDeliveryCard from "@/components/HeroDeliveryCard";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 
 const steps = [
-  {
-    n: 1,
-    title: "Choisissez un produit",
-    text: "Sélectionnez une carte et la quantité.",
-  },
-  {
-    n: 2,
-    title: "Paiement sécurisé",
-    text: "Entrez votre email et payez simplement.",
-  },
-  {
-    n: 3,
-    title: "Recevez le code",
-    text: "Votre code apparaît instantanément.",
-  },
+  { n: 1, title: "Choisissez un produit", text: "Selectionnez une carte et la quantite." },
+  { n: 2, title: "Paiement securise", text: "Entrez votre email et payez simplement." },
+  { n: 3, title: "Recevez le code", text: "Votre code apparait apres confirmation." },
 ];
 
 export default function HomePage() {
   const { settings } = useStoreSettings();
+  const { categories, products } = useProductCatalog();
   const featured =
     settings.featuredProductIds.length > 0
       ? settings.featuredProductIds
           .map((id) => products.find((product) => product.id === id))
-          .filter((product): product is (typeof products)[number] =>
-            Boolean(product),
-          )
+          .filter((product): product is (typeof products)[number] => Boolean(product))
       : products.filter((product) => product.featured);
 
   return (
@@ -46,7 +33,7 @@ export default function HomePage() {
             <div>
               <span className="chip">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_10px_var(--tw-shadow-color)] shadow-accent" />
-                Cartes &amp; codes numériques
+                Cartes &amp; codes numeriques
               </span>
               <h1 className="mt-6 max-w-xl text-5xl font-semibold leading-[1.04] tracking-[-0.035em] text-text sm:text-6xl">
                 {settings.branding.heroTitle}
@@ -55,47 +42,14 @@ export default function HomePage() {
                 {settings.branding.heroSubtitle}
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/products"
-                  className="btn-primary h-12 px-6 text-[15px]"
-                >
+                <Link href="/products" className="btn-primary h-12 px-6 text-[15px]">
                   {settings.branding.primaryCtaLabel}
                 </Link>
-                <Link
-                  href="#how-it-works"
-                  className="btn-ghost h-12 px-6 text-[15px]"
-                >
+                <Link href="#how-it-works" className="btn-ghost h-12 px-6 text-[15px]">
                   {settings.branding.secondaryCtaLabel}
                 </Link>
               </div>
-              {settings.homepage.showTrustStrip && (
-              <div className="mt-9 flex flex-wrap gap-x-7 gap-y-3">
-                {[
-                  "Livraison instantanée",
-                  "Paiement sécurisé",
-                  "Support local",
-                ].map((text) => (
-                  <span
-                    key={text}
-                    className="flex items-center gap-2 text-sm text-muted"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2.2}
-                      className="h-4 w-4 text-accent"
-                      aria-hidden
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  {text}
-                </span>
-              ))}
             </div>
-              )}
-            </div>
-
             <HeroDeliveryCard />
           </div>
         </section>
@@ -106,16 +60,13 @@ export default function HomePage() {
           <div className="flex items-end justify-between gap-6">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text">
-                Catégories populaires
+                Categories populaires
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Les plateformes les plus demandées au Maroc.
+                Les plateformes les plus demandees au Maroc.
               </p>
             </div>
-            <Link
-              href="/products"
-              className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block"
-            >
+            <Link href="/products" className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block">
               Tout voir -&gt;
             </Link>
           </div>
@@ -135,30 +86,34 @@ export default function HomePage() {
                 Produits populaires
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Sélection vérifiée, codes livrés par email.
+                Selection verifiee, codes livres apres paiement.
               </p>
             </div>
-            <Link
-              href="/products"
-              className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block"
-            >
+            <Link href="/products" className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block">
               Tout voir -&gt;
             </Link>
           </div>
-          <div className="mt-8 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
-            {featured.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {featured.length === 0 ? (
+            <div className="card mt-8 px-6 py-12 text-center text-sm text-muted">
+              Aucun produit populaire n'est disponible pour le moment.
+            </div>
+          ) : (
+            <div className="mt-8 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
+              {featured.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
-      <section id="how-it-works" className="mt-16 scroll-mt-20">
+      {settings.homepage.showWhyChooseUs && (
+        <section id="how-it-works" className="mt-16 scroll-mt-20">
           <h2 className="text-2xl font-semibold tracking-tight text-text">
-            Comment ça marche
+            Comment ca marche
           </h2>
           <p className="mt-1 text-sm text-muted">
-            Trois étapes, en moins d'une minute.
+            Trois etapes, en moins d'une minute.
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             {steps.map((step) => (
@@ -171,17 +126,18 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-      </section>
+        </section>
+      )}
 
-      <TrustStrip />
+      {settings.homepage.showTrustStrip && <TrustStrip />}
 
       <section className="mt-16">
         <div className="relative overflow-hidden rounded-[20px] border border-accent/30 bg-gradient-to-br from-accent/20 to-surface px-6 py-12 text-center sm:py-16">
           <h2 className="text-2xl font-semibold tracking-tight text-text sm:text-3xl">
-            Prêt à jouer?
+            Pret a jouer?
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            Choisissez une carte et recevez votre code en quelques secondes.
+            Choisissez une carte et suivez votre commande apres paiement.
           </p>
           <Link href="/products" className="btn-primary mt-6">
             {settings.branding.primaryCtaLabel}

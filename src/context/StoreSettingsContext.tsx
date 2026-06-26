@@ -9,32 +9,24 @@ import {
   useState,
 } from "react";
 import {
-  STORE_SETTINGS_KEY,
   defaultStoreSettings,
   mergeStoreSettings,
   type StoreSettings,
 } from "@/lib/storeSettings";
+import { saveStoreSettingsAction } from "@/app/actions/catalog";
+
+type SaveResult = { ok: boolean; error?: string };
 
 type StoreSettingsContextValue = {
   settings: StoreSettings;
   ready: boolean;
-  saveSettings: (settings: StoreSettings) => void;
-  resetSettings: () => void;
+  saveSettings: (settings: StoreSettings) => Promise<SaveResult>;
+  resetSettings: () => Promise<SaveResult>;
 };
 
 const StoreSettingsContext = createContext<StoreSettingsContextValue | null>(
   null,
 );
-
-function readSettings(): StoreSettings {
-  if (typeof window === "undefined") return defaultStoreSettings;
-  try {
-    const raw = window.localStorage.getItem(STORE_SETTINGS_KEY);
-    return raw ? mergeStoreSettings(JSON.parse(raw)) : defaultStoreSettings;
-  } catch {
-    return defaultStoreSettings;
-  }
-}
 
 function applyTheme(settings: StoreSettings) {
   if (typeof document === "undefined") return;
@@ -46,34 +38,39 @@ function applyTheme(settings: StoreSettings) {
 }
 
 export function StoreSettingsProvider({
+  initialSettings,
   children,
 }: {
+  initialSettings?: StoreSettings;
   children: React.ReactNode;
 }) {
-  const [settings, setSettings] = useState<StoreSettings>(defaultStoreSettings);
+  const initial = mergeStoreSettings(initialSettings ?? defaultStoreSettings);
+  const [settings, setSettings] = useState<StoreSettings>(initial);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const stored = readSettings();
-    setSettings(stored);
-    applyTheme(stored);
+    applyTheme(initial);
     setReady(true);
-  }, []);
+  }, [initial]);
 
   useEffect(() => {
     applyTheme(settings);
   }, [settings]);
 
-  const saveSettings = useCallback((nextSettings: StoreSettings) => {
+  const saveSettings = useCallback(async (nextSettings: StoreSettings) => {
     const merged = mergeStoreSettings(nextSettings);
-    setSettings(merged);
-    window.localStorage.setItem(STORE_SETTINGS_KEY, JSON.stringify(merged));
+    const result = await saveStoreSettingsAction(merged);
+    if (result.ok) setSettings(merged);
+    return result;
   }, []);
 
-  const resetSettings = useCallback(() => {
-    setSettings(defaultStoreSettings);
-    window.localStorage.removeItem(STORE_SETTINGS_KEY);
-    applyTheme(defaultStoreSettings);
+  const resetSettings = useCallback(async () => {
+    const result = await saveStoreSettingsAction(defaultStoreSettings);
+    if (result.ok) {
+      setSettings(defaultStoreSettings);
+      applyTheme(defaultStoreSettings);
+    }
+    return result;
   }, []);
 
   const value = useMemo(

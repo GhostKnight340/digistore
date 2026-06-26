@@ -42,9 +42,14 @@ export default function PaymentsPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await getAdminOrdersAction();
-    setOrders(data);
-    setLoaded(true);
+    try {
+      const data = await getAdminOrdersAction();
+      setOrders(data);
+    } catch (error) {
+      console.error("Failed to load payments", error);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -218,7 +223,7 @@ function PaymentDrawer({
 
   useEffect(() => {
     // Load proof
-    getPaymentProofAction(order.id).then((p) => setProof(p));
+    getPaymentProofAction(order.id).then((p) => setProof(p)).catch(() => setProof(null));
 
     // Initialize delivery entries
     const init: Record<string, AssignmentEntry[]> = {};

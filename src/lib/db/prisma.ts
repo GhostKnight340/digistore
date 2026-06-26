@@ -1,7 +1,8 @@
 import "server-only";
 
 import { PrismaClient } from "@prisma/client";
-import { products } from "@/lib/products";
+import { categories, products } from "@/lib/products";
+import { defaultStoreSettings } from "@/lib/storeSettings";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -27,13 +28,32 @@ async function ensureDatabaseSchema(): Promise<void> {
       "name" TEXT NOT NULL,
       "slug" TEXT NOT NULL,
       "category" TEXT NOT NULL,
+      "description" TEXT NOT NULL DEFAULT '',
       "priceMad" INTEGER NOT NULL,
       "region" TEXT NOT NULL,
       "deliveryType" TEXT NOT NULL,
+      "imageUrl" TEXT,
+      "featured" BOOLEAN NOT NULL DEFAULT true,
       "active" BOOLEAN NOT NULL DEFAULT true,
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS "Category" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "name" TEXT NOT NULL,
+      "tagline" TEXT NOT NULL DEFAULT '',
+      "gradient" TEXT NOT NULL DEFAULT 'from-[#1b2838] to-[#2a475e]',
+      "icon" TEXT NOT NULL DEFAULT '',
+      "active" BOOLEAN NOT NULL DEFAULT true,
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0`,
     `CREATE TABLE IF NOT EXISTS "DigitalCode" (
       "id" TEXT NOT NULL PRIMARY KEY,
       "productId" TEXT NOT NULL,
@@ -87,6 +107,32 @@ async function ensureDatabaseSchema(): Promise<void> {
       "body" TEXT NOT NULL,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "EmailLog_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS "Customer" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "name" TEXT NOT NULL,
+      "email" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "customerId" TEXT`,
+    `CREATE TABLE IF NOT EXISTS "ProductMedia" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "productId" TEXT NOT NULL,
+      "url" TEXT NOT NULL,
+      "alt" TEXT NOT NULL DEFAULT '',
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS "ProductVariant" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "productId" TEXT NOT NULL,
+      "name" TEXT NOT NULL,
+      "priceMad" INTEGER NOT NULL,
+      "active" BOOLEAN NOT NULL DEFAULT true,
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS "PaymentProof" (
       "id" TEXT NOT NULL PRIMARY KEY,
@@ -149,6 +195,11 @@ async function ensureDatabaseSchema(): Promise<void> {
       "instructions" TEXT NOT NULL DEFAULT '',
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS "StoreSetting" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "value" JSONB NOT NULL,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Product_slug_key" ON "Product"("slug")`,
     `CREATE INDEX IF NOT EXISTS "DigitalCode_productId_status_idx" ON "DigitalCode"("productId", "status")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "DigitalCode_productId_code_key" ON "DigitalCode"("productId", "code")`,
@@ -157,6 +208,10 @@ async function ensureDatabaseSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS "PaymentProof_orderId_key" ON "PaymentProof"("orderId")`,
     `CREATE INDEX IF NOT EXISTS "PaymentEvent_orderId_idx" ON "PaymentEvent"("orderId")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "PaymentMethodConfig_method_key" ON "PaymentMethodConfig"("method")`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Customer_email_key" ON "Customer"("email")`,
+    `CREATE INDEX IF NOT EXISTS "ProductMedia_productId_idx" ON "ProductMedia"("productId")`,
+    `CREATE INDEX IF NOT EXISTS "ProductVariant_productId_idx" ON "ProductVariant"("productId")`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "DeliveredCode_digitalCodeId_key" ON "DeliveredCode"("digitalCodeId") WHERE "digitalCodeId" IS NOT NULL`,
   ];
 
   for (const statement of statements) {
@@ -165,26 +220,61 @@ async function ensureDatabaseSchema(): Promise<void> {
 }
 
 async function seedCatalogProducts(): Promise<void> {
-  for (const product of products) {
+  for (const [index, category] of categories.entries()) {
+    await prisma.category.upsert({
+      where: { id: category.id },
+      update: {
+        name: category.name,
+        tagline: category.tagline,
+        gradient: category.gradient,
+        icon: category.icon,
+        active: true,
+        sortOrder: index,
+      },
+      create: {
+        id: category.id,
+        name: category.name,
+        tagline: category.tagline,
+        gradient: category.gradient,
+        icon: category.icon,
+        active: true,
+        sortOrder: index,
+      },
+    });
+  }
+
+  for (const [index, product] of products.entries()) {
     await prisma.product.upsert({
       where: { slug: product.id },
       update: {
         name: product.name,
         category: product.category,
+        description: product.description,
         priceMad: product.price,
         region: product.region,
         deliveryType: product.deliveryType,
+        featured: Boolean(product.featured),
         active: true,
+        sortOrder: index,
       },
       create: {
         slug: product.id,
         name: product.name,
         category: product.category,
+        description: product.description,
         priceMad: product.price,
         region: product.region,
         deliveryType: product.deliveryType,
+        featured: Boolean(product.featured),
         active: true,
+        sortOrder: index,
       },
     });
   }
+
+  await prisma.storeSetting.upsert({
+    where: { id: "default" },
+    update: {},
+    create: { id: "default", value: defaultStoreSettings },
+  });
 }

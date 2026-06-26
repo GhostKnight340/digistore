@@ -1,11 +1,9 @@
 import Link from "next/link";
 import type { Product } from "@/lib/types";
-import { getCategory } from "@/lib/products";
 import { formatMAD } from "@/lib/format";
 import ProductArt from "./ProductArt";
 
 export default function ProductCard({ product }: { product: Product }) {
-  const cat = getCategory(product.category);
   return (
     <Link
       href={`/products/${product.id}`}
@@ -33,7 +31,7 @@ export default function ProductCard({ product }: { product: Product }) {
           <span className="font-mono text-lg font-semibold tracking-tight text-text">
             {formatMAD(product.price)}
           </span>
-          <span className="text-xs text-faint">{cat?.name}</span>
+          <span className="text-xs text-faint">{product.categoryName}</span>
         </div>
       </div>
     </Link>

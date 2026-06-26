@@ -1,12 +1,7 @@
 // Prisma schema for the Karta digital store.
 //
-// SQLite is used for local development so the project has a real database
-// structure that can later be migrated to PostgreSQL (Supabase / Neon) by
-// swapping the datasource `provider` and `DATABASE_URL`.
-//
-// NOTE: SQLite has no native enum type, so status fields are stored as
-// strings. The allowed values are documented next to each field and mirrored
-// by the TypeScript unions in src/lib/types.ts.
+// Supabase/PostgreSQL is the production source of truth. Status fields remain
+// strings so the TypeScript unions in src/lib/types.ts define the allowed set.
 
 generator client {
   provider = "prisma-client-js"
@@ -22,16 +17,65 @@ model Product {
   name         String
   slug         String   @unique
   category     String
+  description  String   @default("")
   priceMad     Int
   region       String
   deliveryType String
+  imageUrl     String?
+  featured     Boolean  @default(false)
   active       Boolean  @default(true)
+  sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  categoryRecord Category? @relation(fields: [category], references: [id])
   digitalCodes   DigitalCode[]
   orderItems     OrderItem[]
   deliveredCodes DeliveredCode[]
+  media          ProductMedia[]
+  variants       ProductVariant[]
+}
+
+model Category {
+  id        String   @id
+  name      String
+  tagline   String   @default("")
+  gradient  String   @default("from-[#1b2838] to-[#2a475e]")
+  icon      String   @default("")
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+model ProductMedia {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  alt       String   @default("")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  name      String
+  priceMad  Int
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
 }
 
 model DigitalCode {
@@ -55,6 +99,7 @@ model DigitalCode {
 
 model Order {
   id            String   @id @default(cuid())
+  customerId    String?
   customerName  String
   customerEmail String
   // status: "pending_payment" | "payment_submitted" | "payment_confirmed"
@@ -70,6 +115,17 @@ model Order {
   emailLogs      EmailLog[]
   paymentProof   PaymentProof?
   paymentEvents  PaymentEvent[]
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
 }
 
 model OrderItem {
@@ -99,6 +155,7 @@ model DeliveredCode {
   digitalCode DigitalCode? @relation(fields: [digitalCodeId], references: [id])
 
   @@index([orderId])
+  @@unique([digitalCodeId])
 }
 
 model EmailLog {
@@ -118,7 +175,7 @@ model EmailLog {
 }
 
 // Customer-uploaded payment proof (PNG / JPG / JPEG / PDF).
-// Stored as base64 string for prototype; swap to object storage (S3/R2) in production.
+// Stored as base64 in PostgreSQL until object storage is configured.
 model PaymentProof {
   id         String   @id @default(cuid())
   orderId    String   @unique
@@ -193,4 +250,10 @@ model SupportConfig {
   supportEmail   String   @default("support@karta.ma")
   instructions   String   @default("")
   updatedAt      DateTime @default(now()) @updatedAt
+}
+
+model StoreSetting {
+  id        String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

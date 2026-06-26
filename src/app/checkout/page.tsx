@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
-import { getProduct } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
@@ -22,7 +22,8 @@ const METHOD_META: Record<
 };
 
 export default function CheckoutPage() {
-  const { cart, ready, cartTotal, rememberOrder } = useStore();
+  const { cart, ready, cartTotal, clearCart } = useStore();
+  const { getProduct } = useProductCatalog();
   const router = useRouter();
 
   const [config, setConfig] = useState<PaymentConfigDTO | null>(null);
@@ -103,7 +104,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      rememberOrder(order.id);
+      clearCart();
       router.push(`/payment/${order.id}`);
     } catch {
       setSubmitting(false);

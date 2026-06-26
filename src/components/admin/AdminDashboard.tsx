@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { products } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass } from "@/lib/orderStatus";
 import {
@@ -49,6 +49,7 @@ export default function AdminDashboard({
   initialInventory,
   initialLoadError = null,
 }: AdminDashboardProps) {
+  const { products } = useProductCatalog();
   const [activeTab, setActiveTab] = useState("overview");
   const [orders, setOrders] = useState<AdminOrderDTO[]>(initialOrders);
   const [inventory, setInventory] =

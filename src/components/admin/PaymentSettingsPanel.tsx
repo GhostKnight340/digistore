@@ -28,9 +28,15 @@ export default function PaymentSettingsPanel() {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
-    const data = await getAdminPaymentConfigAction();
-    setConfig(data as AdminConfig);
-    setLoaded(true);
+    try {
+      const data = await getAdminPaymentConfigAction();
+      setConfig(data as AdminConfig);
+    } catch (error) {
+      console.error("Failed to load payment settings", error);
+      setFeedback({ general: "Payment settings could not be loaded." });
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -58,8 +64,11 @@ export default function PaymentSettingsPanel() {
     setSaving(null);
   }
 
-  if (!loaded || !config) {
+  if (!loaded) {
     return <p className="text-sm text-muted">Chargement...</p>;
+  }
+  if (!config) {
+    return <p className="text-sm text-red-400">{feedback.general ?? "Payment settings could not be loaded."}</p>;
   }
 
   return (

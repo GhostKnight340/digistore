@@ -9,18 +9,12 @@ import {
   useState,
 } from "react";
 import type { CartItem } from "@/lib/types";
-import { getProduct } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 
 const CART_KEY = "digitalshop.cart.v1";
-// Without real auth we remember which order ids belong to this browser so the
-// account/delivery pages can look them up in the database.
-const MY_ORDERS_KEY = "digitalshop.myOrders.v1";
 
 interface StoreContextValue {
   cart: CartItem[];
-  /** Order ids created from this browser (no auth yet — local bridge). */
-  myOrderIds: string[];
-  /** Hydration guard — true once localStorage has been read on the client. */
   ready: boolean;
   cartCount: number;
   cartTotal: number;
@@ -28,8 +22,6 @@ interface StoreContextValue {
   removeFromCart: (productId: string) => void;
   setQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  /** Persists a freshly created order id and clears the cart. */
-  rememberOrder: (orderId: string) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -45,14 +37,12 @@ function readJSON<T>(key: string, fallback: T): T {
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
+  const { getProduct } = useProductCatalog();
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [myOrderIds, setMyOrderIds] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
 
-  // Hydrate from localStorage once, on the client.
   useEffect(() => {
     setCart(readJSON<CartItem[]>(CART_KEY, []));
-    setMyOrderIds(readJSON<string[]>(MY_ORDERS_KEY, []));
     setReady(true);
   }, []);
 
@@ -61,19 +51,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(CART_KEY, JSON.stringify(cart));
   }, [cart, ready]);
 
-  useEffect(() => {
-    if (!ready) return;
-    window.localStorage.setItem(MY_ORDERS_KEY, JSON.stringify(myOrderIds));
-  }, [myOrderIds, ready]);
-
   const addToCart = useCallback((productId: string, quantity = 1) => {
     setCart((prev) => {
-      const existing = prev.find((i) => i.productId === productId);
+      const existing = prev.find((item) => item.productId === productId);
       if (existing) {
-        return prev.map((i) =>
-          i.productId === productId
-            ? { ...i, quantity: i.quantity + quantity }
-            : i,
+        return prev.map((item) =>
+          item.productId === productId
+            ? { ...item, quantity: item.quantity + quantity }
+            : item,
         );
       }
       return [...prev, { productId, quantity }];
@@ -81,45 +66,39 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeFromCart = useCallback((productId: string) => {
-    setCart((prev) => prev.filter((i) => i.productId !== productId));
+    setCart((prev) => prev.filter((item) => item.productId !== productId));
   }, []);
 
   const setQuantity = useCallback((productId: string, quantity: number) => {
     setCart((prev) =>
       prev
-        .map((i) =>
-          i.productId === productId
-            ? { ...i, quantity: Math.max(1, quantity) }
-            : i,
+        .map((item) =>
+          item.productId === productId
+            ? { ...item, quantity: Math.max(1, quantity) }
+            : item,
         )
-        .filter((i) => i.quantity > 0),
+        .filter((item) => item.quantity > 0),
     );
   }, []);
 
   const clearCart = useCallback(() => setCart([]), []);
 
-  const rememberOrder = useCallback((orderId: string) => {
-    setMyOrderIds((prev) => (prev.includes(orderId) ? prev : [orderId, ...prev]));
-    setCart([]);
-  }, []);
-
   const cartCount = useMemo(
-    () => cart.reduce((sum, i) => sum + i.quantity, 0),
+    () => cart.reduce((sum, item) => sum + item.quantity, 0),
     [cart],
   );
 
   const cartTotal = useMemo(
     () =>
-      cart.reduce((sum, i) => {
-        const product = getProduct(i.productId);
-        return sum + (product ? product.price * i.quantity : 0);
+      cart.reduce((sum, item) => {
+        const product = getProduct(item.productId);
+        return sum + (product ? product.price * item.quantity : 0);
       }, 0),
-    [cart],
+    [cart, getProduct],
   );
 
   const value: StoreContextValue = {
     cart,
-    myOrderIds,
     ready,
     cartCount,
     cartTotal,
@@ -127,7 +106,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     removeFromCart,
     setQuantity,
     clearCart,
-    rememberOrder,
   };
 
   return (

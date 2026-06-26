@@ -45,8 +45,6 @@ export type StoreSettings = {
   };
 };
 
-export const STORE_SETTINGS_KEY = "digitalshop.storeSettings.v1";
-
 export const defaultStoreSettings: StoreSettings = {
   branding: {
     siteName: "Karta",
