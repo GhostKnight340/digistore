@@ -168,7 +168,7 @@ async function setPaymentStatus(
 
 export async function getPaymentProof(
   orderId: string,
-): Promise<{ data: string; mimeType: string; fileName: string } | null> {
+): Promise<{ data: string; mimeType: string; fileName: string; uploadedAt: string } | null> {
   await ensureDatabaseReady();
   const proof = await prisma.paymentProof.findUnique({ where: { orderId } });
   if (!proof) return null;
@@ -176,5 +176,6 @@ export async function getPaymentProof(
     data: proof.data,
     mimeType: proof.mimeType,
     fileName: proof.fileName,
+    uploadedAt: proof.uploadedAt.toISOString(),
   };
 }

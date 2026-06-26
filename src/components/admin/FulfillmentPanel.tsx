@@ -13,6 +13,7 @@ import {
   confirmPaymentAction,
   deliverOrderAction,
 } from "@/app/actions/admin";
+import { getPaymentProofAction } from "@/app/actions/payments";
 import type {
   AdminOrderDTO,
   AdminCodeDTO,
@@ -197,6 +198,9 @@ function OrderDrawer({
   const [available, setAvailable] = useState<Record<string, AdminCodeDTO[]>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [proof, setProof] = useState<
+    { data: string; mimeType: string; fileName: string; uploadedAt: string } | null | "loading"
+  >("loading");
 
   const delivered = isDelivered(order.status);
   const paymentConfirmed =
@@ -204,7 +208,7 @@ function OrderDrawer({
   const isRejectedOrCancelled =
     order.status === "rejected" || order.status === "cancelled";
 
-  // Initialize per-unit entries and load available codes when the order opens.
+  // Initialize per-unit entries, load available codes and proof when the order opens.
   useEffect(() => {
     const init: Record<string, AssignmentEntry[]> = {};
     for (const item of order.items) {
@@ -212,6 +216,11 @@ function OrderDrawer({
     }
     setEntries(init);
     setError("");
+    setProof("loading");
+
+    getPaymentProofAction(order.id)
+      .then((p) => setProof(p))
+      .catch(() => setProof(null));
 
     const slugs = [...new Set(order.items.map((i) => i.productId))];
     Promise.all(slugs.map((s) => getAvailableCodesAction(s))).then((lists) => {
@@ -346,6 +355,56 @@ function OrderDrawer({
                 </button>
               )}
             </div>
+          </section>
+
+          <section className="rounded-xl border border-border bg-surface p-4">
+            <h4 className="text-sm font-semibold text-white">Payment proof</h4>
+            {proof === "loading" ? (
+              <p className="mt-2 text-xs text-muted">Loading…</p>
+            ) : proof === null ? (
+              <p className="mt-2 text-xs text-muted">Aucun justificatif téléchargé.</p>
+            ) : proof.mimeType.startsWith("image/") ? (
+              <div className="mt-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <span>{proof.fileName}</span>
+                  <span>·</span>
+                  <span>{proof.mimeType}</span>
+                  <span>·</span>
+                  <span>{formatDate(proof.uploadedAt)}</span>
+                  <a
+                    href={`data:${proof.mimeType};base64,${proof.data}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-auto text-accent hover:text-accent-hover"
+                  >
+                    Open in new tab ↗
+                  </a>
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:${proof.mimeType};base64,${proof.data}`}
+                  alt="Payment proof"
+                  className="max-h-64 w-full rounded-lg border border-border object-contain"
+                />
+              </div>
+            ) : (
+              <div className="mt-3 flex items-center gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border bg-base text-xl">
+                  📄
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white">{proof.fileName}</p>
+                  <p className="text-xs text-muted">{formatDate(proof.uploadedAt)}</p>
+                  <a
+                    href={`data:${proof.mimeType};base64,${proof.data}`}
+                    download={proof.fileName}
+                    className="text-xs text-accent hover:text-accent-hover"
+                  >
+                    View PDF / Download
+                  </a>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="space-y-4">

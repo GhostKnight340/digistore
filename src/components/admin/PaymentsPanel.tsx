@@ -209,7 +209,7 @@ function PaymentDrawer({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [proof, setProof] = useState<{ data: string; mimeType: string; fileName: string } | null | "loading">("loading");
+  const [proof, setProof] = useState<{ data: string; mimeType: string; fileName: string; uploadedAt: string } | null | "loading">("loading");
 
   // Delivery state
   const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
@@ -330,30 +330,45 @@ function PaymentDrawer({
             {proof === "loading" ? (
               <p className="mt-2 text-xs text-muted">Chargement...</p>
             ) : proof === null ? (
-              <p className="mt-2 text-xs text-muted">Aucune preuve uploadée.</p>
+              <p className="mt-2 text-xs text-muted">Aucun justificatif téléchargé.</p>
             ) : proof.mimeType.startsWith("image/") ? (
               <div className="mt-3">
-                <p className="mb-2 text-xs text-muted">{proof.fileName}</p>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <span>{proof.fileName}</span>
+                  <span>·</span>
+                  <span>{proof.mimeType}</span>
+                  <span>·</span>
+                  <span>{formatDate(proof.uploadedAt)}</span>
+                  <a
+                    href={`data:${proof.mimeType};base64,${proof.data}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-auto text-accent hover:text-accent-hover"
+                  >
+                    Ouvrir ↗
+                  </a>
+                </div>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`data:${proof.mimeType};base64,${proof.data}`}
                   alt="Preuve de paiement"
-                  className="max-h-64 w-full rounded-lg object-contain border border-border"
+                  className="max-h-64 w-full rounded-lg border border-border object-contain"
                 />
               </div>
             ) : (
               <div className="mt-3 flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-base text-xl">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border bg-base text-xl">
                   📄
                 </span>
-                <div>
-                  <p className="text-sm text-white">{proof.fileName}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white">{proof.fileName}</p>
+                  <p className="text-xs text-muted">{formatDate(proof.uploadedAt)}</p>
                   <a
                     href={`data:${proof.mimeType};base64,${proof.data}`}
                     download={proof.fileName}
                     className="text-xs text-accent hover:text-accent-hover"
                   >
-                    Télécharger le PDF
+                    Voir le PDF / Télécharger
                   </a>
                 </div>
               </div>

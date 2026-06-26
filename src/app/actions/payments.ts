@@ -65,7 +65,7 @@ export async function markPaymentIssueAction(orderId: string): Promise<ActionRes
 /** Admin: fetch base64 proof for a given order. */
 export async function getPaymentProofAction(
   orderId: string,
-): Promise<{ data: string; mimeType: string; fileName: string } | null> {
+): Promise<{ data: string; mimeType: string; fileName: string; uploadedAt: string } | null> {
   return getPaymentProof(orderId);
 }
 
