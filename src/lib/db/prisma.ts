@@ -200,6 +200,19 @@ async function ensureDatabaseSchema(): Promise<void> {
       "value" JSONB NOT NULL,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    // ── New columns added in migration 20260626030000 ──────────────────────
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "brand" TEXT`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "shortDescription" TEXT`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "longDescription" TEXT`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "instructions" TEXT`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "faceValue" DOUBLE PRECISION`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "faceCurrency" TEXT NOT NULL DEFAULT 'MAD'`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "stockControl" TEXT NOT NULL DEFAULT 'manual'`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "stockMode" TEXT NOT NULL DEFAULT 'automatic'`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCost" DOUBLE PRECISION`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCurrency" TEXT NOT NULL DEFAULT 'MAD'`,
+    // ────────────────────────────────────────────────────────────────────────
     `CREATE UNIQUE INDEX IF NOT EXISTS "Product_slug_key" ON "Product"("slug")`,
     `CREATE INDEX IF NOT EXISTS "DigitalCode_productId_status_idx" ON "DigitalCode"("productId", "status")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "DigitalCode_productId_code_key" ON "DigitalCode"("productId", "code")`,
