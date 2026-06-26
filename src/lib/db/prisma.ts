@@ -274,32 +274,27 @@ async function seedCatalogProducts(): Promise<void> {
   }
 
   for (const [index, product] of products.entries()) {
-    await prisma.product.upsert({
+    const existing = await prisma.product.findUnique({
       where: { slug: product.id },
-      update: {
-        name: product.name,
-        category: product.category,
-        description: product.description,
-        priceMad: product.price,
-        region: product.region,
-        deliveryType: product.deliveryType,
-        featured: Boolean(product.featured),
-        active: true,
-        sortOrder: index,
-      },
-      create: {
-        slug: product.id,
-        name: product.name,
-        category: product.category,
-        description: product.description,
-        priceMad: product.price,
-        region: product.region,
-        deliveryType: product.deliveryType,
-        featured: Boolean(product.featured),
-        active: true,
-        sortOrder: index,
-      },
+      select: { id: true },
     });
+
+    if (!existing) {
+      await prisma.product.create({
+        data: {
+          slug: product.id,
+          name: product.name,
+          category: product.category,
+          description: product.description,
+          priceMad: product.price,
+          region: product.region,
+          deliveryType: product.deliveryType,
+          featured: Boolean(product.featured),
+          active: true,
+          sortOrder: index,
+        },
+      });
+    }
   }
 
   await prisma.storeSetting.upsert({

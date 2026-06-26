@@ -1,11 +1,21 @@
 import "server-only";
 
+import type { Prisma } from "@prisma/client";
 import { cache } from "react";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { defaultStoreSettings, mergeStoreSettings, type StoreSettings } from "@/lib/storeSettings";
 import type { Category, Product } from "@/lib/types";
 
 type ProductWithCategory = Awaited<ReturnType<typeof getActiveProductRows>>[number];
+
+const productCatalogInclude = {
+  categoryRecord: true,
+  variants: {
+    where: { active: true, featured: true },
+    select: { id: true },
+    take: 1,
+  },
+} satisfies Prisma.ProductInclude;
 
 function toProduct(row: ProductWithCategory): Product {
   return {
@@ -17,7 +27,7 @@ function toProduct(row: ProductWithCategory): Product {
     price: row.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,
-    featured: row.featured,
+    featured: row.featured || row.variants.length > 0,
   };
 }
 
@@ -61,7 +71,7 @@ function getActiveProductRows(options: {
         : {}),
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    include: { categoryRecord: true },
+    include: productCatalogInclude,
   });
 }
 
@@ -132,7 +142,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
   await ensureDatabaseReady();
   const product = await prisma.product.findFirst({
     where: { slug, active: true },
-    include: { categoryRecord: true },
+    include: productCatalogInclude,
   });
   return product ? toProduct(product) : null;
 }
@@ -144,7 +154,7 @@ export async function getProductsByCategorySlug(
   const products = await prisma.product.findMany({
     where: { category, active: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    include: { categoryRecord: true },
+    include: productCatalogInclude,
   });
   return products.map(toProduct);
 }
