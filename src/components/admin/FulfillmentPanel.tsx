@@ -247,6 +247,20 @@ function OrderDrawer({
     setEmailLogs(order.emailLogs);
   }, [order]);
 
+  const chosenIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const arr of Object.values(entries)) {
+      for (const e of arr) if (e.digitalCodeId) set.add(e.digitalCodeId);
+    }
+    return set;
+  }, [entries]);
+
+  const allFilled = order?.items.every((item) =>
+    (entries[item.id] ?? [])
+      .slice(0, item.quantity)
+      .every((e) => e.digitalCodeId || e.manualCode?.trim()),
+  ) ?? false;
+
   if (detailLoading) {
     return (
       <div className="fixed inset-0 z-50 flex justify-end">
@@ -279,21 +293,6 @@ function OrderDrawer({
       return { ...prev, [itemId]: arr };
     });
   }
-
-  // Inventory code ids already chosen in this form (avoid double-assigning).
-  const chosenIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const arr of Object.values(entries)) {
-      for (const e of arr) if (e.digitalCodeId) set.add(e.digitalCodeId);
-    }
-    return set;
-  }, [entries]);
-
-  const allFilled = order?.items.every((item) =>
-    (entries[item.id] ?? [])
-      .slice(0, item.quantity)
-      .every((e) => e.digitalCodeId || e.manualCode?.trim()),
-  ) ?? false;
 
   async function handleConfirmPayment() {
     if (!order) return;
