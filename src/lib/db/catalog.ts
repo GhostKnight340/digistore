@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { defaultStoreSettings, mergeStoreSettings, type StoreSettings } from "@/lib/storeSettings";
 import type { Category, Product } from "@/lib/types";
@@ -46,7 +47,7 @@ function getActiveProductRows() {
   });
 }
 
-export async function getCatalogData(): Promise<{
+export const getCatalogData = cache(async function getCatalogData(): Promise<{
   categories: Category[];
   products: Product[];
 }> {
@@ -64,7 +65,7 @@ export async function getCatalogData(): Promise<{
     categories: categoryRows.map(toCategory),
     products: productRows.map(toProduct),
   };
-}
+});
 
 export async function getProductCatalog(): Promise<Product[]> {
   const { products } = await getCatalogData();
@@ -92,13 +93,13 @@ export async function getProductsByCategorySlug(
   return products.map(toProduct);
 }
 
-export async function getStoreSettings(): Promise<StoreSettings> {
+export const getStoreSettings = cache(async function getStoreSettings(): Promise<StoreSettings> {
   await ensureDatabaseReady();
   const record = await prisma.storeSetting.findUnique({
     where: { id: "default" },
   });
   return record ? mergeStoreSettings(record.value) : defaultStoreSettings;
-}
+});
 
 export async function saveStoreSettings(settings: StoreSettings): Promise<void> {
   await ensureDatabaseReady();

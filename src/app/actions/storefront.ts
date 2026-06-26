@@ -4,7 +4,6 @@ import {
   getCatalogData,
   getProductBySlug,
   getProductCatalog,
-  getProductsByCategorySlug,
 } from "@/lib/db/catalog";
 import { getInventoryGroups } from "@/lib/db/inventory";
 import type { Product, StockStatus } from "@/lib/types";
@@ -48,11 +47,7 @@ async function withStockStatus(products: Product[]): Promise<Product[]> {
 
 export async function getCategoryCountsAction(): Promise<Record<string, number>> {
   const { categories } = await getCatalogData();
-  const counts: Record<string, number> = {};
-  for (const category of categories) {
-    counts[category.id] = (await getProductsByCategorySlug(category.id)).length;
-  }
-  return counts;
+  return Object.fromEntries(categories.map((cat) => [cat.id, cat.productCount ?? 0]));
 }
 
 export async function getCategoryStockStatusesAction(): Promise<

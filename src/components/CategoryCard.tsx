@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Category, StockStatus } from "@/lib/types";
 import ProductArt from "./ProductArt";
 
@@ -20,10 +21,11 @@ export default function CategoryCard({
       className="group overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-border-strong hover:shadow-soft"
     >
       {thumbnail ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={thumbnail}
           alt={category.name}
+          width={400}
+          height={250}
           className="aspect-[16/10] w-full object-cover"
         />
       ) : (

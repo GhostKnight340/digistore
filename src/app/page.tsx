@@ -1,12 +1,11 @@
-"use client";
-
 import Link from "next/link";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
 import HeroDeliveryCard from "@/components/HeroDeliveryCard";
-import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { useProductCatalog } from "@/context/ProductCatalogContext";
+import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+
+export const revalidate = 3600;
 
 const steps = [
   { n: 1, title: "Choisissez un produit", text: "Selectionnez une carte et la quantite." },
@@ -14,9 +13,12 @@ const steps = [
   { n: 3, title: "Recevez le code", text: "Votre code apparait apres confirmation." },
 ];
 
-export default function HomePage() {
-  const { settings } = useStoreSettings();
-  const { categories, products } = useProductCatalog();
+export default async function HomePage() {
+  const [{ categories, products }, settings] = await Promise.all([
+    getCatalogData(),
+    getStoreSettings(),
+  ]);
+
   const featured =
     settings.featuredProductIds.length > 0
       ? settings.featuredProductIds
@@ -95,7 +97,7 @@ export default function HomePage() {
           </div>
           {featured.length === 0 ? (
             <div className="card mt-8 px-6 py-12 text-center text-sm text-muted">
-              Aucun produit populaire n'est disponible pour le moment.
+              Aucun produit populaire n&apos;est disponible pour le moment.
             </div>
           ) : (
             <div className="mt-8 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
