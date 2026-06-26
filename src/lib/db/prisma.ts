@@ -1,7 +1,7 @@
 import "server-only";
 
 import { PrismaClient } from "@prisma/client";
-import { categories, products, productGroups } from "@/lib/products";
+import { categories, productGroups, OLD_DENOMINATION_SLUGS } from "@/lib/products";
 import { defaultStoreSettings } from "@/lib/storeSettings";
 
 const globalForPrisma = globalThis as unknown as {
@@ -200,6 +200,19 @@ async function ensureDatabaseSchema(): Promise<void> {
       "value" JSONB NOT NULL,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    // Extra Product columns added after initial schema
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "brand" TEXT`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "shortDescription" TEXT`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "longDescription" TEXT`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "instructions" TEXT`,
+    // Extra ProductVariant columns added after initial schema
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "faceValue" DOUBLE PRECISION`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "faceCurrency" TEXT NOT NULL DEFAULT 'MAD'`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "stockControl" TEXT NOT NULL DEFAULT 'manual'`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "stockMode" TEXT NOT NULL DEFAULT 'automatic'`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCost" DOUBLE PRECISION`,
+    `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCurrency" TEXT NOT NULL DEFAULT 'MAD'`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Product_slug_key" ON "Product"("slug")`,
     `CREATE INDEX IF NOT EXISTS "DigitalCode_productId_status_idx" ON "DigitalCode"("productId", "status")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "DigitalCode_productId_code_key" ON "DigitalCode"("productId", "code")`,
@@ -243,36 +256,17 @@ async function seedCatalogProducts(): Promise<void> {
     });
   }
 
-  for (const [index, product] of products.entries()) {
-    await prisma.product.upsert({
-      where: { slug: product.id },
-      update: {
-        name: product.name,
-        category: product.category,
-        description: product.description,
-        priceMad: product.price,
-        region: product.region,
-        deliveryType: product.deliveryType,
-        featured: Boolean(product.featured),
-        active: true,
-        sortOrder: index,
-      },
-      create: {
-        slug: product.id,
-        name: product.name,
-        category: product.category,
-        description: product.description,
-        priceMad: product.price,
-        region: product.region,
-        deliveryType: product.deliveryType,
-        featured: Boolean(product.featured),
-        active: true,
-        sortOrder: index,
-      },
+  // Deactivate legacy MAD-based denomination products (kept in DB for order history).
+  if (OLD_DENOMINATION_SLUGS.size > 0) {
+    await prisma.product.updateMany({
+      where: { slug: { in: [...OLD_DENOMINATION_SLUGS] } },
+      data: { active: false },
     });
   }
 
   // Seed parent products (one per platform) and their denomination variants.
+  // Each denomination also gets its own storefront Product row (purchasable),
+  // so customers see "Steam Wallet 5 EUR" as an individual product.
   for (const group of productGroups) {
     const parent = await prisma.product.upsert({
       where: { slug: group.id },
@@ -300,6 +294,35 @@ async function seedCatalogProducts(): Promise<void> {
     });
 
     for (const denom of group.denominations) {
+      // Storefront purchasable row: full name "Steam Wallet 5 EUR", linked to category.
+      await prisma.product.upsert({
+        where: { slug: denom.id },
+        update: {
+          name: `${group.name} ${denom.name}`,
+          category: group.category,
+          description: group.description,
+          priceMad: denom.priceMad,
+          region: group.region,
+          deliveryType: group.deliveryType,
+          featured: denom.featured,
+          active: true,
+          sortOrder: denom.sortOrder,
+        },
+        create: {
+          slug: denom.id,
+          name: `${group.name} ${denom.name}`,
+          category: group.category,
+          description: group.description,
+          priceMad: denom.priceMad,
+          region: group.region,
+          deliveryType: group.deliveryType,
+          featured: denom.featured,
+          active: true,
+          sortOrder: denom.sortOrder,
+        },
+      });
+
+      // Admin variant row: denomination entry linked to parent.
       await prisma.productVariant.upsert({
         where: { id: denom.id },
         update: {

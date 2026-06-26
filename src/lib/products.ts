@@ -49,133 +49,28 @@ export function getCategory(id: string): Category | undefined {
   return categories.find((c) => c.id === id);
 }
 
+// Current product catalog — denominations use native card currency (EUR/USD).
+// Selling prices in MAD are initial defaults; the admin can override them.
 export const products: Product[] = [
-  {
-    id: "steam-50",
-    name: "Steam Wallet 50 MAD",
-    category: "steam",
-    region: "Maroc / Global",
-    price: 50,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Ajoutez 50 MAD à votre Steam Wallet et utilisez votre solde pour acheter jeux, DLC et contenus en jeu sur Steam.",
-    featured: true,
-  },
-  {
-    id: "steam-100",
-    name: "Steam Wallet 100 MAD",
-    category: "steam",
-    region: "Maroc / Global",
-    price: 100,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Ajoutez 100 MAD à votre Steam Wallet et profitez de vos jeux, DLC et contenus préférés sur Steam.",
-    featured: true,
-  },
-  {
-    id: "steam-200",
-    name: "Steam Wallet 200 MAD",
-    category: "steam",
-    region: "Maroc / Global",
-    price: 200,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Ajoutez 200 MAD à votre Steam Wallet pour vos achats plus importants et les promotions saisonnières.",
-  },
-  {
-    id: "psn-100",
-    name: "PlayStation Store 100 MAD",
-    category: "playstation",
-    region: "Maroc",
-    price: 100,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Rechargez votre portefeuille PlayStation Store pour acheter jeux, extensions et abonnements.",
-    featured: true,
-  },
-  {
-    id: "psn-250",
-    name: "PlayStation Store 250 MAD",
-    category: "playstation",
-    region: "Maroc",
-    price: 250,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Ajoutez 250 MAD à votre portefeuille PlayStation Store pour vos jeux complets et contenus favoris.",
-  },
-  {
-    id: "xbox-100",
-    name: "Xbox Gift Card 100 MAD",
-    category: "xbox",
-    region: "Maroc / Global",
-    price: 100,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Utilisez cette carte sur Microsoft Store et Xbox pour acheter jeux, applications et divertissement.",
-    featured: true,
-  },
-  {
-    id: "xbox-200",
-    name: "Xbox Gift Card 200 MAD",
-    category: "xbox",
-    region: "Maroc / Global",
-    price: 200,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Ajoutez 200 MAD à votre compte Xbox pour jeux, abonnements et contenus numériques.",
-  },
-  {
-    id: "nintendo-150",
-    name: "Nintendo eShop 150 MAD",
-    category: "nintendo",
-    region: "Maroc / EU",
-    price: 150,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Ajoutez des fonds à votre compte Nintendo pour acheter jeux Switch et contenus depuis le Nintendo eShop.",
-  },
-  {
-    id: "roblox-100",
-    name: "Roblox Gift Card 100 MAD",
-    category: "roblox",
-    region: "Global",
-    price: 100,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Échangez cette carte contre des Robux ou un abonnement Premium sur Roblox.",
-    featured: true,
-  },
-  {
-    id: "roblox-200",
-    name: "Roblox Gift Card 200 MAD",
-    category: "roblox",
-    region: "Global",
-    price: 200,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Échangez 200 MAD contre des Robux ou un abonnement Premium sur Roblox.",
-  },
-  {
-    id: "valorant-100",
-    name: "Valorant Points 100 MAD",
-    category: "valorant",
-    region: "MENA",
-    price: 100,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Échangez des Valorant Points pour skins, passes de combat et agents.",
-    featured: true,
-  },
-  {
-    id: "valorant-200",
-    name: "Valorant Points 200 MAD",
-    category: "valorant",
-    region: "MENA",
-    price: 200,
-    deliveryType: "Code numérique instantané",
-    description:
-      "Échangez 200 MAD de Valorant Points pour skins et passes de combat.",
-  },
+  // Steam Wallet — EUR
+  { id: "steam-5eur",  name: "Steam Wallet 5 EUR",  category: "steam",       region: "Maroc / Global", price: 65,  deliveryType: "Code numérique instantané", description: "Ajoutez 5 EUR à votre Steam Wallet pour acheter jeux, DLC et contenus sur Steam.", featured: true },
+  { id: "steam-10eur", name: "Steam Wallet 10 EUR", category: "steam",       region: "Maroc / Global", price: 130, deliveryType: "Code numérique instantané", description: "Ajoutez 10 EUR à votre Steam Wallet pour acheter jeux, DLC et contenus sur Steam.", featured: true },
+  { id: "steam-20eur", name: "Steam Wallet 20 EUR", category: "steam",       region: "Maroc / Global", price: 250, deliveryType: "Code numérique instantané", description: "Ajoutez 20 EUR à votre Steam Wallet pour vos achats et promotions saisonnières." },
+  { id: "steam-50eur", name: "Steam Wallet 50 EUR", category: "steam",       region: "Maroc / Global", price: 610, deliveryType: "Code numérique instantané", description: "Ajoutez 50 EUR à votre Steam Wallet pour vos achats importants sur Steam." },
+  // PlayStation Store — USD
+  { id: "psn-10usd",  name: "PlayStation Store 10 USD", category: "playstation", region: "Maroc", price: 105, deliveryType: "Code numérique instantané", description: "Rechargez 10 USD sur le PlayStation Store pour acheter jeux, extensions et abonnements.", featured: true },
+  { id: "psn-20usd",  name: "PlayStation Store 20 USD", category: "playstation", region: "Maroc", price: 210, deliveryType: "Code numérique instantané", description: "Rechargez 20 USD sur le PlayStation Store pour vos jeux et contenus favoris." },
+  { id: "psn-50usd",  name: "PlayStation Store 50 USD", category: "playstation", region: "Maroc", price: 520, deliveryType: "Code numérique instantané", description: "Rechargez 50 USD sur le PlayStation Store pour jeux complets et abonnements." },
+  // Xbox Gift Card — USD
+  { id: "xbox-25usd", name: "Xbox Gift Card 25 USD", category: "xbox", region: "Maroc / Global", price: 265, deliveryType: "Code numérique instantané", description: "Utilisez 25 USD sur le Microsoft Store et Xbox pour jeux, applications et divertissement.", featured: true },
+  // Nintendo eShop — EUR
+  { id: "nintendo-25eur", name: "Nintendo eShop 25 EUR", category: "nintendo", region: "Maroc / EU", price: 295, deliveryType: "Code numérique instantané", description: "Ajoutez 25 EUR à votre compte Nintendo pour acheter jeux Switch et contenus Nintendo eShop." },
+  // Roblox Gift Card — USD
+  { id: "roblox-10usd", name: "Roblox Gift Card 10 USD", category: "roblox", region: "Global", price: 105, deliveryType: "Code numérique instantané", description: "Échangez 10 USD contre des Robux ou un abonnement Premium sur Roblox.", featured: true },
+  { id: "roblox-25usd", name: "Roblox Gift Card 25 USD", category: "roblox", region: "Global", price: 265, deliveryType: "Code numérique instantané", description: "Échangez 25 USD contre des Robux ou un abonnement Premium sur Roblox." },
+  // Valorant Points — USD
+  { id: "valorant-10usd", name: "Valorant Points 10 USD", category: "valorant", region: "MENA", price: 105, deliveryType: "Code numérique instantané", description: "Échangez 10 USD de Valorant Points pour skins, passes de combat et agents.", featured: true },
+  { id: "valorant-25usd", name: "Valorant Points 25 USD", category: "valorant", region: "MENA", price: 265, deliveryType: "Code numérique instantané", description: "Échangez 25 USD de Valorant Points pour skins et passes de combat." },
 ];
 
 export function getProduct(id: string): Product | undefined {
@@ -190,16 +85,29 @@ export function getProductsByCategory(category: string): Product[] {
   return products.filter((p) => p.category === category);
 }
 
-// IDs of legacy denomination products that are NOT parent products.
-// These exist in the DB to preserve order history but should be excluded from
-// the admin product list so only the grouped parent products appear there.
-export const DENOMINATION_SLUGS = new Set([
+// Legacy MAD-based denomination slugs — deactivated but kept in DB so that
+// existing orders can still reference them. Never appear on the storefront.
+export const OLD_DENOMINATION_SLUGS = new Set([
   "steam-50", "steam-100", "steam-200",
   "psn-100", "psn-250",
   "xbox-100", "xbox-200",
   "nintendo-150",
   "roblox-100", "roblox-200",
   "valorant-100", "valorant-200",
+]);
+
+// All denomination slugs (legacy + current). Products whose slug is in this
+// set are individual purchasable denominations, NOT parent platform products.
+// Used to filter the admin product list so it shows only parent products.
+export const DENOMINATION_SLUGS = new Set([
+  ...OLD_DENOMINATION_SLUGS,
+  // Current EUR/USD denominations
+  "steam-5eur", "steam-10eur", "steam-20eur", "steam-50eur",
+  "psn-10usd", "psn-20usd", "psn-50usd",
+  "xbox-25usd",
+  "nintendo-25eur",
+  "roblox-10usd", "roblox-25usd",
+  "valorant-10usd", "valorant-25usd",
 ]);
 
 export interface DenominationSeed {
@@ -223,7 +131,9 @@ export interface ProductGroupSeed {
   denominations: DenominationSeed[];
 }
 
-// Canonical parent product definitions — one per platform.
+// Canonical parent product groups — one per platform.
+// Each denomination is seeded as both a storefront Product row and an admin
+// ProductVariant row so the two views stay in sync automatically.
 export const productGroups: ProductGroupSeed[] = [
   {
     id: "steam-wallet",
@@ -234,9 +144,10 @@ export const productGroups: ProductGroupSeed[] = [
     description: "Rechargez votre Steam Wallet et utilisez votre solde pour acheter jeux, DLC et contenus en jeu sur Steam.",
     sortOrder: 0,
     denominations: [
-      { id: "steam-wallet-50mad", name: "50 MAD", priceMad: 50, faceValue: 50, faceCurrency: "MAD", featured: true, sortOrder: 0 },
-      { id: "steam-wallet-100mad", name: "100 MAD", priceMad: 100, faceValue: 100, faceCurrency: "MAD", featured: true, sortOrder: 1 },
-      { id: "steam-wallet-200mad", name: "200 MAD", priceMad: 200, faceValue: 200, faceCurrency: "MAD", featured: false, sortOrder: 2 },
+      { id: "steam-5eur",  name: "5 EUR",  priceMad: 65,  faceValue: 5,  faceCurrency: "EUR", featured: true,  sortOrder: 0 },
+      { id: "steam-10eur", name: "10 EUR", priceMad: 130, faceValue: 10, faceCurrency: "EUR", featured: true,  sortOrder: 1 },
+      { id: "steam-20eur", name: "20 EUR", priceMad: 250, faceValue: 20, faceCurrency: "EUR", featured: false, sortOrder: 2 },
+      { id: "steam-50eur", name: "50 EUR", priceMad: 610, faceValue: 50, faceCurrency: "EUR", featured: false, sortOrder: 3 },
     ],
   },
   {
@@ -248,8 +159,9 @@ export const productGroups: ProductGroupSeed[] = [
     description: "Rechargez votre portefeuille PlayStation Store pour acheter jeux, extensions et abonnements.",
     sortOrder: 1,
     denominations: [
-      { id: "psn-store-100mad", name: "100 MAD", priceMad: 100, faceValue: 100, faceCurrency: "MAD", featured: true, sortOrder: 0 },
-      { id: "psn-store-250mad", name: "250 MAD", priceMad: 250, faceValue: 250, faceCurrency: "MAD", featured: false, sortOrder: 1 },
+      { id: "psn-10usd", name: "10 USD", priceMad: 105, faceValue: 10, faceCurrency: "USD", featured: true,  sortOrder: 0 },
+      { id: "psn-20usd", name: "20 USD", priceMad: 210, faceValue: 20, faceCurrency: "USD", featured: false, sortOrder: 1 },
+      { id: "psn-50usd", name: "50 USD", priceMad: 520, faceValue: 50, faceCurrency: "USD", featured: false, sortOrder: 2 },
     ],
   },
   {
@@ -261,8 +173,7 @@ export const productGroups: ProductGroupSeed[] = [
     description: "Utilisez cette carte sur Microsoft Store et Xbox pour acheter jeux, applications et divertissement.",
     sortOrder: 2,
     denominations: [
-      { id: "xbox-gift-card-100mad", name: "100 MAD", priceMad: 100, faceValue: 100, faceCurrency: "MAD", featured: true, sortOrder: 0 },
-      { id: "xbox-gift-card-200mad", name: "200 MAD", priceMad: 200, faceValue: 200, faceCurrency: "MAD", featured: false, sortOrder: 1 },
+      { id: "xbox-25usd", name: "25 USD", priceMad: 265, faceValue: 25, faceCurrency: "USD", featured: true, sortOrder: 0 },
     ],
   },
   {
@@ -274,7 +185,7 @@ export const productGroups: ProductGroupSeed[] = [
     description: "Ajoutez des fonds à votre compte Nintendo pour acheter jeux Switch et contenus depuis le Nintendo eShop.",
     sortOrder: 3,
     denominations: [
-      { id: "nintendo-eshop-150mad", name: "150 MAD", priceMad: 150, faceValue: 150, faceCurrency: "MAD", featured: false, sortOrder: 0 },
+      { id: "nintendo-25eur", name: "25 EUR", priceMad: 295, faceValue: 25, faceCurrency: "EUR", featured: false, sortOrder: 0 },
     ],
   },
   {
@@ -286,8 +197,8 @@ export const productGroups: ProductGroupSeed[] = [
     description: "Échangez cette carte contre des Robux ou un abonnement Premium sur Roblox.",
     sortOrder: 4,
     denominations: [
-      { id: "roblox-gift-card-100mad", name: "100 MAD", priceMad: 100, faceValue: 100, faceCurrency: "MAD", featured: true, sortOrder: 0 },
-      { id: "roblox-gift-card-200mad", name: "200 MAD", priceMad: 200, faceValue: 200, faceCurrency: "MAD", featured: false, sortOrder: 1 },
+      { id: "roblox-10usd", name: "10 USD", priceMad: 105, faceValue: 10, faceCurrency: "USD", featured: true,  sortOrder: 0 },
+      { id: "roblox-25usd", name: "25 USD", priceMad: 265, faceValue: 25, faceCurrency: "USD", featured: false, sortOrder: 1 },
     ],
   },
   {
@@ -299,8 +210,8 @@ export const productGroups: ProductGroupSeed[] = [
     description: "Échangez des Valorant Points pour skins, passes de combat et agents.",
     sortOrder: 5,
     denominations: [
-      { id: "valorant-points-100mad", name: "100 MAD", priceMad: 100, faceValue: 100, faceCurrency: "MAD", featured: true, sortOrder: 0 },
-      { id: "valorant-points-200mad", name: "200 MAD", priceMad: 200, faceValue: 200, faceCurrency: "MAD", featured: false, sortOrder: 1 },
+      { id: "valorant-10usd", name: "10 USD", priceMad: 105, faceValue: 10, faceCurrency: "USD", featured: true,  sortOrder: 0 },
+      { id: "valorant-25usd", name: "25 USD", priceMad: 265, faceValue: 25, faceCurrency: "USD", featured: false, sortOrder: 1 },
     ],
   },
 ];

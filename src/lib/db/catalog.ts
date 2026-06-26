@@ -40,7 +40,7 @@ function toCategory(row: {
 
 function getActiveProductRows() {
   return prisma.product.findMany({
-    where: { active: true },
+    where: { active: true, priceMad: { gt: 0 } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: { categoryRecord: true },
   });
@@ -74,7 +74,7 @@ export async function getProductCatalog(): Promise<Product[]> {
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   await ensureDatabaseReady();
   const product = await prisma.product.findFirst({
-    where: { slug, active: true },
+    where: { slug, active: true, priceMad: { gt: 0 } },
     include: { categoryRecord: true },
   });
   return product ? toProduct(product) : null;
@@ -85,7 +85,7 @@ export async function getProductsByCategorySlug(
 ): Promise<Product[]> {
   await ensureDatabaseReady();
   const products = await prisma.product.findMany({
-    where: { category, active: true },
+    where: { category, active: true, priceMad: { gt: 0 } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: { categoryRecord: true },
   });
