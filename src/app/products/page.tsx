@@ -80,6 +80,33 @@ export default async function ProductsPage({
             Reinitialiser
           </Link>
         </div>
+      ) : !category && !query ? (
+        <div className="space-y-12">
+          {categories
+            .map((cat) => ({ cat, products: filtered.filter((p) => p.category === cat.id) }))
+            .filter(({ products: ps }) => ps.length > 0)
+            .map(({ cat, products: ps }) => (
+              <section key={cat.id}>
+                <div className="mb-5 flex items-end justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold tracking-tight text-white">{cat.name}</h2>
+                    {cat.tagline && <p className="mt-0.5 text-sm text-muted">{cat.tagline}</p>}
+                  </div>
+                  <Link
+                    href={`/products?category=${cat.id}`}
+                    className="shrink-0 text-sm font-medium text-accent hover:text-accent-hover"
+                  >
+                    Voir tout &rarr;
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
+                  {ps.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              </section>
+            ))}
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
           {filtered.map((product) => (

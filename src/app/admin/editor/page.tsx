@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { categories } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import HeroDeliveryCard from "@/components/HeroDeliveryCard";
@@ -55,6 +55,7 @@ const howItWorksSteps = [
 
 function EditorCanvas() {
   const { draft, previewMode, set } = useEditor();
+  const { categories } = useProductCatalog();
   const s = draft;
 
   const [featured, setFeatured] = useState<Product[]>([]);

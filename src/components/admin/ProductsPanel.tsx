@@ -289,34 +289,72 @@ export default function ProductsPanel() {
               <p className="mt-1 text-xs">Run the Supabase setup SQL to seed parent products, or click + New.</p>
             </div>
           ) : (
-            <ul className="divide-y divide-border">
-              {parents.map((p) => (
-                <li key={p.slug}>
-                  <button
-                    type="button"
-                    onClick={() => openParent(p)}
-                    className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface ${
-                      selectedSlug === p.slug ? "bg-accent/10" : ""
-                    }`}
-                  >
-                    <div
-                      className="h-8 w-8 flex-shrink-0 rounded-lg"
-                      style={gradientStyle(p.category)}
-                    />
-                    <div className="min-w-0">
-                      <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
-                        {p.name}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
-                        {" · "}
-                        {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
-                      </p>
+            <div className="divide-y divide-border">
+              {CATEGORIES.map((catId) => {
+                const group = parents.filter((p) => p.category === catId);
+                if (group.length === 0) return null;
+                return (
+                  <div key={catId}>
+                    <div className="px-4 py-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-faint">
+                        {catId}
+                      </span>
                     </div>
-                  </button>
-                </li>
+                    {group.map((p) => (
+                      <button
+                        key={p.slug}
+                        type="button"
+                        onClick={() => openParent(p)}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface ${
+                          selectedSlug === p.slug ? "bg-accent/10" : ""
+                        }`}
+                      >
+                        <div
+                          className="h-8 w-8 flex-shrink-0 rounded-lg"
+                          style={gradientStyle(p.category)}
+                        />
+                        <div className="min-w-0">
+                          <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
+                            {p.name}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
+                            {" · "}
+                            {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+              {/* Products with unknown/custom categories */}
+              {parents.filter((p) => !(CATEGORIES as readonly string[]).includes(p.category)).map((p) => (
+                <button
+                  key={p.slug}
+                  type="button"
+                  onClick={() => openParent(p)}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface ${
+                    selectedSlug === p.slug ? "bg-accent/10" : ""
+                  }`}
+                >
+                  <div
+                    className="h-8 w-8 flex-shrink-0 rounded-lg"
+                    style={gradientStyle(p.category)}
+                  />
+                  <div className="min-w-0">
+                    <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
+                      {p.name}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {p.variants.length} variant{p.variants.length !== 1 ? "s" : ""}
+                      {" · "}
+                      {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
+                    </p>
+                  </div>
+                </button>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </aside>

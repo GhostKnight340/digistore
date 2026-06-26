@@ -60,10 +60,10 @@ export default function HomePage() {
           <div className="flex items-end justify-between gap-6">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text">
-                Categories populaires
+                {settings.homepage.categoriesTitle}
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Les plateformes les plus demandees au Maroc.
+                {settings.homepage.categoriesSubtitle}
               </p>
             </div>
             <Link href="/products" className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block">
@@ -83,10 +83,10 @@ export default function HomePage() {
           <div className="flex items-end justify-between gap-6">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text">
-                Produits populaires
+                {settings.homepage.featuredTitle}
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Selection verifiee, codes livres apres paiement.
+                {settings.homepage.featuredSubtitle}
               </p>
             </div>
             <Link href="/products" className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block">
@@ -107,13 +107,13 @@ export default function HomePage() {
         </section>
       )}
 
-      {settings.homepage.showWhyChooseUs && (
+      {settings.homepage.showHowItWorks && (
         <section id="how-it-works" className="mt-16 scroll-mt-20">
           <h2 className="text-2xl font-semibold tracking-tight text-text">
-            Comment ca marche
+            {settings.homepage.howItWorksTitle}
           </h2>
           <p className="mt-1 text-sm text-muted">
-            Trois etapes, en moins d'une minute.
+            {settings.homepage.howItWorksSubtitle}
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             {steps.map((step) => (
@@ -129,15 +129,15 @@ export default function HomePage() {
         </section>
       )}
 
-      {settings.homepage.showTrustStrip && <TrustStrip />}
+      {settings.homepage.showWhyChooseUs && <TrustStrip />}
 
       <section className="mt-16">
         <div className="relative overflow-hidden rounded-[20px] border border-accent/30 bg-gradient-to-br from-accent/20 to-surface px-6 py-12 text-center sm:py-16">
           <h2 className="text-2xl font-semibold tracking-tight text-text sm:text-3xl">
-            Pret a jouer?
+            {settings.homepage.ctaTitle}
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            Choisissez une carte et suivez votre commande apres paiement.
+            {settings.homepage.ctaSubtitle}
           </p>
           <Link href="/products" className="btn-primary mt-6">
             {settings.branding.primaryCtaLabel}
