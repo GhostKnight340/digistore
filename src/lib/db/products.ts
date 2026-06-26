@@ -269,9 +269,10 @@ export async function deleteParentProduct(
   await ensureDatabaseReady();
   const product = await prisma.product.findUnique({
     where: { slug: input.slug },
-    select: {
-      id: true,
-      slug: true,
+    include: {
+      variants: {
+        select: { id: true },
+      },
       _count: {
         select: {
           digitalCodes: true,
@@ -284,11 +285,12 @@ export async function deleteParentProduct(
   });
   if (!product) return { ok: false, error: "Product not found." };
 
-  if (
+  const hasProtectedReferences =
     product._count.digitalCodes > 0 ||
     product._count.orderItems > 0 ||
-    product._count.deliveredCodes > 0
-  ) {
+    product._count.deliveredCodes > 0;
+
+  if (input.variantStrategy === "delete" && hasProtectedReferences) {
     return {
       ok: false,
       error:
@@ -300,14 +302,55 @@ export async function deleteParentProduct(
     await prisma.$transaction(async (tx) => {
       if (input.variantStrategy === "move") {
         if (!input.targetParentSlug || input.targetParentSlug === input.slug) {
-          throw new Error("Choose another parent product for moved variants.");
+          throw new Error("Choose another parent product for the merge.");
         }
         const target = await tx.product.findUnique({
           where: { slug: input.targetParentSlug },
-          select: { id: true },
+          select: {
+            id: true,
+            _count: { select: { variants: true } },
+          },
         });
         if (!target) throw new Error("Target parent product not found.");
+
+        await tx.productVariant.upsert({
+          where: { id: product.slug },
+          update: {
+            productId: target.id,
+            name: product.name,
+            priceMad: product.priceMad,
+            active: product.active,
+            featured: product.featured,
+            stockMode: "automatic",
+          },
+          create: {
+            id: product.slug,
+            productId: target.id,
+            name: product.name,
+            priceMad: product.priceMad,
+            faceValue: null,
+            faceCurrency: "MAD",
+            stockControl: "manual",
+            stockMode: "automatic",
+            active: product.active,
+            featured: product.featured,
+            sortOrder: target._count.variants,
+          },
+        });
+
         await tx.productVariant.updateMany({
+          where: { productId: product.id, id: { not: product.slug } },
+          data: { productId: target.id },
+        });
+        await tx.digitalCode.updateMany({
+          where: { productId: product.id },
+          data: { productId: target.id },
+        });
+        await tx.orderItem.updateMany({
+          where: { productId: product.id },
+          data: { productId: target.id },
+        });
+        await tx.deliveredCode.updateMany({
           where: { productId: product.id },
           data: { productId: target.id },
         });
@@ -315,10 +358,21 @@ export async function deleteParentProduct(
         await tx.productVariant.deleteMany({ where: { productId: product.id } });
       }
 
+      await tx.productMedia.deleteMany({ where: { productId: product.id } });
       await tx.product.delete({ where: { id: product.id } });
     });
     return { ok: true };
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        ok: false,
+        error:
+          "Some inventory codes already exist under the target parent. Remove duplicate codes before merging.",
+      };
+    }
     return { ok: false, error: String(error) };
   }
 }

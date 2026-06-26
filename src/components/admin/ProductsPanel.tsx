@@ -388,7 +388,13 @@ export default function ProductsPanel() {
       ...options,
     });
     if (result.ok) {
-      setMsg({ text: "Parent product deleted.", ok: true });
+      setMsg({
+        text:
+          options.variantStrategy === "move"
+            ? "Duplicate parent merged and deleted."
+            : "Parent product deleted.",
+        ok: true,
+      });
       invalidateCache(selectedSlug);
       setSelectedSlug(null);
       setDraft(null);
@@ -663,7 +669,7 @@ function DeleteParentDialog({
         </p>
         <h3 className="mt-2 text-lg font-bold text-white">{product.name}</h3>
         <p className="mt-2 text-sm text-muted">
-          This removes the parent product from Admin and the storefront. Choose what should happen to its child variants.
+          This removes the parent product from Admin and the storefront. Merge duplicates into the real parent when they have inventory or order history.
         </p>
 
         <div className="mt-5 space-y-3 text-sm">
@@ -677,7 +683,7 @@ function DeleteParentDialog({
             <span>
               <span className="font-medium text-white">Delete all child variants</span>
               <span className="block text-xs text-muted">
-                Use this when the variants are no longer needed.
+                Only works when this parent has no inventory or order history.
               </span>
             </span>
           </label>
@@ -689,9 +695,9 @@ function DeleteParentDialog({
               className="mt-1 accent-[#3e7bfa]"
             />
             <span className="min-w-0 flex-1">
-              <span className="font-medium text-white">Move child variants to another parent</span>
+              <span className="font-medium text-white">Merge into another parent, then delete</span>
               <span className="block text-xs text-muted">
-                Use this when the current parent is a duplicate or should be merged.
+                Converts this duplicate into a variant and moves inventory, order references, and child variants.
               </span>
               {variantStrategy === "move" && (
                 <select
