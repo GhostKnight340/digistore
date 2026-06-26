@@ -213,6 +213,10 @@ async function ensureDatabaseSchema(): Promise<void> {
     `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "stockMode" TEXT NOT NULL DEFAULT 'automatic'`,
     `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCost" DOUBLE PRECISION`,
     `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCurrency" TEXT NOT NULL DEFAULT 'MAD'`,
+    // Sequential order number — create sequence and column
+    `CREATE SEQUENCE IF NOT EXISTS "order_number_seq" START 1`,
+    `ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "orderNumber" INTEGER`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Order_orderNumber_key" ON "Order"("orderNumber") WHERE "orderNumber" IS NOT NULL`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Product_slug_key" ON "Product"("slug")`,
     `CREATE INDEX IF NOT EXISTS "DigitalCode_productId_status_idx" ON "DigitalCode"("productId", "status")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "DigitalCode_productId_code_key" ON "DigitalCode"("productId", "code")`,
@@ -233,6 +237,20 @@ async function ensureDatabaseSchema(): Promise<void> {
 }
 
 async function seedCatalogProducts(): Promise<void> {
+  // Backfill existing orders that predate the sequential number column.
+  const ordersWithoutNumber = await prisma.order.findMany({
+    where: { orderNumber: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  for (const order of ordersWithoutNumber) {
+    const [row] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('"order_number_seq"')`;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { orderNumber: Number(row.nextval) },
+    });
+  }
+
   for (const [index, category] of categories.entries()) {
     await prisma.category.upsert({
       where: { id: category.id },

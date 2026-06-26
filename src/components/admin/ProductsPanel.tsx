@@ -7,6 +7,8 @@ import {
   saveParentProductAction,
   saveVariantAction,
   deleteVariantAction,
+  deleteParentProductAction,
+  duplicateParentProductAction,
 } from "@/app/actions/admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -70,6 +72,14 @@ export default function ProductsPanel() {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [isAddingVariant, setIsAddingVariant] = useState(false);
   const [newVariantDraft, setNewVariantDraft] = useState<VariantDTO | null>(null);
+  // Parent product management
+  const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<"cascade" | "move">("cascade");
+  const [moveTarget, setMoveTarget] = useState("");
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [dupSlug, setDupSlug] = useState("");
+  const [dupName, setDupName] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,6 +166,88 @@ export default function ProductsPanel() {
       await load();
     } else {
       setMsg({ text: result.error ?? "Unknown error.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  async function handleToggleArchive() {
+    if (!draft) return;
+    setSaving(true);
+    setMsg(null);
+    setShowMenu(false);
+    const result = await saveParentProductAction({
+      slug: draft.slug,
+      name: draft.name.trim(),
+      category: draft.category,
+      brand: draft.brand?.trim() || null,
+      region: draft.region,
+      deliveryType: draft.deliveryType,
+      description: draft.description,
+      shortDescription: draft.shortDescription?.trim() || null,
+      longDescription: draft.longDescription?.trim() || null,
+      instructions: draft.instructions?.trim() || null,
+      thumbnail: draft.thumbnail?.trim() || null,
+      active: !draft.active,
+    });
+    if (result.ok) {
+      setMsg({ text: draft.active ? "Archived." : "Unarchived.", ok: true });
+      await load();
+    } else {
+      setMsg({ text: result.error ?? "Failed.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  function openDuplicateDialog() {
+    if (!draft) return;
+    setDupSlug(`${draft.slug}-copy`);
+    setDupName(`${draft.name} (Copy)`);
+    setShowDuplicateDialog(true);
+    setShowMenu(false);
+  }
+
+  async function handleDuplicate() {
+    if (!draft) return;
+    setSaving(true);
+    setMsg(null);
+    const result = await duplicateParentProductAction(draft.slug, dupSlug.trim(), dupName.trim());
+    setShowDuplicateDialog(false);
+    if (result.ok) {
+      setMsg({ text: "Product duplicated.", ok: true });
+      await load();
+    } else {
+      setMsg({ text: result.error ?? "Failed.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  function openDeleteDialog() {
+    if (!draft) return;
+    setDeleteMode("cascade");
+    setMoveTarget(
+      parents.find((p) => p.slug !== draft.slug)?.slug ?? "",
+    );
+    setShowDeleteDialog(true);
+    setShowMenu(false);
+  }
+
+  async function handleDelete() {
+    if (!draft) return;
+    setSaving(true);
+    setMsg(null);
+    const result = await deleteParentProductAction(
+      draft.slug,
+      deleteMode === "cascade",
+      deleteMode === "move" ? moveTarget : undefined,
+    );
+    setShowDeleteDialog(false);
+    if (result.ok) {
+      setSelectedSlug(null);
+      setDraft(null);
+      setMsg({ text: "Product deleted.", ok: true });
+      await load();
+    } else {
+      setMsg({ text: result.error ?? "Failed.", ok: false });
     }
     setSaving(false);
   }
@@ -387,8 +479,195 @@ export default function ProductsPanel() {
               <button type="button" onClick={save} className="btn-primary text-sm" disabled={saving}>
                 {saving ? "Saving…" : "Save product"}
               </button>
+              {!isNew && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowMenu((v) => !v)}
+                    className="btn-ghost h-9 w-9 text-lg leading-none"
+                    aria-label="More actions"
+                    disabled={saving}
+                  >
+                    ⋮
+                  </button>
+                  {showMenu && (
+                    <>
+                      <button
+                        type="button"
+                        className="fixed inset-0 z-10"
+                        aria-label="Close menu"
+                        onClick={() => setShowMenu(false)}
+                      />
+                      <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+                        <button
+                          type="button"
+                          onClick={() => { setActiveTab("details"); setShowMenu(false); }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/5"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleToggleArchive}
+                          className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/5"
+                        >
+                          {draft.active ? "Archive" : "Unarchive"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openDuplicateDialog}
+                          className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/5"
+                        >
+                          Duplicate
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openDeleteDialog}
+                          className="w-full border-t border-border px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Delete dialog */}
+          {showDeleteDialog && draft && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/60"
+                onClick={() => setShowDeleteDialog(false)}
+              />
+              <div className="relative w-full max-w-sm rounded-2xl border border-border bg-base p-6 shadow-2xl">
+                <h3 className="font-bold text-white">Delete "{draft.name}"?</h3>
+                <p className="mt-1 text-sm text-muted">This cannot be undone.</p>
+
+                {draft.variants.length > 0 && (
+                  <div className="mt-4 space-y-3">
+                    <p className="text-sm text-white">
+                      This product has <strong>{draft.variants.length}</strong> variant(s). Choose what to do:
+                    </p>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
+                      <input
+                        type="radio"
+                        name="deleteMode"
+                        value="cascade"
+                        checked={deleteMode === "cascade"}
+                        onChange={() => setDeleteMode("cascade")}
+                        className="accent-[#3e7bfa]"
+                      />
+                      Delete all variants too
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
+                      <input
+                        type="radio"
+                        name="deleteMode"
+                        value="move"
+                        checked={deleteMode === "move"}
+                        onChange={() => setDeleteMode("move")}
+                        className="accent-[#3e7bfa]"
+                      />
+                      Move variants to another product
+                    </label>
+                    {deleteMode === "move" && (
+                      <select
+                        className="input mt-1"
+                        value={moveTarget}
+                        onChange={(e) => setMoveTarget(e.target.value)}
+                      >
+                        {parents
+                          .filter((p) => p.slug !== draft.slug)
+                          .map((p) => (
+                            <option key={p.slug} value={p.slug}>
+                              {p.name}
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteDialog(false)}
+                    className="btn-ghost text-sm"
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={saving || (deleteMode === "move" && !moveTarget)}
+                    className="h-9 rounded-lg border border-red-500/50 bg-red-500/10 px-4 text-sm font-medium text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                  >
+                    {saving ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Duplicate dialog */}
+          {showDuplicateDialog && draft && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/60"
+                onClick={() => setShowDuplicateDialog(false)}
+              />
+              <div className="relative w-full max-w-sm rounded-2xl border border-border bg-base p-6 shadow-2xl">
+                <h3 className="font-bold text-white">Duplicate "{draft.name}"</h3>
+                <p className="mt-1 text-sm text-muted">
+                  The duplicate starts inactive. Variants are copied.
+                </p>
+                <div className="mt-4 space-y-3">
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-white">New name</span>
+                    <input
+                      className="input"
+                      value={dupName}
+                      onChange={(e) => setDupName(e.target.value)}
+                      placeholder="My Product (Copy)"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-white">New slug</span>
+                    <input
+                      className="input font-mono"
+                      value={dupSlug}
+                      onChange={(e) =>
+                        setDupSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))
+                      }
+                      placeholder="my-product-copy"
+                    />
+                  </label>
+                </div>
+                <div className="mt-6 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDuplicateDialog(false)}
+                    className="btn-ghost text-sm"
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDuplicate}
+                    disabled={saving || !dupName.trim() || !dupSlug.trim()}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    {saving ? "Duplicating…" : "Duplicate"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="card overflow-hidden">

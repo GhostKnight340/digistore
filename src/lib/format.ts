@@ -1,3 +1,9 @@
+/** Formats a sequential order number as a zero-padded reference, e.g. "#000042". */
+export function formatOrderNumber(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return `#${String(n).padStart(6, "0")}`;
+}
+
 /** Formats a number as Moroccan Dirham, e.g. "100 MAD". */
 export function formatMAD(amount: number): string {
   return `${new Intl.NumberFormat("en-US").format(amount)} MAD`;

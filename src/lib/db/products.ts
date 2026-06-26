@@ -221,6 +221,110 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
   }
 }
 
+export async function deleteParentProduct(
+  slug: string,
+  cascade: boolean,
+  moveToSlug?: string,
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+
+  const product = await prisma.product.findUnique({
+    where: { slug },
+    include: { variants: { select: { id: true } } },
+  });
+  if (!product) return { ok: false, error: "Product not found." };
+
+  try {
+    if (!cascade && moveToSlug) {
+      const target = await prisma.product.findUnique({ where: { slug: moveToSlug } });
+      if (!target) return { ok: false, error: "Target product not found." };
+      await prisma.productVariant.updateMany({
+        where: { productId: product.id },
+        data: { productId: target.id },
+      });
+    } else {
+      // Deactivate denomination storefront rows whose slug matches a variant id.
+      const variantIds = product.variants.map((v) => v.id);
+      if (variantIds.length > 0) {
+        await prisma.product.updateMany({
+          where: { slug: { in: variantIds } },
+          data: { active: false },
+        });
+      }
+    }
+
+    // Deleting parent cascades to its ProductVariant rows via onDelete: Cascade.
+    await prisma.product.delete({ where: { id: product.id } });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+export async function duplicateParentProduct(
+  sourceSlug: string,
+  newSlug: string,
+  newName: string,
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+
+  if (!newSlug.trim() || !newName.trim()) {
+    return { ok: false, error: "Slug and name are required." };
+  }
+
+  const source = await prisma.product.findUnique({
+    where: { slug: sourceSlug },
+    include: { variants: true },
+  });
+  if (!source) return { ok: false, error: "Source product not found." };
+
+  const exists = await prisma.product.findUnique({ where: { slug: newSlug } });
+  if (exists) return { ok: false, error: "A product with this slug already exists." };
+
+  try {
+    const copy = await prisma.product.create({
+      data: {
+        slug: newSlug,
+        name: newName,
+        category: source.category,
+        brand: source.brand,
+        region: source.region,
+        deliveryType: source.deliveryType,
+        description: source.description,
+        shortDescription: source.shortDescription,
+        longDescription: source.longDescription,
+        instructions: source.instructions,
+        imageUrl: source.imageUrl,
+        priceMad: 0,
+        featured: false,
+        active: false,
+        sortOrder: source.sortOrder,
+      },
+    });
+
+    for (const v of source.variants) {
+      await prisma.productVariant.create({
+        data: {
+          productId: copy.id,
+          name: v.name,
+          priceMad: v.priceMad,
+          faceValue: v.faceValue,
+          faceCurrency: v.faceCurrency,
+          featured: v.featured,
+          active: v.active,
+          sortOrder: v.sortOrder,
+          stockControl: v.stockControl,
+          stockMode: v.stockMode,
+        },
+      });
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
 export async function deleteVariant(slug: string): Promise<ActionResult> {
   await ensureDatabaseReady();
 

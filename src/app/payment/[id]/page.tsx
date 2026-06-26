@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { formatMAD, formatDate } from "@/lib/format";
+import { formatMAD, formatDate, formatOrderNumber } from "@/lib/format";
 import {
   orderStatusBadgeClass,
   isDelivered,
@@ -108,7 +108,7 @@ export default function PaymentPage({
           </p>
 
           <dl className="mx-auto mt-6 grid max-w-xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
-            <VaultMeta label="Commande" value={`#${order.id.slice(-8).toUpperCase()}`} />
+            <VaultMeta label="Commande" value={formatOrderNumber(order.orderNumber)} />
             <VaultMeta label="Méthode" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
             <VaultMeta label="Total" value={formatMAD(order.totalMad)} />
             <VaultMeta label="Date" value={formatDate(order.createdAt)} />
@@ -119,6 +119,7 @@ export default function PaymentPage({
         {isPendingPayment(order.status) && (
           <PendingPaymentSection
             orderId={order.id}
+            orderRef={String(order.orderNumber ?? "").padStart(6, "0")}
             totalMad={order.totalMad}
             paymentMethod={order.paymentMethod}
             methodConfig={methodConfig ?? null}
@@ -153,7 +154,7 @@ export default function PaymentPage({
             title="Une erreur semble s'être produite lors du paiement."
             body="Veuillez contacter notre support WhatsApp avec votre numéro de commande."
             whatsapp={whatsapp}
-            orderId={order.id}
+            orderRef={formatOrderNumber(order.orderNumber)}
           />
         )}
 
@@ -162,7 +163,7 @@ export default function PaymentPage({
             title="Paiement refusé"
             body="Nous n'avons pas pu confirmer votre paiement. Veuillez nous contacter sur WhatsApp avec votre numéro de commande."
             whatsapp={whatsapp}
-            orderId={order.id}
+            orderRef={formatOrderNumber(order.orderNumber)}
             isRejection
           />
         )}
@@ -195,10 +196,10 @@ export default function PaymentPage({
           <h2 className="text-sm font-semibold text-white">Besoin d'aide?</h2>
           <p className="mt-1 text-xs text-muted">
             Contactez le support avec votre numéro de commande:{" "}
-            <span className="font-mono text-text">{order.id}</span>
+            <span className="font-mono text-text">{formatOrderNumber(order.orderNumber)}</span>
           </p>
           <a
-            href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai une question concernant ma commande ${order.id}`}
+            href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai une question concernant ma commande ${formatOrderNumber(order.orderNumber)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-green-400 hover:text-green-300"
@@ -228,6 +229,7 @@ export default function PaymentPage({
 
 function PendingPaymentSection({
   orderId,
+  orderRef,
   totalMad,
   paymentMethod,
   methodConfig,
@@ -237,6 +239,7 @@ function PendingPaymentSection({
   setError,
 }: {
   orderId: string;
+  orderRef: string;
   totalMad: number;
   paymentMethod: string;
   methodConfig: PaymentMethodConfigDTO | null;
@@ -255,7 +258,6 @@ function PendingPaymentSection({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selectedWallet = wallets.find((w) => w.network === selectedNetwork);
-  const orderRef = orderId.slice(-8).toUpperCase();
   const proofRequired = methodConfig?.proofRequired ?? true;
 
   async function handleSubmit() {
@@ -588,13 +590,13 @@ function IssueCard({
   title,
   body,
   whatsapp,
-  orderId,
+  orderRef,
   isRejection,
 }: {
   title: string;
   body: string;
   whatsapp: string;
-  orderId: string;
+  orderRef: string;
   isRejection?: boolean;
 }) {
   return (
@@ -605,7 +607,7 @@ function IssueCard({
       <p className="mt-4 font-semibold text-white">{title}</p>
       <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
       <a
-        href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai un problème avec ma commande ${orderId}`}
+        href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai un problème avec ma commande ${orderRef}`}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-4 inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700"

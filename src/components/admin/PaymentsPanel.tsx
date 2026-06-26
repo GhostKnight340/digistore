@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatMAD, formatDate } from "@/lib/format";
+import { formatMAD, formatDate, formatOrderNumber } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass, isDelivered } from "@/lib/orderStatus";
 import {
   getAdminOrdersAction,
@@ -141,7 +141,7 @@ export default function PaymentsPanel() {
                 {visible.map((order) => (
                   <tr key={order.id} className="border-b border-border/60 hover:bg-surface/40">
                     <td className="px-4 py-3 font-mono text-xs text-white">
-                      {order.id.slice(0, 12)}…
+                      {formatOrderNumber(order.orderNumber)}
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-white">{order.customerName}</p>
@@ -300,7 +300,7 @@ function PaymentDrawer({
       <div className="relative h-full w-full max-w-lg overflow-y-auto border-l border-border-strong bg-base shadow-card">
         <div className="sticky top-0 flex items-center justify-between border-b border-border bg-base/95 px-5 py-4 backdrop-blur">
           <div>
-            <p className="font-mono text-xs text-muted">{order.id}</p>
+            <p className="font-mono text-xs text-muted">{formatOrderNumber(order.orderNumber)}</p>
             <h3 className="text-lg font-bold text-white">Gestion du paiement</h3>
           </div>
           <button type="button" onClick={onClose} className="btn-ghost h-9 px-3 text-xs">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatMAD, formatDate } from "@/lib/format";
+import { formatMAD, formatDate, formatOrderNumber } from "@/lib/format";
 import {
   orderStatusShort,
   orderStatusBadgeClass,
@@ -126,7 +126,7 @@ export default function FulfillmentPanel({
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase text-muted">
                 <tr className="border-b border-border">
-                  <th className="px-5 py-3 font-medium">Order</th>
+                  <th className="px-5 py-3 font-medium">#</th>
                   <th className="px-5 py-3 font-medium">Customer</th>
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Total</th>
@@ -138,7 +138,7 @@ export default function FulfillmentPanel({
                 {visibleOrders.map((order) => (
                   <tr key={order.id} className="border-b border-border/60">
                     <td className="px-5 py-3 font-mono text-xs text-white">
-                      {order.id}
+                      {formatOrderNumber(order.orderNumber)}
                     </td>
                     <td className="px-5 py-3 text-muted">
                       {order.customerEmail}
@@ -300,7 +300,7 @@ function OrderDrawer({
       <div className="relative h-full w-full max-w-lg overflow-y-auto border-l border-border-strong bg-base shadow-card">
         <div className="sticky top-0 flex items-center justify-between border-b border-border bg-base/95 px-5 py-4 backdrop-blur">
           <div>
-            <p className="font-mono text-xs text-muted">{order.id}</p>
+            <p className="font-mono text-xs text-muted">{formatOrderNumber(order.orderNumber)}</p>
             <h3 className="text-lg font-bold text-white">Order fulfillment</h3>
           </div>
           <button

@@ -14,6 +14,7 @@ function iso(value: Date | string): string {
 function buildCustomerDTO(data: OrderRecord): CustomerOrderDTO {
   return {
     id: data.id,
+    orderNumber: data.orderNumber ?? null,
     status: data.status as OrderStatus,
     customerName: data.customerName,
     customerEmail: data.customerEmail,
@@ -159,8 +160,12 @@ export async function createOrder(
         },
       });
 
+      const [seqRow] = await tx.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('"order_number_seq"')`;
+      const orderNumber = Number(seqRow.nextval);
+
       const created = await tx.order.create({
         data: {
+          orderNumber,
           customerId: customer.id,
           customerName: input.customerName,
           customerEmail: input.customerEmail,

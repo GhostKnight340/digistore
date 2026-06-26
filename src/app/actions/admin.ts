@@ -27,6 +27,8 @@ import {
 } from "@/lib/db/paymentSettings";
 import {
   deleteVariant,
+  deleteParentProduct,
+  duplicateParentProduct,
   getParentProducts,
   saveParentProduct,
   saveVariant,
@@ -107,6 +109,22 @@ export async function saveVariantAction(
 
 export async function deleteVariantAction(slug: string): Promise<ActionResult> {
   return deleteVariant(slug);
+}
+
+export async function deleteParentProductAction(
+  slug: string,
+  cascade: boolean,
+  moveToSlug?: string,
+): Promise<ActionResult> {
+  return deleteParentProduct(slug, cascade, moveToSlug);
+}
+
+export async function duplicateParentProductAction(
+  sourceSlug: string,
+  newSlug: string,
+  newName: string,
+): Promise<ActionResult> {
+  return duplicateParentProduct(sourceSlug, newSlug, newName);
 }
 
 // ─── Payment settings admin actions ───────────────────────────────────────────

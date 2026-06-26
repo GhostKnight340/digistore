@@ -110,6 +110,7 @@ model DigitalCode {
 
 model Order {
   id            String   @id @default(cuid())
+  orderNumber   Int?     @unique
   customerId    String?
   customerName  String
   customerEmail String
