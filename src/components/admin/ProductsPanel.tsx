@@ -171,6 +171,8 @@ export default function ProductsPanel() {
       priceMad: 0,
       faceValue: null,
       faceCurrency: "MAD",
+      supplierCost: null,
+      supplierCurrency: "MAD",
       active: true,
       featured: false,
       stockControl: "manual",
@@ -201,6 +203,8 @@ export default function ProductsPanel() {
       priceMad: newVariantDraft.priceMad,
       faceValue: newVariantDraft.faceValue,
       faceCurrency: newVariantDraft.faceCurrency,
+      supplierCost: newVariantDraft.supplierCost,
+      supplierCurrency: newVariantDraft.supplierCurrency,
       region: draft.region,
       deliveryType: draft.deliveryType,
       active: newVariantDraft.active,
@@ -246,6 +250,8 @@ export default function ProductsPanel() {
       priceMad: v.priceMad,
       faceValue: v.faceValue,
       faceCurrency: v.faceCurrency,
+      supplierCost: v.supplierCost,
+      supplierCurrency: v.supplierCurrency,
       region: draft.region,
       deliveryType: draft.deliveryType,
       active: v.active,
@@ -628,6 +634,27 @@ function VariantForm({
             value={v.priceMad}
             onChange={(e) => onChange("priceMad", Number(e.target.value))}
           />
+        </Field>
+        <Field label="Supplier cost">
+          <input
+            className="input"
+            type="number"
+            min="0"
+            step="0.01"
+            value={v.supplierCost ?? ""}
+            onChange={(e) =>
+              onChange("supplierCost", e.target.value === "" ? null : Number(e.target.value))
+            }
+          />
+        </Field>
+        <Field label="Supplier currency">
+          <select
+            className="input"
+            value={v.supplierCurrency}
+            onChange={(e) => onChange("supplierCurrency", e.target.value)}
+          >
+            {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
         </Field>
         <Field label="Stock control">
           <select

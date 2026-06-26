@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
 import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
-import { categories } from "@/lib/products";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import type { PaymentMethod, Product, StockMode, StockStatus } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -38,6 +38,7 @@ const sectionLabels: Record<(typeof homepageSectionKeys)[number], string> = {
 
 export default function SettingsPanel() {
   const { settings, ready, saveSettings, resetSettings } = useStoreSettings();
+  const { categories } = useProductCatalog();
   const [draft, setDraft] = useState<StoreSettings>(settings);
   const [message, setMessage] = useState("");
   const [products, setProducts] = useState<Product[]>([]);

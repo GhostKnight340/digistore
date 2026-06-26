@@ -85,6 +85,8 @@ export interface VariantDTO {
   priceMad: number;
   faceValue: number | null;
   faceCurrency: string;
+  supplierCost: number | null;
+  supplierCurrency: string;
   active: boolean;
   featured: boolean;
   stockControl: string;
@@ -132,6 +134,8 @@ export interface SaveVariantInput {
   priceMad: number;
   faceValue: number | null;
   faceCurrency: string;
+  supplierCost: number | null;
+  supplierCurrency: string;
   region: string;
   deliveryType: string;
   active: boolean;

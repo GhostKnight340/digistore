@@ -13,20 +13,24 @@ datasource db {
 }
 
 model Product {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
-  category     String
-  description  String   @default("")
-  priceMad     Int
-  region       String
-  deliveryType String
-  imageUrl     String?
-  featured     Boolean  @default(false)
-  active       Boolean  @default(true)
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  category         String
+  description      String   @default("")
+  shortDescription String?
+  longDescription  String?
+  instructions     String?
+  brand            String?
+  priceMad         Int
+  region           String
+  deliveryType     String
+  imageUrl         String?
+  featured         Boolean  @default(false)
+  active           Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   categoryRecord Category? @relation(fields: [category], references: [id])
   digitalCodes   DigitalCode[]
@@ -64,14 +68,21 @@ model ProductMedia {
 }
 
 model ProductVariant {
-  id        String   @id @default(cuid())
-  productId String
-  name      String
-  priceMad  Int
-  active    Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  productId        String
+  name             String
+  priceMad         Int
+  faceValue        Float?
+  faceCurrency     String   @default("MAD")
+  stockControl     String   @default("manual")
+  stockMode        String   @default("automatic")
+  supplierCost     Float?
+  supplierCurrency String   @default("MAD")
+  active           Boolean  @default(true)
+  featured         Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 

@@ -34,12 +34,14 @@ function toVariant(product: ProductRow, variant: ProductRow["variants"][number])
     slug: variant.id,
     name: variant.name,
     priceMad: variant.priceMad,
-    faceValue: null,
-    faceCurrency: "MAD",
+    faceValue: variant.faceValue,
+    faceCurrency: variant.faceCurrency,
+    supplierCost: variant.supplierCost,
+    supplierCurrency: variant.supplierCurrency,
     active: variant.active,
-    featured: product.featured,
-    stockControl: "manual",
-    stockMode: "automatic",
+    featured: variant.featured,
+    stockControl: variant.stockControl,
+    stockMode: variant.stockMode,
     inventoryUnused: product.digitalCodes.filter((code) => code.status === "unused").length,
   };
 }
@@ -52,6 +54,8 @@ function productAsFallbackVariant(product: ProductRow): VariantDTO {
     priceMad: product.priceMad,
     faceValue: null,
     faceCurrency: "MAD",
+    supplierCost: null,
+    supplierCurrency: "MAD",
     active: product.active,
     featured: product.featured,
     stockControl: "manual",
@@ -70,13 +74,13 @@ function toParent(product: ProductRow): ParentProductDTO {
     slug: product.slug,
     name: product.name,
     category: product.category,
-    brand: null,
+    brand: product.brand,
     region: product.region,
     deliveryType: product.deliveryType,
     description: product.description,
-    shortDescription: null,
-    longDescription: null,
-    instructions: null,
+    shortDescription: product.shortDescription,
+    longDescription: product.longDescription,
+    instructions: product.instructions,
     thumbnail: product.imageUrl ?? product.media[0]?.url ?? null,
     active: product.active,
     createdAt: product.createdAt.toISOString(),
@@ -105,9 +109,13 @@ export async function saveParentProduct(
       update: {
         name: data.name,
         category: data.category,
+        brand: data.brand,
         region: data.region,
         deliveryType: data.deliveryType,
         description: data.description,
+        shortDescription: data.shortDescription,
+        longDescription: data.longDescription,
+        instructions: data.instructions,
         imageUrl: data.thumbnail || null,
         active: data.active,
       },
@@ -115,9 +123,13 @@ export async function saveParentProduct(
         slug: data.slug,
         name: data.name,
         category: data.category,
+        brand: data.brand,
         region: data.region,
         deliveryType: data.deliveryType,
         description: data.description,
+        shortDescription: data.shortDescription,
+        longDescription: data.longDescription,
+        instructions: data.instructions,
         imageUrl: data.thumbnail || null,
         active: data.active,
         priceMad: 0,
@@ -160,27 +172,35 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       return { ok: true };
     }
 
+
     const existing =
       product.variants.find((variant) => variant.id === data.slug) ??
       product.variants.find((variant) => variant.name === data.name);
 
+    const variantFields = {
+      name: data.name,
+      priceMad: data.priceMad,
+      faceValue: data.faceValue,
+      faceCurrency: data.faceCurrency,
+      supplierCost: data.supplierCost,
+      supplierCurrency: data.supplierCurrency,
+      stockControl: data.stockControl,
+      stockMode: data.stockMode,
+      active: data.active,
+      featured: data.featured,
+    };
+
     if (existing) {
       await prisma.productVariant.update({
         where: { id: existing.id },
-        data: {
-          name: data.name,
-          priceMad: data.priceMad,
-          active: data.active,
-        },
+        data: variantFields,
       });
     } else {
       await prisma.productVariant.create({
         data: {
           id: data.slug,
           productId: product.id,
-          name: data.name,
-          priceMad: data.priceMad,
-          active: data.active,
+          ...variantFields,
           sortOrder: product.variants.length,
         },
       });
