@@ -38,6 +38,10 @@ import {
 import {
   deleteVariant,
   duplicateVariant,
+  duplicateParentProduct,
+  archiveParentProduct,
+  deleteParentProduct,
+  convertProductToVariant,
   getParentProducts,
   getParentProductBySlug,
   getProductList,
@@ -56,6 +60,8 @@ import type {
   InventoryGroupDTO,
   InventorySummaryDTO,
   ItemAssignment,
+  ConvertProductToVariantInput,
+  DeleteParentProductInput,
   ParentProductDTO,
   ProductListItemDTO,
   SaveParentProductInput,
@@ -173,6 +179,36 @@ export async function saveParentProductAction(
   data: SaveParentProductInput,
 ): Promise<ActionResult> {
   const result = await saveParentProduct(data);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function duplicateParentProductAction(
+  slug: string,
+): Promise<ActionResult & { slug?: string }> {
+  const result = await duplicateParentProduct(slug);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function archiveParentProductAction(slug: string): Promise<ActionResult> {
+  const result = await archiveParentProduct(slug);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function deleteParentProductAction(
+  input: DeleteParentProductInput,
+): Promise<ActionResult> {
+  const result = await deleteParentProduct(input);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function convertProductToVariantAction(
+  input: ConvertProductToVariantInput,
+): Promise<ActionResult> {
+  const result = await convertProductToVariant(input);
   if (result.ok) revalidatePath("/", "layout");
   return result;
 }

@@ -19,12 +19,7 @@ export default async function HomePage() {
     getStoreSettings(),
   ]);
 
-  const featured =
-    settings.featuredProductIds.length > 0
-      ? settings.featuredProductIds
-          .map((id) => products.find((product) => product.id === id))
-          .filter((product): product is (typeof products)[number] => Boolean(product))
-      : products.filter((product) => product.featured);
+  const featured = products.filter((product) => product.featured);
 
   return (
     <div className="container-page">

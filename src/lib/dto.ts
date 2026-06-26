@@ -114,6 +114,18 @@ export interface ProductListItemDTO {
   variantCount: number;
 }
 
+export interface DeleteParentProductInput {
+  slug: string;
+  variantStrategy: "delete" | "move";
+  targetParentSlug?: string;
+}
+
+export interface ConvertProductToVariantInput {
+  sourceSlug: string;
+  targetParentSlug: string;
+  removeSource: boolean;
+}
+
 // Product management DTOs restored from the historical admin editor. The
 // current DB maps parent fields to Product and variant fields to ProductVariant.
 export interface VariantDTO {
@@ -145,6 +157,7 @@ export interface ParentProductDTO {
   instructions: string | null;
   thumbnail: string | null;
   active: boolean;
+  featured: boolean;
   createdAt: string;
   variants: VariantDTO[];
 }
@@ -163,6 +176,7 @@ export interface SaveParentProductInput {
   instructions: string | null;
   thumbnail: string | null;
   active: boolean;
+  featured: boolean;
 }
 
 export interface SaveVariantInput {

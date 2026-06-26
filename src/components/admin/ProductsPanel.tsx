@@ -6,10 +6,15 @@ import {
   getProductListAction,
   getParentProductBySlugAction,
   saveParentProductAction,
+  duplicateParentProductAction,
+  archiveParentProductAction,
+  deleteParentProductAction,
+  convertProductToVariantAction,
   saveVariantAction,
   deleteVariantAction,
   duplicateVariantAction,
 } from "@/app/actions/admin";
+import { uploadImageFile } from "@/lib/clientUpload";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -51,6 +56,7 @@ function emptyParent(): ParentProductDTO {
     instructions: null,
     thumbnail: null,
     active: true,
+    featured: false,
     createdAt: new Date().toISOString(),
     variants: [],
   };
@@ -76,6 +82,7 @@ export default function ProductsPanel() {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [isAddingVariant, setIsAddingVariant] = useState(false);
   const [newVariantDraft, setNewVariantDraft] = useState<VariantDTO | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Cache: slug → ParentProductDTO so navigating between products is instant
   const detailCache = useRef<Record<string, ParentProductDTO>>({});
@@ -183,6 +190,7 @@ export default function ProductsPanel() {
       instructions: draft.instructions?.trim() || null,
       thumbnail: draft.thumbnail?.trim() || null,
       active: draft.active,
+      featured: draft.featured,
     });
     if (result.ok) {
       setMsg({ text: "Saved.", ok: true });
@@ -336,6 +344,84 @@ export default function ProductsPanel() {
     }
   }
 
+  async function duplicateParent() {
+    if (!selectedSlug || selectedSlug === "__new__") return;
+    setSaving(true);
+    setMsg(null);
+    const result = await duplicateParentProductAction(selectedSlug);
+    if (result.ok && result.slug) {
+      setMsg({ text: "Parent product duplicated as an archived draft.", ok: true });
+      await loadList();
+      const item = { slug: result.slug } as ProductListItemDTO;
+      await openParent(item);
+    } else {
+      setMsg({ text: result.error ?? "Duplicate failed.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  async function archiveParent() {
+    if (!selectedSlug || selectedSlug === "__new__") return;
+    setSaving(true);
+    setMsg(null);
+    const result = await archiveParentProductAction(selectedSlug);
+    if (result.ok) {
+      setMsg({ text: "Parent product archived.", ok: true });
+      invalidateCache(selectedSlug);
+      await loadList();
+      await refreshDetail();
+    } else {
+      setMsg({ text: result.error ?? "Archive failed.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  async function confirmDeleteParent(options: {
+    variantStrategy: "delete" | "move";
+    targetParentSlug?: string;
+  }) {
+    if (!selectedSlug || selectedSlug === "__new__") return;
+    setSaving(true);
+    setMsg(null);
+    const result = await deleteParentProductAction({
+      slug: selectedSlug,
+      ...options,
+    });
+    if (result.ok) {
+      setMsg({ text: "Parent product deleted.", ok: true });
+      invalidateCache(selectedSlug);
+      setSelectedSlug(null);
+      setDraft(null);
+      setVariantDrafts({});
+      setDeleteDialogOpen(false);
+      await loadList();
+    } else {
+      setMsg({ text: result.error ?? "Delete failed.", ok: false });
+    }
+    setSaving(false);
+  }
+
+  async function convertStandaloneProduct(sourceSlug: string, removeSource: boolean) {
+    if (!selectedSlug || selectedSlug === "__new__") return;
+    setSaving(true);
+    setMsg(null);
+    const result = await convertProductToVariantAction({
+      sourceSlug,
+      targetParentSlug: selectedSlug,
+      removeSource,
+    });
+    if (result.ok) {
+      setMsg({ text: "Standalone product converted into a variant.", ok: true });
+      invalidateCache(selectedSlug);
+      invalidateCache(sourceSlug);
+      await loadList();
+      await refreshDetail();
+    } else {
+      setMsg({ text: result.error ?? "Conversion failed.", ok: false });
+    }
+    setSaving(false);
+  }
+
   return (
     <div className="grid h-full gap-6 lg:grid-cols-[260px_1fr]">
       {/* ── Left: parent list ── */}
@@ -457,6 +543,24 @@ export default function ProductsPanel() {
                   {msg.text}
                 </span>
               )}
+              {!isNew && selectedSlug && (
+                <>
+                  <button type="button" onClick={duplicateParent} className="btn-ghost text-sm" disabled={saving}>
+                    Duplicate
+                  </button>
+                  <button type="button" onClick={archiveParent} className="btn-ghost text-sm" disabled={saving || !draft.active}>
+                    Archive
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    className="rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
+                    disabled={saving}
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
               <button type="button" onClick={cancel} className="btn-ghost text-sm" disabled={saving}>
                 Cancel
               </button>
@@ -496,6 +600,7 @@ export default function ProductsPanel() {
               {activeTab === "variants" && (
                 <VariantsTab
                   draft={draft}
+                  parentOptions={items.filter((item) => item.slug !== draft.slug)}
                   variantDrafts={variantDrafts}
                   editingVariant={editingVariant}
                   setEditingVariant={setEditingVariant}
@@ -510,11 +615,21 @@ export default function ProductsPanel() {
                   onCancelNewVariant={cancelAddVariant}
                   onDeleteVariant={deleteVariantHandler}
                   onDuplicateVariant={duplicateVariantHandler}
+                  onConvertStandalone={convertStandaloneProduct}
                 />
               )}
               {activeTab === "media" && <MediaTab draft={draft} update={updateDraft} />}
             </div>
           </div>
+          {deleteDialogOpen && selectedSlug && (
+            <DeleteParentDialog
+              product={draft}
+              parentOptions={items.filter((item) => item.slug !== selectedSlug)}
+              saving={saving}
+              onCancel={() => setDeleteDialogOpen(false)}
+              onConfirm={confirmDeleteParent}
+            />
+          )}
         </section>
       )}
     </div>
@@ -522,6 +637,102 @@ export default function ProductsPanel() {
 }
 
 // ─── Details tab ─────────────────────────────────────────────────────────────
+
+function DeleteParentDialog({
+  product,
+  parentOptions,
+  saving,
+  onCancel,
+  onConfirm,
+}: {
+  product: ParentProductDTO;
+  parentOptions: ProductListItemDTO[];
+  saving: boolean;
+  onCancel: () => void;
+  onConfirm: (options: { variantStrategy: "delete" | "move"; targetParentSlug?: string }) => Promise<void>;
+}) {
+  const [variantStrategy, setVariantStrategy] = useState<"delete" | "move">("delete");
+  const [targetParentSlug, setTargetParentSlug] = useState("");
+  const canConfirm = variantStrategy === "delete" || Boolean(targetParentSlug);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
+      <div className="w-full max-w-lg rounded-2xl border border-border-strong bg-base p-5 shadow-card">
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
+          Delete parent product
+        </p>
+        <h3 className="mt-2 text-lg font-bold text-white">{product.name}</h3>
+        <p className="mt-2 text-sm text-muted">
+          This removes the parent product from Admin and the storefront. Choose what should happen to its child variants.
+        </p>
+
+        <div className="mt-5 space-y-3 text-sm">
+          <label className="flex items-start gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+            <input
+              type="radio"
+              checked={variantStrategy === "delete"}
+              onChange={() => setVariantStrategy("delete")}
+              className="mt-1 accent-[#3e7bfa]"
+            />
+            <span>
+              <span className="font-medium text-white">Delete all child variants</span>
+              <span className="block text-xs text-muted">
+                Use this when the variants are no longer needed.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+            <input
+              type="radio"
+              checked={variantStrategy === "move"}
+              onChange={() => setVariantStrategy("move")}
+              className="mt-1 accent-[#3e7bfa]"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="font-medium text-white">Move child variants to another parent</span>
+              <span className="block text-xs text-muted">
+                Use this when the current parent is a duplicate or should be merged.
+              </span>
+              {variantStrategy === "move" && (
+                <select
+                  className="input mt-3 h-10 py-0 text-sm"
+                  value={targetParentSlug}
+                  onChange={(event) => setTargetParentSlug(event.target.value)}
+                >
+                  <option value="">Choose target parent...</option>
+                  {parentOptions.map((item) => (
+                    <option key={item.slug} value={item.slug}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </span>
+          </label>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="btn-ghost text-sm" disabled={saving}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canConfirm || saving}
+            onClick={() =>
+              onConfirm({
+                variantStrategy,
+                targetParentSlug: variantStrategy === "move" ? targetParentSlug : undefined,
+              })
+            }
+            className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-50"
+          >
+            {saving ? "Deleting..." : "Confirm delete"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DetailsTab({
   draft,
@@ -591,6 +802,11 @@ function DetailsTab({
           label="Active (visible in store)"
           checked={draft.active}
           onChange={(v) => update("active", v)}
+        />
+        <Toggle
+          label="Featured (homepage popular products)"
+          checked={draft.featured}
+          onChange={(v) => update("featured", v)}
         />
       </div>
     </div>
@@ -763,6 +979,7 @@ function VariantForm({
 
 function VariantsTab({
   draft,
+  parentOptions,
   variantDrafts,
   editingVariant,
   setEditingVariant,
@@ -777,8 +994,10 @@ function VariantsTab({
   onCancelNewVariant,
   onDeleteVariant,
   onDuplicateVariant,
+  onConvertStandalone,
 }: {
   draft: ParentProductDTO;
+  parentOptions: ProductListItemDTO[];
   variantDrafts: Record<string, VariantDTO>;
   editingVariant: string | null;
   setEditingVariant: (slug: string | null) => void;
@@ -793,11 +1012,61 @@ function VariantsTab({
   onCancelNewVariant: () => void;
   onDeleteVariant: (slug: string) => Promise<void>;
   onDuplicateVariant: (slug: string) => Promise<void>;
+  onConvertStandalone: (sourceSlug: string, removeSource: boolean) => Promise<void>;
 }) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [sourceSlug, setSourceSlug] = useState("");
+  const [removeSource, setRemoveSource] = useState(true);
 
   return (
     <div className="space-y-3">
+      {parentOptions.length > 0 && (
+        <div className="rounded-xl border border-border bg-base px-4 py-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[220px] flex-1">
+              <label className="mb-1.5 block text-xs font-medium text-white">
+                Convert standalone product into this parent
+              </label>
+              <select
+                className="input h-10 py-0 text-sm"
+                value={sourceSlug}
+                onChange={(event) => setSourceSlug(event.target.value)}
+              >
+                <option value="">Choose a product to convert...</option>
+                {parentOptions.map((item) => (
+                  <option key={item.slug} value={item.slug}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={removeSource}
+                onChange={(event) => setRemoveSource(event.target.checked)}
+                className="h-4 w-4 accent-[#3e7bfa]"
+              />
+              Delete source parent after conversion
+            </label>
+            <button
+              type="button"
+              disabled={!sourceSlug || saving}
+              onClick={async () => {
+                await onConvertStandalone(sourceSlug, removeSource);
+                setSourceSlug("");
+              }}
+              className="btn-primary h-10 px-4 text-xs disabled:opacity-50"
+            >
+              Convert
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            Use this to remove duplicate standalone products and manage them as variants under this parent.
+          </p>
+        </div>
+      )}
+
       {/* Add variant button */}
       <div className="flex justify-end">
         <button
@@ -973,12 +1242,8 @@ function MediaTab({
     setUploadError(null);
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Upload failed.");
-      update("thumbnail", data.url);
+      const url = await uploadImageFile(file);
+      update("thumbnail", url);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed.");
     } finally {

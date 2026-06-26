@@ -21,6 +21,13 @@ const METHOD_META: Record<
   card: { label: "Carte bancaire", hint: "Disponible prochainement" },
 };
 
+function isMethodUsable(config: PaymentConfigDTO, method: PaymentMethod): boolean {
+  if (!config.methods[method]?.enabled) return false;
+  if (method === "bank") return config.banks.length > 0;
+  if (method === "usdt") return config.wallets.length > 0;
+  return true;
+}
+
 export default function CheckoutClient({
   initialConfig = null,
 }: {
@@ -34,7 +41,7 @@ export default function CheckoutClient({
   const [configError, setConfigError] = useState(false);
   const enabledMethods = config
     ? (["bank", "usdt", "paypal", "card"] as PaymentMethod[]).filter(
-        (m) => config.methods[m]?.enabled,
+        (m) => isMethodUsable(config, m),
       )
     : [];
 
@@ -52,7 +59,7 @@ export default function CheckoutClient({
       .then((cfg) => {
         setConfig(cfg);
         const first = (["bank", "usdt", "paypal", "card"] as PaymentMethod[]).find(
-          (m) => cfg.methods[m]?.enabled,
+          (m) => isMethodUsable(cfg, m),
         );
         if (first) setMethod(first);
       })

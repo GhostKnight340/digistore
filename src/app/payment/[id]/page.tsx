@@ -270,9 +270,10 @@ function PendingPaymentSection({
         : paymentMethod === "usdt" && wallets.length === 0
           ? "Les adresses USDT ne sont pas configurees. Contactez l'administrateur."
           : "";
+  const methodUnavailable = !methodConfig?.enabled || paymentMethod === "usdt" && wallets.length === 0;
   const proofMissing = proofRequired && !proofFile;
   const disabledReason =
-    configurationError ||
+    (methodUnavailable ? configurationError : "") ||
     proofError ||
     (proofMissing ? "Veuillez selectionner un justificatif de paiement avant de continuer." : "");
   const submitDisabled = submitting || Boolean(disabledReason);
@@ -313,7 +314,7 @@ function PendingPaymentSection({
   }
 
   async function handleSubmit() {
-    if (configurationError) {
+    if (methodUnavailable) {
       setError(configurationError);
       return;
     }

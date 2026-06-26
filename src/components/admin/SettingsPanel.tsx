@@ -5,6 +5,7 @@ import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
 import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
+import { uploadImageFile } from "@/lib/clientUpload";
 import type { PaymentMethod, Product, StockMode, StockStatus } from "@/lib/types";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -528,12 +529,8 @@ function CategoryMediaRow({
     setError("");
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      const json = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !json.url) throw new Error(json.error ?? "Upload failed");
-      onChange(json.url);
+      const url = await uploadImageFile(file);
+      onChange(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {

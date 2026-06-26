@@ -5,6 +5,8 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import type {
   ActionResult,
+  ConvertProductToVariantInput,
+  DeleteParentProductInput,
   ParentProductDTO,
   ProductListItemDTO,
   SaveParentProductInput,
@@ -92,6 +94,7 @@ function toParent(product: ProductRow): ParentProductDTO {
     instructions: product.instructions,
     thumbnail: product.imageUrl ?? product.media[0]?.url ?? null,
     active: product.active,
+    featured: product.featured,
     createdAt: product.createdAt.toISOString(),
     variants,
   };
@@ -182,6 +185,235 @@ export async function duplicateVariant(variantId: string): Promise<ActionResult 
   }
 }
 
+function copySlug(base: string): string {
+  return `${base}-copy-${Date.now().toString(36)}`;
+}
+
+export async function duplicateParentProduct(slug: string): Promise<ActionResult & { slug?: string }> {
+  await ensureDatabaseReady();
+  const product = await prisma.product.findUnique({
+    where: { slug },
+    include: {
+      variants: true,
+      media: true,
+    },
+  });
+  if (!product) return { ok: false, error: "Product not found." };
+
+  const newSlug = copySlug(product.slug);
+  try {
+    await prisma.product.create({
+      data: {
+        name: `${product.name} (copy)`,
+        slug: newSlug,
+        category: product.category,
+        description: product.description,
+        shortDescription: product.shortDescription,
+        longDescription: product.longDescription,
+        instructions: product.instructions,
+        brand: product.brand,
+        priceMad: product.priceMad,
+        region: product.region,
+        deliveryType: product.deliveryType,
+        imageUrl: product.imageUrl,
+        featured: false,
+        active: false,
+        sortOrder: product.sortOrder + 1,
+        media: {
+          create: product.media.map((item) => ({
+            url: item.url,
+            alt: item.alt,
+            sortOrder: item.sortOrder,
+          })),
+        },
+        variants: {
+          create: product.variants.map((variant) => ({
+            id: `${newSlug}-${variant.id}`.slice(0, 180),
+            name: variant.name,
+            priceMad: variant.priceMad,
+            faceValue: variant.faceValue,
+            faceCurrency: variant.faceCurrency,
+            stockControl: variant.stockControl,
+            stockMode: variant.stockMode,
+            supplierCost: variant.supplierCost,
+            supplierCurrency: variant.supplierCurrency,
+            active: variant.active,
+            featured: false,
+            sortOrder: variant.sortOrder,
+          })),
+        },
+      },
+    });
+    return { ok: true, slug: newSlug };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+export async function archiveParentProduct(slug: string): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  try {
+    await prisma.product.update({
+      where: { slug },
+      data: { active: false, featured: false },
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+export async function deleteParentProduct(
+  input: DeleteParentProductInput,
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const product = await prisma.product.findUnique({
+    where: { slug: input.slug },
+    select: {
+      id: true,
+      slug: true,
+      _count: {
+        select: {
+          digitalCodes: true,
+          orderItems: true,
+          deliveredCodes: true,
+          variants: true,
+        },
+      },
+    },
+  });
+  if (!product) return { ok: false, error: "Product not found." };
+
+  if (
+    product._count.digitalCodes > 0 ||
+    product._count.orderItems > 0 ||
+    product._count.deliveredCodes > 0
+  ) {
+    return {
+      ok: false,
+      error:
+        "This product has inventory or order history. Archive it, or convert it into another parent product instead.",
+    };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (input.variantStrategy === "move") {
+        if (!input.targetParentSlug || input.targetParentSlug === input.slug) {
+          throw new Error("Choose another parent product for moved variants.");
+        }
+        const target = await tx.product.findUnique({
+          where: { slug: input.targetParentSlug },
+          select: { id: true },
+        });
+        if (!target) throw new Error("Target parent product not found.");
+        await tx.productVariant.updateMany({
+          where: { productId: product.id },
+          data: { productId: target.id },
+        });
+      } else {
+        await tx.productVariant.deleteMany({ where: { productId: product.id } });
+      }
+
+      await tx.product.delete({ where: { id: product.id } });
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+export async function convertProductToVariant(
+  input: ConvertProductToVariantInput,
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  if (input.sourceSlug === input.targetParentSlug) {
+    return { ok: false, error: "Choose a different source product." };
+  }
+
+  const [source, target] = await Promise.all([
+    prisma.product.findUnique({
+      where: { slug: input.sourceSlug },
+      include: { variants: true },
+    }),
+    prisma.product.findUnique({
+      where: { slug: input.targetParentSlug },
+      select: { id: true },
+    }),
+  ]);
+  if (!source) return { ok: false, error: "Source product not found." };
+  if (!target) return { ok: false, error: "Target parent product not found." };
+
+  const baseVariantId = source.slug;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.productVariant.upsert({
+        where: { id: baseVariantId },
+        update: {
+          productId: target.id,
+          name: source.name,
+          priceMad: source.priceMad,
+          active: source.active,
+          featured: source.featured,
+          stockMode: "automatic",
+        },
+        create: {
+          id: baseVariantId,
+          productId: target.id,
+          name: source.name,
+          priceMad: source.priceMad,
+          faceValue: null,
+          faceCurrency: "MAD",
+          stockControl: "manual",
+          stockMode: "automatic",
+          active: source.active,
+          featured: source.featured,
+          sortOrder: source.variants.length,
+        },
+      });
+
+      await tx.productVariant.updateMany({
+        where: { productId: source.id, id: { not: baseVariantId } },
+        data: { productId: target.id },
+      });
+      await tx.digitalCode.updateMany({
+        where: { productId: source.id },
+        data: { productId: target.id },
+      });
+      await tx.orderItem.updateMany({
+        where: { productId: source.id },
+        data: { productId: target.id },
+      });
+      await tx.deliveredCode.updateMany({
+        where: { productId: source.id },
+        data: { productId: target.id },
+      });
+
+      if (input.removeSource) {
+        await tx.product.delete({ where: { id: source.id } });
+      } else {
+        await tx.product.update({
+          where: { id: source.id },
+          data: { active: false, featured: false },
+        });
+      }
+    });
+    return { ok: true };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        ok: false,
+        error:
+          "Some inventory codes already exist under the target parent. Remove duplicates before converting.",
+      };
+    }
+    return { ok: false, error: String(error) };
+  }
+}
+
 export async function saveParentProduct(
   data: SaveParentProductInput,
 ): Promise<ActionResult> {
@@ -203,6 +435,7 @@ export async function saveParentProduct(
     instructions: data.instructions,
     imageUrl: data.thumbnail || null,
     active: data.active,
+    featured: data.featured,
   };
 
   try {
@@ -257,7 +490,6 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
           name: data.name,
           priceMad: data.priceMad,
           active: data.active,
-          featured: data.featured,
           category: data.category,
           region: data.region,
           deliveryType: data.deliveryType,
@@ -298,11 +530,6 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
         },
       });
     }
-
-    await prisma.product.update({
-      where: { id: product.id },
-      data: { featured: data.featured },
-    });
 
     return { ok: true };
   } catch (error) {

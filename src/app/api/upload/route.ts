@@ -30,12 +30,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const buffer = Buffer.from(bytes);
+
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json({
+        url: `data:${file.type};base64,${buffer.toString("base64")}`,
+      });
+    }
+
     const ext = file.type === "image/webp" ? "webp" : file.type === "image/png" ? "png" : "jpg";
     const name = `${Date.now()}-${randomBytes(6).toString("hex")}.${ext}`;
     const uploadsDir = join(process.cwd(), "public", "uploads");
 
     await mkdir(uploadsDir, { recursive: true });
-    await writeFile(join(uploadsDir, name), Buffer.from(bytes));
+    await writeFile(join(uploadsDir, name), buffer);
 
     return NextResponse.json({ url: `/uploads/${name}` });
   } catch (err) {
