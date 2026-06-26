@@ -25,7 +25,6 @@ const BG_PRESETS: Record<string, { label: string; from: string; to: string }> = 
 };
 
 const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
-const STOCK_CONTROLS = ["manual", "api"];
 type EditorTab = "details" | "content" | "variants" | "media";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -908,29 +907,20 @@ function VariantForm({
             onChange={(e) => onChange("priceMad", Number(e.target.value))}
           />
         </Field>
-        <Field label="Stock control">
-          <select
-            className="input"
-            value={v.stockControl}
-            onChange={(e) => onChange("stockControl", e.target.value)}
-          >
-            {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
-          </select>
-        </Field>
-        <Field label={`Stock display${!slugEditable ? ` · ${v.inventoryUnused} code(s)` : ""}`}>
+        <Field label="Stock mode">
           <select
             className="input"
             value={v.stockMode}
             onChange={(e) => onChange("stockMode", e.target.value)}
           >
-            <option value="automatic">Automatique (inventaire)</option>
-            <option value="force_in_stock">Toujours En stock</option>
-            <option value="force_out_of_stock">Toujours En rupture</option>
+            <option value="automatic">Automatic from inventory</option>
+            <option value="force_in_stock">Force In Stock</option>
+            <option value="force_out_of_stock">Force Out of Stock</option>
           </select>
         </Field>
         {!slugEditable && (
-          <Field label="Inventory (unused codes)">
-            <input className="input" value={v.inventoryUnused} disabled readOnly />
+          <Field label="Unused codes">
+            <p className="py-2 text-sm text-muted">{v.inventoryUnused}</p>
           </Field>
         )}
       </div>

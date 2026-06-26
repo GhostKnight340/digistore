@@ -6,15 +6,20 @@ import {
   getProductCatalog,
   getProductsByCategorySlug,
 } from "@/lib/db/catalog";
-import { getInventoryGroups } from "@/lib/db/inventory";
-import type { Product, StockStatus } from "@/lib/types";
+import { getInventoryGroups, getVariantStockModes } from "@/lib/db/inventory";
+import type { Product, StockMode, StockStatus } from "@/lib/types";
+
+const LOW_STOCK_THRESHOLD = 3;
 
 export async function getStorefrontProductsAction(): Promise<Product[]> {
   return withStockStatus(await getProductCatalog());
 }
 
 export async function getStorefrontProductAction(slug: string): Promise<Product | null> {
-  return getProductBySlug(slug);
+  const product = await getProductBySlug(slug);
+  if (!product) return null;
+  const [withStock] = await withStockStatus([product]);
+  return withStock;
 }
 
 export async function getStorefrontFeaturedAction(): Promise<Product[]> {
@@ -33,17 +38,32 @@ export async function getStorefrontProductsByIdsAction(
     .filter((product): product is Product => Boolean(product));
 }
 
-async function getStockMap() {
-  const inventory = await getInventoryGroups();
-  return new Map(inventory.map((row) => [row.productId, row.unused]));
-}
-
-async function withStockStatus(products: Product[]): Promise<Product[]> {
-  const stock = await getStockMap();
-  return products.map((product) => ({
-    ...product,
-    stockStatus: (stock.get(product.id) ?? 0) > 0 ? "in_stock" : "out_of_stock",
-  }));
+export async function withStockStatus(products: Product[]): Promise<Product[]> {
+  if (products.length === 0) return products;
+  const ids = products.map((p) => p.id);
+  const [inventory, modeMap] = await Promise.all([
+    getInventoryGroups(),
+    getVariantStockModes(ids),
+  ]);
+  const stockMap = new Map(inventory.map((row) => [row.productId, row.unused]));
+  return products.map((product) => {
+    const mode = (modeMap.get(product.id) ?? "automatic") as StockMode;
+    let stockStatus: StockStatus;
+    if (mode === "force_in_stock") {
+      stockStatus = "in_stock";
+    } else if (mode === "force_out_of_stock") {
+      stockStatus = "out_of_stock";
+    } else {
+      const unused = stockMap.get(product.id) ?? 0;
+      stockStatus =
+        unused === 0
+          ? "out_of_stock"
+          : unused <= LOW_STOCK_THRESHOLD
+            ? "low_stock"
+            : "in_stock";
+    }
+    return { ...product, stockStatus };
+  });
 }
 
 export async function getCategoryCountsAction(): Promise<Record<string, number>> {
@@ -58,18 +78,17 @@ export async function getCategoryCountsAction(): Promise<Record<string, number>>
 export async function getCategoryStockStatusesAction(): Promise<
   Record<string, StockStatus>
 > {
-  const [inventory, products] = await Promise.all([
-    getInventoryGroups(),
-    getProductCatalog(),
-  ]);
-  const productStock = new Map(inventory.map((row) => [row.productId, row.unused]));
+  const products = await getProductCatalog();
+  const withStock = await withStockStatus(products);
   const status: Record<string, StockStatus> = {};
 
-  for (const product of products) {
+  const priority: Record<StockStatus, number> = { in_stock: 2, low_stock: 1, out_of_stock: 0 };
+  for (const product of withStock) {
+    const s = product.stockStatus ?? "out_of_stock";
     const current = status[product.category];
-    if (current === "in_stock") continue;
-    status[product.category] =
-      (productStock.get(product.id) ?? 0) > 0 ? "in_stock" : "out_of_stock";
+    if (!current || priority[s] > priority[current]) {
+      status[product.category] = s;
+    }
   }
 
   return status;

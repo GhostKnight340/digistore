@@ -24,6 +24,18 @@ function rowToCode(code: CodeRecord): AdminCodeDTO {
   };
 }
 
+export async function getVariantStockModes(
+  productIds: string[],
+): Promise<Map<string, string>> {
+  if (productIds.length === 0) return new Map();
+  await ensureDatabaseReady();
+  const variants = await prisma.productVariant.findMany({
+    where: { productId: { in: productIds } },
+    select: { productId: true, stockMode: true },
+  });
+  return new Map(variants.map((v) => [v.productId, v.stockMode]));
+}
+
 export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
   await ensureDatabaseReady();
   const products = await prisma.product.findMany({

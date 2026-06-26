@@ -1,17 +1,40 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  getProductBySlug,
   getProductCatalog,
   getProductsByCategorySlug,
 } from "@/lib/db/catalog";
+import { getStorefrontProductAction, withStockStatus } from "@/app/actions/storefront";
 import ProductArt from "@/components/ProductArt";
 import ProductCard from "@/components/ProductCard";
 import AddToCartForm from "@/components/AddToCartForm";
+import type { StockStatus } from "@/lib/types";
 
 export async function generateStaticParams() {
   const products = await getProductCatalog().catch(() => []);
   return products.map((product) => ({ id: product.id }));
+}
+
+function DetailStockBadge({ status }: { status: StockStatus }) {
+  if (status === "out_of_stock") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400">
+        En rupture
+      </span>
+    );
+  }
+  if (status === "low_stock") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-yellow-500/10 px-3 py-1 text-xs font-medium text-yellow-400">
+        Stock faible
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
+      En stock
+    </span>
+  );
 }
 
 const howItWorks = [
@@ -26,12 +49,13 @@ export default async function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const product = await getProductBySlug(id);
+  const product = await getStorefrontProductAction(id);
   if (!product) notFound();
 
-  const related = (await getProductsByCategorySlug(product.category))
+  const relatedRaw = (await getProductsByCategorySlug(product.category))
     .filter((item) => item.id !== product.id)
     .slice(0, 4);
+  const related = await withStockStatus(relatedRaw);
 
   return (
     <div className="container-page py-8 sm:py-10">
@@ -81,9 +105,14 @@ export default async function ProductDetailPage({
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
-            Livraison apres confirmation
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
+              Livraison apres confirmation
+            </span>
+            {product.stockStatus && (
+              <DetailStockBadge status={product.stockStatus} />
+            )}
+          </div>
 
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-text">
             {product.name}

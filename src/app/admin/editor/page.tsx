@@ -14,9 +14,8 @@ import {
   getStorefrontFeaturedAction,
   getStorefrontProductsByIdsAction,
   getCategoryCountsAction,
-  getCategoryStockStatusesAction,
 } from "@/app/actions/storefront";
-import type { Product, StockStatus } from "@/lib/types";
+import type { Product } from "@/lib/types";
 
 const iconProps = {
   viewBox: "0 0 24 24",
@@ -60,17 +59,13 @@ function EditorCanvas() {
 
   const [featured, setFeatured] = useState<Product[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
-  const [autoStockStatuses, setAutoStockStatuses] = useState<Record<string, StockStatus>>({});
   const [countsReady, setCountsReady] = useState(false);
 
   useEffect(() => {
-    Promise.all([getCategoryCountsAction(), getCategoryStockStatusesAction()]).then(
-      ([counts, stockStatuses]) => {
-        setCategoryCounts(counts);
-        setAutoStockStatuses(stockStatuses);
-        setCountsReady(true);
-      },
-    );
+    getCategoryCountsAction().then((counts) => {
+      setCategoryCounts(counts);
+      setCountsReady(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -206,26 +201,14 @@ function EditorCanvas() {
                 : categories
               )
                 .slice(0, 4)
-                .map((category) => {
-                  const mode = s.categoryStockModes?.[category.id] ?? "automatic";
-                  const autoStatus = autoStockStatuses[category.id];
-                  const stockStatus: StockStatus | undefined = countsReady
-                    ? mode === "force_in_stock"
-                      ? "in_stock"
-                      : mode === "force_out_of_stock"
-                        ? "out_of_stock"
-                        : autoStatus
-                    : undefined;
-                  return (
-                    <CategoryCard
-                      key={category.id}
-                      category={category}
-                      count={categoryCounts[category.id]}
-                      thumbnail={s.categoryMedia?.[category.id]}
-                      stockStatus={stockStatus}
-                    />
-                  );
-                })}
+                .map((category) => (
+                  <CategoryCard
+                    key={category.id}
+                    category={category}
+                    count={categoryCounts[category.id]}
+                    thumbnail={s.categoryMedia?.[category.id]}
+                  />
+                ))}
             </div>
           </section>
         </SectionWrapper>

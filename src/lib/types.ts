@@ -56,7 +56,7 @@ export type PaymentMethod =
   | "test";
 
 export type StockMode = "automatic" | "force_in_stock" | "force_out_of_stock";
-export type StockStatus = "in_stock" | "out_of_stock";
+export type StockStatus = "in_stock" | "low_stock" | "out_of_stock";
 
 /**
  * Full payment lifecycle:
