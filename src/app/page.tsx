@@ -19,7 +19,12 @@ export default async function HomePage() {
     getStoreSettings(),
   ]);
 
-  const featured = products.filter((product) => product.featured);
+  const featured = products.filter(
+    (product) =>
+      product.featured &&
+      (settings.featuredOutOfStock === "show" ||
+        product.stockStatus !== "out_of_stock"),
+  );
 
   return (
     <div className="container-page">

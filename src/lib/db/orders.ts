@@ -339,19 +339,40 @@ export async function createOrder(
 ): Promise<{ id: string } | null> {
   await ensureDatabaseReady();
   const slugs = input.items.map((item) => item.productId);
-  const products = await prisma.product.findMany({
-    where: { slug: { in: slugs }, active: true },
-  });
+  const [products, variants] = await Promise.all([
+    prisma.product.findMany({
+      where: { slug: { in: slugs }, active: true },
+    }),
+    prisma.productVariant.findMany({
+      where: {
+        id: { in: slugs },
+        active: true,
+        product: { active: true },
+      },
+      include: { product: true },
+    }),
+  ]);
 
-  const bySlug = new Map(products.map((product) => [product.slug, product]));
+  const bySlug = new Map(
+    products.map((product) => [
+      product.slug,
+      { productId: product.id, unitPriceMad: product.priceMad },
+    ]),
+  );
+  for (const variant of variants) {
+    bySlug.set(variant.id, {
+      productId: variant.productId,
+      unitPriceMad: variant.priceMad,
+    });
+  }
   const lineItems = input.items
     .map((item) => {
-      const product = bySlug.get(item.productId);
-      if (!product || item.quantity < 1) return null;
+      const purchasable = bySlug.get(item.productId);
+      if (!purchasable || item.quantity < 1) return null;
       return {
-        productId: product.id,
+        productId: purchasable.productId,
         quantity: item.quantity,
-        unitPriceMad: product.priceMad,
+        unitPriceMad: purchasable.unitPriceMad,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);

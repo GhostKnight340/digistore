@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getProductBySlug,
-  getProductCatalog,
+  getParentProductSlugs,
   getProductsByCategorySlug,
 } from "@/lib/db/catalog";
 import ProductArt from "@/components/ProductArt";
@@ -10,8 +10,8 @@ import ProductCard from "@/components/ProductCard";
 import AddToCartForm from "@/components/AddToCartForm";
 
 export async function generateStaticParams() {
-  const products = await getProductCatalog().catch(() => []);
-  return products.map((product) => ({ id: product.id }));
+  const slugs = await getParentProductSlugs().catch(() => []);
+  return slugs.map((id) => ({ id }));
 }
 
 const howItWorks = [
@@ -22,15 +22,22 @@ const howItWorks = [
 
 export default async function ProductDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ variant?: string }>;
 }) {
   const { id } = await params;
+  const { variant: rawVariant } = await searchParams;
   const product = await getProductBySlug(id);
   if (!product) notFound();
+  const selectedVariant =
+    product.variants?.find((item) => item.id === rawVariant) ??
+    product.variants?.find((item) => item.id === product.selectedVariantId) ??
+    product.variants?.[0];
 
   const related = (await getProductsByCategorySlug(product.category))
-    .filter((item) => item.id !== product.id)
+    .filter((item) => item.parentId !== product.id)
     .slice(0, 4);
 
   return (
@@ -98,7 +105,31 @@ export default async function ProductDetailPage({
           </div>
 
           <div className="mt-7 rounded-2xl border border-border bg-surface p-6">
-            <AddToCartForm productId={product.id} price={product.price} />
+            {product.variants && product.variants.length > 0 && (
+              <div className="mb-5">
+                <p className="mb-2 text-sm font-medium text-faint">Montant</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {product.variants.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/products/${product.id}?variant=${encodeURIComponent(item.id)}`}
+                      className={`rounded-xl border px-3 py-2 text-sm transition ${
+                        item.id === selectedVariant?.id
+                          ? "border-accent bg-accent/10 text-white"
+                          : "border-border text-muted hover:border-border-strong hover:text-white"
+                      }`}
+                    >
+                      <span className="block font-medium">{item.title}</span>
+                      <span className="font-mono text-xs">{item.price} MAD</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+            <AddToCartForm
+              productId={selectedVariant?.id ?? product.id}
+              price={selectedVariant?.price ?? product.price}
+            />
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
               Paiement securise - methodes configurees dans Supabase
             </div>

@@ -4,20 +4,91 @@ import type { Prisma } from "@prisma/client";
 import { cache } from "react";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { defaultStoreSettings, mergeStoreSettings, type StoreSettings } from "@/lib/storeSettings";
-import type { Category, Product } from "@/lib/types";
+import type { Category, Product, ProductVariantOption, StockMode, StockStatus } from "@/lib/types";
 
 type ProductWithCategory = Awaited<ReturnType<typeof getActiveProductRows>>[number];
 
 const productCatalogInclude = {
   categoryRecord: true,
   variants: {
-    where: { active: true, featured: true },
-    select: { id: true },
-    take: 1,
+    where: { active: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  },
+  _count: {
+    select: { digitalCodes: { where: { status: "unused" } } },
   },
 } satisfies Prisma.ProductInclude;
 
-function toProduct(row: ProductWithCategory): Product {
+function normalizeStockMode(value: string): StockMode {
+  return value === "force_in_stock" || value === "force_out_of_stock"
+    ? value
+    : "automatic";
+}
+
+function isVariantPublic(row: ProductWithCategory, variant: ProductWithCategory["variants"][number]) {
+  return row.active && variant.active && normalizeStockMode(variant.stockMode) !== "force_out_of_stock";
+}
+
+function variantStockStatus(
+  row: ProductWithCategory,
+  variant: ProductWithCategory["variants"][number],
+): StockStatus {
+  const stockMode = normalizeStockMode(variant.stockMode);
+  if (stockMode === "force_in_stock") return "in_stock";
+  if (stockMode === "force_out_of_stock") return "out_of_stock";
+  return row._count.digitalCodes > 0 ? "in_stock" : "out_of_stock";
+}
+
+function variantTitle(parentName: string, variant: ProductWithCategory["variants"][number]) {
+  return variant.faceValue != null
+    ? `${parentName} ${variant.faceValue} ${variant.faceCurrency}`
+    : variant.name;
+}
+
+function toVariantOption(
+  row: ProductWithCategory,
+  variant: ProductWithCategory["variants"][number],
+): ProductVariantOption {
+  return {
+    id: variant.id,
+    name: variant.name,
+    title: variantTitle(row.name, variant),
+    price: variant.priceMad,
+    faceValue: variant.faceValue,
+    faceCurrency: variant.faceCurrency,
+    active: variant.active,
+    featured: variant.featured,
+    stockMode: normalizeStockMode(variant.stockMode),
+    stockStatus: variantStockStatus(row, variant),
+  };
+}
+
+function toVariantProduct(row: ProductWithCategory, variant: ProductWithCategory["variants"][number]): Product {
+  const title = variantTitle(row.name, variant);
+  return {
+    id: variant.id,
+    parentId: row.slug,
+    variantId: variant.id,
+    href: `/products/${row.slug}?variant=${encodeURIComponent(variant.id)}`,
+    name: title,
+    category: row.category,
+    categoryName: row.categoryRecord?.name ?? row.category,
+    region: row.region,
+    price: variant.priceMad,
+    deliveryType: row.deliveryType,
+    description: row.description,
+    featured: row.featured || variant.featured,
+    stockStatus: variantStockStatus(row, variant),
+  };
+}
+
+function toParentProduct(row: ProductWithCategory, selectedVariantId?: string): Product {
+  const variants = row.variants
+    .filter((variant) => isVariantPublic(row, variant))
+    .map((variant) => toVariantOption(row, variant));
+  const selectedVariant =
+    variants.find((variant) => variant.id === selectedVariantId) ?? variants[0];
+
   return {
     id: row.slug,
     name: row.name,
@@ -27,7 +98,10 @@ function toProduct(row: ProductWithCategory): Product {
     price: row.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,
-    featured: row.featured || row.variants.length > 0,
+    featured: row.featured || variants.some((variant) => variant.featured),
+    stockStatus: selectedVariant?.stockStatus,
+    variants,
+    selectedVariantId: selectedVariant?.id,
   };
 }
 
@@ -66,6 +140,16 @@ function getActiveProductRows(options: {
             OR: [
               { name: { contains: options.query, mode: "insensitive" } },
               { category: { contains: options.query, mode: "insensitive" } },
+              {
+                variants: {
+                  some: {
+                    OR: [
+                      { id: { contains: options.query, mode: "insensitive" } },
+                      { name: { contains: options.query, mode: "insensitive" } },
+                    ],
+                  },
+                },
+              },
             ],
           }
         : {}),
@@ -96,20 +180,30 @@ export async function getCatalogPage(options: {
 }> {
   await ensureDatabaseReady();
   const page = Math.max(1, options.page ?? 1);
-  const pageSize = Math.min(48, Math.max(1, options.take ?? 24));
+  const pageSize = Math.min(200, Math.max(1, options.take ?? 24));
   const where = {
     active: true,
     category: options.category,
     ...(options.query
       ? {
-          OR: [
-            { name: { contains: options.query, mode: "insensitive" as const } },
-            { category: { contains: options.query, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
+            OR: [
+              { name: { contains: options.query, mode: "insensitive" as const } },
+              { category: { contains: options.query, mode: "insensitive" as const } },
+              {
+                variants: {
+                  some: {
+                    OR: [
+                      { id: { contains: options.query, mode: "insensitive" as const } },
+                      { name: { contains: options.query, mode: "insensitive" as const } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
   };
-  const [categoryRows, productRows, total] = await Promise.all([
+  const [categoryRows, productRows] = await Promise.all([
     prisma.category.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -118,16 +212,19 @@ export async function getCatalogPage(options: {
     getActiveProductRows({
       category: options.category,
       query: options.query,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
     }),
-    prisma.product.count({ where }),
   ]);
+  const variantProducts = productRows.flatMap((row) =>
+    row.variants
+      .filter((variant) => isVariantPublic(row, variant))
+      .map((variant) => toVariantProduct(row, variant)),
+  );
+  const pagedProducts = variantProducts.slice((page - 1) * pageSize, page * pageSize);
 
   return {
     categories: categoryRows.map(toCategory),
-    products: productRows.map(toProduct),
-    total,
+    products: pagedProducts,
+    total: variantProducts.length,
     page,
     pageSize,
   };
@@ -144,7 +241,16 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     where: { slug, active: true },
     include: productCatalogInclude,
   });
-  return product ? toProduct(product) : null;
+  return product ? toParentProduct(product) : null;
+}
+
+export async function getParentProductSlugs(): Promise<string[]> {
+  await ensureDatabaseReady();
+  const products = await prisma.product.findMany({
+    where: { active: true },
+    select: { slug: true },
+  });
+  return products.map((product) => product.slug);
 }
 
 export async function getProductsByCategorySlug(
@@ -156,7 +262,11 @@ export async function getProductsByCategorySlug(
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: productCatalogInclude,
   });
-  return products.map(toProduct);
+  return products.flatMap((row) =>
+    row.variants
+      .filter((variant) => isVariantPublic(row, variant))
+      .map((variant) => toVariantProduct(row, variant)),
+  );
 }
 
 export const getStoreSettings = cache(async function getStoreSettings(): Promise<StoreSettings> {

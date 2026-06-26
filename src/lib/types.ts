@@ -18,6 +18,9 @@ export interface Category {
 
 export interface Product {
   id: string;
+  parentId?: string;
+  variantId?: string;
+  href?: string;
   name: string;
   category: string;
   categoryName?: string;
@@ -28,6 +31,21 @@ export interface Product {
   description: string;
   featured?: boolean;
   stockStatus?: StockStatus;
+  variants?: ProductVariantOption[];
+  selectedVariantId?: string;
+}
+
+export interface ProductVariantOption {
+  id: string;
+  name: string;
+  title: string;
+  price: number;
+  faceValue: number | null;
+  faceCurrency: string;
+  active: boolean;
+  featured: boolean;
+  stockMode: StockMode;
+  stockStatus: StockStatus;
 }
 
 export interface CartItem {

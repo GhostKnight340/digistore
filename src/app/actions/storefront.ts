@@ -41,7 +41,11 @@ async function withStockStatus(products: Product[]): Promise<Product[]> {
   const stock = await getStockMap();
   return products.map((product) => ({
     ...product,
-    stockStatus: (stock.get(product.id) ?? 0) > 0 ? "in_stock" : "out_of_stock",
+    stockStatus:
+      product.stockStatus ??
+      ((stock.get(product.parentId ?? product.id) ?? 0) > 0
+        ? "in_stock"
+        : "out_of_stock"),
   }));
 }
 
@@ -64,7 +68,10 @@ export async function getCategoryStockStatusesAction(): Promise<
     const current = status[product.category];
     if (current === "in_stock") continue;
     status[product.category] =
-      (productStock.get(product.id) ?? 0) > 0 ? "in_stock" : "out_of_stock";
+      product.stockStatus ??
+      ((productStock.get(product.parentId ?? product.id) ?? 0) > 0
+        ? "in_stock"
+        : "out_of_stock");
   }
 
   return status;

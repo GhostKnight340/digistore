@@ -58,7 +58,7 @@ export default function CartPage() {
                 <div className="flex flex-1 flex-col">
                   <div className="flex items-start justify-between gap-2">
                     <Link
-                      href={`/products/${product.id}`}
+                      href={product.href ?? `/products/${product.id}`}
                       className="font-semibold text-white hover:text-accent"
                     >
                       {product.name}

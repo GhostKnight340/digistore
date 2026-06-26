@@ -6,7 +6,7 @@ import ProductArt from "./ProductArt";
 export default function ProductCard({ product }: { product: Product }) {
   return (
     <Link
-      href={`/products/${product.id}`}
+      href={product.href ?? `/products/${product.id}`}
       className="group flex flex-col overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-border-strong hover:shadow-soft"
     >
       <ProductArt category={product.category} className="aspect-[3/2] w-full" />
