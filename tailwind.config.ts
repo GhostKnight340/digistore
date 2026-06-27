@@ -50,9 +50,14 @@ const config: Config = {
           "0%,100%": { opacity: "1" },
           "50%": { opacity: "0.35" },
         },
+        fadeUp: {
+          from: { opacity: "0", transform: "translateY(14px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         pulse2: "pulse2 1.4s ease-in-out infinite",
+        "fade-up": "fadeUp 0.35s ease both",
       },
     },
   },

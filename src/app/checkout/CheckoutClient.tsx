@@ -8,18 +8,9 @@ import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
+import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
 import type { PaymentMethod } from "@/lib/types";
 import type { PaymentConfigDTO } from "@/lib/dto";
-
-const METHOD_META: Record<
-  string,
-  { label: string; hint: string; badge?: string }
-> = {
-  bank: { label: "Virement bancaire", hint: "RIB / IBAN affiché à l'étape suivante" },
-  usdt: { label: "USDT Crypto", hint: "TRC20 / BEP20 uniquement" },
-  paypal: { label: "PayPal", hint: "Vous serez guidé à l'étape suivante" },
-  card: { label: "Carte bancaire", hint: "Disponible prochainement" },
-};
 
 function isMethodUsable(config: PaymentConfigDTO, method: PaymentMethod): boolean {
   if (!config.methods[method]?.enabled) return false;
@@ -222,46 +213,12 @@ export default function CheckoutClient({
                 Aucune méthode de paiement disponible pour le moment.
               </p>
             ) : (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {enabledMethods.map((m) => {
-                  const meta = METHOD_META[m] ?? { label: m, hint: "" };
-                  const active = method === m;
-                  return (
-                    <button
-                      type="button"
-                      key={m}
-                      onClick={() => setMethod(m)}
-                      className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${
-                        active
-                          ? "border-accent bg-accent/10"
-                          : "border-border bg-surface hover:border-accent/50"
-                      }`}
-                    >
-                      <span
-                        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
-                          active ? "border-accent bg-accent" : "border-border"
-                        }`}
-                      >
-                        {active && (
-                          <span className="h-2 w-2 rounded-full bg-white" />
-                        )}
-                      </span>
-                      <span>
-                        <span className="flex items-center gap-2 font-semibold text-white">
-                          {meta.label}
-                          {meta.badge && (
-                            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
-                              {meta.badge}
-                            </span>
-                          )}
-                        </span>
-                        <span className="block text-xs text-muted">
-                          {meta.hint}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="mt-5">
+                <PaymentMethodSelector
+                  methods={enabledMethods}
+                  selected={method}
+                  onSelect={setMethod}
+                />
               </div>
             )}
           </section>

@@ -13,6 +13,7 @@ import {
 import { getPaymentPageDataAction, submitPaymentAction } from "@/app/actions/payments";
 import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
+import PaymentDetailsPanel from "@/components/checkout/PaymentDetailsPanel";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
 import type { BankDTO, CryptoWalletDTO, PaymentMethodConfigDTO } from "@/lib/dto";
@@ -249,17 +250,11 @@ function PendingPaymentSection({
   onSubmitted: () => void;
   setError: (e: string) => void;
 }) {
-  const [selectedBank, setSelectedBank] = useState<BankDTO | null>(banks[0] ?? null);
-  const [selectedNetwork, setSelectedNetwork] = useState<string>(
-    wallets.find((w) => w.network === "TRC20") ? "TRC20" : wallets[0]?.network ?? "TRC20",
-  );
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofError, setProofError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const selectedWallet = wallets.find((w) => w.network === selectedNetwork);
   const orderRef = orderId.slice(-8).toUpperCase();
   const proofRequired = methodConfig?.proofRequired ?? true;
   const configurationError =
@@ -277,20 +272,6 @@ function PendingPaymentSection({
     proofError ||
     (proofMissing ? "Veuillez selectionner un justificatif de paiement avant de continuer." : "");
   const submitDisabled = submitting || Boolean(disabledReason);
-
-  useEffect(() => {
-    setSelectedBank((current) =>
-      current && banks.some((bank) => bank.id === current.id) ? current : banks[0] ?? null,
-    );
-  }, [banks]);
-
-  useEffect(() => {
-    setSelectedNetwork((current) =>
-      wallets.some((wallet) => wallet.network === current)
-        ? current
-        : wallets.find((wallet) => wallet.network === "TRC20")?.network ?? wallets[0]?.network ?? "TRC20",
-    );
-  }, [wallets]);
 
   function handleProofChange(file: File | null) {
     if (!file) {
@@ -345,18 +326,6 @@ function PendingPaymentSection({
     }
   }
 
-  async function copyAddress(text: string) {
-    try {
-      await copyToClipboard(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("[payment] Copy failed", error);
-      setCopied(false);
-      setError("Impossible de copier automatiquement. Selectionnez le texte manuellement.");
-    }
-  }
-
   return (
     <div className="space-y-4">
       {/* Instructions header */}
@@ -366,159 +335,15 @@ function PendingPaymentSection({
         </div>
       )}
 
-      {/* ── Bank Transfer ── */}
-      {paymentMethod === "bank" && (
-        <div className="card p-5">
-          <h2 className="text-base font-semibold text-white">Informations de virement</h2>
-
-          {banks.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">
-              Les coordonnées bancaires sont en cours de configuration. Veuillez réessayer ultérieurement.
-            </p>
-          ) : (
-            <>
-              {banks.length > 1 && (
-                <div className="mt-4">
-                  <p className="mb-2 text-xs uppercase tracking-wide text-faint">Choisissez une banque</p>
-                  <div className="flex flex-wrap gap-2">
-                    {banks.map((b) => (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => setSelectedBank(b)}
-                        className={`rounded-lg border px-3 py-1.5 text-sm ${
-                          selectedBank?.id === b.id
-                            ? "border-accent bg-accent/15 text-white"
-                            : "border-border text-muted"
-                        }`}
-                      >
-                        {b.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedBank && (
-                <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
-                  {selectedBank.name && <BankField label="Banque" value={selectedBank.name} />}
-                  {selectedBank.accountHolder && <BankField label="Titulaire" value={selectedBank.accountHolder} />}
-                  {selectedBank.rib && <BankField label="RIB" value={selectedBank.rib} copyable />}
-                  {selectedBank.iban && <BankField label="IBAN" value={selectedBank.iban} copyable />}
-                  {selectedBank.accountNumber && <BankField label="Compte" value={selectedBank.accountNumber} copyable />}
-                  {selectedBank.swift && <BankField label="SWIFT/BIC" value={selectedBank.swift} />}
-                  <BankField label="Montant" value={formatMAD(totalMad)} />
-                  <BankField label="Référence" value={`CMD-${orderRef}`} copyable />
-                </dl>
-              )}
-
-              {selectedBank?.instructions && (
-                <p className="mt-3 text-sm text-muted">{selectedBank.instructions}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── USDT ── */}
-      {paymentMethod === "usdt" && (
-        <div className="card p-5">
-          <h2 className="text-base font-semibold text-white">Paiement USDT</h2>
-
-          {wallets.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">
-              Les adresses USDT sont en cours de configuration. Veuillez réessayer ultérieurement.
-            </p>
-          ) : (
-            <>
-              <div className="mt-4">
-                <p className="mb-2 text-xs uppercase tracking-wide text-faint">Réseau</p>
-                <div className="flex gap-2">
-                  {["TRC20", "BEP20"].filter((n) => wallets.some((w) => w.network === n)).map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setSelectedNetwork(n)}
-                      className={`rounded-lg border px-4 py-1.5 text-sm font-medium ${
-                        selectedNetwork === n
-                          ? "border-accent bg-accent/15 text-white"
-                          : "border-border text-muted"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {selectedWallet ? (
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <p className="mb-1 text-xs uppercase tracking-wide text-faint">Adresse {selectedWallet.network}</p>
-                    <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2">
-                      <code className="min-w-0 flex-1 break-all text-xs text-white">
-                        {selectedWallet.address}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => copyAddress(selectedWallet.address)}
-                        className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-white"
-                      >
-                        {copied ? "Copié ✓" : "Copier"}
-                      </button>
-                    </div>
-                  </div>
-                  <dl className="grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
-                    <BankField label="Réseau" value={selectedWallet.network} />
-                    <BankField label="Montant" value={`${(totalMad / 10).toFixed(2)} USDT`} />
-                    <BankField label="Référence" value={`CMD-${orderRef}`} />
-                  </dl>
-                  {selectedWallet.instructions && (
-                    <p className="text-sm text-muted">{selectedWallet.instructions}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-muted">
-                  Aucun portefeuille disponible pour le réseau {selectedNetwork}.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── PayPal ── */}
-      {paymentMethod === "paypal" && (
-        <div className="card p-5 text-center">
-          <h2 className="text-base font-semibold text-white">Paiement PayPal</h2>
-          <p className="mt-2 text-sm text-muted">
-            {methodConfig?.paypalEmail
-              ? `Envoyez ${formatMAD(totalMad)} à : ${methodConfig.paypalEmail}`
-              : "Les instructions PayPal seront bientôt disponibles."}
-          </p>
-          <div className="mt-5 inline-block rounded-2xl border border-border bg-[#0070BA]/10 px-8 py-5 text-center">
-            <div className="text-2xl font-bold text-[#003087]">Pay</div>
-            <div className="text-2xl font-bold text-[#009cde]">Pal</div>
-            <p className="mt-2 text-xs text-muted">{formatMAD(totalMad)}</p>
-            <p className="mt-1 text-[10px] text-faint">Interface de paiement à venir</p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Card ── */}
-      {paymentMethod === "card" && (
-        <div className="card p-8 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-border bg-surface text-2xl">
-            💳
-          </span>
-          <h2 className="mt-4 text-base font-semibold text-white">
-            {methodConfig?.cardMessage ?? "Paiement par carte bientôt disponible."}
-          </h2>
-          <p className="mt-2 text-sm text-muted">
-            Veuillez choisir une autre méthode de paiement.
-          </p>
-        </div>
-      )}
+      {/* ── Payment details (redesigned scoped panel) ── */}
+      <PaymentDetailsPanel
+        paymentMethod={paymentMethod}
+        methodConfig={methodConfig}
+        banks={banks}
+        wallets={wallets}
+        totalMad={totalMad}
+        orderRef={orderRef}
+      />
 
       {/* ── Proof Upload + Submit (not for card) ── */}
       {paymentMethod !== "card" && (
@@ -698,47 +523,6 @@ function IssueCard({
   );
 }
 
-function BankField({
-  label,
-  value,
-  copyable,
-}: {
-  label: string;
-  value: string;
-  copyable?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  return (
-    <div className="flex items-center justify-between bg-surface px-4 py-3">
-      <div>
-        <dt className="text-[11px] uppercase tracking-wide text-faint">{label}</dt>
-        <dd className="mt-0.5 font-mono text-sm text-white">{value}</dd>
-      </div>
-      {copyable && (
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              await copyToClipboard(value);
-              setCopyFailed(false);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            } catch {
-              setCopied(false);
-              setCopyFailed(true);
-              setTimeout(() => setCopyFailed(false), 2000);
-            }
-          }}
-          className="shrink-0 text-xs text-muted hover:text-white"
-        >
-          {copyFailed ? "Erreur copie" : copied ? "Copié ✓" : "Copier"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function validateProofFile(file: File): string {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   const validType = file.type ? ALLOWED_PROOF_TYPES.has(file.type) : ALLOWED_PROOF_EXTENSIONS.has(extension);
@@ -751,24 +535,6 @@ function validateProofFile(file: File): string {
     return "Fichier trop volumineux. Taille maximum: 5 Mo.";
   }
   return "";
-}
-
-async function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-  if (!copied) throw new Error("Clipboard copy failed");
 }
 
 function VaultMeta({ label, value }: { label: string; value: string }) {
