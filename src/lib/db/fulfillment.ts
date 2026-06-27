@@ -102,6 +102,7 @@ export async function deliverOrder(
 
   try {
     await timeAdmin("admin.deliverOrder", "transaction.deliverCodes", () => prisma.$transaction(async (tx) => {
+      const deliveredValues: string[] = [];
       for (const item of order.items) {
         const assignment = assignments.find((entry) => entry.orderItemId === item.id);
         const entries = (assignment?.codes ?? [])
@@ -132,8 +133,10 @@ export async function deliverOrder(
               throw new Error("Selected code is no longer available.");
             }
             digitalCodeId = entry.digitalCodeId;
+            deliveredValues.push(code.code);
           } else {
             manualCode = entry.manualCode!.trim();
+            deliveredValues.push(manualCode);
           }
 
           await tx.deliveredCode.create({
@@ -167,7 +170,7 @@ export async function deliverOrder(
           type: "code_delivered",
           recipient: order.customerEmail,
           subject: "Votre code est disponible",
-          body: "Your payment was confirmed. Your code is now available. Thank you for your purchase.",
+          body: `Your payment was confirmed. Your code is now available.\n\nCodes:\n${deliveredValues.join("\n")}\n\nThank you for your purchase.`,
         },
       });
     }), () => assignments.length);

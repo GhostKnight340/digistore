@@ -36,10 +36,12 @@ function isVariantPublic(row: ProductWithCategory, variant: ProductWithCategory[
 function variantStockStatus(
   row: ProductWithCategory,
   variant: ProductWithCategory["variants"][number],
+  inventoryMode: StoreSettings["inventoryMode"] = "automatic",
 ): StockStatus {
   const stockMode = normalizeStockMode(variant.stockMode);
   if (stockMode === "force_in_stock") return "in_stock";
   if (stockMode === "force_out_of_stock") return "out_of_stock";
+  if (inventoryMode === "manual") return "in_stock";
   return row._count.digitalCodes > 0 ? "in_stock" : "out_of_stock";
 }
 
@@ -52,6 +54,7 @@ function variantTitle(parentName: string, variant: ProductWithCategory["variants
 function toVariantOption(
   row: ProductWithCategory,
   variant: ProductWithCategory["variants"][number],
+  inventoryMode?: StoreSettings["inventoryMode"],
 ): ProductVariantOption {
   return {
     id: variant.id,
@@ -63,11 +66,15 @@ function toVariantOption(
     active: variant.active,
     featured: variant.featured,
     stockMode: normalizeStockMode(variant.stockMode),
-    stockStatus: variantStockStatus(row, variant),
+    stockStatus: variantStockStatus(row, variant, inventoryMode),
   };
 }
 
-function toVariantProduct(row: ProductWithCategory, variant: ProductWithCategory["variants"][number]): Product {
+function toVariantProduct(
+  row: ProductWithCategory,
+  variant: ProductWithCategory["variants"][number],
+  inventoryMode?: StoreSettings["inventoryMode"],
+): Product {
   const title = variantTitle(row.name, variant);
   const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
   return {
@@ -84,14 +91,18 @@ function toVariantProduct(row: ProductWithCategory, variant: ProductWithCategory
     description: row.description,
     imageUrl,
     featured: variant.featured,
-    stockStatus: variantStockStatus(row, variant),
+    stockStatus: variantStockStatus(row, variant, inventoryMode),
   };
 }
 
-function toParentProduct(row: ProductWithCategory, selectedVariantId?: string): Product {
+function toParentProduct(
+  row: ProductWithCategory,
+  selectedVariantId?: string,
+  inventoryMode?: StoreSettings["inventoryMode"],
+): Product {
   const variants = row.variants
     .filter((variant) => isVariantPublic(row, variant))
-    .map((variant) => toVariantOption(row, variant));
+    .map((variant) => toVariantOption(row, variant, inventoryMode));
   const selectedVariant =
     variants.find((variant) => variant.id === selectedVariantId) ?? variants[0];
   const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
@@ -229,10 +240,11 @@ export async function getCatalogPage(options: {
       query: options.query,
     }),
   ]);
+  const settings = await getStoreSettings();
   const variantProducts = productRows.flatMap((row) =>
     row.variants
       .filter((variant) => isVariantPublic(row, variant))
-      .map((variant) => toVariantProduct(row, variant)),
+      .map((variant) => toVariantProduct(row, variant, settings.inventoryMode)),
   );
   const pagedProducts = variantProducts.slice((page - 1) * pageSize, page * pageSize);
 
@@ -256,7 +268,8 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     where: { slug, active: true, variants: { some: {} } },
     include: productCatalogInclude,
   });
-  return product ? toParentProduct(product) : null;
+  const settings = await getStoreSettings();
+  return product ? toParentProduct(product, undefined, settings.inventoryMode) : null;
 }
 
 export async function getParentProductSlugs(): Promise<string[]> {
@@ -277,10 +290,11 @@ export async function getProductsByCategorySlug(
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: productCatalogInclude,
   });
+  const settings = await getStoreSettings();
   return products.flatMap((row) =>
     row.variants
       .filter((variant) => isVariantPublic(row, variant))
-      .map((variant) => toVariantProduct(row, variant)),
+      .map((variant) => toVariantProduct(row, variant, settings.inventoryMode)),
   );
 }
 

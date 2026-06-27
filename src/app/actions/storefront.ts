@@ -2,6 +2,7 @@
 
 import {
   getCatalogData,
+  getStoreSettings,
   getProductBySlug,
   getProductCatalog,
 } from "@/lib/db/catalog";
@@ -38,6 +39,10 @@ async function getStockMap() {
 }
 
 async function withStockStatus(products: Product[]): Promise<Product[]> {
+  const settings = await getStoreSettings();
+  if (settings.inventoryMode === "manual") {
+    return products.map((product) => ({ ...product, stockStatus: "in_stock" }));
+  }
   const stock = await getStockMap();
   return products.map((product) => ({
     ...product,
@@ -61,6 +66,10 @@ export async function getCategoryStockStatusesAction(): Promise<
     getInventoryGroups(),
     getProductCatalog(),
   ]);
+  const settings = await getStoreSettings();
+  if (settings.inventoryMode === "manual") {
+    return Object.fromEntries(products.map((product) => [product.category, "in_stock" as const]));
+  }
   const productStock = new Map(inventory.map((row) => [row.productId, row.unused]));
   const status: Record<string, StockStatus> = {};
 

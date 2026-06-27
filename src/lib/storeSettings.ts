@@ -8,6 +8,7 @@ export type TrustItemSetting = {
 };
 
 export type StoreSettings = {
+  inventoryMode: "automatic" | "manual";
   branding: {
     siteName: string;
     logoText: string;
@@ -63,6 +64,7 @@ export type StoreSettings = {
 };
 
 export const defaultStoreSettings: StoreSettings = {
+  inventoryMode: "automatic",
   branding: {
     siteName: "Karta",
     logoText: "Karta",
@@ -165,6 +167,10 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
   return {
     ...defaultStoreSettings,
     ...value,
+    inventoryMode:
+      value.inventoryMode === "manual" || value.inventoryMode === "automatic"
+        ? value.inventoryMode
+        : defaultStoreSettings.inventoryMode,
     branding: {
       ...defaultStoreSettings.branding,
       ...(isObject(value.branding) ? value.branding : {}),

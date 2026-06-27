@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   isDelivered,
   orderStatusBadgeClass,
@@ -67,6 +68,7 @@ export default function OrderDetailPage({
 }: {
   initialOrder: AdminOrderDTO;
 }) {
+  const { settings } = useStoreSettings();
   const [order, setOrder] = useState(initialOrder);
   const [proof, setProof] = useState<AdminPaymentProofDTO | null | "loading">("loading");
   const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
@@ -74,6 +76,7 @@ export default function OrderDetailPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const manualMode = settings.inventoryMode === "manual";
 
   const delivered = isDelivered(order.status);
   const canApprove =
@@ -119,7 +122,7 @@ export default function OrderDetailPage({
     }
     setEntries(init);
 
-    if (!canDeliver) {
+    if (!canDeliver || manualMode) {
       setAvailable({});
       return;
     }
@@ -137,7 +140,7 @@ export default function OrderDetailPage({
         console.error("Failed to load available codes", loadError);
         setAvailable({});
       });
-  }, [canDeliver, order]);
+  }, [canDeliver, manualMode, order]);
 
   const chosenIds = useMemo(() => {
     const ids = new Set<string>();
@@ -154,6 +157,14 @@ export default function OrderDetailPage({
       .slice(0, item.quantity)
       .every((entry) => entry.digitalCodeId || entry.manualCode?.trim()),
   );
+
+  const manualCountsValid = order.items.every((item) => {
+    const codes = (entries[item.id] ?? [])
+      .slice(0, item.quantity)
+      .map((entry) => entry.manualCode?.trim() ?? "")
+      .filter(Boolean);
+    return codes.length === item.quantity;
+  });
 
   function setEntry(itemId: string, index: number, entry: AssignmentEntry) {
     setEntries((previous) => {
@@ -181,6 +192,11 @@ export default function OrderDetailPage({
   }
 
   async function handleDeliver() {
+    if (manualMode && !manualCountsValid) {
+      setError("Enter exactly one code per unit before delivery.");
+      return;
+    }
+    if (!window.confirm("Deliver these codes to the customer now?")) return;
     const assignments: ItemAssignment[] = order.items.map((item) => ({
       orderItemId: item.id,
       codes: entries[item.id] ?? [],
@@ -289,9 +305,14 @@ export default function OrderDetailPage({
               entries={entries}
               chosenIds={chosenIds}
               busy={busy}
-              allFilled={allFilled}
+              allFilled={manualMode ? manualCountsValid : allFilled}
+              manualMode={manualMode}
               onSetEntry={setEntry}
               onDeliver={handleDeliver}
+              onSaveDraft={() => {
+                setError("");
+                setMessage("Draft codes saved on this page. Deliver when ready.");
+              }}
             />
           ) : null}
 
@@ -465,8 +486,10 @@ function DeliverySection({
   chosenIds,
   busy,
   allFilled,
+  manualMode,
   onSetEntry,
   onDeliver,
+  onSaveDraft,
 }: {
   order: AdminOrderDTO;
   delivered: boolean;
@@ -475,13 +498,33 @@ function DeliverySection({
   chosenIds: Set<string>;
   busy: boolean;
   allFilled: boolean;
+  manualMode: boolean;
   onSetEntry: (itemId: string, index: number, entry: AssignmentEntry) => void;
   onDeliver: () => Promise<void>;
+  onSaveDraft: () => void;
 }) {
+  function updateManualCodes(itemId: string, quantity: number, value: string) {
+    const lines = value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, quantity);
+    for (let index = 0; index < quantity; index += 1) {
+      onSetEntry(itemId, index, lines[index] ? { manualCode: lines[index] } : {});
+    }
+  }
+
   return (
     <section id="assign-codes" className="card overflow-hidden">
       <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Assign and deliver codes</h2>
+        <h2 className="font-bold text-white">
+          {manualMode ? "Enter and deliver codes" : "Assign and deliver codes"}
+        </h2>
+        {manualMode ? (
+          <p className="mt-1 text-xs text-muted">
+            Manual code entry mode is active. Stock inventory will not be reserved or consumed.
+          </p>
+        ) : null}
       </div>
       <div className="space-y-4 px-5 py-5">
         {order.items.map((item) => {
@@ -510,6 +553,32 @@ function DeliverySection({
                       {code.code}
                     </div>
                   ))}
+                </div>
+              ) : manualMode ? (
+                <div className="mt-4">
+                  <label className="mb-2 block text-xs font-medium text-muted">
+                    Paste one code per line
+                  </label>
+                  <textarea
+                    value={(entries[item.id] ?? [])
+                      .slice(0, item.quantity)
+                      .map((entry) => entry.manualCode ?? "")
+                      .join("\n")}
+                    onChange={(event) =>
+                      updateManualCodes(item.id, item.quantity, event.target.value)
+                    }
+                    rows={Math.max(3, item.quantity + 1)}
+                    placeholder={Array.from({ length: item.quantity }, (_, index) =>
+                      index === 0 ? "AAAA-BBBB-CCCC" : "DDDD-EEEE-FFFF",
+                    ).join("\n")}
+                    className="input min-h-28 py-3 font-mono text-sm"
+                  />
+                  <p className="mt-2 text-xs text-muted">
+                    Required: {item.quantity} code{item.quantity === 1 ? "" : "s"}. Entered:{" "}
+                    {(entries[item.id] ?? [])
+                      .slice(0, item.quantity)
+                      .filter((entry) => entry.manualCode?.trim()).length}
+                  </p>
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
@@ -559,14 +628,26 @@ function DeliverySection({
         })}
 
         {!delivered ? (
-          <button
-            type="button"
-            disabled={!allFilled || busy}
-            onClick={onDeliver}
-            className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy ? "Delivering..." : "Deliver codes"}
-          </button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {manualMode ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onSaveDraft}
+                className="btn-ghost w-full disabled:opacity-50"
+              >
+                Save draft codes
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={!allFilled || busy}
+              onClick={onDeliver}
+              className={`${manualMode ? "" : "sm:col-span-2"} btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              {busy ? "Delivering..." : "Deliver codes"}
+            </button>
+          </div>
         ) : (
           <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
             Delivered. The customer can see the assigned code.

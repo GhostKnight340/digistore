@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDate } from "@/lib/format";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   getInventoryProductsAction,
   getInventoryCodesAction,
@@ -75,6 +76,7 @@ function sortedRecently(products: InventoryProductDTO[]) {
 }
 
 export default function InventoryPanel() {
+  const { settings, saveSettings } = useStoreSettings();
   const [products, setProducts] = useState<InventoryProductDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -85,6 +87,17 @@ export default function InventoryPanel() {
     product: InventoryProductDTO;
     variant: InventoryVariantDTO;
   } | null>(null);
+  const [modeSaving, setModeSaving] = useState(false);
+  const [modeMessage, setModeMessage] = useState("");
+  const manualMode = settings.inventoryMode === "manual";
+
+  async function setInventoryMode(mode: "automatic" | "manual") {
+    setModeSaving(true);
+    setModeMessage("");
+    const result = await saveSettings({ ...settings, inventoryMode: mode });
+    setModeMessage(result.ok ? "Inventory mode saved." : result.error ?? "Mode could not be saved.");
+    setModeSaving(false);
+  }
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -169,6 +182,47 @@ export default function InventoryPanel() {
       ) : null}
 
       <div className="card p-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Inventory Mode</h3>
+            <p className="mt-1 text-xs text-muted">
+              Choose whether orders use uploaded stock or admin-entered delivery codes.
+            </p>
+          </div>
+          <div className="flex gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
+            <button
+              type="button"
+              disabled={modeSaving}
+              onClick={() => setInventoryMode("automatic")}
+              className={`rounded-md px-3 py-2 transition disabled:opacity-50 ${
+                !manualMode ? "bg-accent/15 text-white" : "text-muted hover:text-white"
+              }`}
+            >
+              Automatic inventory
+            </button>
+            <button
+              type="button"
+              disabled={modeSaving}
+              onClick={() => setInventoryMode("manual")}
+              className={`rounded-md px-3 py-2 transition disabled:opacity-50 ${
+                manualMode ? "bg-accent/15 text-white" : "text-muted hover:text-white"
+              }`}
+            >
+              Manual code entry
+            </button>
+          </div>
+          {modeMessage ? <p className="w-full text-xs text-muted">{modeMessage}</p> : null}
+        </div>
+
+        {manualMode ? (
+          <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <p className="font-medium text-amber-50">Manual code entry mode is active.</p>
+            <p className="mt-1 text-xs text-amber-100/85">
+              Inventory codes are ignored for new orders. You can manually enter delivery codes from each order detail page. Existing inventory remains untouched.
+            </p>
+          </div>
+        ) : null}
+
         <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
           <input
             value={query}
