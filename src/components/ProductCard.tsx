@@ -13,7 +13,7 @@ export default function ProductCard({ product }: { product: Product }) {
         category={product.category}
         imageUrl={product.imageUrl}
         label={product.name}
-        className="aspect-[3/2] w-full"
+        className="aspect-[16/9] w-full shrink-0 rounded-t-[14px]"
       />
       <div className="flex flex-1 flex-col p-4">
         <span className="mb-2.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent">

@@ -15,6 +15,7 @@ import {
   duplicateVariantAction,
 } from "@/app/actions/admin";
 import { uploadImageFile } from "@/lib/clientUpload";
+import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1479,25 +1480,12 @@ function MediaTab({
       {/* Preview card */}
       <div>
         <p className="mb-2 text-sm font-medium text-white">Preview</p>
-        <div
-          className="relative h-36 w-56 overflow-hidden rounded-2xl"
-          style={gradientStyle(draft.category)}
-        >
-          {draft.thumbnail && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={draft.thumbnail}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover opacity-30"
-            />
-          )}
-          <div className="absolute inset-0 flex flex-col justify-end p-3">
-            <p className="text-xs font-bold uppercase tracking-widest text-white/60">
-              {draft.category}
-            </p>
-            <p className="text-sm font-bold text-white">{draft.name || "Product name"}</p>
-          </div>
-        </div>
+        <ProductArt
+          category={draft.category}
+          imageUrl={draft.thumbnail}
+          label={draft.name || draft.category}
+          className="aspect-[16/9] w-full max-w-sm rounded-[14px] border border-border"
+        />
         {preset && (
           <p className="mt-2 text-xs text-muted">
             Active preset: <span className="text-white">{preset.label}</span>
