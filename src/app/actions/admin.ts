@@ -88,10 +88,7 @@ export async function getAdminPaymentOrdersAction(): Promise<AdminOrderSummaryDT
 }
 
 export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
-  return getAdminOrdersPage({
-    take: 50,
-    statuses: ["pending_payment", "payment_submitted", "payment_confirmed", "payment_issue"],
-  });
+  return getAdminOrdersPage({ take: 100 });
 }
 
 export async function getAdminOverviewAction(): Promise<AdminOverviewDTO> {

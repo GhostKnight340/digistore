@@ -18,18 +18,21 @@ const PaymentSettingsPanel = lazy(() => import("@/components/admin/PaymentSettin
 const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"));
 const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 
-const navItems = [
-  { id: "overview", label: "Overview", icon: "[]" },
-  { id: "homepage-editor", label: "Homepage editor", icon: "HE", href: "/admin/editor" },
-  { id: "settings", label: "Store settings", icon: "SS" },
-  { id: "products", label: "Products", icon: "PR" },
-  { id: "inventory", label: "Inventory", icon: "IN" },
-  { id: "payments", label: "Payments", icon: "PM" },
-  { id: "payment-settings", label: "Payment settings", icon: "PS" },
-  { id: "fulfillment", label: "Manual fulfillment", icon: "MF" },
-  { id: "customers", label: "Customers", icon: "CU" },
-  { id: "suppliers", label: "Supplier API", icon: "API" },
-  { id: "refunds", label: "Refunds", icon: "RF" },
+const navSections = [
+  [{ id: "overview", label: "Overview", icon: "[]" }],
+  [
+    { id: "products", label: "Products", icon: "PR" },
+    { id: "inventory", label: "Inventory", icon: "IN" },
+    { id: "orders", label: "Orders", icon: "OR" },
+    { id: "payments", label: "Payments", icon: "PM" },
+    { id: "customers", label: "Customers", icon: "CU" },
+  ],
+  [{ id: "suppliers", label: "Supplier API", icon: "API" }],
+  [
+    { id: "payment-settings", label: "Payment settings", icon: "PS" },
+    { id: "refunds", label: "Refunds", icon: "RF" },
+  ],
+  [{ id: "settings", label: "Store settings", icon: "SS" }],
 ];
 
 const LOW_STOCK_MAX = 5;
@@ -119,43 +122,45 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-white">Admin dashboard</h1>
           <p className="mt-1 text-sm text-muted">
-            Store inventory, payments, and manual fulfillment.
+            Store inventory, orders, payments, and configuration.
           </p>
         </div>
-        <span className="chip border-accent/40 text-accent">Production data</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/editor"
+            className="btn-ghost h-10 px-4 text-sm"
+          >
+            Homepage Editor
+          </Link>
+          <span className="chip border-accent/40 text-accent">Production data</span>
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
         <aside className="h-fit">
-          <nav className="card space-y-1 p-3 text-sm">
-            {navItems.map((item) => {
-              const className = `flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left ${
-                activeTab === item.id
-                  ? "bg-accent/10 font-medium text-white"
-                  : "text-muted hover:bg-surface hover:text-white"
-              }`;
-
-              if ("href" in item && item.href) {
-                return (
-                  <Link key={item.id} href={item.href} className={className}>
+          <nav className="card p-3 text-sm">
+            {navSections.map((section, sectionIndex) => (
+              <div
+                key={sectionIndex}
+                className={sectionIndex === 0 ? "space-y-1" : "mt-3 space-y-1 border-t border-border pt-3"}
+              >
+                {section.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveTab(item.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left ${
+                      activeTab === item.id
+                        ? "bg-accent/10 font-medium text-white"
+                        : "text-muted hover:bg-surface hover:text-white"
+                    }`}
+                  >
                     <NavIcon value={item.icon} />
                     {item.label}
-                  </Link>
-                );
-              }
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  className={className}
-                >
-                  <NavIcon value={item.icon} />
-                  {item.label}
-                </button>
-              );
-            })}
+                  </button>
+                ))}
+              </div>
+            ))}
           </nav>
         </aside>
 
@@ -179,7 +184,7 @@ export default function AdminDashboard() {
           <Suspense fallback={panelFallback}>
             <PaymentSettingsPanel />
           </Suspense>
-        ) : activeTab === "fulfillment" ? (
+        ) : activeTab === "orders" ? (
           <Suspense fallback={panelFallback}>
             <FulfillmentPanel />
           </Suspense>
@@ -239,7 +244,7 @@ export default function AdminDashboard() {
                 <div>
                   <h2 className="font-bold text-white">Recent orders</h2>
                   <p className="mt-1 text-xs text-muted">
-                    Latest bounded orders. Open Payments or Fulfillment for work queues.
+                    Latest bounded orders. Open Orders or Payments for work queues.
                   </p>
                 </div>
                 <div className="w-full sm:w-80">

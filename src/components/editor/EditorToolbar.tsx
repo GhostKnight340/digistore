@@ -55,6 +55,15 @@ export default function EditorToolbar() {
 
         <div className="mx-2 h-4 w-px bg-border" />
 
+        <Link
+          href="/admin/editor"
+          className="rounded-lg border border-accent/40 bg-accent/15 px-3 py-1 text-xs font-medium text-white"
+        >
+          Homepage Editor
+        </Link>
+
+        <div className="mx-1 h-4 w-px bg-border" />
+
         <div className="flex items-center">
           <button
             type="button"

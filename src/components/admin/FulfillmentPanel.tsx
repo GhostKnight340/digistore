@@ -11,7 +11,16 @@ import {
 import { getAdminFulfillmentOrdersAction } from "@/app/actions/admin";
 import type { AdminOrderSummaryDTO } from "@/lib/dto";
 
-type Filter = "todo" | "all";
+type Filter = "all" | "pending" | "awaiting" | "ready" | "delivered" | "refunded";
+
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "all", label: "All Orders" },
+  { id: "pending", label: "Pending Payment" },
+  { id: "awaiting", label: "Awaiting Confirmation" },
+  { id: "ready", label: "Ready to Deliver" },
+  { id: "delivered", label: "Delivered" },
+  { id: "refunded", label: "Refunded" },
+];
 
 const LOAD_TIMEOUT_MS = 8000;
 
@@ -31,7 +40,7 @@ export default function FulfillmentPanel() {
   const [orders, setOrders] = useState<AdminOrderSummaryDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [filter, setFilter] = useState<Filter>("todo");
+  const [filter, setFilter] = useState<Filter>("all");
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -51,43 +60,46 @@ export default function FulfillmentPanel() {
     load();
   }, [load]);
 
-  const visibleOrders = useMemo(
-    () =>
-      filter === "all"
-        ? orders
-        : orders.filter((order) => order.status !== "delivered"),
-    [orders, filter],
-  );
-  const todoCount = orders.filter((order) => order.status !== "delivered").length;
+  const visibleOrders = useMemo(() => {
+    if (filter === "pending") return orders.filter((order) => order.status === "pending_payment");
+    if (filter === "awaiting") return orders.filter((order) => order.status === "payment_submitted" || order.status === "payment_issue");
+    if (filter === "ready") return orders.filter((order) => order.status === "payment_confirmed");
+    if (filter === "delivered") return orders.filter((order) => order.status === "delivered");
+    if (filter === "refunded") return orders.filter((order) => order.status === "refunded");
+    return orders;
+  }, [orders, filter]);
+
+  const countFor = (id: Filter) => {
+    if (id === "pending") return orders.filter((order) => order.status === "pending_payment").length;
+    if (id === "awaiting") return orders.filter((order) => order.status === "payment_submitted" || order.status === "payment_issue").length;
+    if (id === "ready") return orders.filter((order) => order.status === "payment_confirmed").length;
+    if (id === "delivered") return orders.filter((order) => order.status === "delivered").length;
+    if (id === "refunded") return orders.filter((order) => order.status === "refunded").length;
+    return orders.length;
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-white">Manual fulfillment</h2>
+          <h2 className="text-xl font-bold text-white">Orders</h2>
           <p className="mt-1 text-sm text-muted">
-            Review payments, open order details, assign codes, and deliver orders.
+            Review every order, open details, assign codes, and deliver orders.
           </p>
         </div>
-        <div className="flex gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
-          <button
-            type="button"
-            onClick={() => setFilter("todo")}
-            className={`rounded-md px-3 py-1.5 ${
-              filter === "todo" ? "bg-accent/15 text-white" : "text-muted"
-            }`}
-          >
-            To process ({todoCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter("all")}
-            className={`rounded-md px-3 py-1.5 ${
-              filter === "all" ? "bg-accent/15 text-white" : "text-muted"
-            }`}
-          >
-            All ({orders.length})
-          </button>
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
+          {FILTERS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setFilter(item.id)}
+              className={`rounded-md px-3 py-1.5 ${
+                filter === item.id ? "bg-accent/15 text-white" : "text-muted hover:text-white"
+              }`}
+            >
+              {item.label} ({countFor(item.id)})
+            </button>
+          ))}
         </div>
       </div>
 
@@ -102,9 +114,7 @@ export default function FulfillmentPanel() {
           <p className="px-5 py-8 text-sm text-muted">Loading...</p>
         ) : visibleOrders.length === 0 ? (
           <p className="px-5 py-8 text-sm text-muted">
-            {filter === "todo"
-              ? "No pending orders. Everything is delivered."
-              : "No orders yet. Place a test order to see it here."}
+            No orders match this filter.
           </p>
         ) : (
           <div className="overflow-x-auto">
