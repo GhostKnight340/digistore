@@ -9,7 +9,12 @@ import {
 } from "@/lib/db/payments";
 import { getPaymentConfig, getAdminPaymentConfig } from "@/lib/db/paymentSettings";
 import { getCustomerOrder } from "@/lib/db/orders";
-import type { ActionResult, PaymentConfigDTO, CustomerOrderDTO } from "@/lib/dto";
+import type {
+  ActionResult,
+  AdminPaymentProofDTO,
+  PaymentConfigDTO,
+  CustomerOrderDTO,
+} from "@/lib/dto";
 
 const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_PROOF_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "application/pdf"]);
@@ -88,7 +93,7 @@ export async function markPaymentIssueAction(orderId: string): Promise<ActionRes
 /** Admin: fetch base64 proof for a given order. */
 export async function getPaymentProofAction(
   orderId: string,
-): Promise<{ data: string; mimeType: string; fileName: string } | null> {
+): Promise<AdminPaymentProofDTO | null> {
   return getPaymentProof(orderId);
 }
 

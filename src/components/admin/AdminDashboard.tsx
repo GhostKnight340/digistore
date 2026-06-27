@@ -300,13 +300,12 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td className="px-5 py-3">
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab("fulfillment")}
+                            <Link
+                              href={`/admin/orders/${order.id}`}
                               className="text-xs font-medium text-accent hover:text-accent-hover"
                             >
                               {order.status === "delivered" ? "View" : "Fulfill"}
-                            </button>
+                            </Link>
                           </td>
                         </tr>
                       ))}

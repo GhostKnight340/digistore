@@ -14,6 +14,7 @@ export interface OrderItemDTO {
 
 export interface DeliveredCodeDTO {
   productId: string;
+  orderItemId?: string;
   code: string;
 }
 
@@ -54,6 +55,15 @@ export interface EmailLogDTO {
 export interface AdminOrderDTO extends CustomerOrderDTO {
   emailLogs: EmailLogDTO[];
   proofMimeType: string | null;
+}
+
+export interface AdminPaymentProofDTO {
+  data: string;
+  mimeType: string;
+  fileName: string;
+  uploadedAt: string;
+  sizeBytes: number | null;
+  source: "base64" | "url";
 }
 
 export interface AdminOrderSummaryDTO {

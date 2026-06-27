@@ -2,7 +2,7 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
-import type { ActionResult } from "@/lib/dto";
+import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
   "image/png",
@@ -182,7 +182,7 @@ async function setPaymentStatus(
 
 export async function getPaymentProof(
   orderId: string,
-): Promise<{ data: string; mimeType: string; fileName: string } | null> {
+): Promise<AdminPaymentProofDTO | null> {
   await ensureDatabaseReady();
   const proof = await timeAdmin(
     "admin.paymentProof",
@@ -191,9 +191,19 @@ export async function getPaymentProof(
     (row) => (row ? 1 : 0),
   );
   if (!proof) return null;
+  const source = /^https?:\/\//i.test(proof.data) || proof.data.startsWith("data:")
+    ? "url"
+    : "base64";
+  const sizeBytes =
+    source === "base64"
+      ? Math.floor((proof.data.length * 3) / 4) - (proof.data.endsWith("==") ? 2 : proof.data.endsWith("=") ? 1 : 0)
+      : null;
   return {
     data: proof.data,
     mimeType: proof.mimeType,
     fileName: proof.fileName,
+    uploadedAt: proof.uploadedAt.toISOString(),
+    sizeBytes,
+    source,
   };
 }

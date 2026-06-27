@@ -32,6 +32,7 @@ function buildCustomerDTO(data: OrderRecord): CustomerOrderDTO {
     })),
     deliveredCodes: data.deliveredCodes.map((delivered) => ({
       productId: delivered.product.slug,
+      orderItemId: delivered.orderItemId,
       code: delivered.digitalCode?.code ?? delivered.manualCode ?? "",
     })),
     proofUploaded: !!data.paymentProof,
@@ -67,6 +68,7 @@ function loadOrder(id: string) {
       },
       deliveredCodes: {
         select: {
+          orderItemId: true,
           manualCode: true,
           product: { select: { slug: true } },
           digitalCode: { select: { code: true } },
