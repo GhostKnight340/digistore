@@ -260,7 +260,6 @@ function PendingPaymentSection({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selectedWallet = wallets.find((w) => w.network === selectedNetwork);
-  const orderRef = orderId.slice(-8).toUpperCase();
   const proofRequired = methodConfig?.proofRequired ?? true;
   const configurationError =
     !methodConfig?.enabled
@@ -408,7 +407,7 @@ function PendingPaymentSection({
                   {selectedBank.accountNumber && <BankField label="Compte" value={selectedBank.accountNumber} copyable />}
                   {selectedBank.swift && <BankField label="SWIFT/BIC" value={selectedBank.swift} />}
                   <BankField label="Montant" value={formatMAD(totalMad)} />
-                  <BankField label="Référence" value={`CMD-${orderRef}`} copyable />
+                  <BankField label="Motif" value="E-commerce" copyable />
                 </dl>
               )}
 
@@ -471,7 +470,7 @@ function PendingPaymentSection({
                   <dl className="grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
                     <BankField label="Réseau" value={selectedWallet.network} />
                     <BankField label="Montant" value={`${(totalMad / 10).toFixed(2)} USDT`} />
-                    <BankField label="Référence" value={`CMD-${orderRef}`} />
+                    <BankField label="Motif" value="E-commerce" />
                   </dl>
                   {selectedWallet.instructions && (
                     <p className="text-sm text-muted">{selectedWallet.instructions}</p>
