@@ -8,6 +8,8 @@ import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, Ad
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
 
+const REVENUE_ORDER_STATUSES = ["payment_confirmed", "delivered", "fulfilled"];
+
 function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -256,7 +258,16 @@ export async function getAdminStats(): Promise<{
   await ensureDatabaseReady();
   const [totalOrders, revenueResult, pendingCount, customerCount] = await Promise.all([
     timeAdmin("admin.stats", "order.count.total", () => prisma.order.count(), (count) => count),
-    timeAdmin("admin.stats", "order.aggregate.revenue", () => prisma.order.aggregate({ _sum: { totalMad: true } }), () => 1),
+    timeAdmin(
+      "admin.stats",
+      "order.aggregate.revenue",
+      () =>
+        prisma.order.aggregate({
+          where: { status: { in: REVENUE_ORDER_STATUSES } },
+          _sum: { totalMad: true },
+        }),
+      () => 1,
+    ),
     timeAdmin("admin.stats", "order.count.pending", () => prisma.order.count({ where: { status: { not: "delivered" } } }), (count) => count),
     timeAdmin("admin.stats", "customer.count", () => prisma.customer.count(), (count) => count),
   ]);
@@ -274,7 +285,16 @@ export async function getAdminOverview(): Promise<AdminOverviewDTO> {
     await Promise.all([
       timeAdmin("admin.overview", "order.count.total", () => prisma.order.count(), (count) => count),
       timeAdmin("admin.overview", "order.count.pending", () => prisma.order.count({ where: { status: { not: "delivered" } } }), (count) => count),
-      timeAdmin("admin.overview", "order.aggregate.revenue", () => prisma.order.aggregate({ _sum: { totalMad: true } }), () => 1),
+      timeAdmin(
+        "admin.overview",
+        "order.aggregate.revenue",
+        () =>
+          prisma.order.aggregate({
+            where: { status: { in: REVENUE_ORDER_STATUSES } },
+            _sum: { totalMad: true },
+          }),
+        () => 1,
+      ),
       timeAdmin("admin.overview", "customer.count", () => prisma.customer.count(), (count) => count),
       getAdminOrdersPage({ take: 10 }),
     ]);
