@@ -7,6 +7,16 @@ export type TrustItemSetting = {
   enabled: boolean;
 };
 
+export type PaymentDisplaySetting = {
+  displayName?: string;
+  subtitle?: string;
+  logoType?: "image" | "initials" | "generated";
+  logoUrl?: string;
+  iconUrl?: string;
+  initials?: string;
+  accentColor?: string;
+};
+
 export type StoreSettings = {
   inventoryMode: "automatic" | "manual";
   branding: {
@@ -45,6 +55,7 @@ export type StoreSettings = {
   trustItems: TrustItemSetting[];
   featuredProductIds: string[];
   paymentMethods: Record<PaymentMethod, boolean>;
+  paymentDisplay: Record<string, PaymentDisplaySetting>;
   footer: {
     contactEmail: string;
     whatsappNumber: string;
@@ -138,6 +149,7 @@ export const defaultStoreSettings: StoreSettings = {
     card: false,
     test: true,
   },
+  paymentDisplay: {},
   footer: {
     contactEmail: "support@karta.ma",
     whatsappNumber: "+212 600 000 000",
@@ -204,6 +216,9 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
       ...defaultStoreSettings.paymentMethods,
       ...(isObject(value.paymentMethods) ? value.paymentMethods : {}),
     },
+    paymentDisplay: isObject(value.paymentDisplay)
+      ? (value.paymentDisplay as Record<string, PaymentDisplaySetting>)
+      : defaultStoreSettings.paymentDisplay,
     footer: {
       ...defaultStoreSettings.footer,
       ...(isObject(value.footer) ? value.footer : {}),

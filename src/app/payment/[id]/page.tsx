@@ -13,7 +13,15 @@ import {
 import { getPaymentPageDataAction, submitPaymentAction } from "@/app/actions/payments";
 import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
+import PaymentBrandMark from "@/components/PaymentBrandMark";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import {
+  bankDisplayKey,
+  methodDisplayKey,
+  resolvePaymentDisplay,
+  walletDisplayKey,
+} from "@/lib/paymentDisplay";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
 import type { BankDTO, CryptoWalletDTO, PaymentMethodConfigDTO } from "@/lib/dto";
 
@@ -249,6 +257,7 @@ function PendingPaymentSection({
   onSubmitted: () => void;
   setError: (e: string) => void;
 }) {
+  const { settings } = useStoreSettings();
   const [selectedBank, setSelectedBank] = useState<BankDTO | null>(banks[0] ?? null);
   const [selectedNetwork, setSelectedNetwork] = useState<string>(
     wallets.find((w) => w.network === "TRC20") ? "TRC20" : wallets[0]?.network ?? "TRC20",
@@ -260,6 +269,43 @@ function PendingPaymentSection({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selectedWallet = wallets.find((w) => w.network === selectedNetwork);
+  const bankDisplay = selectedBank
+    ? resolvePaymentDisplay(settings.paymentDisplay[bankDisplayKey(selectedBank.id)], {
+        displayName: selectedBank.name,
+        subtitle: "Virement bancaire",
+        initials: selectedBank.name.slice(0, 2),
+        accentColor: "#3e7bfa",
+      })
+    : null;
+  const walletDisplay = selectedWallet
+    ? resolvePaymentDisplay(
+        settings.paymentDisplay[walletDisplayKey(selectedWallet.id)] ??
+          settings.paymentDisplay[methodDisplayKey("usdt")],
+        {
+          displayName: selectedWallet.label || "Crypto",
+          subtitle: selectedWallet.network,
+          initials: selectedWallet.network.slice(0, 2),
+          accentColor: "#22c55e",
+        },
+      )
+    : resolvePaymentDisplay(settings.paymentDisplay[methodDisplayKey("usdt")], {
+        displayName: "Crypto",
+        subtitle: "Paiement crypto instantane",
+        initials: "US",
+        accentColor: "#22c55e",
+      });
+  const paypalDisplay = resolvePaymentDisplay(settings.paymentDisplay[methodDisplayKey("paypal")], {
+    displayName: "PayPal",
+    subtitle: "PayPal ou envoi manuel",
+    initials: "P",
+    accentColor: "#3e7bfa",
+  });
+  const cardDisplay = resolvePaymentDisplay(settings.paymentDisplay[methodDisplayKey("card")], {
+    displayName: "Carte bancaire",
+    subtitle: "Disponible prochainement",
+    initials: "CB",
+    accentColor: "#8b5cf6",
+  });
   const proofRequired = methodConfig?.proofRequired ?? true;
   const configurationError =
     !methodConfig?.enabled
@@ -368,7 +414,23 @@ function PendingPaymentSection({
       {/* ── Bank Transfer ── */}
       {paymentMethod === "bank" && (
         <div className="card p-5">
-          <h2 className="text-base font-semibold text-white">Informations de virement</h2>
+          <div className="flex items-center gap-3">
+            {bankDisplay && (
+              <PaymentBrandMark
+                display={bankDisplay}
+                active
+                className="h-11 w-11 shrink-0"
+              />
+            )}
+            <div>
+              <h2 className="text-base font-semibold text-white">
+                {bankDisplay?.displayName ?? "Informations de virement"}
+              </h2>
+              <p className="text-xs text-muted">
+                {bankDisplay?.subtitle ?? "Virement bancaire"}
+              </p>
+            </div>
+          </div>
 
           {banks.length === 0 ? (
             <p className="mt-3 text-sm text-muted">
@@ -422,7 +484,19 @@ function PendingPaymentSection({
       {/* ── USDT ── */}
       {paymentMethod === "usdt" && (
         <div className="card p-5">
-          <h2 className="text-base font-semibold text-white">Paiement USDT</h2>
+          <div className="flex items-center gap-3">
+            <PaymentBrandMark
+              display={walletDisplay}
+              active
+              className="h-11 w-11 shrink-0"
+            />
+            <div>
+              <h2 className="text-base font-semibold text-white">
+                {walletDisplay.displayName}
+              </h2>
+              <p className="text-xs text-muted">{walletDisplay.subtitle}</p>
+            </div>
+          </div>
 
           {wallets.length === 0 ? (
             <p className="mt-3 text-sm text-muted">
@@ -489,7 +563,12 @@ function PendingPaymentSection({
       {/* ── PayPal ── */}
       {paymentMethod === "paypal" && (
         <div className="card p-5 text-center">
-          <h2 className="text-base font-semibold text-white">Paiement PayPal</h2>
+          <PaymentBrandMark
+            display={paypalDisplay}
+            active
+            className="mx-auto h-14 w-14"
+          />
+          <h2 className="mt-4 text-base font-semibold text-white">{paypalDisplay.displayName}</h2>
           <p className="mt-2 text-sm text-muted">
             {methodConfig?.paypalEmail
               ? `Envoyez ${formatMAD(totalMad)} à : ${methodConfig.paypalEmail}`
@@ -507,9 +586,11 @@ function PendingPaymentSection({
       {/* ── Card ── */}
       {paymentMethod === "card" && (
         <div className="card p-8 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-border bg-surface text-2xl">
-            💳
-          </span>
+          <PaymentBrandMark
+            display={cardDisplay}
+            active
+            className="mx-auto mb-3 h-14 w-14"
+          />
           <h2 className="mt-4 text-base font-semibold text-white">
             {methodConfig?.cardMessage ?? "Paiement par carte bientôt disponible."}
           </h2>

@@ -13,6 +13,16 @@ import {
   deleteWalletAction,
 } from "@/app/actions/admin";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
+import PaymentBrandMark from "@/components/PaymentBrandMark";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { uploadImageFile } from "@/lib/clientUpload";
+import {
+  bankDisplayKey,
+  methodDisplayKey,
+  resolvePaymentDisplay,
+  walletDisplayKey,
+} from "@/lib/paymentDisplay";
+import type { PaymentDisplaySetting } from "@/lib/storeSettings";
 import type { BankDTO, CryptoWalletDTO, SupportConfigDTO, PaymentMethodConfigDTO } from "@/lib/dto";
 
 interface AdminConfig {
@@ -23,6 +33,7 @@ interface AdminConfig {
 }
 
 export default function PaymentSettingsPanel() {
+  const { settings, saveSettings } = useStoreSettings();
   const [config, setConfig] = useState<AdminConfig | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
@@ -81,6 +92,21 @@ export default function PaymentSettingsPanel() {
     setSaving(null);
   }
 
+  async function saveDisplaySetting(key: string, data: PaymentDisplaySetting) {
+    setSaving(`display-${key}`);
+    const next = {
+      ...settings,
+      paymentDisplay: {
+        ...settings.paymentDisplay,
+        [key]: data,
+      },
+    };
+    const res = await saveSettings(next);
+    if (res.ok) setMsg(`display-${key}`, "SauvegardÃ©");
+    else setMsg(`display-${key}`, res.error ?? "Erreur");
+    setSaving(null);
+  }
+
   if (!loaded) {
     return <p className="text-sm text-muted">Chargement...</p>;
   }
@@ -109,6 +135,15 @@ export default function PaymentSettingsPanel() {
           else setMsg("support", res.error ?? "Erreur");
           setSaving(null);
         }}
+      />
+
+      <PaymentDisplaySection
+        banks={config.banks}
+        wallets={config.wallets}
+        displaySettings={settings.paymentDisplay}
+        saving={saving}
+        feedback={feedback}
+        onSave={saveDisplaySetting}
       />
 
       {/* Bank Transfer */}
@@ -198,6 +233,239 @@ export default function PaymentSettingsPanel() {
 }
 
 // ─── Support Section ──────────────────────────────────────────────────────────
+
+function PaymentDisplaySection({
+  banks,
+  wallets,
+  displaySettings,
+  saving,
+  feedback,
+  onSave,
+}: {
+  banks: BankDTO[];
+  wallets: CryptoWalletDTO[];
+  displaySettings: Record<string, PaymentDisplaySetting>;
+  saving: string | null;
+  feedback: Record<string, string>;
+  onSave: (key: string, data: PaymentDisplaySetting) => void;
+}) {
+  const methodCards = [
+    {
+      key: methodDisplayKey("usdt"),
+      title: "Crypto / USDT",
+      subtitle: "Paiement crypto instantane",
+      initials: "US",
+      accentColor: "#22c55e",
+    },
+    {
+      key: methodDisplayKey("paypal"),
+      title: "PayPal",
+      subtitle: "PayPal ou envoi manuel",
+      initials: "P",
+      accentColor: "#3e7bfa",
+    },
+    {
+      key: methodDisplayKey("card"),
+      title: "Carte bancaire",
+      subtitle: "Disponible prochainement",
+      initials: "CB",
+      accentColor: "#8b5cf6",
+    },
+  ];
+
+  return (
+    <SectionCard title="Logos et cartes de paiement" icon="◇">
+      <p className="text-sm text-muted">
+        Ces options changent uniquement l'apparence des cartes de paiement au checkout et sur la page de paiement.
+      </p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {banks.map((bank) => (
+          <PaymentDisplayEditor
+            key={bank.id}
+            itemKey={bankDisplayKey(bank.id)}
+            title={bank.name}
+            fallback={{
+              displayName: bank.name,
+              subtitle: "Virement bancaire",
+              initials: bank.name.slice(0, 2),
+              accentColor: "#3e7bfa",
+            }}
+            value={displaySettings[bankDisplayKey(bank.id)]}
+            saving={saving === `display-${bankDisplayKey(bank.id)}`}
+            feedback={feedback[`display-${bankDisplayKey(bank.id)}`] ?? ""}
+            onSave={onSave}
+          />
+        ))}
+        {wallets.map((wallet) => (
+          <PaymentDisplayEditor
+            key={wallet.id}
+            itemKey={walletDisplayKey(wallet.id)}
+            title={wallet.label || wallet.network}
+            fallback={{
+              displayName: wallet.label || "Crypto",
+              subtitle: wallet.network,
+              initials: wallet.network.slice(0, 2),
+              accentColor: "#22c55e",
+            }}
+            value={displaySettings[walletDisplayKey(wallet.id)]}
+            saving={saving === `display-${walletDisplayKey(wallet.id)}`}
+            feedback={feedback[`display-${walletDisplayKey(wallet.id)}`] ?? ""}
+            onSave={onSave}
+          />
+        ))}
+        {methodCards.map((card) => (
+          <PaymentDisplayEditor
+            key={card.key}
+            itemKey={card.key}
+            title={card.title}
+            fallback={{
+              displayName: card.title,
+              subtitle: card.subtitle,
+              initials: card.initials,
+              accentColor: card.accentColor,
+            }}
+            value={displaySettings[card.key]}
+            saving={saving === `display-${card.key}`}
+            feedback={feedback[`display-${card.key}`] ?? ""}
+            onSave={onSave}
+          />
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+function PaymentDisplayEditor({
+  itemKey,
+  title,
+  fallback,
+  value,
+  saving,
+  feedback,
+  onSave,
+}: {
+  itemKey: string;
+  title: string;
+  fallback: {
+    displayName: string;
+    subtitle: string;
+    initials: string;
+    accentColor: string;
+  };
+  value: PaymentDisplaySetting | undefined;
+  saving: boolean;
+  feedback: string;
+  onSave: (key: string, data: PaymentDisplaySetting) => void;
+}) {
+  const [displayName, setDisplayName] = useState(value?.displayName ?? fallback.displayName);
+  const [subtitle, setSubtitle] = useState(value?.subtitle ?? fallback.subtitle);
+  const [logoUrl, setLogoUrl] = useState(value?.logoUrl ?? "");
+  const [iconUrl, setIconUrl] = useState(value?.iconUrl ?? "");
+  const [initials, setInitials] = useState(value?.initials ?? fallback.initials);
+  const [accentColor, setAccentColor] = useState(value?.accentColor ?? fallback.accentColor);
+  const [logoType, setLogoType] = useState<PaymentDisplaySetting["logoType"]>(
+    value?.logoType ?? "generated",
+  );
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  useEffect(() => {
+    setDisplayName(value?.displayName ?? fallback.displayName);
+    setSubtitle(value?.subtitle ?? fallback.subtitle);
+    setLogoUrl(value?.logoUrl ?? "");
+    setIconUrl(value?.iconUrl ?? "");
+    setInitials(value?.initials ?? fallback.initials);
+    setAccentColor(value?.accentColor ?? fallback.accentColor);
+    setLogoType(value?.logoType ?? "generated");
+  }, [fallback.accentColor, fallback.displayName, fallback.initials, fallback.subtitle, value]);
+
+  const preview = resolvePaymentDisplay(
+    { displayName, subtitle, logoUrl, iconUrl, initials, accentColor, logoType },
+    fallback,
+  );
+
+  async function uploadLogo(file: File | null) {
+    if (!file) return;
+    setUploading(true);
+    setUploadError("");
+    try {
+      const url = await uploadImageFile(file);
+      setLogoUrl(url);
+      setLogoType("image");
+    } catch (error) {
+      console.error("Payment logo upload failed", error);
+      setUploadError("Upload impossible.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-base p-4">
+      <div className="mb-4 flex items-center gap-3">
+        <PaymentBrandMark display={preview} active className="h-12 w-12 shrink-0" />
+        <div className="min-w-0">
+          <p className="font-medium text-white">{title}</p>
+          <p className="text-xs text-muted">Apercu: {preview.displayName}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField label="Nom affiche" value={displayName} onChange={setDisplayName} />
+        <FormField label="Sous-titre" value={subtitle} onChange={setSubtitle} />
+        <FormField label="Logo image URL" value={logoUrl} onChange={setLogoUrl} placeholder="/uploads/logo.png" />
+        <FormField label="Icon URL" value={iconUrl} onChange={setIconUrl} placeholder="https://..." />
+        <FormField label="Initiales fallback" value={initials} onChange={setInitials} />
+        <FormField label="Couleur accent" value={accentColor} onChange={setAccentColor} type="color" />
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-muted">Type de logo</label>
+          <select
+            value={logoType ?? "generated"}
+            onChange={(e) => setLogoType(e.target.value as PaymentDisplaySetting["logoType"])}
+            className="input h-10 py-0 text-sm"
+          >
+            <option value="generated">Auto</option>
+            <option value="image">Image / URL</option>
+            <option value="initials">Initiales</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-muted">Upload</label>
+          <label className="btn-ghost flex h-10 cursor-pointer items-center px-3 text-xs">
+            {uploading ? "Envoi..." : "Choisir"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => uploadLogo(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
+      </div>
+
+      {uploadError && <p className="mt-2 text-xs text-red-400">{uploadError}</p>}
+      <SaveRow
+        saving={saving}
+        feedback={feedback}
+        onSave={() =>
+          onSave(itemKey, {
+            displayName,
+            subtitle,
+            logoType,
+            logoUrl,
+            iconUrl,
+            initials,
+            accentColor,
+          })
+        }
+      />
+    </div>
+  );
+}
 
 function SupportSection({
   support,
