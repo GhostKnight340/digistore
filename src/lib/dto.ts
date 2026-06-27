@@ -106,6 +106,31 @@ export interface InventorySummaryDTO {
   total: number;
 }
 
+export interface InventoryVariantDTO {
+  productId: string;
+  name: string;
+  unused: number;
+  reserved: number;
+  used: number;
+  disabled: number;
+  total: number;
+  lastUpdatedAt: string | null;
+}
+
+export interface InventoryProductDTO {
+  productId: string;
+  productName: string;
+  category: string;
+  variantCount: number;
+  unused: number;
+  reserved: number;
+  used: number;
+  disabled: number;
+  total: number;
+  lastUpdatedAt: string | null;
+  variants: InventoryVariantDTO[];
+}
+
 export interface ProductListItemDTO {
   slug: string;
   name: string;

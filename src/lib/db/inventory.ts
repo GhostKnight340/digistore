@@ -3,7 +3,14 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
-import type { ActionResult, AdminCodeDTO, InventoryGroupDTO, InventorySummaryDTO } from "@/lib/dto";
+import type {
+  ActionResult,
+  AdminCodeDTO,
+  InventoryGroupDTO,
+  InventoryProductDTO,
+  InventorySummaryDTO,
+  InventoryVariantDTO,
+} from "@/lib/dto";
 
 type CodeRecord = {
   id: string;
@@ -12,6 +19,24 @@ type CodeRecord = {
   assignedOrderId: string | null;
   usedAt: Date | null;
   createdAt: Date;
+};
+
+type InventoryCounts = {
+  unused: number;
+  reserved: number;
+  used: number;
+  disabled: number;
+  total: number;
+  lastUpdatedAt: string | null;
+};
+
+const EMPTY_COUNTS: InventoryCounts = {
+  unused: 0,
+  reserved: 0,
+  used: 0,
+  disabled: 0,
+  total: 0,
+  lastUpdatedAt: null,
 };
 
 function rowToCode(code: CodeRecord): AdminCodeDTO {
@@ -23,6 +48,52 @@ function rowToCode(code: CodeRecord): AdminCodeDTO {
     usedAt: code.usedAt?.toISOString() ?? null,
     createdAt: code.createdAt.toISOString(),
   };
+}
+
+function addCounts(target: InventoryCounts, source: InventoryCounts) {
+  target.unused += source.unused;
+  target.reserved += source.reserved;
+  target.used += source.used;
+  target.disabled += source.disabled;
+  target.total += source.total;
+  if (
+    source.lastUpdatedAt &&
+    (!target.lastUpdatedAt || source.lastUpdatedAt > target.lastUpdatedAt)
+  ) {
+    target.lastUpdatedAt = source.lastUpdatedAt;
+  }
+}
+
+function variantDisplayName(productName: string, parentName: string) {
+  const escaped = parentName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const withoutParent = productName.replace(new RegExp(`^${escaped}\\s*`, "i"), "").trim();
+  return withoutParent || productName;
+}
+
+function countsForProduct(
+  productId: string,
+  rows: Array<{
+    productId: string;
+    status: string;
+    _count: { _all: number };
+    _max: { updatedAt: Date | null };
+  }>,
+): InventoryCounts {
+  const counts = { ...EMPTY_COUNTS };
+  for (const row of rows) {
+    if (row.productId !== productId) continue;
+    const count = row._count._all;
+    counts.total += count;
+    if (row.status === "unused") counts.unused = count;
+    else if (row.status === "reserved") counts.reserved = count;
+    else if (row.status === "used") counts.used = count;
+    else if (row.status === "disabled") counts.disabled = count;
+    const updatedAt = row._max.updatedAt?.toISOString() ?? null;
+    if (updatedAt && (!counts.lastUpdatedAt || updatedAt > counts.lastUpdatedAt)) {
+      counts.lastUpdatedAt = updatedAt;
+    }
+  }
+  return counts;
 }
 
 export async function getInventorySummary(): Promise<InventorySummaryDTO[]> {
@@ -83,6 +154,101 @@ export async function getInventoryGroups(): Promise<InventoryGroupDTO[]> {
   await ensureDatabaseReady();
   const summaries = await getInventorySummary();
   return summaries.map((summary) => ({ ...summary, codes: [] }));
+}
+
+export async function getInventoryProducts(): Promise<InventoryProductDTO[]> {
+  await ensureDatabaseReady();
+  const [products, statusGroups] = await Promise.all([
+    timeAdmin(
+      "admin.inventoryProducts",
+      "product.findMany.inventory",
+      () =>
+        prisma.product.findMany({
+          take: 300,
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            category: true,
+            categoryRecord: { select: { name: true } },
+            variants: {
+              orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+              select: {
+                id: true,
+                name: true,
+                faceValue: true,
+                faceCurrency: true,
+              },
+            },
+          },
+        }),
+      (rows) => rows.length,
+    ),
+    timeAdmin(
+      "admin.inventoryProducts",
+      "digitalCode.groupBy.status",
+      () =>
+        prisma.digitalCode.groupBy({
+          by: ["productId", "status"],
+          _count: { _all: true },
+          _max: { updatedAt: true },
+        }),
+      (rows) => rows.length,
+    ),
+  ]);
+
+  const grouped = new Map<string, InventoryProductDTO>();
+
+  for (const product of products) {
+    const productCounts = countsForProduct(product.id, statusGroups);
+    const parentName =
+      product.variants.length > 0
+        ? product.name
+        : product.categoryRecord?.name ?? product.category;
+    const groupKey =
+      product.variants.length > 0 ? product.slug : `category:${product.category}`;
+    const variants: InventoryVariantDTO[] =
+      product.variants.length > 0
+        ? product.variants.map((variant) => ({
+            productId: product.slug,
+            name:
+              variant.faceValue != null
+                ? `${variant.faceValue} ${variant.faceCurrency}`
+                : variant.name,
+            ...productCounts,
+          }))
+        : [
+            {
+              productId: product.slug,
+              name: variantDisplayName(product.name, parentName),
+              ...productCounts,
+            },
+          ];
+
+    if (!grouped.has(groupKey)) {
+      grouped.set(groupKey, {
+        productId: product.variants.length > 0 ? product.slug : product.category,
+        productName: parentName,
+        category: product.category,
+        variantCount: 0,
+        unused: 0,
+        reserved: 0,
+        used: 0,
+        disabled: 0,
+        total: 0,
+        lastUpdatedAt: null,
+        variants: [],
+      });
+    }
+
+    const group = grouped.get(groupKey)!;
+    group.variants.push(...variants);
+    group.variantCount = group.variants.length;
+    addCounts(group, productCounts);
+  }
+
+  return [...grouped.values()].filter((group) => group.variants.length > 0);
 }
 
 export async function getInventoryCodes(

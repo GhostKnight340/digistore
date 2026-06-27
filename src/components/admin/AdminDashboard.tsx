@@ -6,9 +6,9 @@ import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import {
   getAdminOverviewAction,
-  getInventorySummaryAction,
+  getInventoryProductsAction,
 } from "@/app/actions/admin";
-import type { AdminOrderSummaryDTO, AdminStatsDTO, InventorySummaryDTO } from "@/lib/dto";
+import type { AdminOrderSummaryDTO, AdminStatsDTO, InventoryProductDTO } from "@/lib/dto";
 
 const SettingsPanel = lazy(() => import("@/components/admin/SettingsPanel"));
 const ProductsPanel = lazy(() => import("@/components/admin/ProductsPanel"));
@@ -32,12 +32,14 @@ const navItems = [
   { id: "refunds", label: "Refunds", icon: "RF" },
 ];
 
+const LOW_STOCK_MAX = 5;
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [orderQuery, setOrderQuery] = useState("");
   const [stats, setStats] = useState<AdminStatsDTO | null>(null);
   const [recentOrders, setRecentOrders] = useState<AdminOrderSummaryDTO[]>([]);
-  const [inventorySummary, setInventorySummary] = useState<InventorySummaryDTO[]>([]);
+  const [inventoryProducts, setInventoryProducts] = useState<InventoryProductDTO[]>([]);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
 
@@ -47,10 +49,10 @@ export default function AdminDashboard() {
     try {
       const [overview, summary] = await Promise.all([
         getAdminOverviewAction(),
-        getInventorySummaryAction(),
+        getInventoryProductsAction(),
       ]);
       setRecentOrders(overview.recentOrders);
-      setInventorySummary(summary);
+      setInventoryProducts(summary);
       setStats({
         totalOrders: overview.totalOrders,
         pendingCount: overview.pendingFulfillment,
@@ -90,6 +92,23 @@ export default function AdminDashboard() {
     });
   }, [recentOrders, orderQuery]);
 
+  const inventoryAlerts = useMemo(
+    () =>
+      inventoryProducts
+        .flatMap((product) =>
+          product.variants
+            .filter((variant) => variant.unused <= LOW_STOCK_MAX)
+            .map((variant) => ({
+              productName: product.productName,
+              variantName: variant.name,
+              unused: variant.unused,
+            })),
+        )
+        .sort((a, b) => a.unused - b.unused)
+        .slice(0, 5),
+    [inventoryProducts],
+  );
+
   const panelFallback = (
     <section className="card p-6 text-sm text-muted">Loading section...</section>
   );
@@ -100,7 +119,7 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-white">Admin dashboard</h1>
           <p className="mt-1 text-sm text-muted">
-            Database-backed inventory and manual fulfillment.
+            Store inventory, payments, and manual fulfillment.
           </p>
         </div>
         <span className="chip border-accent/40 text-accent">Production data</span>
@@ -300,9 +319,9 @@ export default function AdminDashboard() {
             <section className="card p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-bold text-white">Inventory summary</h2>
+                  <h2 className="font-bold text-white">Inventory alerts</h2>
                   <p className="mt-1 text-xs text-muted">
-                    Summary loads with the overview; full codes load only in the Inventory tab.
+                    Low and out-of-stock variants from the current inventory counts.
                   </p>
                 </div>
                 <button
@@ -313,48 +332,51 @@ export default function AdminDashboard() {
                   Manage codes
                 </button>
               </div>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="text-xs uppercase text-muted">
-                    <tr className="border-b border-border">
-                      <th className="px-5 py-3 font-medium">Product</th>
-                      <th className="px-5 py-3 font-medium">Unused</th>
-                      <th className="px-5 py-3 font-medium">Used</th>
-                      <th className="px-5 py-3 font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overviewLoading ? (
-                      <tr>
-                        <td colSpan={4} className="px-5 py-8 text-sm text-muted">
-                          Loading...
-                        </td>
-                      </tr>
-                    ) : inventorySummary.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-5 py-8 text-sm text-muted">
-                          No inventory codes yet. Use Manage codes to add stock.
-                        </td>
-                      </tr>
-                    ) : (
-                      inventorySummary.map((row) => (
-                        <tr key={row.productId} className="border-b border-border/60">
-                          <td className="px-5 py-3 font-mono text-xs text-white">
-                            {row.productId}
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className="font-semibold text-green-400">
-                              {row.unused}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-muted">{row.used}</td>
-                          <td className="px-5 py-3 text-muted">{row.total}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {overviewLoading ? (
+                <p className="mt-4 text-sm text-muted">Loading...</p>
+              ) : inventoryProducts.length === 0 ? (
+                <p className="mt-4 text-sm text-muted">
+                  No inventory codes yet. Use Manage codes to add stock.
+                </p>
+              ) : inventoryAlerts.length === 0 ? (
+                <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-200">
+                  All tracked variants are in stock.
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {inventoryAlerts.map((alert) => {
+                    const out = alert.unused === 0;
+                    return (
+                      <button
+                        key={`${alert.productName}-${alert.variantName}`}
+                        type="button"
+                        onClick={() => setActiveTab("inventory")}
+                        className={`rounded-xl border px-4 py-3 text-left ${
+                          out
+                            ? "border-red-500/40 bg-red-500/10"
+                            : "border-amber-500/40 bg-amber-500/10"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              out ? "bg-red-400" : "bg-amber-400"
+                            }`}
+                          />
+                          <span className="text-sm font-medium text-white">
+                            {alert.productName} {alert.variantName}
+                          </span>
+                        </div>
+                        <p className={`mt-1 text-xs ${out ? "text-red-300" : "text-amber-300"}`}>
+                          {out
+                            ? "Out of stock"
+                            : `Only ${alert.unused} code${alert.unused === 1 ? "" : "s"} left`}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
         )}

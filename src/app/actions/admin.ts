@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/orders";
 import {
   getInventoryGroups,
+  getInventoryProducts,
   getInventoryCodes,
   getInventorySummary,
   getAvailableCodes,
@@ -58,6 +59,7 @@ import type {
   AdminStatsDTO,
   EmailLogDTO,
   InventoryGroupDTO,
+  InventoryProductDTO,
   InventorySummaryDTO,
   ItemAssignment,
   ConvertProductToVariantInput,
@@ -114,6 +116,10 @@ export async function getAdminStatsAction(): Promise<AdminStatsDTO> {
 
 export async function getInventoryAction(): Promise<InventoryGroupDTO[]> {
   return getInventoryGroups();
+}
+
+export async function getInventoryProductsAction(): Promise<InventoryProductDTO[]> {
+  return getInventoryProducts();
 }
 
 export async function getInventoryCodesAction(productSlug: string): Promise<AdminCodeDTO[]> {
