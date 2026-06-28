@@ -2,6 +2,7 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
+import { formatPublicOrderNumber, parsePublicOrderNumber } from "@/lib/orderNumber";
 import type { OrderStatus } from "@/lib/types";
 import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
 
@@ -14,9 +15,10 @@ function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function buildCustomerDTO(data: OrderRecord): CustomerOrderDTO {
+function buildCustomerDTO(data: OrderRecord, publicOrderNumber?: string): CustomerOrderDTO {
   return {
     id: data.id,
+    publicOrderNumber,
     status: data.status as OrderStatus,
     customerName: data.customerName,
     customerEmail: data.customerEmail,
@@ -142,7 +144,18 @@ export async function getCustomerOrder(
 ): Promise<CustomerOrderDTO | null> {
   await ensureDatabaseReady();
   const data = await loadOrder(id);
-  return data ? buildCustomerDTO(data) : null;
+  if (!data) return null;
+
+  const earlierOrders = await prisma.order.count({
+    where: {
+      OR: [
+        { createdAt: { lt: data.createdAt } },
+        { createdAt: data.createdAt, id: { lt: data.id } },
+      ],
+    },
+  });
+
+  return buildCustomerDTO(data, formatPublicOrderNumber(earlierOrders + 1));
 }
 
 export async function getOrderSummaries(
@@ -160,7 +173,7 @@ export async function getOrderSummaries(
       paymentEvents: { orderBy: { createdAt: "asc" } },
     },
   });
-  return orders.map(buildCustomerDTO);
+  return orders.map((order) => buildCustomerDTO(order));
 }
 
 export async function getAdminOrders(): Promise<AdminOrderSummaryDTO[]> {
@@ -467,11 +480,27 @@ export async function createOrder(
 export async function findOrderByEmailAndId(
   id: string,
   email: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; status: string } | null> {
   await ensureDatabaseReady();
+  const normalizedEmail = email.trim().toLowerCase();
+  const publicOrderNumber = parsePublicOrderNumber(id);
+
+  if (publicOrderNumber !== null) {
+    const [order] = await prisma.order.findMany({
+      skip: publicOrderNumber - 1,
+      take: 1,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, status: true, customerEmail: true },
+    });
+
+    if (order?.customerEmail.toLowerCase() === normalizedEmail) {
+      return { id: order.id, status: order.status };
+    }
+  }
+
   const order = await prisma.order.findFirst({
-    where: { id, customerEmail: email },
-    select: { id: true },
+    where: { id: id.trim(), customerEmail: { equals: normalizedEmail, mode: "insensitive" } },
+    select: { id: true, status: true },
   });
   return order ?? null;
 }

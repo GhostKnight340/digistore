@@ -103,6 +103,7 @@ export default function PaymentPage({
   const { order, config } = data;
   const methodConfig = config.methods[order.paymentMethod] ?? null;
   const whatsapp = config.support.whatsappNumber.replace(/\s/g, "");
+  const publicOrderNumber = order.publicOrderNumber ?? `#${order.id.slice(-8).toUpperCase()}`;
 
   return (
     <div className="container-page py-10">
@@ -120,7 +121,7 @@ export default function PaymentPage({
           </p>
 
           <dl className="mx-auto mt-6 grid max-w-xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
-            <VaultMeta label="Commande" value={`#${order.id.slice(-8).toUpperCase()}`} />
+            <VaultMeta label="Commande" value={publicOrderNumber} />
             <VaultMeta label="Méthode" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
             <VaultMeta label="Total" value={formatMAD(order.totalMad)} />
             <VaultMeta label="Date" value={formatDate(order.createdAt)} />
@@ -165,7 +166,7 @@ export default function PaymentPage({
             title="Une erreur semble s'être produite lors du paiement."
             body="Veuillez contacter notre support WhatsApp avec votre numéro de commande."
             whatsapp={whatsapp}
-            orderId={order.id}
+            orderReference={publicOrderNumber}
           />
         )}
 
@@ -174,7 +175,7 @@ export default function PaymentPage({
             title="Paiement refusé"
             body="Nous n'avons pas pu confirmer votre paiement. Veuillez nous contacter sur WhatsApp avec votre numéro de commande."
             whatsapp={whatsapp}
-            orderId={order.id}
+            orderReference={publicOrderNumber}
             isRejection
           />
         )}
@@ -207,10 +208,10 @@ export default function PaymentPage({
           <h2 className="text-sm font-semibold text-white">Besoin d'aide?</h2>
           <p className="mt-1 text-xs text-muted">
             Contactez le support avec votre numéro de commande:{" "}
-            <span className="font-mono text-text">{order.id}</span>
+            <span className="font-mono text-text">{publicOrderNumber}</span>
           </p>
           <a
-            href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai une question concernant ma commande ${order.id}`}
+            href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai une question concernant ma commande ${publicOrderNumber}`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-green-400 hover:text-green-300"
@@ -746,13 +747,13 @@ function IssueCard({
   title,
   body,
   whatsapp,
-  orderId,
+  orderReference,
   isRejection,
 }: {
   title: string;
   body: string;
   whatsapp: string;
-  orderId: string;
+  orderReference: string;
   isRejection?: boolean;
 }) {
   return (
@@ -763,7 +764,7 @@ function IssueCard({
       <p className="mt-4 font-semibold text-white">{title}</p>
       <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
       <a
-        href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai un problème avec ma commande ${orderId}`}
+        href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai un problème avec ma commande ${orderReference}`}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-4 inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700"

@@ -6,6 +6,7 @@ import {
   getOrderSummaries,
   findOrderByEmailAndId,
 } from "@/lib/db/orders";
+import { customerOrderRedirectPath } from "@/lib/orderNumber";
 import type { CustomerOrderDTO } from "@/lib/dto";
 
 /** Checkout: create a pending order in the database. Returns the new order id. */
@@ -33,14 +34,18 @@ export async function getMyOrdersAction(
 }
 
 /**
- * Customer: look up an order by its ID + the email used at checkout.
- * Returns the order ID on match so the client can redirect to /payment/{id}.
+ * Customer: look up an order by public number + the email used at checkout.
+ * Falls back to the internal ID for legacy support links.
  */
 export async function findOrderAction(
-  orderId: string,
+  orderNumber: string,
   email: string,
-): Promise<{ found: boolean; id?: string }> {
-  const order = await findOrderByEmailAndId(orderId.trim(), email.trim().toLowerCase());
+): Promise<{ found: boolean; id?: string; redirectTo?: string }> {
+  const order = await findOrderByEmailAndId(orderNumber.trim(), email.trim().toLowerCase());
   if (!order) return { found: false };
-  return { found: true, id: order.id };
+  return {
+    found: true,
+    id: order.id,
+    redirectTo: customerOrderRedirectPath(order.status, order.id),
+  };
 }

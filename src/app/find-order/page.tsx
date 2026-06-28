@@ -7,27 +7,26 @@ import { findOrderAction } from "@/app/actions/orders";
 
 export default function FindOrderPage() {
   const router = useRouter();
-  const [orderId, setOrderId] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!orderId.trim() || !email.trim()) {
-      setError("Veuillez renseigner l'identifiant de commande et votre email.");
+    if (!orderNumber.trim() || !email.trim()) {
+      setError("Veuillez renseigner le numéro de commande et votre email.");
       return;
     }
+
     setError("");
     setLoading(true);
     try {
-      const result = await findOrderAction(orderId.trim(), email.trim());
-      if (result.found && result.id) {
-        router.push(`/payment/${result.id}`);
+      const result = await findOrderAction(orderNumber.trim(), email.trim());
+      if (result.found && result.redirectTo) {
+        router.push(result.redirectTo);
       } else {
-        setError(
-          "Aucune commande trouvée avec ces informations. Vérifiez l'identifiant et l'email utilisé lors de la commande.",
-        );
+        setError("Aucune commande trouvée avec ce numéro et cette adresse email.");
       }
     } catch {
       setError("Une erreur est survenue. Veuillez réessayer.");
@@ -40,31 +39,33 @@ export default function FindOrderPage() {
     <div className="container-page py-10">
       <div className="mx-auto max-w-md">
         <nav className="mb-8 flex items-center gap-2 text-sm text-faint">
-          <Link href="/" className="text-muted hover:text-white transition">Accueil</Link>
+          <Link href="/" className="text-muted transition hover:text-white">
+            Accueil
+          </Link>
           <span>/</span>
           <span className="text-text">Retrouver ma commande</span>
         </nav>
 
         <h1 className="text-3xl font-bold text-white">Retrouver ma commande</h1>
         <p className="mt-2 text-sm text-muted">
-          Saisissez l&apos;identifiant de votre commande et l&apos;email utilisé lors du checkout.
+          Entrez votre numéro de commande et l&apos;adresse email utilisée lors de votre achat.
         </p>
 
         <form onSubmit={handleSubmit} className="card mt-8 space-y-5 p-6">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-white">
-              Identifiant de commande
+              Numéro de commande
             </label>
             <input
               className="input w-full font-mono text-sm"
-              placeholder="Ex: clyxxxxxxxxxxxxxxxxxxxx"
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
+              placeholder="#000123"
+              value={orderNumber}
+              onChange={(e) => setOrderNumber(e.target.value)}
               autoComplete="off"
               spellCheck={false}
             />
             <p className="mt-1 text-xs text-faint">
-              Disponible dans l&apos;email de confirmation reçu après le checkout.
+              Votre numéro de commande est présent dans les emails envoyés par Karta.
             </p>
           </div>
 
@@ -79,6 +80,7 @@ export default function FindOrderPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
+              required
             />
           </div>
 
@@ -93,7 +95,7 @@ export default function FindOrderPage() {
             disabled={loading}
             className="btn-primary w-full disabled:opacity-60"
           >
-            {loading ? "Recherche en cours…" : "Retrouver ma commande →"}
+            {loading ? "Recherche en cours..." : "Retrouver ma commande"}
           </button>
         </form>
 
