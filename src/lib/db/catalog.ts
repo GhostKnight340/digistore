@@ -257,11 +257,25 @@ export async function getCatalogPage(options: {
     }),
   ]);
   const settings = await getStoreSettings();
-  const variantProducts = productRows.flatMap((row) =>
-    row.variants
-      .filter((variant) => isVariantPublic(row, variant))
-      .map((variant) => toVariantProduct(row, variant, settings.inventoryMode)),
-  );
+  const variantProducts = productRows
+    .flatMap((row, productIndex) =>
+      row.variants
+        .filter((variant) => isVariantPublic(row, variant))
+        .map((variant, variantIndex) => ({
+          product: toVariantProduct(row, variant, settings.inventoryMode),
+          productIndex,
+          variantIndex,
+        })),
+    )
+    .sort((a, b) => {
+      if (a.product.featured !== b.product.featured) {
+        return a.product.featured ? -1 : 1;
+      }
+      if (a.productIndex !== b.productIndex) return a.productIndex - b.productIndex;
+      if (a.variantIndex !== b.variantIndex) return a.variantIndex - b.variantIndex;
+      return a.product.name.localeCompare(b.product.name);
+    })
+    .map((entry) => entry.product);
   const pagedProducts = variantProducts.slice((page - 1) * pageSize, page * pageSize);
 
   return {
