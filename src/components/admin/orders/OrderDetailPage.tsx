@@ -81,12 +81,37 @@ function eventNote(order: AdminOrderDTO, toStatus: string) {
   return order.paymentEvents.find((event) => event.toStatus === toStatus)?.note ?? null;
 }
 
+type ReviewIntent = "reject" | "request_proof" | "refund_update";
+
+const REVIEW_TEMPLATE_KEYS: Record<ReviewIntent, string> = {
+  reject: "payment_rejected",
+  request_proof: "new_proof_requested",
+  refund_update: "refund_update",
+};
+
+/**
+ * Best-effort reverse substitution: turn a rendered email (with the customer's
+ * real values) back into a reusable template by replacing concrete values with
+ * their `{{placeholder}}` so "Save as template" stays generic. Longest values
+ * are replaced first to avoid partial collisions.
+ */
+function rerenderToTemplate(text: string, variables: Record<string, string>) {
+  const entries = Object.entries(variables)
+    .filter(([, value]) => value && value.trim().length >= 3)
+    .sort((a, b) => b[1].length - a[1].length);
+  let result = text;
+  for (const [name, value] of entries) {
+    result = result.split(value).join(`{{${name}}}`);
+  }
+  return result;
+}
+
 export default function OrderDetailPage({
   initialOrder,
 }: {
   initialOrder: AdminOrderDTO;
 }) {
-  const { settings } = useStoreSettings();
+  const { settings, saveSettings } = useStoreSettings();
   const [order, setOrder] = useState(initialOrder);
   const [proof, setProof] = useState<AdminPaymentProofDTO | null | "loading">("loading");
   const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
@@ -98,12 +123,14 @@ export default function OrderDetailPage({
   const [nextStatus, setNextStatus] = useState<OrderStatus>(initialOrder.status);
   const [statusNote, setStatusNote] = useState("");
   const [reviewEmail, setReviewEmail] = useState<{
-    intent: "reject" | "request_proof" | "refund_update";
+    intent: ReviewIntent;
     title: string;
     subject: string;
     text: string;
     reason: string;
+    edited: boolean;
   } | null>(null);
+  const [templateSaved, setTemplateSaved] = useState(false);
   const manualMode = settings.inventoryMode === "manual";
 
   const delivered = isDelivered(order.status);
@@ -219,13 +246,11 @@ export default function OrderDetailPage({
     setBusy(false);
   }
 
-  async function openReviewEmail(
-    intent: "reject" | "request_proof" | "refund_update",
-    title: string,
-  ) {
+  async function openReviewEmail(intent: ReviewIntent, title: string) {
     setBusy(true);
     setError("");
     setMessage("");
+    setTemplateSaved(false);
     try {
       const preview = await getPaymentEmailPreviewAction(order.id, intent);
       setReviewEmail({
@@ -234,6 +259,7 @@ export default function OrderDetailPage({
         subject: preview.subject,
         text: preview.text,
         reason: "",
+        edited: false,
       });
     } catch (previewError) {
       setError(previewError instanceof Error ? previewError.message : "Aperçu email impossible.");
@@ -250,9 +276,42 @@ export default function OrderDetailPage({
         reviewEmail.intent,
         { subject: reviewEmail.subject, text: reviewEmail.text },
         reviewEmail.reason,
+        reviewEmail.edited,
       ),
     );
     setReviewEmail(null);
+  }
+
+  async function saveReviewAsTemplate() {
+    if (!reviewEmail) return;
+    const key = REVIEW_TEMPLATE_KEYS[reviewEmail.intent];
+    const variables: Record<string, string> = {
+      customer_name: order.customerName,
+      order_number: order.id,
+      total: `${order.totalMad} MAD`,
+      support_email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? settings.footer.contactEmail,
+      support_whatsapp: settings.footer.whatsappNumber,
+      reason: reviewEmail.reason,
+    };
+    setBusy(true);
+    setError("");
+    setTemplateSaved(false);
+    const result = await saveSettings({
+      ...settings,
+      emailTemplates: {
+        ...settings.emailTemplates,
+        [key]: {
+          subject: rerenderToTemplate(reviewEmail.subject, variables),
+          body: rerenderToTemplate(reviewEmail.text, variables),
+        },
+      },
+    });
+    setBusy(false);
+    if (result.ok) {
+      setTemplateSaved(true);
+    } else {
+      setError(result.error ?? "Enregistrement du modèle impossible.");
+    }
   }
 
   async function handleDeliver() {
@@ -498,21 +557,6 @@ export default function OrderDetailPage({
             <div className="mt-5 space-y-4">
               <label className="block text-sm">
                 <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
-                  Sujet
-                </span>
-                <input
-                  value={reviewEmail.subject}
-                  onChange={(event) =>
-                    setReviewEmail((current) =>
-                      current ? { ...current, subject: event.target.value } : current,
-                    )
-                  }
-                  className="input h-11 py-0"
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
                   Raison interne / client
                 </span>
                 <input
@@ -527,39 +571,64 @@ export default function OrderDetailPage({
                 />
               </label>
 
-              <label className="block text-sm">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
-                  Message
-                </span>
+              {/* Real, editable preview: edits happen inline inside the rendered
+                  email and apply only to this send. */}
+              <div className="rounded-xl border border-border bg-white p-5 text-[#0a0b0d] shadow-card">
+                <div className="flex items-center justify-between gap-3 border-b border-black/10 pb-3 text-xs text-[#5a6573]">
+                  <span>
+                    De&nbsp;: ghost.ma &lt;no-reply@ghost.ma&gt;
+                  </span>
+                  <span>À&nbsp;: {order.customerEmail}</span>
+                </div>
+                <input
+                  value={reviewEmail.subject}
+                  onChange={(event) =>
+                    setReviewEmail((current) =>
+                      current
+                        ? { ...current, subject: event.target.value, edited: true }
+                        : current,
+                    )
+                  }
+                  aria-label="Sujet de l'email"
+                  className="mt-3 w-full border-0 bg-transparent p-0 text-lg font-semibold text-[#0a0b0d] outline-none focus:ring-0"
+                />
                 <textarea
                   value={reviewEmail.text}
                   onChange={(event) =>
                     setReviewEmail((current) =>
-                      current ? { ...current, text: event.target.value } : current,
+                      current
+                        ? { ...current, text: event.target.value, edited: true }
+                        : current,
                     )
                   }
-                  rows={10}
-                  className="input min-h-64 py-3"
+                  aria-label="Corps de l'email"
+                  rows={12}
+                  className="mt-3 min-h-64 w-full resize-y whitespace-pre-wrap border-0 bg-transparent p-0 text-sm leading-relaxed text-[#1f2733] outline-none focus:ring-0"
                 />
-              </label>
-
-              <div className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-xs uppercase tracking-wide text-muted">Aperçu</p>
-                <h3 className="mt-2 text-base font-semibold text-white">
-                  {reviewEmail.subject}
-                </h3>
-                <pre className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted">
-                  {reviewEmail.text}
-                </pre>
               </div>
+              <p className="text-xs text-muted">
+                Cliquez directement dans l'aperçu pour modifier le sujet ou le
+                message. Les changements s'appliquent uniquement à cet envoi, sauf
+                si vous enregistrez le modèle.
+                {reviewEmail.edited ? " • Modifié" : ""}
+                {templateSaved ? " • Modèle enregistré" : ""}
+              </p>
 
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => setReviewEmail(null)}
                   className="btn-ghost w-full justify-center"
                 >
                   Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !reviewEmail.subject.trim() || !reviewEmail.text.trim()}
+                  onClick={saveReviewAsTemplate}
+                  className="btn-ghost w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Enregistrer comme modèle
                 </button>
                 <button
                   type="button"

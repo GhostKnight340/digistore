@@ -235,6 +235,7 @@ export async function applyPaymentStatusWithEmail(
   emailType: string,
   templateKey: EmailTemplateKey,
   email: { subject: string; text: string; html?: string },
+  manuallyEdited = false,
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -264,7 +265,7 @@ export async function applyPaymentStatusWithEmail(
         subject: email.subject,
         text: email.text,
         html: email.html,
-        manuallyEdited: true,
+        manuallyEdited,
         variables: {
           customer_name: order.customerName,
           order_number: order.id,

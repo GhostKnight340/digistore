@@ -111,6 +111,7 @@ export async function sendPaymentReviewEmailAction(
   intent: "reject" | "request_proof" | "refund_update",
   email: { subject: string; text: string; html?: string },
   reason?: string,
+  manuallyEdited = false,
 ): Promise<ActionResult> {
   if (intent === "reject") {
     return applyPaymentStatusWithEmail(
@@ -120,6 +121,7 @@ export async function sendPaymentReviewEmailAction(
       "payment_rejected",
       "payment_rejected",
       email,
+      manuallyEdited,
     );
   }
   if (intent === "refund_update") {
@@ -130,6 +132,7 @@ export async function sendPaymentReviewEmailAction(
       "refund_update",
       "refund_update",
       email,
+      manuallyEdited,
     );
   }
   return applyPaymentStatusWithEmail(
@@ -139,6 +142,7 @@ export async function sendPaymentReviewEmailAction(
     "payment_issue",
     "new_proof_requested",
     email,
+    manuallyEdited,
   );
 }
 
