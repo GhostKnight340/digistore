@@ -548,25 +548,6 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
 
     if (!product) return { ok: false, error: "Product not found." };
 
-    if (data.slug === product.slug || data.slug === product.id) {
-      await prisma.product.update({
-        where: { id: product.id },
-        data: {
-          name: data.name,
-          priceMad: data.priceMad,
-          active: data.active,
-          category: category.id,
-          region: data.region,
-          deliveryType: data.deliveryType,
-        },
-      });
-      return { ok: true };
-    }
-
-    const existing =
-      product.variants.find((variant) => variant.id === data.slug) ??
-      product.variants.find((variant) => variant.name === data.name);
-
     const variantFields = {
       name: data.name,
       priceMad: data.priceMad,
@@ -579,6 +560,35 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       active: data.active,
       featured: data.featured,
     };
+
+    if ((data.slug === product.slug || data.slug === product.id) && product.variants.length === 0) {
+      await prisma.$transaction([
+        prisma.product.update({
+          where: { id: product.id },
+          data: {
+            name: data.name,
+            priceMad: data.priceMad,
+            active: data.active,
+            category: category.id,
+            region: data.region,
+            deliveryType: data.deliveryType,
+          },
+        }),
+        prisma.productVariant.create({
+          data: {
+            id: data.slug,
+            productId: product.id,
+            ...variantFields,
+            sortOrder: 0,
+          },
+        }),
+      ]);
+      return { ok: true };
+    }
+
+    const existing =
+      product.variants.find((variant) => variant.id === data.slug) ??
+      product.variants.find((variant) => variant.name === data.name);
 
     if (existing) {
       await prisma.productVariant.update({
