@@ -2,6 +2,8 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
+import { getStoreSettings } from "./catalog";
+import { renderEmailTemplate } from "@/lib/emailTemplates";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
@@ -16,6 +18,13 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
   if (order.status === "payment_confirmed" || order.status === "delivered") {
     return { ok: false, error: "Paiement déjà confirmé." };
   }
+  const settings = await getStoreSettings();
+  const paymentEmail = renderEmailTemplate(settings, "payment_confirmed", {
+    customer_name: order.customerName,
+    order_number: order.id,
+    order_url: `/order/${order.id}`,
+    total: `${order.totalMad} MAD`,
+  });
 
   try {
     await timeAdmin("admin.confirmPayment", "transaction.statusEmailEvent", () => prisma.$transaction(async (tx) => {
@@ -37,8 +46,8 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
           orderId,
           type: "payment_confirmed",
           recipient: order.customerEmail,
-          subject: "Paiement confirmé",
-          body: "Votre paiement a été confirmé. Votre produit numérique sera disponible sous peu.",
+          subject: paymentEmail.subject,
+          body: paymentEmail.body,
         },
       });
     }), () => 3);
@@ -72,6 +81,7 @@ export async function deliverOrder(
             select: {
               id: true,
               productId: true,
+              variantId: true,
               quantity: true,
             },
           },
@@ -101,6 +111,7 @@ export async function deliverOrder(
   }
 
   try {
+    const settings = await getStoreSettings();
     await timeAdmin("admin.deliverOrder", "transaction.deliverCodes", () => prisma.$transaction(async (tx) => {
       const deliveredValues: string[] = [];
       for (const item of order.items) {
@@ -120,9 +131,16 @@ export async function deliverOrder(
             if (!code || code.status === "used" || code.status === "disabled") {
               throw new Error("Le code sélectionné n’est plus disponible.");
             }
+            if (item.variantId && code.variantId !== item.variantId) {
+              throw new Error("Le code sélectionné ne correspond pas à la variante commandée.");
+            }
 
             const claim = await tx.digitalCode.updateMany({
-              where: { id: entry.digitalCodeId, status: "unused" },
+              where: {
+                id: entry.digitalCodeId,
+                status: "unused",
+                ...(item.variantId ? { variantId: item.variantId } : {}),
+              },
               data: {
                 status: "used",
                 assignedOrderId: orderId,
@@ -169,8 +187,12 @@ export async function deliverOrder(
           orderId,
           type: "code_delivered",
           recipient: order.customerEmail,
-          subject: "Votre code est disponible",
-          body: `Votre paiement a été confirmé. Votre produit numérique est maintenant disponible.\n\nCodes :\n${deliveredValues.join("\n")}\n\nMerci pour votre achat.`,
+          ...renderEmailTemplate(settings, "order_delivered", {
+            customer_name: order.customerEmail,
+            order_number: orderId,
+            delivery_url: `/delivery/${orderId}`,
+            codes: deliveredValues.join("\n"),
+          }),
         },
       });
     }), () => assignments.length);

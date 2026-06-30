@@ -66,7 +66,8 @@ export default function Footer() {
           links={[
             { href: "/terms", label: "Conditions" },
             { href: "/privacy", label: "Confidentialité" },
-            { href: "/support", label: "Remboursements" },
+            { href: "/refunds", label: "Remboursements" },
+            { href: "/legal", label: "Mentions légales" },
             ...socialLinks.map(([name, href]) => ({
               href,
               label: name.charAt(0).toUpperCase() + name.slice(1),

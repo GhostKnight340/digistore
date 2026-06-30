@@ -225,12 +225,25 @@ async function ensureDatabaseSchema(): Promise<void> {
     `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false`,
     `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCost" DOUBLE PRECISION`,
     `ALTER TABLE "ProductVariant" ADD COLUMN IF NOT EXISTS "supplierCurrency" TEXT NOT NULL DEFAULT 'MAD'`,
+    `ALTER TABLE "DigitalCode" ADD COLUMN IF NOT EXISTS "variantId" TEXT`,
+    `ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "variantId" TEXT`,
+    `UPDATE "DigitalCode" dc
+      SET "variantId" = only_variant."id"
+      FROM (
+        SELECT "productId", MIN("id") AS "id"
+        FROM "ProductVariant"
+        GROUP BY "productId"
+        HAVING COUNT(*) = 1
+      ) only_variant
+      WHERE dc."variantId" IS NULL
+        AND dc."productId" = only_variant."productId"`,
     // ────────────────────────────────────────────────────────────────────────
     `CREATE UNIQUE INDEX IF NOT EXISTS "Product_slug_key" ON "Product"("slug")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Category_slug_key" ON "Category"("slug")`,
     `CREATE INDEX IF NOT EXISTS "Product_active_sortOrder_idx" ON "Product"("active", "sortOrder")`,
     `CREATE INDEX IF NOT EXISTS "Product_category_active_idx" ON "Product"("category", "active")`,
     `CREATE INDEX IF NOT EXISTS "DigitalCode_productId_status_idx" ON "DigitalCode"("productId", "status")`,
+    `CREATE INDEX IF NOT EXISTS "DigitalCode_variantId_status_idx" ON "DigitalCode"("variantId", "status")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "DigitalCode_productId_code_key" ON "DigitalCode"("productId", "code")`,
     `CREATE INDEX IF NOT EXISTS "DeliveredCode_orderId_idx" ON "DeliveredCode"("orderId")`,
     `CREATE INDEX IF NOT EXISTS "EmailLog_orderId_idx" ON "EmailLog"("orderId")`,
@@ -241,6 +254,7 @@ async function ensureDatabaseSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS "ProductMedia_productId_idx" ON "ProductMedia"("productId")`,
     `CREATE INDEX IF NOT EXISTS "ProductVariant_productId_idx" ON "ProductVariant"("productId")`,
     `CREATE INDEX IF NOT EXISTS "ProductVariant_productId_active_idx" ON "ProductVariant"("productId", "active")`,
+    `CREATE INDEX IF NOT EXISTS "OrderItem_variantId_idx" ON "OrderItem"("variantId")`,
     `CREATE INDEX IF NOT EXISTS "Order_status_idx" ON "Order"("status")`,
     `CREATE INDEX IF NOT EXISTS "Order_customerEmail_idx" ON "Order"("customerEmail")`,
     `CREATE INDEX IF NOT EXISTS "Order_createdAt_idx" ON "Order"("createdAt")`,

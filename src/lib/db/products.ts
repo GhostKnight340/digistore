@@ -24,6 +24,11 @@ function productDetailQuery(where?: Prisma.ProductWhereInput) {
     include: {
       variants: {
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        include: {
+          _count: {
+            select: { digitalCodes: { where: { status: "unused" } } },
+          },
+        },
       },
       media: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -55,7 +60,7 @@ function toVariant(product: ProductRow, variant: ProductRow["variants"][number])
     featured: variant.featured,
     stockControl: variant.stockControl,
     stockMode: variant.stockMode,
-    inventoryUnused: product._count.digitalCodes,
+    inventoryUnused: variant._count.digitalCodes,
   };
 }
 
@@ -387,10 +392,10 @@ export async function deleteParentProduct(
           where: { productId: product.id, id: { not: product.slug } },
           data: { productId: target.id },
         });
-        await tx.digitalCode.updateMany({
-          where: { productId: product.id },
-          data: { productId: target.id },
-        });
+      await tx.digitalCode.updateMany({
+        where: { productId: product.id },
+        data: { productId: target.id, variantId: product.slug },
+      });
         await tx.orderItem.updateMany({
           where: { productId: product.id },
           data: { productId: target.id },
@@ -477,7 +482,7 @@ export async function convertProductToVariant(
       });
       await tx.digitalCode.updateMany({
         where: { productId: source.id },
-        data: { productId: target.id },
+        data: { productId: target.id, variantId: baseVariantId },
       });
       await tx.orderItem.updateMany({
         where: { productId: source.id },

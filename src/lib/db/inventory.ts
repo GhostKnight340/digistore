@@ -16,6 +16,7 @@ type CodeRecord = {
   id: string;
   code: string;
   status: string;
+  variantId: string | null;
   assignedOrderId: string | null;
   usedAt: Date | null;
   createdAt: Date;
@@ -44,6 +45,7 @@ function rowToCode(code: CodeRecord): AdminCodeDTO {
     id: code.id,
     code: code.code,
     status: code.status,
+    variantId: code.variantId,
     assignedOrderId: code.assignedOrderId,
     usedAt: code.usedAt?.toISOString() ?? null,
     createdAt: code.createdAt.toISOString(),
@@ -74,20 +76,23 @@ function countsForProduct(
   productId: string,
   rows: Array<{
     productId: string;
+    variantId: string | null;
     status: string;
     _count: { _all: number };
     _max: { updatedAt: Date | null };
   }>,
+  variantId?: string | null,
 ): InventoryCounts {
   const counts = { ...EMPTY_COUNTS };
   for (const row of rows) {
     if (row.productId !== productId) continue;
+    if (variantId !== undefined && row.variantId !== variantId) continue;
     const count = row._count._all;
     counts.total += count;
-    if (row.status === "unused") counts.unused = count;
-    else if (row.status === "reserved") counts.reserved = count;
-    else if (row.status === "used") counts.used = count;
-    else if (row.status === "disabled") counts.disabled = count;
+    if (row.status === "unused") counts.unused += count;
+    else if (row.status === "reserved") counts.reserved += count;
+    else if (row.status === "used") counts.used += count;
+    else if (row.status === "disabled") counts.disabled += count;
     const updatedAt = row._max.updatedAt?.toISOString() ?? null;
     if (updatedAt && (!counts.lastUpdatedAt || updatedAt > counts.lastUpdatedAt)) {
       counts.lastUpdatedAt = updatedAt;
@@ -114,7 +119,7 @@ export async function getInventorySummary(): Promise<InventorySummaryDTO[]> {
       "digitalCode.groupBy.status",
       () =>
         prisma.digitalCode.groupBy({
-          by: ["productId", "status"],
+          by: ["productId", "variantId", "status"],
           _count: { _all: true },
         }),
       (rows) => rows.length,
@@ -141,10 +146,10 @@ export async function getInventorySummary(): Promise<InventorySummaryDTO[]> {
     const s = result.get(product.slug)!;
     const count = row._count._all;
     s.total += count;
-    if (row.status === "unused") s.unused = count;
-    else if (row.status === "reserved") s.reserved = count;
-    else if (row.status === "used") s.used = count;
-    else if (row.status === "disabled") s.disabled = count;
+    if (row.status === "unused") s.unused += count;
+    else if (row.status === "reserved") s.reserved += count;
+    else if (row.status === "used") s.used += count;
+    else if (row.status === "disabled") s.disabled += count;
   }
 
   return [...result.values()];
@@ -190,7 +195,7 @@ export async function getInventoryProducts(): Promise<InventoryProductDTO[]> {
       "digitalCode.groupBy.status",
       () =>
         prisma.digitalCode.groupBy({
-          by: ["productId", "status"],
+          by: ["productId", "variantId", "status"],
           _count: { _all: true },
           _max: { updatedAt: true },
         }),
@@ -201,7 +206,7 @@ export async function getInventoryProducts(): Promise<InventoryProductDTO[]> {
   const grouped = new Map<string, InventoryProductDTO>();
 
   for (const product of products) {
-    const productCounts = countsForProduct(product.id, statusGroups);
+    const legacyCounts = countsForProduct(product.id, statusGroups, null);
     const parentName =
       product.variants.length > 0
         ? product.name
@@ -210,19 +215,36 @@ export async function getInventoryProducts(): Promise<InventoryProductDTO[]> {
       product.variants.length > 0 ? product.slug : `category:${product.category}`;
     const variants: InventoryVariantDTO[] =
       product.variants.length > 0
-        ? product.variants.map((variant) => ({
-            productId: product.slug,
-            name:
-              variant.faceValue != null
-                ? `${variant.faceValue} ${variant.faceCurrency}`
-                : variant.name,
-            ...productCounts,
-          }))
+        ? [
+            ...product.variants.map((variant) => ({
+              productId: product.slug,
+              variantId: variant.id,
+              name:
+                variant.faceValue != null
+                  ? `${variant.faceValue} ${variant.faceCurrency}`
+                  : variant.name,
+              legacy: false,
+              ...countsForProduct(product.id, statusGroups, variant.id),
+            })),
+            ...(legacyCounts.total > 0
+              ? [
+                  {
+                    productId: product.slug,
+                    variantId: null,
+                    name: "Codes hérités non assignés",
+                    legacy: true,
+                    ...legacyCounts,
+                  },
+                ]
+              : []),
+          ]
         : [
             {
               productId: product.slug,
+              variantId: null,
               name: variantDisplayName(product.name, parentName),
-              ...productCounts,
+              legacy: true,
+              ...legacyCounts,
             },
           ];
 
@@ -245,41 +267,70 @@ export async function getInventoryProducts(): Promise<InventoryProductDTO[]> {
     const group = grouped.get(groupKey)!;
     group.variants.push(...variants);
     group.variantCount = group.variants.length;
-    addCounts(group, productCounts);
+    for (const variant of variants) addCounts(group, variant);
   }
 
   return [...grouped.values()].filter((group) => group.variants.length > 0);
 }
 
+async function resolveInventoryTarget(targetId: string): Promise<{
+  productId: string;
+  productSlug: string;
+  variantId: string | null;
+  hasVariants: boolean;
+} | null> {
+  const variant = await prisma.productVariant.findUnique({
+    where: { id: targetId },
+    select: { id: true, productId: true, product: { select: { slug: true } } },
+  });
+  if (variant) {
+    return {
+      productId: variant.productId,
+      productSlug: variant.product.slug,
+      variantId: variant.id,
+      hasVariants: true,
+    };
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { slug: targetId },
+    select: { id: true, slug: true, _count: { select: { variants: true } } },
+  });
+  if (!product) return null;
+  return {
+    productId: product.id,
+    productSlug: product.slug,
+    variantId: null,
+    hasVariants: product._count.variants > 0,
+  };
+}
+
 export async function getInventoryCodes(
-  productSlug: string,
+  targetId: string,
   take = 100,
 ): Promise<AdminCodeDTO[]> {
   await ensureDatabaseReady();
-  const product = await timeAdmin(
+  const target = await timeAdmin(
     "admin.inventoryCodes",
-    "product.findUnique.id",
-    () =>
-      prisma.product.findUnique({
-        where: { slug: productSlug },
-        select: { id: true },
-      }),
+    "inventory.resolveTarget",
+    () => resolveInventoryTarget(targetId),
     (row) => (row ? 1 : 0),
   );
-  if (!product) return [];
+  if (!target) return [];
 
   const codes = await timeAdmin(
     "admin.inventoryCodes",
     "digitalCode.findMany.product",
     () =>
-      prisma.digitalCode.findMany({
-        where: { productId: product.id },
+        prisma.digitalCode.findMany({
+        where: { productId: target.productId, variantId: target.variantId },
         take,
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
           code: true,
           status: true,
+          variantId: true,
           assignedOrderId: true,
           usedAt: true,
           createdAt: true,
@@ -292,33 +343,34 @@ export async function getInventoryCodes(
 }
 
 export async function getAvailableCodes(
-  productSlug: string,
+  targetId: string,
 ): Promise<AdminCodeDTO[]> {
   await ensureDatabaseReady();
-  const product = await timeAdmin(
+  const target = await timeAdmin(
     "admin.availableCodes",
-    "product.findUnique.id",
-    () =>
-      prisma.product.findUnique({
-        where: { slug: productSlug },
-        select: { id: true },
-      }),
+    "inventory.resolveTarget",
+    () => resolveInventoryTarget(targetId),
     (row) => (row ? 1 : 0),
   );
-  if (!product) return [];
+  if (!target) return [];
 
   const codes = await timeAdmin(
     "admin.availableCodes",
     "digitalCode.findMany.unused",
     () =>
-      prisma.digitalCode.findMany({
-        where: { productId: product.id, status: "unused" },
+        prisma.digitalCode.findMany({
+        where: {
+          productId: target.productId,
+          variantId: target.variantId,
+          status: "unused",
+        },
         take: 200,
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
           code: true,
           status: true,
+          variantId: true,
           assignedOrderId: true,
           usedAt: true,
           createdAt: true,
@@ -331,20 +383,24 @@ export async function getAvailableCodes(
 }
 
 export async function addCode(
-  productSlug: string,
+  targetId: string,
   code: string,
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const trimmed = code.trim();
   if (!trimmed) return { ok: false, error: "Code is empty." };
 
-  const product = await prisma.product.findUnique({ where: { slug: productSlug } });
-  if (!product) return { ok: false, error: "Unknown product." };
+  const target = await resolveInventoryTarget(targetId);
+  if (!target) return { ok: false, error: "Unknown product or variant." };
+  if (target.hasVariants && !target.variantId) {
+    return { ok: false, error: "Add new codes to a specific variant." };
+  }
 
   try {
     await prisma.digitalCode.create({
       data: {
-        productId: product.id,
+        productId: target.productId,
+        variantId: target.variantId,
         code: trimmed,
         status: "unused",
       },
@@ -362,12 +418,15 @@ export async function addCode(
 }
 
 export async function addCodesBulk(
-  productSlug: string,
+  targetId: string,
   raw: string,
 ): Promise<ActionResult & { added?: number; skipped?: number }> {
   await ensureDatabaseReady();
-  const product = await prisma.product.findUnique({ where: { slug: productSlug } });
-  if (!product) return { ok: false, error: "Unknown product." };
+  const target = await resolveInventoryTarget(targetId);
+  if (!target) return { ok: false, error: "Unknown product or variant." };
+  if (target.hasVariants && !target.variantId) {
+    return { ok: false, error: "Add new codes to a specific variant." };
+  }
 
   const codes = Array.from(
     new Set(raw.split(/\r?\n/).map((code) => code.trim()).filter(Boolean)),
@@ -376,7 +435,8 @@ export async function addCodesBulk(
 
   const result = await prisma.digitalCode.createMany({
     data: codes.map((code) => ({
-      productId: product.id,
+      productId: target.productId,
+      variantId: target.variantId,
       code,
       status: "unused",
     })),

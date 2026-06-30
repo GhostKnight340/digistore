@@ -93,6 +93,8 @@ model ProductVariant {
   updatedAt        DateTime @updatedAt
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  digitalCodes DigitalCode[]
+  orderItems   OrderItem[]
 
   @@index([productId])
   @@index([productId, active])
@@ -101,6 +103,7 @@ model ProductVariant {
 model DigitalCode {
   id              String    @id @default(cuid())
   productId       String
+  variantId       String?
   code            String
   // status: "unused" | "reserved" | "used" | "disabled"
   status          String    @default("unused")
@@ -111,10 +114,12 @@ model DigitalCode {
   updatedAt       DateTime  @updatedAt
 
   product        Product         @relation(fields: [productId], references: [id])
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   deliveredCodes DeliveredCode[]
 
   @@unique([productId, code])
   @@index([productId, status])
+  @@index([variantId, status])
 }
 
 model Order {
@@ -160,12 +165,16 @@ model OrderItem {
   id           String @id @default(cuid())
   orderId      String
   productId    String
+  variantId    String?
   quantity     Int
   unitPriceMad Int
 
   order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product        Product         @relation(fields: [productId], references: [id])
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   deliveredCodes DeliveredCode[]
+
+  @@index([variantId])
 }
 
 model DeliveredCode {

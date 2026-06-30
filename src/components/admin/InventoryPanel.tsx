@@ -496,7 +496,7 @@ function ManageCodesPanel({
     setLoading(true);
     setError("");
     try {
-      const data = await getInventoryCodesAction(variant.productId);
+      const data = await getInventoryCodesAction(variant.variantId ?? variant.productId);
       setCodes(data);
       setLoaded(true);
     } catch (loadError) {
@@ -505,7 +505,7 @@ function ManageCodesPanel({
     } finally {
       setLoading(false);
     }
-  }, [variant.productId]);
+  }, [variant.productId, variant.variantId]);
 
   useEffect(() => {
     loadCodes();
@@ -516,7 +516,7 @@ function ManageCodesPanel({
     setBusy(true);
     setMessage("");
     setError("");
-    const result = await addCodesBulkAction(variant.productId, bulk);
+    const result = await addCodesBulkAction(variant.variantId ?? variant.productId, bulk);
     if (result.ok) {
       setMessage(`${result.added ?? 0} importé(s), ${result.skipped ?? 0} doublon(s) ignoré(s).`);
       setBulk("");
@@ -547,6 +547,11 @@ function ManageCodesPanel({
             <div>
               <p className="text-xs uppercase tracking-wide text-muted">{product.productName}</p>
               <h3 className="mt-1 text-lg font-bold text-white">{variant.name}</h3>
+              {variant.legacy ? (
+                <p className="mt-1 text-xs text-amber-300">
+                  Stock historique non assigné à une variante. Les nouveaux codes doivent être importés sur une variante.
+                </p>
+              ) : null}
             </div>
             <button type="button" onClick={onClose} className="btn-ghost h-9 px-3 text-xs">
               Fermer

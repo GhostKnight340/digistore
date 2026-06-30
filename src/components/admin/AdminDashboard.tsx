@@ -13,28 +13,48 @@ import type { AdminOrderSummaryDTO, AdminStatsDTO, InventoryProductDTO } from "@
 const SettingsPanel = lazy(() => import("@/components/admin/SettingsPanel"));
 const ProductsPanel = lazy(() => import("@/components/admin/ProductsPanel"));
 const CategoriesPanel = lazy(() => import("@/components/admin/CategoriesPanel"));
+const FeaturedProductsPanel = lazy(() => import("@/components/admin/FeaturedProductsPanel"));
 const InventoryPanel = lazy(() => import("@/components/admin/InventoryPanel"));
 const PaymentsPanel = lazy(() => import("@/components/admin/PaymentsPanel"));
 const PaymentSettingsPanel = lazy(() => import("@/components/admin/PaymentSettingsPanel"));
 const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"));
 const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
+const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplatesPanel"));
+const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
+const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
 
 const navSections = [
-  [{ id: "overview", label: "Vue d'ensemble", icon: "[]" }],
-  [
-    { id: "products", label: "Produits", icon: "PR" },
-    { id: "categories", label: "Catégories", icon: "CA" },
-    { id: "inventory", label: "Stock", icon: "IN" },
-    { id: "orders", label: "Commandes", icon: "OR" },
-    { id: "payments", label: "Paiements", icon: "PM" },
-    { id: "customers", label: "Clients", icon: "CU" },
-  ],
-  [{ id: "suppliers", label: "API fournisseur", icon: "API" }],
-  [
-    { id: "payment-settings", label: "Paramètres de paiement", icon: "PS" },
-    { id: "refunds", label: "Remboursements", icon: "RF" },
-  ],
-  [{ id: "settings", label: "Paramètres de la boutique", icon: "SS" }],
+  { title: "Overview", items: [{ id: "overview", label: "Vue d'ensemble", icon: "OV" }] },
+  {
+    title: "Catalogue",
+    items: [
+      { id: "products", label: "Produits", icon: "PR" },
+      { id: "categories", label: "Catégories", icon: "CA" },
+      { id: "featured", label: "Produits populaires", icon: "FP" },
+    ],
+  },
+  {
+    title: "Orders",
+    items: [
+      { id: "orders", label: "Toutes les commandes", icon: "OR" },
+      { id: "payments", label: "Revue paiements", icon: "PM" },
+      { id: "refunds", label: "Remboursements", icon: "RF" },
+    ],
+  },
+  { title: "Inventory", items: [{ id: "inventory", label: "Stock", icon: "IN" }] },
+  { title: "Customers", items: [{ id: "customers", label: "Clients", icon: "CU" }] },
+  {
+    title: "Settings",
+    items: [
+      { id: "settings", label: "Boutique", icon: "SS" },
+      { id: "payment-settings", label: "Paiements", icon: "PS" },
+      { id: "email-templates", label: "Templates email", icon: "EM" },
+      { id: "legal-pages", label: "Pages légales", icon: "LG" },
+      { id: "maintenance", label: "Maintenance", icon: "MT" },
+      { id: "suppliers", label: "API fournisseur", icon: "API" },
+      { id: "developer", label: "Developer tools", icon: "DV" },
+    ],
+  },
 ];
 
 const LOW_STOCK_MAX = 5;
@@ -119,7 +139,7 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="container-page py-10">
+    <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-white">Tableau de bord admin</h1>
@@ -138,15 +158,18 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
-        <aside className="h-fit">
+      <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="h-fit lg:sticky lg:top-6">
           <nav className="card p-3 text-sm">
             {navSections.map((section, sectionIndex) => (
               <div
-                key={sectionIndex}
+                key={section.title}
                 className={sectionIndex === 0 ? "space-y-1" : "mt-3 space-y-1 border-t border-border pt-3"}
               >
-                {section.map((item) => (
+                <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-faint">
+                  {section.title}
+                </p>
+                {section.items.map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -178,6 +201,10 @@ export default function AdminDashboard() {
           <Suspense fallback={panelFallback}>
             <CategoriesPanel />
           </Suspense>
+        ) : activeTab === "featured" ? (
+          <Suspense fallback={panelFallback}>
+            <FeaturedProductsPanel />
+          </Suspense>
         ) : activeTab === "inventory" ? (
           <Suspense fallback={panelFallback}>
             <InventoryPanel />
@@ -189,6 +216,18 @@ export default function AdminDashboard() {
         ) : activeTab === "payment-settings" ? (
           <Suspense fallback={panelFallback}>
             <PaymentSettingsPanel />
+          </Suspense>
+        ) : activeTab === "email-templates" ? (
+          <Suspense fallback={panelFallback}>
+            <EmailTemplatesPanel />
+          </Suspense>
+        ) : activeTab === "legal-pages" ? (
+          <Suspense fallback={panelFallback}>
+            <LegalPagesPanel />
+          </Suspense>
+        ) : activeTab === "maintenance" ? (
+          <Suspense fallback={panelFallback}>
+            <MaintenancePanel />
           </Suspense>
         ) : activeTab === "orders" ? (
           <Suspense fallback={panelFallback}>

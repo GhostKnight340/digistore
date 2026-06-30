@@ -2,6 +2,8 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
+import { getStoreSettings } from "./catalog";
+import { renderEmailTemplate } from "@/lib/emailTemplates";
 import { formatPublicOrderNumber, parsePublicOrderNumber } from "@/lib/orderNumber";
 import type { OrderStatus } from "@/lib/types";
 import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
@@ -13,6 +15,20 @@ const REVENUE_ORDER_STATUSES = ["payment_confirmed", "delivered", "fulfilled"];
 
 function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function orderItemName(item: {
+  product: { name: string };
+  variant?: {
+    name: string;
+    faceValue: number | null;
+    faceCurrency: string;
+  } | null;
+}) {
+  if (!item.variant) return item.product.name;
+  return item.variant.faceValue != null
+    ? `${item.product.name} ${item.variant.faceValue} ${item.variant.faceCurrency}`
+    : item.variant.name;
 }
 
 function buildCustomerDTO(
@@ -32,8 +48,8 @@ function buildCustomerDTO(
     createdAt: iso(data.createdAt),
     items: data.items.map((item) => ({
       id: item.id,
-      productId: item.product.slug,
-      name: item.product.name,
+      productId: item.variantId ?? item.product.slug,
+      name: orderItemName(item),
       quantity: item.quantity,
       unitPriceMad: item.unitPriceMad,
     })),
@@ -70,9 +86,18 @@ function loadOrder(id: string) {
       items: {
         select: {
           id: true,
+          variantId: true,
           quantity: true,
           unitPriceMad: true,
           product: { select: { slug: true, name: true } },
+          variant: {
+            select: {
+              id: true,
+              name: true,
+              faceValue: true,
+              faceCurrency: true,
+            },
+          },
         },
       },
       deliveredCodes: {
@@ -115,9 +140,18 @@ function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] }
       items: {
         select: {
           id: true,
+          variantId: true,
           quantity: true,
           unitPriceMad: true,
           product: { select: { slug: true, name: true } },
+          variant: {
+            select: {
+              id: true,
+              name: true,
+              faceValue: true,
+              faceCurrency: true,
+            },
+          },
         },
       },
       paymentProof: { select: { id: true, mimeType: true } },
@@ -136,8 +170,8 @@ function buildAdminSummaryDTO(order: AdminOrderSummaryRecord): AdminOrderSummary
     createdAt: iso(order.createdAt),
     items: order.items.map((item) => ({
       id: item.id,
-      productId: item.product.slug,
-      name: item.product.name,
+      productId: item.variantId ?? item.product.slug,
+      name: orderItemName(item),
       quantity: item.quantity,
       unitPriceMad: item.unitPriceMad,
     })),
@@ -174,7 +208,7 @@ export async function getOrderSummaries(
     where: { id: { in: ids } },
     orderBy: { createdAt: "desc" },
     include: {
-      items: { include: { product: true } },
+      items: { include: { product: true, variant: true } },
       deliveredCodes: { include: { product: true, digitalCode: true } },
       paymentProof: { select: { id: true, mimeType: true } },
       paymentEvents: { orderBy: { createdAt: "asc" } },
@@ -408,12 +442,13 @@ export async function createOrder(
   const bySlug = new Map(
     products.map((product) => [
       product.slug,
-      { productId: product.id, unitPriceMad: product.priceMad },
+      { productId: product.id, variantId: null as string | null, unitPriceMad: product.priceMad },
     ]),
   );
   for (const variant of variants) {
     bySlug.set(variant.id, {
       productId: variant.productId,
+      variantId: variant.id,
       unitPriceMad: variant.priceMad,
     });
   }
@@ -423,6 +458,7 @@ export async function createOrder(
       if (!purchasable || item.quantity < 1) return null;
       return {
         productId: purchasable.productId,
+        variantId: purchasable.variantId,
         quantity: item.quantity,
         unitPriceMad: purchasable.unitPriceMad,
       };
@@ -435,6 +471,14 @@ export async function createOrder(
     (sum, item) => sum + item.unitPriceMad * item.quantity,
     0,
   );
+  const settings = await getStoreSettings();
+  const orderEmail = renderEmailTemplate(settings, "order_received", {
+    customer_name: input.customerName,
+    order_number: "",
+    payment_url: "",
+    order_url: "",
+    total: `${totalMad} MAD`,
+  });
 
   try {
     const order = await prisma.$transaction(async (tx) => {
@@ -458,6 +502,7 @@ export async function createOrder(
           items: {
             create: lineItems.map((item) => ({
               productId: item.productId,
+              variantId: item.variantId,
               quantity: item.quantity,
               unitPriceMad: item.unitPriceMad,
             })),
@@ -470,8 +515,8 @@ export async function createOrder(
           orderId: created.id,
           type: "order_received",
           recipient: input.customerEmail,
-          subject: "Commande recue - en attente de paiement",
-          body: "We received your order. Please complete your payment to proceed.",
+          subject: orderEmail.subject,
+          body: orderEmail.body,
         },
       });
 

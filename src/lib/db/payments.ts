@@ -2,6 +2,8 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
+import { getStoreSettings } from "./catalog";
+import { renderEmailTemplate, type EmailTemplateKey } from "@/lib/emailTemplates";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
@@ -45,6 +47,14 @@ export async function submitPayment(
   }
 
   try {
+    const settings = await getStoreSettings();
+    const proofEmail = renderEmailTemplate(settings, "proof_received", {
+      customer_name: order.customerName,
+      order_number: order.id,
+      order_url: `/order/${order.id}`,
+      payment_url: `/payment/${order.id}`,
+      total: `${order.totalMad} MAD`,
+    });
     await prisma.$transaction(async (tx) => {
       const updated = await tx.order.updateMany({
         where: { id: orderId, status: "pending_payment" },
@@ -87,8 +97,8 @@ export async function submitPayment(
           orderId,
           type: "payment_submitted",
           recipient: order.customerEmail,
-          subject: "Paiement soumis - vérification en cours",
-          body: "Nous avons bien reçu votre paiement et le vérifions. Vous serez informé sous peu.",
+          subject: proofEmail.subject,
+          body: proofEmail.body,
         },
       });
     });
@@ -147,6 +157,21 @@ async function setPaymentStatus(
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Commande introuvable." };
+  const templateKey: EmailTemplateKey =
+    emailType === "payment_confirmed"
+      ? "payment_confirmed"
+      : emailType === "payment_rejected"
+        ? "payment_rejected"
+        : "new_proof_requested";
+  const settings = await getStoreSettings();
+  const email = renderEmailTemplate(settings, templateKey, {
+    customer_name: order.customerName,
+    order_number: order.id,
+    order_url: `/order/${order.id}`,
+    payment_url: `/payment/${order.id}`,
+    total: `${order.totalMad} MAD`,
+    reason: note,
+  });
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -165,8 +190,8 @@ async function setPaymentStatus(
           orderId,
           type: emailType,
           recipient: order.customerEmail,
-          subject,
-          body,
+          subject: email.subject || subject,
+          body: email.body || body,
         },
       });
     });

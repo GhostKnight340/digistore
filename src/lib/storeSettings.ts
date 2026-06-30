@@ -19,6 +19,10 @@ export type PaymentDisplaySetting = {
 
 export type StoreSettings = {
   inventoryMode: "automatic" | "manual";
+  maintenance: {
+    enabled: boolean;
+    message: string;
+  };
   branding: {
     siteName: string;
     logoText: string;
@@ -54,6 +58,17 @@ export type StoreSettings = {
   featuredOutOfStock: "show" | "hide";
   trustItems: TrustItemSetting[];
   featuredProductIds: string[];
+  emailTemplates: Record<string, { subject: string; body: string }>;
+  legalPages: Record<
+    string,
+    {
+      title: string;
+      slug: string;
+      content: string;
+      seoTitle: string;
+      seoDescription: string;
+    }
+  >;
   paymentMethods: Record<PaymentMethod, boolean>;
   paymentDisplay: Record<string, PaymentDisplaySetting>;
   footer: {
@@ -76,6 +91,11 @@ export type StoreSettings = {
 
 export const defaultStoreSettings: StoreSettings = {
   inventoryMode: "automatic",
+  maintenance: {
+    enabled: false,
+    message:
+      "La boutique ghost.ma est momentanément en maintenance. Les commandes existantes restent accessibles depuis leurs liens de suivi.",
+  },
   branding: {
     siteName: "ghost.ma",
     logoText: "ghost.ma",
@@ -141,6 +161,94 @@ export const defaultStoreSettings: StoreSettings = {
     "roblox-100",
     "valorant-100",
   ],
+  emailTemplates: {
+    welcome: {
+      subject: "Bienvenue sur ghost.ma",
+      body: "Bonjour {{customer_name}},\n\nBienvenue sur ghost.ma. Notre support reste disponible à {{support_email}} ou WhatsApp {{support_whatsapp}}.",
+    },
+    email_confirmation: {
+      subject: "Confirmez votre e-mail ghost.ma",
+      body: "Bonjour {{customer_name}},\n\nConfirmez votre adresse e-mail pour sécuriser votre compte ghost.ma.",
+    },
+    password_reset: {
+      subject: "Réinitialisation de mot de passe",
+      body: "Bonjour {{customer_name}},\n\nUtilisez le lien reçu pour réinitialiser votre mot de passe. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
+    },
+    order_received: {
+      subject: "Commande {{order_number}} reçue",
+      body: "Bonjour {{customer_name}},\n\nNous avons reçu votre commande {{order_number}} d'un total de {{total}}.\n\nFinalisez le paiement ici : {{payment_url}}\n\nMerci pour votre confiance.",
+    },
+    awaiting_payment: {
+      subject: "Paiement attendu pour {{order_number}}",
+      body: "Bonjour {{customer_name}},\n\nVotre commande {{order_number}} est en attente de paiement : {{payment_url}}.",
+    },
+    proof_received: {
+      subject: "Justificatif reçu pour {{order_number}}",
+      body: "Bonjour {{customer_name}},\n\nNous avons reçu votre justificatif de paiement pour {{order_number}}. Notre équipe le vérifie rapidement.",
+    },
+    new_proof_requested: {
+      subject: "Nouveau justificatif demandé pour {{order_number}}",
+      body: "Bonjour {{customer_name}},\n\nNous avons besoin d'un nouveau justificatif pour {{order_number}}.\n\nRaison : {{reason}}\n\nAjoutez-le ici : {{payment_url}}.",
+    },
+    payment_rejected: {
+      subject: "Paiement refusé pour {{order_number}}",
+      body: "Bonjour {{customer_name}},\n\nLe paiement de votre commande {{order_number}} n'a pas pu être validé.\n\nRaison : {{reason}}\n\nContactez-nous à {{support_email}}.",
+    },
+    payment_confirmed: {
+      subject: "Paiement confirmé pour {{order_number}}",
+      body: "Bonjour {{customer_name}},\n\nVotre paiement pour {{order_number}} est confirmé. Votre produit numérique sera disponible sous peu.",
+    },
+    order_delivered: {
+      subject: "Votre commande {{order_number}} est disponible",
+      body: "Bonjour {{customer_name}},\n\nVotre commande {{order_number}} est disponible ici : {{delivery_url}}\n\nCodes :\n{{codes}}\n\nMerci pour votre achat.",
+    },
+    refund_update: {
+      subject: "Mise à jour remboursement {{order_number}}",
+      body: "Bonjour {{customer_name}},\n\nMise à jour concernant votre remboursement : {{reason}}\n\nSupport : {{support_email}}",
+    },
+  },
+  legalPages: {
+    terms: {
+      title: "Conditions Générales de Vente",
+      slug: "terms",
+      seoTitle: "Conditions Générales de Vente - ghost.ma",
+      seoDescription: "Conditions de vente des produits numériques proposés par ghost.ma.",
+      content:
+        "Les présentes Conditions Générales de Vente encadrent les achats de produits numériques sur ghost.ma.\n\n1. Identité du vendeur\nghost.ma est exploité par {{business_name}}, {{business_address}}. Les informations légales définitives, notamment l'identifiant fiscal et le registre de commerce, doivent être complétées avant lancement public.\n\n2. Produits numériques\nLes produits vendus sont des codes, cartes cadeaux, licences ou accès numériques. Les caractéristiques essentielles sont indiquées sur chaque fiche produit.\n\n3. Prix et paiement\nLes prix sont affichés en dirhams marocains (MAD), sauf indication contraire. La commande est traitée après validation du paiement.\n\n4. Livraison\nLa livraison est effectuée par voie numérique sur la page de suivi de commande et/ou par e-mail après confirmation du paiement.\n\n5. Utilisation des codes\nLe client est responsable de vérifier la compatibilité régionale et la plateforme avant achat. Une fois un code révélé ou livré, il peut être considéré comme consommé.\n\n6. Support\nPour toute question, contactez {{support_email}} ou {{support_whatsapp}}.",
+    },
+    privacy: {
+      title: "Politique de Confidentialité",
+      slug: "privacy",
+      seoTitle: "Politique de Confidentialité - ghost.ma",
+      seoDescription: "Informations sur la collecte et l'utilisation des données personnelles par ghost.ma.",
+      content:
+        "Cette Politique de Confidentialité explique comment ghost.ma traite les données nécessaires au fonctionnement de la boutique.\n\n1. Données collectées\nNous pouvons collecter le nom, l'adresse e-mail, les informations de commande, le mode de paiement choisi et les justificatifs nécessaires au traitement d'une commande.\n\n2. Finalités\nCes données servent à créer la commande, vérifier le paiement, livrer le produit numérique, fournir le support client et respecter les obligations applicables.\n\n3. Conservation\nLes données sont conservées pendant la durée nécessaire au suivi commercial, au support et aux obligations légales.\n\n4. Partage\nLes données ne sont partagées qu'avec les prestataires nécessaires au fonctionnement du service, lorsque cela est requis.\n\n5. Droits\nVous pouvez demander l'accès, la rectification ou la suppression de vos données en contactant {{support_email}}.",
+    },
+    refunds: {
+      title: "Politique de Remboursement",
+      slug: "refunds",
+      seoTitle: "Politique de Remboursement - ghost.ma",
+      seoDescription: "Règles de remboursement applicables aux produits numériques ghost.ma.",
+      content:
+        "Les produits numériques nécessitent une politique de remboursement adaptée à leur nature.\n\n1. Avant livraison\nUne commande peut être annulée ou remboursée si le paiement n'a pas encore été confirmé ou si le code n'a pas encore été livré.\n\n2. Après livraison\nUne fois le code livré ou révélé, le remboursement n'est généralement pas possible, sauf erreur avérée, doublon, code invalide ou problème imputable à ghost.ma.\n\n3. Demande de support\nToute demande doit inclure le numéro de commande, l'e-mail utilisé et une description du problème.\n\n4. Délais\nLes demandes sont analysées au cas par cas. Les délais peuvent varier selon le mode de paiement.",
+    },
+    legal: {
+      title: "Mentions légales",
+      slug: "legal",
+      seoTitle: "Mentions légales - ghost.ma",
+      seoDescription: "Mentions légales et informations d'identité de ghost.ma.",
+      content:
+        "Éditeur du site : {{business_name}}\nAdresse : {{business_address}}\nE-mail : {{support_email}}\nWhatsApp : {{support_whatsapp}}\nRegistre de commerce : {{business_register}}\nIdentifiant fiscal : {{business_tax_id}}\n\nCes champs doivent être complétés avec les informations officielles de l'entreprise avant le lancement public.",
+    },
+    support: {
+      title: "Contact & Support",
+      slug: "support",
+      seoTitle: "Contact & Support - ghost.ma",
+      seoDescription: "Contacter le support ghost.ma pour une commande ou une question.",
+      content:
+        "Pour toute question sur une commande, un paiement ou un produit numérique, contactez le support ghost.ma.\n\nE-mail : {{support_email}}\nWhatsApp : {{support_whatsapp}}\n\nMerci d'indiquer votre numéro de commande et l'adresse e-mail utilisée lors de l'achat afin d'accélérer le traitement.",
+    },
+  },
   paymentMethods: {
     bank: true,
     usdt: true,
@@ -179,6 +287,14 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
   return {
     ...defaultStoreSettings,
     ...value,
+    maintenance: {
+      ...defaultStoreSettings.maintenance,
+      ...(isObject(value.maintenance) ? value.maintenance : {}),
+      enabled:
+        isObject(value.maintenance) && typeof value.maintenance.enabled === "boolean"
+          ? value.maintenance.enabled
+          : defaultStoreSettings.maintenance.enabled,
+    },
     inventoryMode:
       value.inventoryMode === "manual" || value.inventoryMode === "automatic"
         ? value.inventoryMode
@@ -202,6 +318,18 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
     featuredProductIds: Array.isArray(value.featuredProductIds)
       ? value.featuredProductIds.filter((id): id is string => typeof id === "string")
       : defaultStoreSettings.featuredProductIds,
+    emailTemplates: isObject(value.emailTemplates)
+      ? {
+          ...defaultStoreSettings.emailTemplates,
+          ...(value.emailTemplates as StoreSettings["emailTemplates"]),
+        }
+      : defaultStoreSettings.emailTemplates,
+    legalPages: isObject(value.legalPages)
+      ? {
+          ...defaultStoreSettings.legalPages,
+          ...(value.legalPages as StoreSettings["legalPages"]),
+        }
+      : defaultStoreSettings.legalPages,
     categoryMedia: isObject(value.categoryMedia)
       ? (value.categoryMedia as Record<string, string | null>)
       : defaultStoreSettings.categoryMedia,

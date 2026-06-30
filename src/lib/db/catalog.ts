@@ -17,6 +17,11 @@ const productCatalogInclude = {
   variants: {
     where: { active: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    include: {
+      _count: {
+        select: { digitalCodes: { where: { status: "unused" } } },
+      },
+    },
   },
   _count: {
     select: { digitalCodes: { where: { status: "unused" } } },
@@ -42,7 +47,7 @@ function variantStockStatus(
   if (stockMode === "force_in_stock") return "in_stock";
   if (stockMode === "force_out_of_stock") return "out_of_stock";
   if (inventoryMode === "manual") return "in_stock";
-  return row._count.digitalCodes > 0 ? "in_stock" : "out_of_stock";
+  return variant._count.digitalCodes > 0 ? "in_stock" : "out_of_stock";
 }
 
 function variantTitle(parentName: string, variant: ProductWithCategory["variants"][number]) {

@@ -1,11 +1,11 @@
 import { getStoreSettings } from "@/lib/db/catalog";
 import { legalParagraphs, renderLegalContent } from "@/lib/legalPages";
 
-export const metadata = { title: "Conditions Générales de Vente - ghost.ma" };
+export const metadata = { title: "Politique de Remboursement - ghost.ma" };
 
-export default async function TermsPage() {
+export default async function RefundsPage() {
   const settings = await getStoreSettings();
-  const page = settings.legalPages.terms;
+  const page = settings.legalPages.refunds;
   const paragraphs = legalParagraphs(renderLegalContent(page.content, settings));
 
   return (

@@ -91,6 +91,7 @@ export interface AdminCodeDTO {
   id: string;
   code: string;
   status: string;
+  variantId: string | null;
   assignedOrderId: string | null;
   usedAt: string | null;
   createdAt: string;
@@ -119,7 +120,9 @@ export interface InventorySummaryDTO {
 
 export interface InventoryVariantDTO {
   productId: string;
+  variantId: string | null;
   name: string;
+  legacy: boolean;
   unused: number;
   reserved: number;
   used: number;
