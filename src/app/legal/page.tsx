@@ -1,14 +1,14 @@
 import Link from "next/link";
 
-export const metadata = { title: "Mentions légales - Karta" };
+export const metadata = { title: "Mentions légales - ghost.ma" };
 
 // Informations légales — à compléter lors de l'enregistrement officiel.
 // Modifiez uniquement les valeurs ci-dessous ; le reste de la page s'y réfère.
 const legalInfo = {
-  nomCommercial: "Karta",
+  nomCommercial: "ghost.ma",
   exploitant: "[Nom de l'exploitant]",
   adresse: "[Adresse à compléter]",
-  email: "support@karta.ma",
+  email: "support@ghost.ma",
   whatsapp: "+212 600 000 000",
   immatriculation: "À compléter lors de l'enregistrement officiel",
 };

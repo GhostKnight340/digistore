@@ -27,7 +27,7 @@ export default function ProductCard({ product }: { product: Product }) {
           >
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
           </svg>
-          Instantané
+          Livraison rapide
         </span>
         <h3 className="line-clamp-2 text-[14.5px] font-medium leading-snug text-text">
           {product.name}

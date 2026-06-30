@@ -492,7 +492,7 @@ function SupportSection({
     <SectionCard title="Support client" icon="💬">
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Numéro WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="+212 6 00 00 00 00" />
-        <FormField label="Email de support" value={email} onChange={setEmail} placeholder="support@karta.ma" type="email" />
+        <FormField label="Email de support" value={email} onChange={setEmail} placeholder="support@ghost.ma" type="email" />
       </div>
       <div className="mt-4">
         <FormField label="Instructions" value={instructions} onChange={setInstructions} placeholder="Instructions pour le support..." textarea />
@@ -1106,7 +1106,7 @@ function PaypalSection({
       </div>
 
       <div className="grid gap-4 border-t border-border pt-4">
-        <FormField label="Email PayPal" value={paypalEmail} onChange={setPaypalEmail} placeholder="paypal@karta.ma" type="email" />
+        <FormField label="Email PayPal" value={paypalEmail} onChange={setPaypalEmail} placeholder="paypal@ghost.ma" type="email" />
         <FormField label="Instructions" value={instructions} onChange={setInstructions} placeholder="Instructions PayPal..." textarea />
       </div>
       <SaveRow

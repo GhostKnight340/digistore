@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Conditions Générales de Vente - Karta" };
+export const metadata = { title: "Conditions Générales de Vente - ghost.ma" };
 
 export default function TermsPage() {
   return (
@@ -15,7 +15,7 @@ export default function TermsPage() {
         <div className="mt-6 space-y-4 text-sm leading-relaxed text-muted">
           <p>
             Les présentes Conditions Générales de Vente encadrent l&apos;achat
-            des produits numériques proposés sur Karta. En passant commande, en
+            des produits numériques proposés sur ghost.ma. En passant commande, en
             tant qu&apos;invité ou via un compte client, vous reconnaissez avoir
             lu et accepté ces conditions.
           </p>
@@ -24,7 +24,7 @@ export default function TermsPage() {
             1. Nos produits
           </h2>
           <p>
-            Karta propose exclusivement des produits numériques : cartes
+            ghost.ma propose exclusivement des produits numériques : cartes
             cadeaux, codes numériques, cartes de jeu, portefeuilles, monnaies de
             jeu et autres clés activables en ligne. Aucun bien physique
             n&apos;est vendu ni expédié.
@@ -58,7 +58,7 @@ export default function TermsPage() {
           <p>
             Plusieurs moyens de paiement sont disponibles, notamment le virement
             bancaire, PayPal, la cryptomonnaie et les autres méthodes prises en
-            charge par Karta. Selon le moyen choisi, un justificatif de paiement
+            charge par ghost.ma. Selon le moyen choisi, un justificatif de paiement
             peut vous être demandé afin de confirmer la transaction. Votre
             commande est traitée une fois le paiement vérifié.
           </p>
@@ -67,7 +67,7 @@ export default function TermsPage() {
             5. Livraison
           </h2>
           <p>
-            Certaines commandes sont livrées instantanément après la
+            Certaines commandes sont livrées rapidement après la
             confirmation du paiement. D&apos;autres produits nécessitent une
             vérification préalable et sont livrés dans les meilleurs délais une
             fois cette vérification effectuée. Vous recevez vos codes et le
@@ -133,7 +133,7 @@ export default function TermsPage() {
             11. Limitation de responsabilité
           </h2>
           <p>
-            Karta s&apos;engage à fournir des produits conformes à leur
+            ghost.ma s&apos;engage à fournir des produits conformes à leur
             description. Notre responsabilité ne saurait être engagée pour une
             mauvaise utilisation d&apos;un code, une incompatibilité régionale
             non vérifiée avant l&apos;achat ou les décisions des plateformes

@@ -10,9 +10,9 @@ import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Karta - Cartes de jeu instantanées au Maroc",
+  title: "ghost.ma - Cartes de jeu au Maroc",
   description:
-    "Cartes Steam, PlayStation, Xbox, Nintendo, Roblox et Valorant livrées instantanément après paiement. Simple, sécurisé et adapté au Maroc.",
+    "Cartes Steam, PlayStation, Xbox, Nintendo, Roblox et Valorant livrées rapidement après confirmation du paiement. Simple, sécurisé et adapté au Maroc.",
 };
 
 export default async function RootLayout({

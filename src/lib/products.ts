@@ -56,7 +56,7 @@ export const products: Product[] = [
     category: "steam",
     region: "Maroc / Global",
     price: 50,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Ajoutez 50 MAD à votre Steam Wallet et utilisez votre solde pour acheter jeux, DLC et contenus en jeu sur Steam.",
     featured: true,
@@ -67,7 +67,7 @@ export const products: Product[] = [
     category: "steam",
     region: "Maroc / Global",
     price: 100,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Ajoutez 100 MAD à votre Steam Wallet et profitez de vos jeux, DLC et contenus préférés sur Steam.",
     featured: true,
@@ -78,7 +78,7 @@ export const products: Product[] = [
     category: "steam",
     region: "Maroc / Global",
     price: 200,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Ajoutez 200 MAD à votre Steam Wallet pour vos achats plus importants et les promotions saisonnières.",
   },
@@ -88,7 +88,7 @@ export const products: Product[] = [
     category: "playstation",
     region: "Maroc",
     price: 100,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Rechargez votre portefeuille PlayStation Store pour acheter jeux, extensions et abonnements.",
     featured: true,
@@ -99,7 +99,7 @@ export const products: Product[] = [
     category: "playstation",
     region: "Maroc",
     price: 250,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Ajoutez 250 MAD à votre portefeuille PlayStation Store pour vos jeux complets et contenus favoris.",
   },
@@ -109,7 +109,7 @@ export const products: Product[] = [
     category: "xbox",
     region: "Maroc / Global",
     price: 100,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Utilisez cette carte sur Microsoft Store et Xbox pour acheter jeux, applications et divertissement.",
     featured: true,
@@ -120,7 +120,7 @@ export const products: Product[] = [
     category: "xbox",
     region: "Maroc / Global",
     price: 200,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Ajoutez 200 MAD à votre compte Xbox pour jeux, abonnements et contenus numériques.",
   },
@@ -130,7 +130,7 @@ export const products: Product[] = [
     category: "nintendo",
     region: "Maroc / EU",
     price: 150,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Ajoutez des fonds à votre compte Nintendo pour acheter jeux Switch et contenus depuis le Nintendo eShop.",
   },
@@ -140,7 +140,7 @@ export const products: Product[] = [
     category: "roblox",
     region: "Global",
     price: 100,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Échangez cette carte contre des Robux ou un abonnement Premium sur Roblox.",
     featured: true,
@@ -151,7 +151,7 @@ export const products: Product[] = [
     category: "roblox",
     region: "Global",
     price: 200,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Échangez 200 MAD contre des Robux ou un abonnement Premium sur Roblox.",
   },
@@ -161,7 +161,7 @@ export const products: Product[] = [
     category: "valorant",
     region: "MENA",
     price: 100,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Échangez des Valorant Points pour skins, passes de combat et agents.",
     featured: true,
@@ -172,7 +172,7 @@ export const products: Product[] = [
     category: "valorant",
     region: "MENA",
     price: 200,
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description:
       "Échangez 200 MAD de Valorant Points pour skins et passes de combat.",
   },

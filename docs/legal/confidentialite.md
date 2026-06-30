@@ -2,7 +2,7 @@
 
 _Dernière mise à jour : 30 juin 2026_
 
-Chez Karta, nous accordons une grande importance à la protection de vos données personnelles. Cette politique explique quelles informations nous collectons, pourquoi, comment nous les utilisons et quels sont vos droits. Elle s'applique à l'ensemble de la plateforme Karta, que vous achetiez en tant qu'invité ou via un compte client.
+Chez ghost.ma, nous accordons une grande importance à la protection de vos données personnelles. Cette politique explique quelles informations nous collectons, pourquoi, comment nous les utilisons et quels sont vos droits. Elle s'applique à l'ensemble de la plateforme ghost.ma, que vous achetiez en tant qu'invité ou via un compte client.
 
 ## 1. Informations de compte
 
@@ -22,7 +22,7 @@ Nous ne conservons pas les données sensibles de vos moyens de paiement au-delà
 
 ## 4. Cookies
 
-Karta utilise des cookies et technologies similaires pour assurer le bon fonctionnement de la plateforme, mémoriser votre panier, maintenir votre session et améliorer votre expérience. Certains cookies sont indispensables au service ; d'autres, optionnels, nous aident à mesurer l'audience. Vous pouvez gérer vos préférences depuis votre navigateur.
+ghost.ma utilise des cookies et technologies similaires pour assurer le bon fonctionnement de la plateforme, mémoriser votre panier, maintenir votre session et améliorer votre expérience. Certains cookies sont indispensables au service ; d'autres, optionnels, nous aident à mesurer l'audience. Vous pouvez gérer vos préférences depuis votre navigateur.
 
 ## 5. Mesure d'audience et analyse
 

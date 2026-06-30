@@ -1,15 +1,15 @@
 import Link from "next/link";
 
-export const metadata = { title: "Contact & Support - Karta" };
+export const metadata = { title: "Contact & Support - ghost.ma" };
 
 const faqs = [
   {
-    q: "La livraison est-elle instantanée?",
+    q: "La livraison est-elle rapide?",
     a: "Pour les produits à traitement automatique, votre code apparaît à l'écran dès que le paiement est confirmé, et une copie vous est envoyée par email. Certains produits nécessitent une vérification manuelle et sont livrés dans les meilleurs délais.",
   },
   {
     q: "Quels moyens de paiement sont disponibles?",
-    a: "Vous pouvez payer par virement bancaire, PayPal, cryptomonnaie et les autres méthodes prises en charge par Karta. Selon le moyen choisi, un justificatif de paiement peut vous être demandé pour confirmer la transaction.",
+    a: "Vous pouvez payer par virement bancaire, PayPal, cryptomonnaie et les autres méthodes prises en charge par ghost.ma. Selon le moyen choisi, un justificatif de paiement peut vous être demandé pour confirmer la transaction.",
   },
   {
     q: "Comment suivre ma commande?",
@@ -21,7 +21,7 @@ const faqs = [
   },
   {
     q: "Le service est-il adapté aux clients au Maroc?",
-    a: "Oui. Karta est pensé pour le Maroc, avec un support local en darija, arabe, français et anglais.",
+    a: "Oui. ghost.ma est pensé pour le Maroc, avec un support local en darija, arabe, français et anglais.",
   },
 ];
 
@@ -41,7 +41,7 @@ export default function SupportPage() {
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           {[
             ["WhatsApp", "+212 600 000 000"],
-            ["Email", "support@karta.ma"],
+            ["Email", "support@ghost.ma"],
             ["Horaires", "9:00 - 22:00 (GMT+1)"],
           ].map(([title, text]) => (
             <div key={title} className="card p-5 text-center">

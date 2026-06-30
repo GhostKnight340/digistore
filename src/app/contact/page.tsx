@@ -37,7 +37,7 @@ export default function ContactPage() {
         </form>
 
         <p className="mt-4 rounded-lg bg-surface px-3 py-2 text-center text-xs text-muted">
-          Vous pouvez aussi nous écrire directement à support@karta.ma ou nous
+          Vous pouvez aussi nous écrire directement à support@ghost.ma ou nous
           contacter par WhatsApp au +212 600 000 000.
         </p>
       </div>

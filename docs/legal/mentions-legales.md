@@ -8,7 +8,7 @@ _Dernière mise à jour : 30 juin 2026_
 
 | Champ | Valeur |
 | --- | --- |
-| Nom commercial | Karta |
+| Nom commercial | ghost.ma |
 | Raison sociale | `{{RAISON_SOCIALE}}` |
 | Forme juridique | `{{FORME_JURIDIQUE}}` |
 | Capital social | `{{CAPITAL_SOCIAL}}` |
@@ -24,7 +24,7 @@ _Dernière mise à jour : 30 juin 2026_
 
 ## 1. Éditeur du site
 
-Le site et la plateforme Karta sont édités par `{{RAISON_SOCIALE}}`, `{{FORME_JURIDIQUE}}` au capital de `{{CAPITAL_SOCIAL}}`, immatriculée sous le numéro `{{NUMERO_ENREGISTREMENT}}`, dont le siège social est situé `{{ADRESSE_SIEGE}}`.
+Le site et la plateforme ghost.ma sont édités par `{{RAISON_SOCIALE}}`, `{{FORME_JURIDIQUE}}` au capital de `{{CAPITAL_SOCIAL}}`, immatriculée sous le numéro `{{NUMERO_ENREGISTREMENT}}`, dont le siège social est situé `{{ADRESSE_SIEGE}}`.
 
 Représentant légal : `{{REPRESENTANT_LEGAL}}`.
 
@@ -42,7 +42,7 @@ Le site est hébergé par `{{HEBERGEUR_NOM}}`, dont l'adresse est `{{HEBERGEUR_A
 
 ## 5. Propriété intellectuelle
 
-L'ensemble des éléments composant le site Karta — marque, logo, textes, visuels, interface et structure — est protégé par le droit de la propriété intellectuelle. Toute reproduction, représentation ou exploitation, totale ou partielle, sans autorisation préalable écrite de `{{RAISON_SOCIALE}}` est interdite.
+L'ensemble des éléments composant le site ghost.ma — marque, logo, textes, visuels, interface et structure — est protégé par le droit de la propriété intellectuelle. Toute reproduction, représentation ou exploitation, totale ou partielle, sans autorisation préalable écrite de `{{RAISON_SOCIALE}}` est interdite.
 
 Les marques, logos et noms de produits de tiers mentionnés sur la plateforme appartiennent à leurs propriétaires respectifs et ne sont cités qu'à des fins d'identification des produits proposés.
 

@@ -10,7 +10,7 @@ const statuses = [
   { label: "Paiement confirmé", counter: "02 / 05", progress: "40%" },
   { label: "Code réservé", counter: "03 / 05", progress: "64%" },
   { label: "Code prêt", counter: "04 / 05", progress: "84%" },
-  { label: "Livré instantanément", counter: "05 / 05", progress: "100%" },
+  { label: "Livré rapidement", counter: "05 / 05", progress: "100%" },
 ];
 
 function CheckIcon({ className = "h-3 w-3" }: { className?: string }) {
@@ -146,7 +146,7 @@ export default function HeroDeliveryCard() {
 
           <div className="relative mt-8 flex items-center justify-between gap-4">
             <span className="text-xs text-muted">
-              Produit numérique - Livraison instantanée
+              Produit numérique - Livraison rapide
             </span>
             <span className="h-[26px] w-[34px] rounded-md border border-white/10 bg-[#20252f] bg-[linear-gradient(90deg,transparent_32%,rgba(0,0,0,0.25)_33%_34%,transparent_35%),linear-gradient(0deg,transparent_45%,rgba(0,0,0,0.25)_46%_47%,transparent_48%)]" />
           </div>

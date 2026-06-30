@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Politique de Remboursement - Karta" };
+export const metadata = { title: "Politique de Remboursement - ghost.ma" };
 
 export default function RefundsPage() {
   return (
@@ -14,7 +14,7 @@ export default function RefundsPage() {
         </p>
         <div className="mt-6 space-y-4 text-sm leading-relaxed text-muted">
           <p>
-            Karta vend des produits numériques livrés de manière dématérialisée.
+            ghost.ma vend des produits numériques livrés de manière dématérialisée.
             En raison de leur nature, les codes ne peuvent être « retournés » une
             fois révélés. Cette politique précise clairement les situations dans
             lesquelles un remboursement est possible et celles où il ne l&apos;est

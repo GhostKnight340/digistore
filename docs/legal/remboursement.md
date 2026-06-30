@@ -2,7 +2,7 @@
 
 _Dernière mise à jour : 30 juin 2026_
 
-Karta vend des produits numériques livrés de manière dématérialisée. En raison de leur nature, les codes et clés ne peuvent être « retournés » une fois révélés. Cette politique précise, de manière claire et transparente, les situations dans lesquelles un remboursement est possible et celles où il ne l'est pas.
+ghost.ma vend des produits numériques livrés de manière dématérialisée. En raison de leur nature, les codes et clés ne peuvent être « retournés » une fois révélés. Cette politique précise, de manière claire et transparente, les situations dans lesquelles un remboursement est possible et celles où il ne l'est pas.
 
 ## Principe général
 
@@ -20,7 +20,7 @@ Si un même achat a donné lieu à plusieurs paiements (par exemple en cas de do
 
 ### Code invalide ou inutilisable
 
-Si le code que vous avez reçu s'avère invalide, déjà utilisé ou techniquement inutilisable du fait de Karta, nous le remplaçons en priorité. Si aucun remplacement n'est possible, nous procédons au remboursement intégral du produit concerné. Une demande de cette nature peut nécessiter quelques informations de votre part afin de vérifier le code.
+Si le code que vous avez reçu s'avère invalide, déjà utilisé ou techniquement inutilisable du fait de ghost.ma, nous le remplaçons en priorité. Si aucun remplacement n'est possible, nous procédons au remboursement intégral du produit concerné. Une demande de cette nature peut nécessiter quelques informations de votre part afin de vérifier le code.
 
 ## Investigations manuelles
 
@@ -30,7 +30,7 @@ Certaines demandes nécessitent une vérification de notre part, notamment lorsq
 
 ### Produits déjà livrés et révélés
 
-Un produit numérique dont le code a été livré et révélé est réputé consommé. Il ne peut faire l'objet d'un remboursement, sauf en cas de code invalide ou inutilisable du fait de Karta, comme indiqué ci-dessus.
+Un produit numérique dont le code a été livré et révélé est réputé consommé. Il ne peut faire l'objet d'un remboursement, sauf en cas de code invalide ou inutilisable du fait de ghost.ma, comme indiqué ci-dessus.
 
 ### Erreur d'achat du client
 

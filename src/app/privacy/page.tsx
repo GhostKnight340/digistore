@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Politique de Confidentialité - Karta" };
+export const metadata = { title: "Politique de Confidentialité - ghost.ma" };
 
 export default function PrivacyPage() {
   return (
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
         </p>
         <div className="mt-6 space-y-4 text-sm leading-relaxed text-muted">
           <p>
-            Chez Karta, nous accordons une grande importance à la protection de
+            Chez ghost.ma, nous accordons une grande importance à la protection de
             vos données. Cette politique explique quelles informations nous
             collectons, pourquoi, comment nous les utilisons et quels sont vos
             droits, que vous achetiez en tant qu&apos;invité ou via un compte

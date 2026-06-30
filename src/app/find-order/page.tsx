@@ -65,7 +65,7 @@ export default function FindOrderPage() {
               spellCheck={false}
             />
             <p className="mt-1 text-xs text-faint">
-              Votre numéro de commande est présent dans les emails envoyés par Karta.
+              Votre numéro de commande est présent dans les emails envoyés par ghost.ma.
             </p>
           </div>
 

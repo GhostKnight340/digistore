@@ -29,9 +29,9 @@ Notre équipe support intervient notamment pour :
 
 ## Questions fréquentes
 
-### La livraison est-elle immédiate ?
+### La livraison est-elle rapide ?
 
-Les produits à traitement automatique sont livrés instantanément après la confirmation de votre paiement. Les produits nécessitant une vérification manuelle sont livrés dans les meilleurs délais une fois cette vérification effectuée. Dans tous les cas, vous êtes informé par email et sur le site.
+Les produits à traitement automatique sont livrés rapidement après la confirmation de votre paiement. Les produits nécessitant une vérification manuelle sont livrés dans les meilleurs délais une fois cette vérification effectuée. Dans tous les cas, vous êtes informé par email et sur le site.
 
 ### Pourquoi un justificatif de paiement peut-il m'être demandé ?
 
