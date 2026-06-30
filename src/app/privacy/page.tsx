@@ -1,4 +1,4 @@
-export const metadata = { title: "Confidentialité - Karta" };
+export const metadata = { title: "Confidentialité - ghost.ma" };
 
 export default function PrivacyPage() {
   return (
@@ -10,7 +10,7 @@ export default function PrivacyPage() {
         <div className="mt-6 space-y-4 text-sm leading-relaxed text-muted">
           <p>
             Cette politique de confidentialité est un texte provisoire pour le
-            prototype Karta.
+            prototype ghost.ma.
           </p>
           <h2 className="pt-2 text-base font-semibold text-white">
             Données stockées

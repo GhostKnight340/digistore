@@ -8,7 +8,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Neutral, near-black base with layered surfaces (Karta direction).
+        // Neutral, near-black base with layered surfaces.
         base: "#0a0b0d",
         surface: "#121319",
         surface2: "#171922",

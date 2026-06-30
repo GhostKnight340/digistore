@@ -1,4 +1,4 @@
-// Prisma schema for the Karta digital store.
+// Prisma schema for the ghost.ma digital store.
 //
 // Supabase/PostgreSQL is the production source of truth. Status fields remain
 // strings so the TypeScript unions in src/lib/types.ts define the allowed set.
@@ -273,7 +273,7 @@ model PaymentMethodConfig {
 model SupportConfig {
   id             String   @id @default(cuid())
   whatsappNumber String   @default("+212 600 000 000")
-  supportEmail   String   @default("support@karta.ma")
+  supportEmail   String   @default("support@ghost.ma")
   instructions   String   @default("")
   updatedAt      DateTime @default(now()) @updatedAt
 }

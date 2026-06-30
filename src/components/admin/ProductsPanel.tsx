@@ -56,7 +56,7 @@ function emptyParent(): ParentProductDTO {
     category: "steam",
     brand: null,
     region: "",
-    deliveryType: "Code numérique instantané",
+    deliveryType: "Code numérique - livraison rapide",
     description: "",
     shortDescription: null,
     longDescription: null,
@@ -841,7 +841,7 @@ function DetailsTab({
             className="input"
             value={draft.deliveryType}
             onChange={(e) => update("deliveryType", e.target.value)}
-            placeholder="Code numérique instantané"
+            placeholder="Code numérique - livraison rapide"
           />
         </Field>
       </div>

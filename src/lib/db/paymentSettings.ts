@@ -68,7 +68,7 @@ async function runEnsureDefaults(): Promise<void> {
     await prisma.supportConfig.create({
       data: {
         whatsappNumber: "+212 600 000 000",
-        supportEmail: "support@karta.ma",
+        supportEmail: "support@ghost.ma",
         instructions: "",
       },
     });
@@ -155,7 +155,7 @@ function rowToSupport(row: {
     : {
         id: "",
         whatsappNumber: "+212 600 000 000",
-        supportEmail: "support@karta.ma",
+        supportEmail: "support@ghost.ma",
         instructions: "",
       };
 }

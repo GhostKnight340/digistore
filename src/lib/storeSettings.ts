@@ -77,11 +77,11 @@ export type StoreSettings = {
 export const defaultStoreSettings: StoreSettings = {
   inventoryMode: "automatic",
   branding: {
-    siteName: "Karta",
-    logoText: "Karta",
-    heroTitle: "Achetez vos cartes de jeu instantanement au Maroc",
+    siteName: "ghost.ma",
+    logoText: "ghost.ma",
+    heroTitle: "Achetez vos cartes de jeu rapidement au Maroc",
     heroSubtitle:
-      "Achetez vos cartes Steam, PlayStation et Xbox au meilleur prix. Code recu instantanement par email, paiement 100% securise.",
+      "Achetez vos cartes Steam, PlayStation et Xbox au meilleur prix. Livraison rapide apres confirmation du paiement, paiement 100% securise.",
     primaryCtaLabel: "Parcourir le catalogue",
     secondaryCtaLabel: "Comment ca marche",
   },
@@ -99,7 +99,7 @@ export const defaultStoreSettings: StoreSettings = {
     featuredSubtitle: "Selection verifiee, codes livres apres paiement.",
     howItWorksTitle: "Comment ca marche",
     howItWorksSubtitle: "Trois etapes, en moins d'une minute.",
-    whyChooseUsTitle: "Pourquoi choisir Karta?",
+    whyChooseUsTitle: "Pourquoi choisir ghost.ma?",
     whyChooseUsSubtitle: "Des codes numeriques fiables, simples et rapides.",
     ctaTitle: "Pret a jouer?",
     ctaSubtitle: "Choisissez une carte et suivez votre commande apres paiement.",
@@ -110,7 +110,7 @@ export const defaultStoreSettings: StoreSettings = {
   trustItems: [
     {
       id: "instant-delivery",
-      title: "Livraison instantanee",
+      title: "Livraison rapide",
       description: "Votre code est disponible des la confirmation du paiement.",
       enabled: true,
     },
@@ -151,7 +151,7 @@ export const defaultStoreSettings: StoreSettings = {
   },
   paymentDisplay: {},
   footer: {
-    contactEmail: "support@karta.ma",
+    contactEmail: "support@ghost.ma",
     whatsappNumber: "+212 600 000 000",
     supportText:
       "Le moyen le plus simple d'acheter vos cartes et codes numeriques au Maroc.",

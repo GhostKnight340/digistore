@@ -5,7 +5,7 @@ import { getCatalogPage } from "@/lib/db/catalog";
 export const revalidate = 3600;
 
 export const metadata = {
-  title: "Catalogue - Karta",
+  title: "Catalogue - ghost.ma",
 };
 
 export default async function ProductsPage({

@@ -1,11 +1,11 @@
 import Link from "next/link";
 
-export const metadata = { title: "Support - Karta" };
+export const metadata = { title: "Support - ghost.ma" };
 
 const faqs = [
   {
-    q: "La livraison est-elle vraiment instantanée?",
-    a: "Oui. Votre code apparaît à l'écran dès que la commande est confirmée, et une copie vous est envoyée par email.",
+    q: "La livraison est-elle rapide?",
+    a: "Oui. Votre code apparaît à l'écran après confirmation du paiement, et une copie vous est envoyée par email.",
   },
   {
     q: "Quels moyens de paiement sont disponibles?",
@@ -17,7 +17,7 @@ const faqs = [
   },
   {
     q: "Le service est-il adapté aux clients au Maroc?",
-    a: "Oui. Karta est pensé pour le Maroc, avec un support local en darija, arabe, français et anglais.",
+    a: "Oui. ghost.ma est pensé pour le Maroc, avec un support local en darija, arabe, français et anglais.",
   },
 ];
 
@@ -36,7 +36,7 @@ export default function SupportPage() {
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           {[
             ["Chat en direct", "Bientôt"],
-            ["Email", "support@karta.ma"],
+            ["Email", "support@ghost.ma"],
             ["Horaires", "9:00 - 22:00 (GMT+1)"],
           ].map(([title, text]) => (
             <div key={title} className="card p-5 text-center">

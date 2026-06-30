@@ -291,7 +291,7 @@ function PendingPaymentSection({
       )
     : resolvePaymentDisplay(settings.paymentDisplay[methodDisplayKey("usdt")], {
         displayName: "Crypto",
-        subtitle: "Paiement crypto instantane",
+        subtitle: "Paiement crypto rapide",
         initials: "US",
         accentColor: "#22c55e",
       });

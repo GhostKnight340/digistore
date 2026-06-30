@@ -122,7 +122,7 @@ export default function CartPage() {
               </div>
               <div className="flex justify-between text-muted">
                 <dt>Livraison</dt>
-                <dd className="text-cyan-glow">Instantanée · gratuite</dd>
+                <dd className="text-cyan-glow">Rapide · gratuite</dd>
               </div>
             </dl>
             <div className="my-4 border-t border-border" />

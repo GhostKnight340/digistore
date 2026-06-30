@@ -21,7 +21,7 @@ import type { BankDTO, PaymentConfigDTO } from "@/lib/dto";
 
 const METHOD_META: Record<string, { label: string; hint: string; icon: string }> = {
   bank: { label: "Virement bancaire", hint: "RIB / IBAN disponible", icon: "BK" },
-  usdt: { label: "Crypto", hint: "Paiement crypto instantane", icon: "US" },
+  usdt: { label: "Crypto", hint: "Paiement crypto rapide", icon: "US" },
   paypal: { label: "PayPal", hint: "PayPal ou envoi manuel", icon: "PP" },
   card: { label: "Carte bancaire", hint: "Disponible prochainement", icon: "CB" },
 };

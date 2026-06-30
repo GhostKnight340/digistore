@@ -1,4 +1,4 @@
-export const metadata = { title: "Conditions - Karta" };
+export const metadata = { title: "Conditions - ghost.ma" };
 
 export default function TermsPage() {
   return (
@@ -9,7 +9,7 @@ export default function TermsPage() {
         </h1>
         <div className="mt-6 space-y-4 text-sm leading-relaxed text-muted">
           <p>
-            Ces conditions sont provisoires pour le prototype Karta. En
+            Ces conditions sont provisoires pour le prototype ghost.ma. En
             utilisant cette démo, vous acceptez qu'aucun paiement réel ne soit
             traité et qu'aucune vraie carte cadeau ne soit livrée.
           </p>
@@ -25,7 +25,7 @@ export default function TermsPage() {
             2. Livraison numérique
           </h2>
           <p>
-            En production, les codes numériques seront livrés instantanément et
+            En production, les codes numériques seront livrés rapidement après confirmation du paiement et
             ne seront généralement pas remboursables une fois révélés, sauf en
             cas de code défectueux.
           </p>

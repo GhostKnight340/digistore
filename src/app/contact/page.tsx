@@ -38,7 +38,7 @@ export default function ContactPage() {
 
         <p className="mt-4 rounded-lg bg-surface px-3 py-2 text-center text-xs text-muted">
           Interface de démonstration: les messages ne sont pas envoyés en phase
-          1. Écrivez directement à support@karta.ma.
+          1. Écrivez directement à support@ghost.ma.
         </p>
       </div>
     </div>

@@ -69,7 +69,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "PaymentMethodConfig_method_key" ON "PaymentMe
 CREATE TABLE IF NOT EXISTS "SupportConfig" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "whatsappNumber" TEXT NOT NULL DEFAULT '+212 600 000 000',
-    "supportEmail" TEXT NOT NULL DEFAULT 'support@karta.ma',
+    "supportEmail" TEXT NOT NULL DEFAULT 'support@ghost.ma',
     "instructions" TEXT NOT NULL DEFAULT '',
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

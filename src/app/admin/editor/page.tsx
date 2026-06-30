@@ -50,7 +50,7 @@ const trustIcons = [
 const howItWorksSteps = [
   { n: 1, title: "Choisissez un produit", text: "Sélectionnez une carte et la quantité." },
   { n: 2, title: "Paiement sécurisé", text: "Entrez votre email et payez simplement." },
-  { n: 3, title: "Recevez le code", text: "Votre code apparaît instantanément." },
+  { n: 3, title: "Recevez le code", text: "Votre code est livré après confirmation du paiement." },
 ];
 
 function EditorCanvas() {
@@ -145,7 +145,7 @@ function EditorCanvas() {
                   </div>
                   {s.homepage.showTrustStrip && (
                     <div className="mt-9 flex flex-wrap gap-x-7 gap-y-3">
-                      {["Livraison instantanée", "Paiement sécurisé", "Support local"].map(
+                      {["Livraison rapide", "Paiement sécurisé", "Support local"].map(
                         (text) => (
                           <span key={text} className="flex items-center gap-2 text-sm text-muted">
                             <svg
