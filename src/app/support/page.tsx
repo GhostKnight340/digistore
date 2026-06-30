@@ -29,7 +29,7 @@ export default function SupportPage() {
           Support
         </h1>
         <p className="mt-2 text-muted">
-          Besoin d?aide ? Retrouvez les réponses rapides ci-dessous ou contactez
+          Besoin d'aide ? Retrouvez les réponses rapides ci-dessous ou contactez
           notre équipe.
         </p>
 

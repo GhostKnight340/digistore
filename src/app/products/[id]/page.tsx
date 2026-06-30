@@ -15,9 +15,9 @@ export async function generateStaticParams() {
 }
 
 const howItWorks = [
-  { n: "01", title: "Choisissez votre montant", text: "S?lectionnez la valeur ou la formule qui vous convient." },
-  { n: "02", title: "Payez en toute s?curit?", text: "Choisissez un mode de paiement disponible." },
-  { n: "03", title: "Recevez votre produit num?rique", text: "Disponible apr?s confirmation du paiement." },
+  { n: "01", title: "Choisissez votre montant", text: "Sélectionnez la valeur ou la formule qui vous convient." },
+  { n: "02", title: "Payez en toute sécurité", text: "Choisissez un mode de paiement disponible." },
+  { n: "03", title: "Recevez votre produit numérique", text: "Disponible après confirmation du paiement." },
 ];
 
 export default async function ProductDetailPage({
@@ -65,7 +65,7 @@ export default async function ProductDetailPage({
 
           <section className="mt-10">
             <h2 className="text-lg font-semibold tracking-tight text-text">
-              Comment ?a marche
+              Comment ça marche
             </h2>
             <div className="mt-5 flex flex-col gap-2">
               {howItWorks.map((step) => (
@@ -90,7 +90,7 @@ export default async function ProductDetailPage({
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
-            Livraison apr?s confirmation
+            Livraison après confirmation
           </span>
 
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-text">
@@ -101,7 +101,7 @@ export default async function ProductDetailPage({
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <span className="chip">R?gion : {product.region}</span>
+            <span className="chip">Région : {product.region}</span>
             <span className="chip">{product.deliveryType}</span>
           </div>
 
@@ -132,12 +132,12 @@ export default async function ProductDetailPage({
               price={selectedVariant?.price ?? product.price}
             />
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
-              Paiement s?curis?
+              Paiement sécurisé
             </div>
           </div>
 
           <div className="mt-[18px] grid gap-2.5 sm:grid-cols-2">
-            {["Re?u par e-mail", "Support local"].map((text) => (
+            {["Reçu par e-mail", "Support local"].map((text) => (
               <div
                 key={text}
                 className="flex items-center gap-2.5 rounded-[11px] border border-border bg-surface px-3.5 py-3 text-[13px] text-muted"

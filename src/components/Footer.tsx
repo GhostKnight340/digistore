@@ -61,7 +61,7 @@ export default function Footer() {
           ]}
         />
         <FooterGroup
-          title="L?gal"
+          title="Légal"
           links={[
             { href: "/terms", label: "Conditions" },
             { href: "/privacy", label: "Confidentialité" },

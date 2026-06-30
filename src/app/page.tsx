@@ -8,9 +8,9 @@ import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 export const revalidate = 3600;
 
 const steps = [
-  { n: 1, title: "Choisissez un produit", text: "S?lectionnez le produit et la quantit?." },
-  { n: 2, title: "Paiement s?curis?", text: "Renseignez votre e-mail et choisissez un mode de paiement." },
-  { n: 3, title: "Recevez votre produit num?rique", text: "Votre produit est disponible apr?s confirmation du paiement." },
+  { n: 1, title: "Choisissez un produit", text: "Sélectionnez le produit et la quantité." },
+  { n: 2, title: "Paiement sécurisé", text: "Renseignez votre e-mail et choisissez un mode de paiement." },
+  { n: 3, title: "Recevez votre produit numérique", text: "Votre produit est disponible après confirmation du paiement." },
 ];
 
 export default async function HomePage() {
@@ -35,7 +35,7 @@ export default async function HomePage() {
             <div>
               <span className="chip">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_10px_var(--tw-shadow-color)] shadow-accent" />
-                Produits num?riques
+                Produits numériques
               </span>
               <h1 className="mt-6 max-w-xl text-5xl font-semibold leading-[1.04] tracking-[-0.035em] text-text sm:text-6xl">
                 {settings.branding.heroTitle}

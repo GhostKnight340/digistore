@@ -20,10 +20,10 @@ export default function AccountPage() {
                 Suivi de commande
               </span>
               <span className="block rounded-lg px-3 py-2 text-muted">
-                Profil (bient?t)
+                Profil (bientôt)
               </span>
               <span className="block rounded-lg px-3 py-2 text-muted">
-                Param?tres (bient?t)
+                Paramètres (bientôt)
               </span>
             </nav>
             <Link href="/login" className="btn-ghost mt-4 w-full">
@@ -31,7 +31,7 @@ export default function AccountPage() {
             </Link>
           </div>
           <p className="mt-3 px-1 text-xs text-muted">
-            Les commandes sont enregistr?es dans Supabase. Le suivi se fait par lien de commande jusqu?? l?ajout d?une authentification compl?te.
+            Les commandes sont enregistrées dans Supabase. Le suivi se fait par lien de commande jusqu'à l'ajout d'une authentification complète.
           </p>
         </aside>
 
@@ -43,7 +43,7 @@ export default function AccountPage() {
               Ouvrez le lien de votre commande
             </p>
             <p className="mt-1 max-w-md text-sm text-muted">
-              Sans compte client, l?historique des commandes n?est pas conserv? dans ce navigateur. Utilisez le lien re?u apr?s paiement ou contactez le support avec votre num?ro de commande.
+              Sans compte client, l'historique des commandes n'est pas conservé dans ce navigateur. Utilisez le lien reçu après paiement ou contactez le support avec votre numéro de commande.
             </p>
             <Link href="/products" className="btn-primary mt-6">
               Parcourir le catalogue

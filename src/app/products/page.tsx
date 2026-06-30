@@ -71,10 +71,10 @@ export default async function ProductsPage({
         <div className="card grid place-items-center px-6 py-20 text-center">
           <p className="text-lg font-semibold text-white">Aucun produit trouv?</p>
           <p className="mt-1 text-sm text-muted">
-            Essayez une autre cat?gorie ou un autre terme.
+            Essayez une autre catégorie ou un autre terme.
           </p>
           <Link href="/products" className="btn-primary mt-6">
-            R?initialiser
+            Réinitialiser
           </Link>
         </div>
       ) : !category && !query ? (
@@ -123,7 +123,7 @@ export default async function ProductsPage({
               })}`}
               className="btn-ghost h-10 px-4"
             >
-              Pr?c?dent
+              Précédent
             </Link>
           )}
           <span className="text-muted">

@@ -178,7 +178,7 @@ export default function CheckoutClient({
 
       if (!order) {
         setSubmitting(false);
-        setError("Une erreur est survenue. Veuillez r?essayer.");
+        setError("Une erreur est survenue. Veuillez réessayer.");
         return;
       }
 
@@ -186,7 +186,7 @@ export default function CheckoutClient({
       router.push(`/payment/${order.id}`);
     } catch {
       setSubmitting(false);
-      setError("Une erreur est survenue. Veuillez r?essayer.");
+      setError("Une erreur est survenue. Veuillez réessayer.");
     }
   }
 
@@ -242,7 +242,7 @@ export default function CheckoutClient({
             <div>
               <h2 className="text-lg font-bold text-white">Mode de paiement</h2>
               <p className="mt-1 text-sm text-muted">
-                S?lectionnez une option. Les instructions s?afficheront apr?s la cr?ation de la commande.
+                Sélectionnez une option. Les instructions s'afficheront après la création de la commande.
               </p>
             </div>
 
@@ -313,7 +313,7 @@ export default function CheckoutClient({
 
         <aside className="h-fit lg:sticky lg:top-24">
           <div className="card p-6">
-            <h2 className="text-lg font-bold text-white">R?capitulatif</h2>
+            <h2 className="text-lg font-bold text-white">Récapitulatif</h2>
             <ul className="mt-4 space-y-3">
               {cart.map((item) => {
                 const product = getProduct(item.productId);

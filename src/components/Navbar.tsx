@@ -37,7 +37,7 @@ export default function Navbar() {
         >
           <input
             name="q"
-            placeholder="Rechercher un produit num?rique..."
+            placeholder="Rechercher un produit numérique..."
             className="h-full w-full rounded-[10px] border border-border bg-surface px-10 pr-14 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
             aria-label="Rechercher des produits"
           />
