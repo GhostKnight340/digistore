@@ -72,7 +72,7 @@ export default async function HomePage() {
               </p>
             </div>
             <Link href="/products" className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block">
-              Tout voir ?
+              Tout voir &rarr;
             </Link>
           </div>
           <div className="mt-8 grid grid-cols-2 gap-[18px] md:grid-cols-4">
@@ -95,7 +95,7 @@ export default async function HomePage() {
               </p>
             </div>
             <Link href="/products" className="hidden text-sm font-medium text-accent hover:text-accent-hover sm:block">
-              Tout voir ?
+              Tout voir &rarr;
             </Link>
           </div>
           {featured.length === 0 ? (
