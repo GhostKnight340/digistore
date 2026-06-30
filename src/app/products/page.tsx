@@ -69,7 +69,7 @@ export default async function ProductsPage({
 
       {filtered.length === 0 ? (
         <div className="card grid place-items-center px-6 py-20 text-center">
-          <p className="text-lg font-semibold text-white">Aucun produit trouv?</p>
+          <p className="text-lg font-semibold text-white">Aucun produit trouvé</p>
           <p className="mt-1 text-sm text-muted">
             Essayez une autre catégorie ou un autre terme.
           </p>
