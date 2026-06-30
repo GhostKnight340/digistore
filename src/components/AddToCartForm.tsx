@@ -37,7 +37,7 @@ export default function AddToCartForm({
             type="button"
             onClick={() => setQty((q) => Math.max(1, q - 1))}
             className="h-10 w-10 text-lg text-muted transition hover:text-white"
-            aria-label="Decrease quantity"
+            aria-label="Diminuer la quantit?"
           >
             -
           </button>
@@ -48,7 +48,7 @@ export default function AddToCartForm({
             type="button"
             onClick={() => setQty((q) => Math.min(10, q + 1))}
             className="h-10 w-10 text-lg text-muted transition hover:text-white"
-            aria-label="Increase quantity"
+            aria-label="Augmenter la quantit?"
           >
             +
           </button>
@@ -85,7 +85,7 @@ export default function AddToCartForm({
           >
             <polyline points="20 6 9 17 4 12" />
           </svg>
-          Code livré par email après paiement.
+          Produit disponible après confirmation du paiement.
         </div>
       )}
     </div>

@@ -42,7 +42,7 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 function stockTone(unused: number) {
   if (unused === 0) {
     return {
-      label: "Out of stock",
+      label: "En rupture",
       dot: "bg-red-400",
       text: "text-red-300",
       border: "border-red-500/40",
@@ -51,7 +51,7 @@ function stockTone(unused: number) {
   }
   if (unused <= LOW_STOCK_MAX) {
     return {
-      label: "Low stock",
+      label: "Stock faible",
       dot: "bg-amber-400",
       text: "text-amber-300",
       border: "border-amber-500/40",
@@ -59,7 +59,7 @@ function stockTone(unused: number) {
     };
   }
   return {
-    label: "In stock",
+    label: "En stock",
     dot: "bg-green-400",
     text: "text-green-300",
     border: "border-green-500/40",
@@ -95,7 +95,7 @@ export default function InventoryPanel() {
     setModeSaving(true);
     setModeMessage("");
     const result = await saveSettings({ ...settings, inventoryMode: mode });
-    setModeMessage(result.ok ? "Inventory mode saved." : result.error ?? "Mode could not be saved.");
+    setModeMessage(result.ok ? "Mode de stock enregistré." : result.error ?? "Impossible d'enregistrer le mode.");
     setModeSaving(false);
   }
 
@@ -103,12 +103,12 @@ export default function InventoryPanel() {
     setLoadError("");
     setLoaded(false);
     try {
-      const data = await withTimeout(getInventoryProductsAction(), "Inventory");
+      const data = await withTimeout(getInventoryProductsAction(), "Stock");
       setProducts(data);
       setSelectedProductId((current) => current ?? data[0]?.productId ?? null);
     } catch (error) {
       console.error("Failed to load inventory", error);
-      setLoadError("Inventory could not be refreshed. Showing the latest loaded data.");
+      setLoadError("Impossible d'actualiser le stock. Les dernières données chargées restent affichées.");
     } finally {
       setLoaded(true);
     }
@@ -165,13 +165,13 @@ export default function InventoryPanel() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white">Inventory</h2>
+          <h2 className="text-xl font-bold text-white">Stock</h2>
           <p className="mt-1 text-sm text-muted">
-            Product-first stock control for digital code pools.
+            Gestion du stock par produit pour les codes numériques.
           </p>
         </div>
         <button type="button" onClick={load} className="btn-ghost h-10 px-4 text-xs">
-          Refresh
+          Actualiser
         </button>
       </div>
 
@@ -184,9 +184,9 @@ export default function InventoryPanel() {
       <div className="card p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">Inventory Mode</h3>
+            <h3 className="text-sm font-semibold text-white">Mode de stock</h3>
             <p className="mt-1 text-xs text-muted">
-              Choose whether orders use uploaded stock or admin-entered delivery codes.
+              Choisissez si les commandes utilisent le stock importé ou des codes saisis manuellement.
             </p>
           </div>
           <div className="flex gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
@@ -198,7 +198,7 @@ export default function InventoryPanel() {
                 !manualMode ? "bg-accent/15 text-white" : "text-muted hover:text-white"
               }`}
             >
-              Automatic inventory
+              Stock automatique
             </button>
             <button
               type="button"
@@ -208,7 +208,7 @@ export default function InventoryPanel() {
                 manualMode ? "bg-accent/15 text-white" : "text-muted hover:text-white"
               }`}
             >
-              Manual code entry
+              Saisie manuelle
             </button>
           </div>
           {modeMessage ? <p className="w-full text-xs text-muted">{modeMessage}</p> : null}
@@ -216,9 +216,9 @@ export default function InventoryPanel() {
 
         {manualMode ? (
           <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            <p className="font-medium text-amber-50">Manual code entry mode is active.</p>
+            <p className="font-medium text-amber-50">La saisie manuelle des codes est active.</p>
             <p className="mt-1 text-xs text-amber-100/85">
-              Inventory codes are ignored for new orders. You can manually enter delivery codes from each order detail page. Existing inventory remains untouched.
+              Les codes en stock sont ignorés pour les nouvelles commandes. Vous pouvez saisir les codes depuis la page de détail de chaque commande. Le stock existant reste inchangé.
             </p>
           </div>
         ) : null}
@@ -228,15 +228,15 @@ export default function InventoryPanel() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="input h-10 py-0 text-sm"
-            placeholder="Search products or variants..."
+            placeholder="Rechercher un produit ou une variante..."
           />
           <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
             {[
-              ["all", "All"],
-              ["attention", "Needs attention"],
-              ["low", "Low stock"],
-              ["out", "Out of stock"],
-              ["recent", "Recently updated"],
+              ["all", "Tous"],
+              ["attention", "À surveiller"],
+              ["low", "Stock faible"],
+              ["out", "En rupture"],
+              ["recent", "Mis à jour récemment"],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -254,14 +254,14 @@ export default function InventoryPanel() {
       </div>
 
       {!loaded ? (
-        <p className="text-sm text-muted">Loading...</p>
+        <p className="text-sm text-muted">Chargement...</p>
       ) : products.length === 0 ? (
         <p className="card p-6 text-sm text-muted">
-          No inventory products yet. Add products and code stock to begin.
+          Aucun produit en stock pour le moment. Ajoutez des produits et des codes pour commencer.
         </p>
       ) : visibleProducts.length === 0 ? (
         <p className="card p-6 text-sm text-muted">
-          No products match this search or filter.
+          Aucun produit ne correspond à cette recherche ou à ce filtre.
         </p>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -269,7 +269,7 @@ export default function InventoryPanel() {
             {alerts.length > 0 ? (
               <section className="rounded-2xl border border-border bg-surface/70 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-white">Inventory alerts</h3>
+                  <h3 className="text-sm font-semibold text-white">Alertes de stock</h3>
                   <span className="text-xs text-muted">{alerts.length} active</span>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -293,8 +293,8 @@ export default function InventoryPanel() {
                       </div>
                       <p className={`mt-1 text-xs ${tone.text}`}>
                         {variant.unused === 0
-                          ? "Out of stock"
-                          : `Only ${variant.unused} code${variant.unused === 1 ? "" : "s"} left`}
+                          ? "En rupture"
+                          : `Plus que ${variant.unused} code${variant.unused === 1 ? "" : "s"} disponible${variant.unused === 1 ? "" : "s"}`}
                       </p>
                     </button>
                   ))}
@@ -357,7 +357,7 @@ function ProductCard({
             {product.variantCount} variant{product.variantCount === 1 ? "" : "s"}
           </p>
         </div>
-        <span className="text-xs font-medium text-accent">View inventory</span>
+        <span className="text-xs font-medium text-accent">Voir le stock</span>
       </div>
       <div className="mt-4 space-y-2">
         {product.variants.slice(0, 5).map((variant) => (
@@ -383,7 +383,7 @@ function ProductDetail({
   if (!product) {
     return (
       <section className="card p-6 text-sm text-muted">
-        Select a product to review its stock.
+        Sélectionnez un produit pour consulter son stock.
       </section>
     );
   }
@@ -391,9 +391,9 @@ function ProductDetail({
   return (
     <section className="card h-fit overflow-hidden">
       <div className="border-b border-border px-5 py-4">
-        <h3 className="text-lg font-bold text-white">{product.productName} Inventory</h3>
+        <h3 className="text-lg font-bold text-white">Stock de {product.productName}</h3>
         <p className="mt-1 text-xs text-muted">
-          {product.unused} available, {product.reserved} reserved, {product.used} used
+          {product.unused} disponibles, {product.reserved} réservés, {product.used} utilisés
         </p>
       </div>
       <div className="divide-y divide-border/70">
@@ -403,9 +403,9 @@ function ProductDetail({
               <div>
                 <VariantStockRow variant={variant} />
                 <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                  <Metric label="Unused" value={variant.unused} tone="text-green-400" />
-                  <Metric label="Reserved" value={variant.reserved} tone="text-amber-400" />
-                  <Metric label="Used" value={variant.used} tone="text-muted" />
+                  <Metric label="Disponibles" value={variant.unused} tone="text-green-400" />
+                  <Metric label="Réservés" value={variant.reserved} tone="text-amber-400" />
+                  <Metric label="Utilisés" value={variant.used} tone="text-muted" />
                 </dl>
               </div>
               <button
@@ -413,7 +413,7 @@ function ProductDetail({
                 onClick={() => onManage(product, variant)}
                 className="btn-primary h-9 shrink-0 px-3 text-xs"
               >
-                Manage codes
+                Gérer les codes
               </button>
             </div>
           </div>
@@ -439,7 +439,7 @@ function VariantStockRow({
         </p>
         {!compact && variant.lastUpdatedAt ? (
           <p className="mt-1 text-xs text-muted">
-            Updated {formatDate(variant.lastUpdatedAt)}
+            Mis à jour le {formatDate(variant.lastUpdatedAt)}
           </p>
         ) : null}
       </div>
@@ -501,7 +501,7 @@ function ManageCodesPanel({
       setLoaded(true);
     } catch (loadError) {
       console.error("Failed to load inventory codes", loadError);
-      setError("Codes could not be loaded.");
+      setError("Impossible de charger les codes.");
     } finally {
       setLoading(false);
     }
@@ -518,12 +518,12 @@ function ManageCodesPanel({
     setError("");
     const result = await addCodesBulkAction(variant.productId, bulk);
     if (result.ok) {
-      setMessage(`Imported ${result.added ?? 0}; skipped ${result.skipped ?? 0} duplicate(s).`);
+      setMessage(`${result.added ?? 0} importé(s), ${result.skipped ?? 0} doublon(s) ignoré(s).`);
       setBulk("");
       await onChanged();
       await loadCodes();
     } else {
-      setError(result.error ?? "Codes could not be imported.");
+      setError(result.error ?? "Impossible d'importer les codes.");
     }
     setBusy(false);
   }
@@ -533,7 +533,7 @@ function ManageCodesPanel({
     setMessage("");
     setError("");
     const result = await disableCodeAction(codeId);
-    if (!result.ok) setError(result.error ?? "Code could not be disabled.");
+    if (!result.ok) setError(result.error ?? "Impossible de désactiver le code.");
     await onChanged();
     await loadCodes();
     setBusy(false);
@@ -549,21 +549,21 @@ function ManageCodesPanel({
               <h3 className="mt-1 text-lg font-bold text-white">{variant.name}</h3>
             </div>
             <button type="button" onClick={onClose} className="btn-ghost h-9 px-3 text-xs">
-              Close
+              Fermer
             </button>
           </div>
         </div>
 
         <div className="space-y-5 px-5 py-5">
           <section className="grid grid-cols-3 gap-3">
-            <Metric label="Unused" value={variant.unused} tone="text-green-400" />
-            <Metric label="Reserved" value={variant.reserved} tone="text-amber-400" />
-            <Metric label="Used" value={variant.used} tone="text-muted" />
+            <Metric label="Disponibles" value={variant.unused} tone="text-green-400" />
+            <Metric label="Réservés" value={variant.reserved} tone="text-amber-400" />
+            <Metric label="Utilisés" value={variant.used} tone="text-muted" />
           </section>
 
           <section className="rounded-xl border border-border bg-surface p-4">
             <label className="mb-2 block text-sm font-medium text-white">
-              Paste one code per line
+              Collez un code par ligne
             </label>
             <textarea
               value={bulk}
@@ -578,7 +578,7 @@ function ManageCodesPanel({
               disabled={busy || !bulk.trim()}
               className="btn-primary mt-3 h-10 px-4 text-xs disabled:opacity-50"
             >
-              Import codes
+              Importer les codes
             </button>
           </section>
 
@@ -587,15 +587,15 @@ function ManageCodesPanel({
 
           <section className="rounded-xl border border-border bg-surface">
             <div className="border-b border-border px-4 py-3">
-              <h4 className="text-sm font-semibold text-white">Digital codes</h4>
+              <h4 className="text-sm font-semibold text-white">Codes numériques</h4>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-xs uppercase text-muted">
                   <tr className="border-b border-border">
                     <th className="px-4 py-3 font-medium">Code</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Updated</th>
+                    <th className="px-4 py-3 font-medium">Statut</th>
+                    <th className="px-4 py-3 font-medium">Mis à jour</th>
                     <th className="px-4 py-3 font-medium">Action</th>
                   </tr>
                 </thead>
@@ -603,13 +603,13 @@ function ManageCodesPanel({
                   {loading && !loaded ? (
                     <tr>
                       <td colSpan={4} className="px-4 py-5 text-muted">
-                        Loading codes...
+                        Chargement des codes...
                       </td>
                     </tr>
                   ) : codes.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-4 py-5 text-muted">
-                        No codes yet for this variant.
+                        Aucun code pour cette variante.
                       </td>
                     </tr>
                   ) : (
@@ -632,7 +632,7 @@ function ManageCodesPanel({
                         </td>
                         <td className="px-4 py-3">
                           {code.status === "used" || code.status === "disabled" ? (
-                            <span className="text-[11px] text-faint">Locked</span>
+                            <span className="text-[11px] text-faint">Verrouillé</span>
                           ) : (
                             <button
                               type="button"
@@ -640,7 +640,7 @@ function ManageCodesPanel({
                               disabled={busy}
                               className="text-[11px] font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
                             >
-                              Disable
+                              Désactiver
                             </button>
                           )}
                         </td>

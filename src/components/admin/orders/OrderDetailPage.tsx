@@ -28,10 +28,10 @@ import type {
 } from "@/lib/dto";
 
 const METHOD_LABELS: Record<string, string> = {
-  bank: "Bank transfer",
+  bank: "Virement bancaire",
   usdt: "USDT",
   paypal: "PayPal",
-  card: "Card",
+  card: "Carte bancaire",
   test: "Test",
 };
 
@@ -44,7 +44,7 @@ function orderNumber(id: string) {
 }
 
 function formatBytes(value: number | null) {
-  if (value == null) return "Not available";
+  if (value == null) return "Non disponible";
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
@@ -186,31 +186,31 @@ export default function OrderDetailPage({
       setMessage(label);
       await refreshOrder();
     } else {
-      setError(result.error ?? "Action failed.");
+      setError(result.error ?? "Action impossible.");
     }
     setBusy(false);
   }
 
   async function handleDeliver() {
     if (manualMode && !manualCountsValid) {
-      setError("Enter exactly one code per unit before delivery.");
+      setError("Saisissez exactement un code par unité avant la livraison.");
       return;
     }
-    if (!window.confirm("Deliver these codes to the customer now?")) return;
+    if (!window.confirm("Livrer ces codes au client maintenant ?")) return;
     const assignments: ItemAssignment[] = order.items.map((item) => ({
       orderItemId: item.id,
       codes: entries[item.id] ?? [],
     }));
-    await runAction("Order delivered.", () => deliverOrderAction(order.id, assignments));
+    await runAction("Commande livrée.", () => deliverOrderAction(order.id, assignments));
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Admin order detail</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Détail de commande admin</p>
           <h1 className="mt-1 text-3xl font-bold text-white">
-            Order {orderNumber(order.id)}
+            Commande {orderNumber(order.id)}
           </h1>
           <p className="mt-1 font-mono text-xs text-muted">{order.id}</p>
         </div>
@@ -231,12 +231,12 @@ export default function OrderDetailPage({
       ) : null}
 
       <section className="grid gap-4 lg:grid-cols-4">
-        <SummaryCard label="Customer" value={order.customerName} detail={order.customerEmail} />
+        <SummaryCard label="Client" value={order.customerName} detail={order.customerEmail} />
         <SummaryCard label="Date" value={formatDate(order.createdAt)} />
         <SummaryCard label="Total" value={formatMAD(order.totalMad)} />
         <SummaryCard
-          label="Fulfillment"
-          value={delivered ? "Delivered" : canDeliver ? "Ready to deliver" : "Pending"}
+          label="Livraison"
+          value={delivered ? "Livrée" : canDeliver ? "Prête à livrer" : "En attente"}
           detail={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
         />
       </section>
@@ -245,17 +245,17 @@ export default function OrderDetailPage({
         <div className="space-y-6">
           <section className="card overflow-hidden">
             <div className="border-b border-border px-5 py-4">
-              <h2 className="font-bold text-white">Ordered items</h2>
+              <h2 className="font-bold text-white">Articles commandés</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-xs uppercase text-muted">
                   <tr className="border-b border-border">
-                    <th className="px-5 py-3 font-medium">Product</th>
-                    <th className="px-5 py-3 font-medium">Qty</th>
-                    <th className="px-5 py-3 font-medium">Unit price</th>
+                    <th className="px-5 py-3 font-medium">Produit</th>
+                    <th className="px-5 py-3 font-medium">Qté</th>
+                    <th className="px-5 py-3 font-medium">Prix unitaire</th>
                     <th className="px-5 py-3 font-medium">Total</th>
-                    <th className="px-5 py-3 font-medium">Assigned code</th>
+                    <th className="px-5 py-3 font-medium">Code attribué</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -273,7 +273,7 @@ export default function OrderDetailPage({
                         </td>
                         <td className="px-5 py-3">
                           {codes.length === 0 ? (
-                            <span className="text-xs text-faint">Not assigned</span>
+                            <span className="text-xs text-faint">Non attribué</span>
                           ) : (
                             <div className="space-y-1">
                               {codes.map((code, index) => (
@@ -321,13 +321,13 @@ export default function OrderDetailPage({
 
         <aside className="space-y-6">
           <section className="card p-5">
-            <h2 className="font-bold text-white">Payment</h2>
+            <h2 className="font-bold text-white">Paiement</h2>
             <dl className="mt-4 space-y-3 text-sm">
-              <InfoRow label="Method" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
-              <InfoRow label="Status" value={orderStatusShort(order.status)} />
-              <InfoRow label="Submitted" value={submittedAt ? formatDate(submittedAt) : "Not submitted"} />
-              <InfoRow label="Confirmed" value={confirmedAt ? formatDate(confirmedAt) : "Not confirmed"} />
-              {issueReason ? <InfoRow label="Reason" value={issueReason} /> : null}
+              <InfoRow label="Mode" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
+              <InfoRow label="Statut" value={orderStatusShort(order.status)} />
+              <InfoRow label="Soumis" value={submittedAt ? formatDate(submittedAt) : "Non soumis"} />
+              <InfoRow label="Confirmé" value={confirmedAt ? formatDate(confirmedAt) : "Non confirmé"} />
+              {issueReason ? <InfoRow label="Motif" value={issueReason} /> : null}
             </dl>
           </section>
 
@@ -339,11 +339,11 @@ export default function OrderDetailPage({
                   type="button"
                   disabled={busy}
                   onClick={() =>
-                    runAction("Payment confirmed.", () => approvePaymentAction(order.id))
+                    runAction("Paiement confirmé.", () => approvePaymentAction(order.id))
                   }
                   className="btn-primary w-full justify-center disabled:opacity-50"
                 >
-                  Confirm payment
+                  Confirmer le paiement
                 </button>
               ) : null}
               {canIssue ? (
@@ -351,11 +351,11 @@ export default function OrderDetailPage({
                   type="button"
                   disabled={busy}
                   onClick={() =>
-                    runAction("Payment issue marked.", () => markPaymentIssueAction(order.id))
+                    runAction("Problème de paiement signalé.", () => markPaymentIssueAction(order.id))
                   }
                   className="w-full rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
                 >
-                  Mark payment issue
+                  Signaler un problème de paiement
                 </button>
               ) : null}
               {canReject ? (
@@ -363,21 +363,21 @@ export default function OrderDetailPage({
                   type="button"
                   disabled={busy}
                   onClick={() =>
-                    runAction("Order rejected.", () => rejectPaymentAction(order.id))
+                    runAction("Commande refusée.", () => rejectPaymentAction(order.id))
                   }
                   className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
                 >
-                  Reject order
+                  Refuser la commande
                 </button>
               ) : null}
               {canDeliver ? (
                 <a href="#assign-codes" className="btn-ghost block w-full text-center">
-                  Assign/deliver codes
+                  Attribuer et livrer les codes
                 </a>
               ) : null}
             </div>
             <p className="mt-3 text-xs text-muted">
-              Cancel and internal notes are not configured in the current order workflow.
+              L'annulation et les notes internes ne sont pas configurées dans le flux actuel.
             </p>
           </section>
         </aside>
@@ -425,20 +425,20 @@ function PaymentProofSection({
   return (
     <section className="card overflow-hidden">
       <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Payment proof</h2>
+        <h2 className="font-bold text-white">Justificatif de paiement</h2>
       </div>
       <div className="px-5 py-5">
         {proof === "loading" ? (
-          <p className="text-sm text-muted">Loading proof...</p>
+          <p className="text-sm text-muted">Chargement du justificatif...</p>
         ) : proof === null ? (
           <p className="text-sm text-muted">Aucun justificatif téléchargé.</p>
         ) : (
           <div className="space-y-4">
             <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <InfoRow label="File name" value={proof.fileName} />
-              <InfoRow label="Uploaded" value={formatDate(proof.uploadedAt)} />
-              <InfoRow label="File type" value={proof.mimeType} />
-              <InfoRow label="File size" value={formatBytes(proof.sizeBytes)} />
+              <InfoRow label="Nom du fichier" value={proof.fileName} />
+              <InfoRow label="Importé le" value={formatDate(proof.uploadedAt)} />
+              <InfoRow label="Type de fichier" value={proof.mimeType} />
+              <InfoRow label="Taille" value={formatBytes(proof.sizeBytes)} />
             </dl>
 
             {isImage ? (
@@ -446,7 +446,7 @@ function PaymentProofSection({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={href}
-                  alt="Payment proof"
+                  alt="Justificatif de paiement"
                   className="max-h-[620px] w-full rounded-lg object-contain"
                 />
               </div>
@@ -459,16 +459,16 @@ function PaymentProofSection({
                 rel="noreferrer"
                 className="btn-primary inline-flex"
               >
-                Open PDF proof
+                Ouvrir le PDF
               </a>
             ) : null}
 
             <div className="flex flex-wrap gap-2">
               <a href={href} target="_blank" rel="noreferrer" className="btn-ghost">
-                Open proof in new tab
+                Ouvrir le justificatif
               </a>
               <a href={href} download={proof.fileName} className="btn-ghost">
-                Download proof
+                Télécharger le justificatif
               </a>
             </div>
           </div>
@@ -518,11 +518,11 @@ function DeliverySection({
     <section id="assign-codes" className="card overflow-hidden">
       <div className="border-b border-border px-5 py-4">
         <h2 className="font-bold text-white">
-          {manualMode ? "Enter and deliver codes" : "Assign and deliver codes"}
+          {manualMode ? "Saisir et livrer les codes" : "Attribuer et livrer les codes"}
         </h2>
         {manualMode ? (
           <p className="mt-1 text-xs text-muted">
-            Manual code entry mode is active. Stock inventory will not be reserved or consumed.
+            La saisie manuelle est active. Le stock ne sera ni réservé ni consommé.
           </p>
         ) : null}
       </div>
@@ -539,7 +539,7 @@ function DeliverySection({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium text-white">{item.name}</p>
                 <span className="text-xs text-muted">
-                  {item.quantity} unit{item.quantity === 1 ? "" : "s"} · {stock.length} available
+                  {item.quantity} unité{item.quantity === 1 ? "" : "s"} · {stock.length} disponible{stock.length === 1 ? "" : "s"}
                 </span>
               </div>
 
@@ -557,7 +557,7 @@ function DeliverySection({
               ) : manualMode ? (
                 <div className="mt-4">
                   <label className="mb-2 block text-xs font-medium text-muted">
-                    Paste one code per line
+                    Collez un code par ligne
                   </label>
                   <textarea
                     value={(entries[item.id] ?? [])
@@ -574,7 +574,7 @@ function DeliverySection({
                     className="input min-h-28 py-3 font-mono text-sm"
                   />
                   <p className="mt-2 text-xs text-muted">
-                    Required: {item.quantity} code{item.quantity === 1 ? "" : "s"}. Entered:{" "}
+                    Requis : {item.quantity} code{item.quantity === 1 ? "" : "s"}. Saisi(s) :{" "}
                     {(entries[item.id] ?? [])
                       .slice(0, item.quantity)
                       .filter((entry) => entry.manualCode?.trim()).length}
@@ -597,7 +597,7 @@ function DeliverySection({
                           }
                           className="input h-10 py-0 text-sm"
                         >
-                          <option value="">Choose a stock code...</option>
+                          <option value="">Choisir un code en stock...</option>
                           {stock.map((code) => (
                             <option
                               key={code.id}
@@ -615,7 +615,7 @@ function DeliverySection({
                           onChange={(event) =>
                             onSetEntry(item.id, index, { manualCode: event.target.value })
                           }
-                          placeholder="Or enter a manual code"
+                          placeholder="Ou saisir un code manuellement"
                           className="input h-10 py-0 font-mono text-sm"
                         />
                       </div>
@@ -636,7 +636,7 @@ function DeliverySection({
                 onClick={onSaveDraft}
                 className="btn-ghost w-full disabled:opacity-50"
               >
-                Save draft codes
+                Enregistrer le brouillon
               </button>
             ) : null}
             <button
@@ -645,12 +645,12 @@ function DeliverySection({
               onClick={onDeliver}
               className={`${manualMode ? "" : "sm:col-span-2"} btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50`}
             >
-              {busy ? "Delivering..." : "Deliver codes"}
+              {busy ? "Livraison en cours..." : "Livrer les codes"}
             </button>
           </div>
         ) : (
           <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
-            Delivered. The customer can see the assigned code.
+            Livré. Le client peut consulter le code attribué.
           </div>
         )}
       </div>
@@ -662,11 +662,11 @@ function TimelineSection({ order }: { order: AdminOrderDTO }) {
   return (
     <section className="card overflow-hidden">
       <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Timeline</h2>
+        <h2 className="font-bold text-white">Historique</h2>
       </div>
       <div className="px-5 py-5">
         {order.paymentEvents.length === 0 ? (
-          <p className="text-sm text-muted">No events yet.</p>
+          <p className="text-sm text-muted">Aucun événement pour le moment.</p>
         ) : (
           <ol className="space-y-4">
             {order.paymentEvents.map((event) => (
@@ -675,7 +675,7 @@ function TimelineSection({ order }: { order: AdminOrderDTO }) {
                 <div>
                   <p className="text-sm text-white">
                     {event.note ??
-                      `${event.fromStatus ?? "Start"} to ${event.toStatus ?? event.type}`}
+                      `${event.fromStatus ?? "Début"} → ${event.toStatus ?? event.type}`}
                   </p>
                   <p className="mt-1 text-xs text-muted">{formatDate(event.createdAt)}</p>
                 </div>

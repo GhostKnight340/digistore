@@ -31,7 +31,7 @@ export async function saveStoreSettingsAction(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Save failed.",
+      error: error instanceof Error ? error.message : "Enregistrement impossible.",
     };
   }
 }
@@ -54,7 +54,7 @@ export async function updateProductCatalogItemAction(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Product save failed.",
+      error: error instanceof Error ? error.message : "Enregistrement du produit impossible.",
     };
   }
 }

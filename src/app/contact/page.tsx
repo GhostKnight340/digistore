@@ -18,7 +18,7 @@ export default function ContactPage() {
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-white">
-              Email
+              E-mail
             </label>
             <input className="input" type="email" placeholder="vous@example.com" />
           </div>
@@ -28,7 +28,7 @@ export default function ContactPage() {
             </label>
             <textarea
               className="input min-h-32 resize-y"
-              placeholder="Comment pouvons-nous vous aider?"
+              placeholder="Comment pouvons-nous vous aider ?"
             />
           </div>
           <button className="btn-primary w-full" type="submit">

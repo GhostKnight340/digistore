@@ -29,13 +29,13 @@ const homepageSectionKeys = [
 ] as const;
 
 const sectionLabels: Record<(typeof homepageSectionKeys)[number], string> = {
-  showHero: "Hero",
+  showHero: "Bannière",
   showTrustStrip: "Indicateurs de confiance",
   showCategories: "Catégories populaires",
   showFeaturedProducts: "Produits populaires",
   showHowItWorks: "Comment ça marche",
   showWhyChooseUs: "Pourquoi nous choisir",
-  showFooter: "Footer",
+  showFooter: "Pied de page",
 };
 
 export default function SettingsPanel() {
@@ -68,7 +68,7 @@ export default function SettingsPanel() {
       return;
     }
     if (!draft.branding.heroTitle.trim()) {
-      setMessage("Le titre hero est obligatoire.");
+      setMessage("Le titre de la bannière est obligatoire.");
       return;
     }
     if (!/^#[0-9a-fA-F]{6}$/.test(draft.theme.accentColor)) {
@@ -103,17 +103,17 @@ export default function SettingsPanel() {
       <div className="card p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-bold text-white">Store settings</h2>
+            <h2 className="text-xl font-bold text-white">Paramètres de la boutique</h2>
             <p className="mt-1 text-sm text-muted">
-              Customize storefront copy, sections, payments, footer, and theme.
+              Personnalisez les textes, sections, paiements, pied de page et thème.
             </p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={reset} className="btn-ghost">
-              Reset to defaults
+              Réinitialiser
             </button>
             <button type="button" onClick={save} className="btn-primary">
-              Save settings
+              Enregistrer
             </button>
           </div>
         </div>
@@ -124,45 +124,45 @@ export default function SettingsPanel() {
         )}
       </div>
 
-      <Panel title="Branding">
+      <Panel title="Identité">
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
-            label="Site name"
+            label="Nom du site"
             value={draft.branding.siteName}
             onChange={(value) =>
               update("branding", { ...draft.branding, siteName: value })
             }
           />
           <TextField
-            label="Logo text"
+            label="Texte du logo"
             value={draft.branding.logoText}
             onChange={(value) =>
               update("branding", { ...draft.branding, logoText: value })
             }
           />
           <TextField
-            label="Hero title"
+            label="Titre de la bannière"
             value={draft.branding.heroTitle}
             onChange={(value) =>
               update("branding", { ...draft.branding, heroTitle: value })
             }
           />
           <TextField
-            label="Hero subtitle"
+            label="Sous-titre de la bannière"
             value={draft.branding.heroSubtitle}
             onChange={(value) =>
               update("branding", { ...draft.branding, heroSubtitle: value })
             }
           />
           <TextField
-            label="Primary CTA label"
+            label="Bouton principal"
             value={draft.branding.primaryCtaLabel}
             onChange={(value) =>
               update("branding", { ...draft.branding, primaryCtaLabel: value })
             }
           />
           <TextField
-            label="Secondary CTA label"
+            label="Bouton secondaire"
             value={draft.branding.secondaryCtaLabel}
             onChange={(value) =>
               update("branding", { ...draft.branding, secondaryCtaLabel: value })
@@ -171,7 +171,7 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Homepage sections">
+      <Panel title="Sections de la page d'accueil">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {homepageSectionKeys.map((key) => (
               <ToggleSwitch
@@ -187,9 +187,9 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Category images">
+      <Panel title="Images des catégories">
         <p className="mb-4 text-sm text-muted">
-          Upload or link a custom image for each homepage category card. Leave blank to use the default placeholder.
+          Importez ou indiquez une image pour chaque catégorie affichée en page d'accueil. Laissez vide pour utiliser le visuel par défaut.
         </p>
         <div className="space-y-4">
           {categories.map((cat) => (
@@ -208,14 +208,14 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Trust strip">
+      <Panel title="Arguments de confiance">
         <div className="space-y-4">
           {draft.trustItems.map((item, index) => (
             <div key={item.id} className="rounded-xl border border-border bg-base p-4">
               <div className="mb-3">
                 <ToggleSwitch
                   className="rounded-xl border border-border bg-base px-3 py-3"
-                  label="Trust item"
+                  label="Élément de confiance"
                   checkedLabel="Activé"
                   uncheckedLabel="Désactivé"
                   checked={item.enabled}
@@ -228,7 +228,7 @@ export default function SettingsPanel() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <TextField
-                  label="Title"
+                  label="Titre"
                   value={item.title}
                   onChange={(value) => {
                     const next = [...draft.trustItems];
@@ -251,15 +251,15 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Featured products">
+      <Panel title="Produits populaires">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (
             <ToggleSwitch
               key={product.id}
               className="rounded-xl border border-border bg-base px-3 py-3"
               label={`${product.name} (${product.id})`}
-              checkedLabel="Featured"
-              uncheckedLabel="Non featured"
+              checkedLabel="Mis en avant"
+              uncheckedLabel="Non mis en avant"
               checked={draft.featuredProductIds.includes(product.id)}
               onChange={(checked) => {
                 const ids = checked
@@ -272,9 +272,9 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Featured products behavior">
+      <Panel title="Affichage des produits populaires">
         <p className="mb-4 text-sm text-muted">
-          Control what happens to out-of-stock products in the featured section.
+          Définissez le comportement des produits en rupture dans la section populaire.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {(["show", "hide"] as const).map((opt) => (
@@ -301,7 +301,7 @@ export default function SettingsPanel() {
                 <p className="mt-0.5 text-xs text-muted">
                   {opt === "show"
                     ? "Les produits en rupture restent visibles avec leur badge."
-                    : "Les produits en rupture sont masqués de la section produits populaires."}
+                    : "Les produits en rupture sont masqués de la section Produits populaires."}
                 </p>
               </div>
             </label>
@@ -309,9 +309,9 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Category stock modes">
+      <Panel title="Stock des catégories">
         <p className="mb-4 text-sm text-muted">
-          Override stock display for each category card on the homepage.
+          Remplacez l'affichage du stock pour chaque catégorie de la page d'accueil.
         </p>
         <div className="space-y-3">
           {categories.map((cat) => {
@@ -323,7 +323,7 @@ export default function SettingsPanel() {
                   <p className="text-sm font-medium text-white">{cat.name}</p>
                   {autoStatus && (
                     <p className={`mt-0.5 text-xs ${autoStatus === "in_stock" ? "text-green-400" : "text-yellow-500"}`}>
-                      Auto: {autoStatus === "in_stock" ? "En stock" : "En rupture"}
+                      Auto : {autoStatus === "in_stock" ? "En stock" : "En rupture"}
                     </p>
                   )}
                 </div>
@@ -338,8 +338,8 @@ export default function SettingsPanel() {
                   }
                 >
                   <option value="automatic">Automatique</option>
-                  <option value="force_in_stock">Toujours En stock</option>
-                  <option value="force_out_of_stock">Toujours En rupture</option>
+                  <option value="force_in_stock">Toujours en stock</option>
+                  <option value="force_out_of_stock">Toujours en rupture</option>
                 </select>
               </div>
             );
@@ -347,7 +347,7 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Payment methods">
+      <Panel title="Modes de paiement">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {(Object.keys(draft.paymentMethods) as PaymentMethod[]).map((method) => (
             <ToggleSwitch
@@ -366,24 +366,24 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Footer">
+      <Panel title="Pied de page">
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
-            label="Contact email"
+            label="E-mail de contact"
             value={draft.footer.contactEmail}
             onChange={(value) =>
               update("footer", { ...draft.footer, contactEmail: value })
             }
           />
           <TextField
-            label="WhatsApp number"
+            label="Numéro WhatsApp"
             value={draft.footer.whatsappNumber}
             onChange={(value) =>
               update("footer", { ...draft.footer, whatsappNumber: value })
             }
           />
           <TextField
-            label="Support text"
+            label="Texte de support"
             value={draft.footer.supportText}
             onChange={(value) =>
               update("footer", { ...draft.footer, supportText: value })
@@ -422,10 +422,10 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
-      <Panel title="Theme">
+      <Panel title="Thème">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <TextField
-            label="Accent color"
+            label="Couleur d'accent"
             type="color"
             value={draft.theme.accentColor}
             onChange={(value) =>
@@ -433,7 +433,7 @@ export default function SettingsPanel() {
             }
           />
           <TextField
-            label="Background color"
+            label="Couleur de fond"
             type="color"
             value={draft.theme.backgroundColor}
             onChange={(value) =>
@@ -441,14 +441,14 @@ export default function SettingsPanel() {
             }
           />
           <TextField
-            label="Card radius"
+            label="Arrondi des cartes"
             value={draft.theme.cardRadius}
             onChange={(value) =>
               update("theme", { ...draft.theme, cardRadius: value })
             }
           />
           <TextField
-            label="Button radius"
+            label="Arrondi des boutons"
             value={draft.theme.buttonRadius}
             onChange={(value) =>
               update("theme", { ...draft.theme, buttonRadius: value })
@@ -519,7 +519,7 @@ function CategoryMediaRow({
       const url = await uploadImageFile(file);
       onChange(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : "Import impossible");
     } finally {
       setUploading(false);
     }

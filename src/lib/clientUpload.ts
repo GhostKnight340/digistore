@@ -23,12 +23,12 @@ export async function uploadImageFile(file: File): Promise<string> {
 
   if (!res.ok) {
     throw new Error(
-      typeof payload?.error === "string" ? payload.error : "Upload failed.",
+      typeof payload?.error === "string" ? payload.error : "Import impossible.",
     );
   }
 
   if (typeof payload?.url !== "string" || payload.url.length === 0) {
-    throw new Error("Upload response was invalid.");
+    throw new Error("Réponse d’import invalide.");
   }
 
   return payload.url;

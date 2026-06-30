@@ -35,8 +35,8 @@ export default function Footer() {
             {settings.footer.supportText}
           </p>
           <div className="mt-4 space-y-1 text-xs text-muted">
-            <p>Email: {settings.footer.contactEmail}</p>
-            <p>WhatsApp: {settings.footer.whatsappNumber}</p>
+            <p>E-mail : {settings.footer.contactEmail}</p>
+            <p>WhatsApp : {settings.footer.whatsappNumber}</p>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {["VISA", "MASTERCARD", "PAYPAL"].map((label) => (
@@ -61,7 +61,7 @@ export default function Footer() {
           ]}
         />
         <FooterGroup
-          title="Legal"
+          title="L?gal"
           links={[
             { href: "/terms", label: "Conditions" },
             { href: "/privacy", label: "Confidentialité" },

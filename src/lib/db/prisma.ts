@@ -186,7 +186,7 @@ async function ensureDatabaseSchema(): Promise<void> {
       "enabled" BOOLEAN NOT NULL DEFAULT true,
       "proofRequired" BOOLEAN NOT NULL DEFAULT true,
       "paypalEmail" TEXT NOT NULL DEFAULT '',
-      "cardMessage" TEXT NOT NULL DEFAULT 'Paiement par carte bientot disponible.',
+      "cardMessage" TEXT NOT NULL DEFAULT 'Paiement par carte bientôt disponible.',
       "instructions" TEXT NOT NULL DEFAULT '',
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,

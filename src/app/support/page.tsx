@@ -4,15 +4,15 @@ export const metadata = { title: "Support - ghost.ma" };
 
 const faqs = [
   {
-    q: "La livraison est-elle rapide?",
-    a: "Oui. Votre code apparaît à l'écran après confirmation du paiement, et une copie vous est envoyée par email.",
+    q: "La livraison est-elle rapide ?",
+    a: "Oui. Votre produit numérique apparaît à l'écran après confirmation du paiement, et une copie vous est envoyée par e-mail.",
   },
   {
-    q: "Quels moyens de paiement sont disponibles?",
+    q: "Quels moyens de paiement sont disponibles ?",
     a: "La phase 1 utilise un paiement test. Le virement bancaire, la crypto et PayPal sont affichés comme options prévues, mais ne sont pas encore actifs.",
   },
   {
-    q: "Que faire si mon code ne fonctionne pas?",
+    q: "Que faire si mon produit ne fonctionne pas ?",
     a: "Ce prototype utilise des codes test qui ne peuvent pas être activés sur de vraies boutiques. En production, notre support local remplacera tout code défectueux.",
   },
   {
@@ -29,14 +29,14 @@ export default function SupportPage() {
           Support
         </h1>
         <p className="mt-2 text-muted">
-          Besoin d'aide? Retrouvez les réponses rapides ci-dessous ou contactez
+          Besoin d?aide ? Retrouvez les réponses rapides ci-dessous ou contactez
           notre équipe.
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           {[
             ["Chat en direct", "Bientôt"],
-            ["Email", "support@ghost.ma"],
+            ["E-mail", "support@ghost.ma"],
             ["Horaires", "9:00 - 22:00 (GMT+1)"],
           ].map(([title, text]) => (
             <div key={title} className="card p-5 text-center">

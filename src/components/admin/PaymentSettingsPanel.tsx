@@ -276,7 +276,7 @@ function PaymentDisplaySection({
   return (
     <SectionCard title="Logos et cartes de paiement" icon="◇">
       <p className="text-sm text-muted">
-        Ces options changent uniquement l'apparence des cartes de paiement au checkout et sur la page de paiement.
+        Ces options changent uniquement l’apparence des cartes de paiement au moment du paiement et sur la page de paiement.
       </p>
       <div className="grid gap-4 lg:grid-cols-2">
         {banks.map((bank) => (
@@ -394,7 +394,7 @@ function PaymentDisplayEditor({
       setLogoType("image");
     } catch (error) {
       console.error("Payment logo upload failed", error);
-      setUploadError("Upload impossible.");
+      setUploadError("Import impossible.");
     } finally {
       setUploading(false);
     }
@@ -406,16 +406,16 @@ function PaymentDisplayEditor({
         <PaymentBrandMark display={preview} active className="h-12 w-12 shrink-0" />
         <div className="min-w-0">
           <p className="font-medium text-white">{title}</p>
-          <p className="text-xs text-muted">Apercu: {preview.displayName}</p>
+          <p className="text-xs text-muted">Aperçu : {preview.displayName}</p>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <FormField label="Nom affiche" value={displayName} onChange={setDisplayName} />
+        <FormField label="Nom affiché" value={displayName} onChange={setDisplayName} />
         <FormField label="Sous-titre" value={subtitle} onChange={setSubtitle} />
-        <FormField label="Logo image URL" value={logoUrl} onChange={setLogoUrl} placeholder="/uploads/logo.png" />
-        <FormField label="Icon URL" value={iconUrl} onChange={setIconUrl} placeholder="https://..." />
-        <FormField label="Initiales fallback" value={initials} onChange={setInitials} />
+        <FormField label="URL du logo" value={logoUrl} onChange={setLogoUrl} placeholder="/uploads/logo.png" />
+        <FormField label="URL de l’icône" value={iconUrl} onChange={setIconUrl} placeholder="https://..." />
+        <FormField label="Initiales de secours" value={initials} onChange={setInitials} />
         <FormField label="Couleur accent" value={accentColor} onChange={setAccentColor} type="color" />
       </div>
 
@@ -433,7 +433,7 @@ function PaymentDisplayEditor({
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted">Upload</label>
+          <label className="mb-1.5 block text-xs font-medium text-muted">Import</label>
           <label className="btn-ghost flex h-10 cursor-pointer items-center px-3 text-xs">
             {uploading ? "Envoi..." : "Choisir"}
             <input
@@ -492,7 +492,7 @@ function SupportSection({
     <SectionCard title="Support client" icon="💬">
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Numéro WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="+212 6 00 00 00 00" />
-        <FormField label="Email de support" value={email} onChange={setEmail} placeholder="support@ghost.ma" type="email" />
+        <FormField label="E-mail de support" value={email} onChange={setEmail} placeholder="support@ghost.ma" type="email" />
       </div>
       <div className="mt-4">
         <FormField label="Instructions" value={instructions} onChange={setInstructions} placeholder="Instructions pour le support..." textarea />
@@ -542,7 +542,7 @@ function BankSection({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white">Activé</p>
-          <p className="text-xs text-muted">Afficher le virement bancaire au checkout</p>
+          <p className="text-xs text-muted">Afficher le virement bancaire au paiement</p>
         </div>
         <ToggleSwitch
           checked={method?.enabled ?? false}
@@ -557,7 +557,7 @@ function BankSection({
       <div className="flex items-center justify-between border-t border-border pt-4">
         <div>
           <p className="text-sm font-medium text-white">Preuve requise</p>
-          <p className="text-xs text-muted">Le client doit uploader une preuve</p>
+          <p className="text-xs text-muted">Le client doit importer un justificatif</p>
         </div>
         <ToggleSwitch
           checked={method?.proofRequired ?? true}
@@ -734,7 +734,7 @@ function AddBankForm({
           onClick={() => onSave(form)}
           className="btn-primary h-8 px-4 text-xs disabled:opacity-50"
         >
-          {saving ? "Sauvegarde..." : "Ajouter"}
+          {saving ? "Enregistrement..." : "Ajouter"}
         </button>
         <button type="button" onClick={onCancel} className="btn-ghost h-8 px-3 text-xs">
           Annuler
@@ -788,7 +788,7 @@ function EditBankForm({
           onClick={() => onSave(form)}
           className="btn-primary h-8 px-4 text-xs disabled:opacity-50"
         >
-          {saving ? "Sauvegarde..." : "Sauvegarder"}
+          {saving ? "Enregistrement..." : "Enregistrer"}
         </button>
         <button type="button" onClick={onCancel} className="btn-ghost h-8 px-3 text-xs">
           Annuler
@@ -844,7 +844,7 @@ function WalletSection({
       <div className="flex items-center justify-between border-t border-border pt-4">
         <div>
           <p className="text-sm font-medium text-white">Preuve requise</p>
-          <p className="text-xs text-muted">Le client doit uploader un screenshot de transaction</p>
+          <p className="text-xs text-muted">Le client doit importer une capture de la transaction</p>
         </div>
         <ToggleSwitch
           checked={method?.proofRequired ?? true}
@@ -990,7 +990,7 @@ function AddWalletForm({
           onClick={() => onSave({ network, address, label, instructions })}
           className="btn-primary h-8 px-4 text-xs disabled:opacity-50"
         >
-          {saving ? "Sauvegarde..." : "Ajouter"}
+          {saving ? "Enregistrement..." : "Ajouter"}
         </button>
         <button type="button" onClick={onCancel} className="btn-ghost h-8 px-3 text-xs">
           Annuler
@@ -1041,7 +1041,7 @@ function EditWalletForm({
           onClick={() => onSave({ network, address, label, instructions })}
           className="btn-primary h-8 px-4 text-xs disabled:opacity-50"
         >
-          {saving ? "Sauvegarde..." : "Sauvegarder"}
+          {saving ? "Enregistrement..." : "Enregistrer"}
         </button>
         <button type="button" onClick={onCancel} className="btn-ghost h-8 px-3 text-xs">
           Annuler
@@ -1106,7 +1106,7 @@ function PaypalSection({
       </div>
 
       <div className="grid gap-4 border-t border-border pt-4">
-        <FormField label="Email PayPal" value={paypalEmail} onChange={setPaypalEmail} placeholder="paypal@ghost.ma" type="email" />
+        <FormField label="E-mail PayPal" value={paypalEmail} onChange={setPaypalEmail} placeholder="paypal@ghost.ma" type="email" />
         <FormField label="Instructions" value={instructions} onChange={setInstructions} placeholder="Instructions PayPal..." textarea />
       </div>
       <SaveRow
@@ -1144,7 +1144,7 @@ function CardSection({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white">Activé</p>
-          <p className="text-xs text-muted">Affiche la carte comme option au checkout</p>
+          <p className="text-xs text-muted">Affiche la carte comme option au paiement</p>
         </div>
         <ToggleSwitch
           checked={method?.enabled ?? false}
@@ -1252,7 +1252,7 @@ function SaveRow({
         onClick={onSave}
         className="btn-primary h-8 px-4 text-xs disabled:opacity-50"
       >
-        {saving ? "Sauvegarde..." : "Sauvegarder"}
+        {saving ? "Enregistrement..." : "Enregistrer"}
       </button>
       {feedback && (
         <span className={`text-xs ${feedback === "Sauvegardé" ? "text-green-400" : "text-red-400"}`}>

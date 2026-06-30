@@ -27,7 +27,7 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-2xl font-bold text-white">
-            {mode === "login" ? "Bon retour" : "Créer un compte"}
+            {mode === "login" ? "Bon retour parmi nous" : "Créer un compte"}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {mode === "login"
@@ -49,7 +49,7 @@ export default function LoginPage() {
             )}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-white">
-                Email
+                E-mail
               </label>
               <input
                 className="input"
@@ -76,7 +76,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-4 text-center text-sm text-muted">
-          Vous voulez juste acheter une carte?{" "}
+          Vous voulez simplement acheter un produit ?{" "}
           <Link href="/products" className="text-accent hover:text-accent-hover">
             Parcourir le catalogue
           </Link>

@@ -14,12 +14,12 @@ import type { AdminOrderSummaryDTO } from "@/lib/dto";
 type Filter = "all" | "pending" | "awaiting" | "ready" | "delivered" | "refunded";
 
 const FILTERS: { id: Filter; label: string }[] = [
-  { id: "all", label: "All Orders" },
-  { id: "pending", label: "Pending Payment" },
-  { id: "awaiting", label: "Awaiting Confirmation" },
-  { id: "ready", label: "Ready to Deliver" },
-  { id: "delivered", label: "Delivered" },
-  { id: "refunded", label: "Refunded" },
+  { id: "all", label: "Toutes les commandes" },
+  { id: "pending", label: "En attente de paiement" },
+  { id: "awaiting", label: "En attente de confirmation" },
+  { id: "ready", label: "Prêtes à livrer" },
+  { id: "delivered", label: "Livrées" },
+  { id: "refunded", label: "Remboursées" },
 ];
 
 const LOAD_TIMEOUT_MS = 8000;
@@ -50,7 +50,7 @@ export default function FulfillmentPanel() {
       setOrders(data);
     } catch (error) {
       console.error("Failed to load fulfillment orders", error);
-      setLoadError("Orders could not be refreshed. Showing the latest loaded data.");
+      setLoadError("Impossible d'actualiser les commandes. Les dernières données chargées restent affichées.");
     } finally {
       setLoaded(true);
     }
@@ -82,9 +82,9 @@ export default function FulfillmentPanel() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-white">Orders</h2>
+          <h2 className="text-xl font-bold text-white">Commandes</h2>
           <p className="mt-1 text-sm text-muted">
-            Review every order, open details, assign codes, and deliver orders.
+            Vérifiez chaque commande, ouvrez le détail, attribuez les codes et livrez les produits.
           </p>
         </div>
         <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
@@ -111,21 +111,21 @@ export default function FulfillmentPanel() {
 
       <section className="card overflow-hidden">
         {!loaded ? (
-          <p className="px-5 py-8 text-sm text-muted">Loading...</p>
+          <p className="px-5 py-8 text-sm text-muted">Chargement...</p>
         ) : visibleOrders.length === 0 ? (
           <p className="px-5 py-8 text-sm text-muted">
-            No orders match this filter.
+            Aucune commande ne correspond à ce filtre.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase text-muted">
                 <tr className="border-b border-border">
-                  <th className="px-5 py-3 font-medium">Order</th>
-                  <th className="px-5 py-3 font-medium">Customer</th>
+                  <th className="px-5 py-3 font-medium">Commande</th>
+                  <th className="px-5 py-3 font-medium">Client</th>
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Total</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium">Statut</th>
                   <th className="px-5 py-3 font-medium">Action</th>
                 </tr>
               </thead>
@@ -157,7 +157,7 @@ export default function FulfillmentPanel() {
                         href={`/admin/orders/${order.id}`}
                         className="text-xs font-medium text-accent hover:text-accent-hover"
                       >
-                        {isDelivered(order.status) ? "View" : "Fulfill"}
+                        {isDelivered(order.status) ? "Voir" : "Traiter"}
                       </Link>
                     </td>
                   </tr>

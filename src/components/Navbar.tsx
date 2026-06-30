@@ -7,7 +7,7 @@ import { useStoreSettings } from "@/context/StoreSettingsContext";
 
 const links = [
   { href: "/products", label: "Catégories" },
-  { href: "/find-order", label: "Ma commande" },
+  { href: "/find-order", label: "Retrouver ma commande" },
   { href: "/support", label: "Aide" },
 ];
 
@@ -37,7 +37,7 @@ export default function Navbar() {
         >
           <input
             name="q"
-            placeholder="Rechercher une carte, un jeu..."
+            placeholder="Rechercher un produit num?rique..."
             className="h-full w-full rounded-[10px] border border-border bg-surface px-10 pr-14 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
             aria-label="Rechercher des produits"
           />

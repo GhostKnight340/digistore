@@ -20,7 +20,7 @@ import type { PaymentMethod } from "@/lib/types";
 import type { BankDTO, PaymentConfigDTO } from "@/lib/dto";
 
 const METHOD_META: Record<string, { label: string; hint: string; icon: string }> = {
-  bank: { label: "Virement bancaire", hint: "RIB / IBAN disponible", icon: "BK" },
+  bank: { label: "Virement bancaire", hint: "RIB / IBAN disponibles", icon: "BK" },
   usdt: { label: "Crypto", hint: "Paiement crypto rapide", icon: "US" },
   paypal: { label: "PayPal", hint: "PayPal ou envoi manuel", icon: "PP" },
   card: { label: "Carte bancaire", hint: "Disponible prochainement", icon: "CB" },
@@ -137,7 +137,7 @@ export default function CheckoutClient({
       <div className="container-page py-10">
         <div className="card grid place-items-center px-6 py-20 text-center">
           <p className="text-lg font-semibold text-white">
-            Il n&apos;y a rien a payer pour le moment
+            Il n&apos;y a rien ? payer pour le moment
           </p>
           <Link href="/products" className="btn-primary mt-6">
             Parcourir le catalogue
@@ -152,15 +152,15 @@ export default function CheckoutClient({
     setError("");
 
     if (!email.trim() || !fullName.trim()) {
-      setError("Veuillez entrer votre nom et votre email.");
+      setError("Veuillez saisir votre nom et votre e-mail.");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Veuillez entrer une adresse email valide.");
+      setError("Veuillez saisir une adresse e-mail valide.");
       return;
     }
     if (!method) {
-      setError("Veuillez choisir une methode de paiement.");
+      setError("Veuillez choisir un mode de paiement.");
       return;
     }
 
@@ -178,7 +178,7 @@ export default function CheckoutClient({
 
       if (!order) {
         setSubmitting(false);
-        setError("Une erreur est survenue. Veuillez reessayer.");
+        setError("Une erreur est survenue. Veuillez r?essayer.");
         return;
       }
 
@@ -186,7 +186,7 @@ export default function CheckoutClient({
       router.push(`/payment/${order.id}`);
     } catch {
       setSubmitting(false);
-      setError("Une erreur est survenue. Veuillez reessayer.");
+      setError("Une erreur est survenue. Veuillez r?essayer.");
     }
   }
 
@@ -194,7 +194,7 @@ export default function CheckoutClient({
     <div className="container-page py-10">
       <h1 className="text-3xl font-bold text-white">Paiement</h1>
       <p className="mt-1 text-sm text-muted">
-        Choisissez votre methode de paiement et completez votre commande.
+        Choisissez votre mode de paiement et finalisez votre commande.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -213,7 +213,7 @@ export default function CheckoutClient({
           <section className="card p-6">
             <h2 className="text-lg font-bold text-white">Vos informations</h2>
             <p className="mt-1 text-sm text-muted">
-              Nous vous tiendrons informe du statut de votre commande a cette adresse email.
+              Nous vous tiendrons inform? du suivi de votre commande ? cette adresse e-mail.
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field label="Nom complet">
@@ -225,7 +225,7 @@ export default function CheckoutClient({
                   autoComplete="name"
                 />
               </Field>
-              <Field label="Email">
+              <Field label="E-mail">
                 <input
                   className="input"
                   type="email"
@@ -240,21 +240,21 @@ export default function CheckoutClient({
 
           <section className="space-y-4">
             <div>
-              <h2 className="text-lg font-bold text-white">Methode de paiement</h2>
+              <h2 className="text-lg font-bold text-white">Mode de paiement</h2>
               <p className="mt-1 text-sm text-muted">
-                Selectionnez une option. Les instructions completes seront affichees apres creation.
+                S?lectionnez une option. Les instructions s?afficheront apr?s la cr?ation de la commande.
               </p>
             </div>
 
             {configError ? (
               <p className="card p-5 text-sm text-red-400">
-                Impossible de charger les methodes de paiement.
+                Impossible de charger les modes de paiement.
               </p>
             ) : !config ? (
               <p className="card p-5 text-sm text-muted">Chargement...</p>
             ) : enabledMethods.length === 0 ? (
               <p className="card p-5 text-sm text-muted">
-                Aucune methode de paiement disponible pour le moment.
+                Aucun mode de paiement disponible pour le moment.
               </p>
             ) : (
               <>
@@ -313,7 +313,7 @@ export default function CheckoutClient({
 
         <aside className="h-fit lg:sticky lg:top-24">
           <div className="card p-6">
-            <h2 className="text-lg font-bold text-white">Recapitulatif</h2>
+            <h2 className="text-lg font-bold text-white">R?capitulatif</h2>
             <ul className="mt-4 space-y-3">
               {cart.map((item) => {
                 const product = getProduct(item.productId);
@@ -321,7 +321,7 @@ export default function CheckoutClient({
                 return (
                   <li key={item.productId} className="flex justify-between gap-4 text-sm">
                     <span className="text-muted">
-                      {product.name} <span className="text-muted/70">x{item.quantity}</span>
+                      {product.name} <span className="text-muted/70">?{item.quantity}</span>
                     </span>
                     <span className="shrink-0 text-white">
                       {formatMAD(product.price * item.quantity)}
@@ -358,7 +358,7 @@ export default function CheckoutClient({
               disabled={submitting || configError || !config || enabledMethods.length === 0}
               className="btn-primary mt-6 w-full disabled:opacity-50"
             >
-              {submitting ? "Commande en cours..." : "Passer la commande"}
+              {submitting ? "Commande en cours?" : "Passer la commande"}
             </button>
             <p className="mt-3 text-center text-xs text-muted">
               Les instructions complètes de paiement seront affichées après la création de la commande.

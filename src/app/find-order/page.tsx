@@ -15,7 +15,7 @@ export default function FindOrderPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!orderNumber.trim() || !email.trim()) {
-      setError("Veuillez renseigner le numéro de commande et votre email.");
+      setError("Veuillez renseigner le numéro de commande et votre e-mail.");
       return;
     }
 
@@ -26,7 +26,7 @@ export default function FindOrderPage() {
       if (result.found && result.redirectTo) {
         router.push(result.redirectTo);
       } else {
-        setError("Aucune commande trouvée avec ce numéro et cette adresse email.");
+        setError("Aucune commande trouvée avec ce numéro et cette adresse e-mail.");
       }
     } catch {
       setError("Une erreur est survenue. Veuillez réessayer.");
@@ -48,7 +48,7 @@ export default function FindOrderPage() {
 
         <h1 className="text-3xl font-bold text-white">Retrouver ma commande</h1>
         <p className="mt-2 text-sm text-muted">
-          Entrez votre numéro de commande et l&apos;adresse email utilisée lors de votre achat.
+          Entrez votre numéro de commande et l&apos;adresse e-mail utilisée lors de votre achat.
         </p>
 
         <form onSubmit={handleSubmit} className="card mt-8 space-y-5 p-6">
@@ -65,13 +65,13 @@ export default function FindOrderPage() {
               spellCheck={false}
             />
             <p className="mt-1 text-xs text-faint">
-              Votre numéro de commande est présent dans les emails envoyés par ghost.ma.
+              Votre numéro de commande est présent dans les e-mails envoyés par ghost.ma.
             </p>
           </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-white">
-              Adresse email
+              Adresse e-mail
             </label>
             <input
               className="input w-full"
@@ -95,7 +95,7 @@ export default function FindOrderPage() {
             disabled={loading}
             className="btn-primary w-full disabled:opacity-60"
           >
-            {loading ? "Recherche en cours..." : "Retrouver ma commande"}
+            {loading ? "Recherche en cours?" : "Retrouver ma commande"}
           </button>
         </form>
 

@@ -17,7 +17,7 @@ export default function CustomersPanel() {
       setCustomers(await getAdminCustomersAction());
     } catch (err) {
       console.error("Failed to load customers", err);
-      setError("Customers could not be loaded.");
+      setError("Impossible de charger les clients.");
     } finally {
       setLoading(false);
     }
@@ -31,33 +31,33 @@ export default function CustomersPanel() {
     <section className="card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
-          <h2 className="font-bold text-white">Customers</h2>
+          <h2 className="font-bold text-white">Clients</h2>
           <p className="mt-0.5 text-xs text-muted">
-            Latest 100 buyers from customer records.
+            Les 100 derniers acheteurs enregistrés.
           </p>
         </div>
         <button type="button" onClick={load} className="btn-ghost py-1 text-xs">
-          Refresh
+          Actualiser
         </button>
       </div>
 
       {loading ? (
-        <p className="px-5 py-8 text-sm text-muted">Loading...</p>
+        <p className="px-5 py-8 text-sm text-muted">Chargement...</p>
       ) : error ? (
         <p className="px-5 py-8 text-sm text-red-400">{error}</p>
       ) : customers.length === 0 ? (
         <p className="px-5 py-8 text-sm text-muted">
-          No customers yet. Orders will appear here once placed.
+          Aucun client pour le moment. Les commandes apparaîtront ici une fois passées.
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase text-muted">
               <tr className="border-b border-border">
-                <th className="px-5 py-3 font-medium">Customer</th>
-                <th className="px-5 py-3 font-medium">Orders</th>
-                <th className="px-5 py-3 font-medium">Total spent</th>
-                <th className="px-5 py-3 font-medium">Last order</th>
+                <th className="px-5 py-3 font-medium">Client</th>
+                <th className="px-5 py-3 font-medium">Commandes</th>
+                <th className="px-5 py-3 font-medium">Total dépensé</th>
+                <th className="px-5 py-3 font-medium">Dernière commande</th>
               </tr>
             </thead>
             <tbody>

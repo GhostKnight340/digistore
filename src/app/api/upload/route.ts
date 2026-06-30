@@ -12,12 +12,12 @@ export async function POST(req: NextRequest) {
     const file = form.get("file");
 
     if (!file || typeof file === "string") {
-      return NextResponse.json({ error: "No file provided." }, { status: 400 });
+      return NextResponse.json({ error: "Aucun fichier fourni." }, { status: 400 });
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { error: "Only PNG, JPG, and WebP images are allowed." },
+        { error: "Seules les images PNG, JPG et WebP sont autorisées." },
         { status: 400 },
       );
     }
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     if (bytes.byteLength > MAX_BYTES) {
       return NextResponse.json(
-        { error: "File exceeds 5 MB limit." },
+        { error: "Le fichier dépasse la limite de 5 Mo." },
         { status: 400 },
       );
     }
@@ -48,6 +48,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url: `/uploads/${name}` });
   } catch (err) {
     console.error("[upload]", err);
-    return NextResponse.json({ error: "Upload failed." }, { status: 500 });
+    return NextResponse.json({ error: "Import impossible." }, { status: 500 });
   }
 }

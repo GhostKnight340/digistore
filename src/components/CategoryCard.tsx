@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import type { Category, StockStatus } from "@/lib/types";
 import ProductArt from "./ProductArt";
 
@@ -20,17 +19,12 @@ export default function CategoryCard({
       href={`/products?category=${category.id}`}
       className="group overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-border-strong hover:shadow-soft"
     >
-      {thumbnail ? (
-        <Image
-          src={thumbnail}
-          alt={category.name}
-          width={400}
-          height={250}
-          className="aspect-[16/10] w-full object-cover"
-        />
-      ) : (
-        <ProductArt category={category.id} className="aspect-[16/10] w-full" />
-      )}
+      <ProductArt
+        category={category.id}
+        imageUrl={thumbnail}
+        label={category.name}
+        className="aspect-[16/10] w-full rounded-t-[14px]"
+      />
       <div className="flex items-center justify-between px-[18px] py-4">
         <span className="text-[15px] font-medium text-text">{category.name}</span>
         <span className="font-mono text-xs text-faint">{productCount} cartes</span>

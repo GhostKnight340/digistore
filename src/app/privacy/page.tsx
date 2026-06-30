@@ -16,9 +16,9 @@ export default function PrivacyPage() {
             Données stockées
           </h2>
           <p>
-            Votre panier avant checkout peut etre stocke dans votre navigateur.
-            Les commandes et paiements sont conserves dans notre base Supabase.
-            Rien n'est envoyé à un serveur, et le nom ou l'email saisi au
+            Votre panier avant paiement peut être stocké dans votre navigateur.
+            Les commandes et paiements sont conservés dans notre base Supabase.
+            Rien n’est envoyé à un serveur, et le nom ou l’e-mail saisi au
             paiement ne quitte pas votre appareil.
           </p>
           <h2 className="pt-2 text-base font-semibold text-white">

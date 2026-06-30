@@ -17,9 +17,9 @@ export async function submitPayment(
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) return { ok: false, error: "Order not found." };
+  if (!order) return { ok: false, error: "Commande introuvable." };
   if (order.status !== "pending_payment") {
-    return { ok: false, error: "Order is not in pending_payment state." };
+    return { ok: false, error: "La commande n’est pas en attente de paiement." };
   }
 
   const methodConfig = await prisma.paymentMethodConfig.findUnique({
@@ -29,18 +29,18 @@ export async function submitPayment(
   const proofRequired =
     methodConfig?.proofRequired ?? !["paypal", "card", "test"].includes(order.paymentMethod);
   if (proofRequired && !proof) {
-    return { ok: false, error: "Payment proof is required for this method." };
+    return { ok: false, error: "Un justificatif de paiement est requis pour ce mode de paiement." };
   }
 
   if (proof) {
     if (!ALLOWED_PROOF_TYPES.includes(proof.mimeType)) {
       return {
         ok: false,
-        error: "File type not allowed. Use PNG, JPG, JPEG or PDF.",
+        error: "Type de fichier non autorisé. Utilisez PNG, JPG, JPEG ou PDF.",
       };
     }
     if (proof.dataBase64.length > 7 * 1024 * 1024) {
-      return { ok: false, error: "File too large. Maximum 5 MB." };
+      return { ok: false, error: "Fichier trop volumineux. Maximum 5 Mo." };
     }
   }
 
@@ -51,7 +51,7 @@ export async function submitPayment(
         data: { status: "payment_submitted" },
       });
       if (updated.count !== 1) {
-        throw new Error("Payment was already submitted or the order status changed.");
+        throw new Error("Le paiement a déjà été soumis ou le statut de la commande a changé.");
       }
 
       if (proof) {
@@ -78,7 +78,7 @@ export async function submitPayment(
           type: "status_change",
           fromStatus: "pending_payment",
           toStatus: "payment_submitted",
-          note: proof ? `Proof uploaded: ${proof.fileName}` : "No proof uploaded.",
+          note: proof ? `Justificatif importé : ${proof.fileName}` : "Aucun justificatif importé.",
         },
       });
 
@@ -87,8 +87,8 @@ export async function submitPayment(
           orderId,
           type: "payment_submitted",
           recipient: order.customerEmail,
-          subject: "Paiement soumis - verification en cours",
-          body: "We received your payment submission and are verifying it. We will notify you shortly.",
+          subject: "Paiement soumis - vérification en cours",
+          body: "Nous avons bien reçu votre paiement et le vérifions. Vous serez informé sous peu.",
         },
       });
     });
@@ -98,7 +98,7 @@ export async function submitPayment(
     console.error("[submitPayment]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Submit failed.",
+      error: error instanceof Error ? error.message : "Soumission impossible.",
     };
   }
 }
@@ -107,10 +107,10 @@ export async function approvePayment(orderId: string): Promise<ActionResult> {
   return setPaymentStatus(
     orderId,
     "payment_confirmed",
-    "Admin approved payment.",
+    "Paiement approuvé par l’admin.",
     "payment_confirmed",
-    "Paiement confirme",
-    "Your payment has been confirmed. Your code will be delivered shortly.",
+    "Paiement confirmé",
+    "Votre paiement a été confirmé. Votre produit numérique sera disponible sous peu.",
   );
 }
 
@@ -118,10 +118,10 @@ export async function rejectPayment(orderId: string): Promise<ActionResult> {
   return setPaymentStatus(
     orderId,
     "rejected",
-    "Admin rejected payment.",
+    "Paiement refusé par l’admin.",
     "payment_rejected",
-    "Paiement refuse",
-    "We could not confirm your payment. Please contact us on WhatsApp with your order number.",
+    "Paiement refusé",
+    "Nous n’avons pas pu confirmer votre paiement. Contactez-nous sur WhatsApp avec votre numéro de commande.",
   );
 }
 
@@ -129,10 +129,10 @@ export async function markPaymentIssue(orderId: string): Promise<ActionResult> {
   return setPaymentStatus(
     orderId,
     "payment_issue",
-    "Admin flagged a payment issue.",
+    "Problème de paiement signalé par l’admin.",
     "payment_issue",
-    "Probleme avec votre paiement",
-    "An issue was detected with your payment. Please contact our WhatsApp support.",
+    "Problème avec votre paiement",
+    "Un problème a été détecté avec votre paiement. Contactez notre support WhatsApp.",
   );
 }
 
@@ -146,7 +146,7 @@ async function setPaymentStatus(
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) return { ok: false, error: "Order not found." };
+  if (!order) return { ok: false, error: "Commande introuvable." };
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -175,7 +175,7 @@ async function setPaymentStatus(
     console.error("[setPaymentStatus]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Update failed.",
+      error: error instanceof Error ? error.message : "Mise à jour impossible.",
     };
   }
 }

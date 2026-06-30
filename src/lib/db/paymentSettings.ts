@@ -18,7 +18,7 @@ const DEFAULT_METHODS: PaymentMethodConfigDTO[] = [
     proofRequired: true,
     paypalEmail: "",
     cardMessage: "",
-    instructions: "Veuillez effectuer le virement et telecharger le justificatif.",
+    instructions: "Veuillez effectuer le virement et importer le justificatif.",
   },
   {
     method: "usdt",
@@ -26,7 +26,7 @@ const DEFAULT_METHODS: PaymentMethodConfigDTO[] = [
     proofRequired: true,
     paypalEmail: "",
     cardMessage: "",
-    instructions: "Envoyez exactement le montant indique et telechargez la capture d'ecran.",
+    instructions: "Envoyez exactement le montant indiqué et importez la capture d’écran.",
   },
   {
     method: "paypal",
@@ -41,7 +41,7 @@ const DEFAULT_METHODS: PaymentMethodConfigDTO[] = [
     enabled: false,
     proofRequired: false,
     paypalEmail: "",
-    cardMessage: "Paiement par carte bientot disponible.",
+    cardMessage: "Paiement par carte bientôt disponible.",
     instructions: "",
   },
 ];
@@ -252,7 +252,7 @@ export async function updateMethodConfig(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Update failed.",
+      error: error instanceof Error ? error.message : "Mise à jour impossible.",
     };
   }
 }
@@ -273,7 +273,7 @@ export async function updateSupportConfig(data: {
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Update failed.",
+      error: error instanceof Error ? error.message : "Mise à jour impossible.",
     };
   }
 }
@@ -296,7 +296,7 @@ export async function addBank(data: {
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Add failed.",
+      error: error instanceof Error ? error.message : "Ajout impossible.",
     };
   }
 }
@@ -321,7 +321,7 @@ export async function updateBank(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Update failed.",
+      error: error instanceof Error ? error.message : "Mise à jour impossible.",
     };
   }
 }
@@ -333,7 +333,7 @@ export async function deleteBank(id: string): Promise<ActionResult> {
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Delete failed.",
+      error: error instanceof Error ? error.message : "Suppression impossible.",
     };
   }
 }
@@ -352,7 +352,7 @@ export async function addWallet(data: {
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Add failed.",
+      error: error instanceof Error ? error.message : "Ajout impossible.",
     };
   }
 }
@@ -373,7 +373,7 @@ export async function updateWallet(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Update failed.",
+      error: error instanceof Error ? error.message : "Mise à jour impossible.",
     };
   }
 }
@@ -385,7 +385,7 @@ export async function deleteWallet(id: string): Promise<ActionResult> {
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Delete failed.",
+      error: error instanceof Error ? error.message : "Suppression impossible.",
     };
   }
 }

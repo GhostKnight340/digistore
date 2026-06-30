@@ -25,7 +25,7 @@ export const categories: Category[] = [
   {
     id: "nintendo",
     name: "Nintendo eShop",
-    tagline: "Jeux Switch et DLC",
+    tagline: "Jeux Switch et contenus additionnels",
     gradient: "from-[#b30000] to-[#ff4554]",
     icon: "🔴",
   },
@@ -39,7 +39,7 @@ export const categories: Category[] = [
   {
     id: "valorant",
     name: "Valorant Points",
-    tagline: "VP et points Riot",
+    tagline: "VP et points Riot Games",
     gradient: "from-[#7a1320] to-[#ff4655]",
     icon: "🎯",
   },

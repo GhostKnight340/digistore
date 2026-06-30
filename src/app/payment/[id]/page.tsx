@@ -53,7 +53,7 @@ export default function PaymentPage({
       setData(result);
     } catch (error) {
       console.error("[payment] Failed to load order", error);
-      setError("Impossible de charger la commande. Veuillez reessayer.");
+      setError("Impossible de charger la commande. Veuillez réessayer.");
     } finally {
       setReady(true);
     }
@@ -310,7 +310,7 @@ function PendingPaymentSection({
   const proofRequired = methodConfig?.proofRequired ?? true;
   const configurationError =
     !methodConfig?.enabled
-      ? "Cette methode de paiement n'est pas disponible pour le moment."
+      ? "Ce mode de paiement n'est pas disponible pour le moment."
       : paymentMethod === "bank" && banks.length === 0
         ? "Les coordonnees bancaires ne sont pas configurees. Contactez l'administrateur."
         : paymentMethod === "usdt" && wallets.length === 0
@@ -399,7 +399,7 @@ function PendingPaymentSection({
     } catch (error) {
       console.error("[payment] Copy failed", error);
       setCopied(false);
-      setError("Impossible de copier automatiquement. Selectionnez le texte manuellement.");
+      setError("Impossible de copier automatiquement. Sélectionnez le texte manuellement.");
     }
   }
 

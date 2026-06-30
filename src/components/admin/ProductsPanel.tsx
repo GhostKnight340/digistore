@@ -34,11 +34,17 @@ const BG_PRESETS: Record<string, { label: string; from: string; to: string }> = 
 const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
 const STOCK_CONTROLS = ["manual", "api"];
 const STOCK_MODE_OPTIONS = [
-  { value: "automatic", label: "Automatic" },
-  { value: "force_in_stock", label: "Force in stock" },
-  { value: "force_out_of_stock", label: "Force out of stock" },
+  { value: "automatic", label: "Automatique" },
+  { value: "force_in_stock", label: "Forcer en stock" },
+  { value: "force_out_of_stock", label: "Forcer en rupture" },
 ] as const;
 type EditorTab = "details" | "content" | "variants" | "media";
+const TAB_LABELS: Record<EditorTab, string> = {
+  details: "Détails",
+  content: "Contenu",
+  variants: "Variantes",
+  media: "Média",
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,7 +62,7 @@ function emptyParent(): ParentProductDTO {
     category: "steam",
     brand: null,
     region: "",
-    deliveryType: "Code numérique - livraison rapide",
+    deliveryType: "Produit numérique - livraison rapide",
     description: "",
     shortDescription: null,
     longDescription: null,
@@ -177,7 +183,7 @@ export default function ProductsPanel() {
   async function save() {
     if (!draft) return;
     if (!draft.slug.trim() || !draft.name.trim()) {
-      setMsg({ text: "Slug and name are required.", ok: false });
+      setMsg({ text: "Le slug et le nom sont obligatoires.", ok: false });
       return;
     }
     setSaving(true);
@@ -200,7 +206,7 @@ export default function ProductsPanel() {
       featured: draft.featured,
     });
     if (result.ok) {
-      setMsg({ text: "Saved.", ok: true });
+      setMsg({ text: "Enregistré.", ok: true });
       setIsNew(false);
       if (selectedSlug && selectedSlug !== newSlug) invalidateCache(selectedSlug);
       invalidateCache(newSlug);
@@ -212,7 +218,7 @@ export default function ProductsPanel() {
         setVariantDrafts(Object.fromEntries(detail.variants.map((v) => [v.slug, { ...v }])));
       }
     } else {
-      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+      setMsg({ text: result.error ?? "Erreur inconnue.", ok: false });
     }
     setSaving(false);
   }
@@ -271,12 +277,12 @@ export default function ProductsPanel() {
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
-      setMsg({ text: "Variant added.", ok: true });
+      setMsg({ text: "Variante ajoutée.", ok: true });
       setIsAddingVariant(false);
       setNewVariantDraft(null);
       await refreshDetail();
     } else {
-      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+      setMsg({ text: result.error ?? "Erreur inconnue.", ok: false });
     }
     setSaving(false);
   }
@@ -286,10 +292,10 @@ export default function ProductsPanel() {
     setMsg(null);
     const result = await deleteVariantAction(slug);
     if (result.ok) {
-      setMsg({ text: "Variant deleted.", ok: true });
+      setMsg({ text: "Variante supprimée.", ok: true });
       await refreshDetail();
     } else {
-      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+      setMsg({ text: result.error ?? "Erreur inconnue.", ok: false });
     }
     setSaving(false);
   }
@@ -299,10 +305,10 @@ export default function ProductsPanel() {
     setMsg(null);
     const result = await duplicateVariantAction(slug);
     if (result.ok) {
-      setMsg({ text: "Variant duplicated.", ok: true });
+      setMsg({ text: "Variante dupliquée.", ok: true });
       await refreshDetail();
     } else {
-      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+      setMsg({ text: result.error ?? "Erreur inconnue.", ok: false });
     }
     setSaving(false);
   }
@@ -331,11 +337,11 @@ export default function ProductsPanel() {
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
-      setMsg({ text: `Variant "${v.name}" saved.`, ok: true });
+      setMsg({ text: `Variante « ${v.name} » enregistrée.`, ok: true });
       setEditingVariant(null);
       await refreshDetail();
     } else {
-      setMsg({ text: result.error ?? "Unknown error.", ok: false });
+      setMsg({ text: result.error ?? "Erreur inconnue.", ok: false });
     }
     setSaving(false);
   }
@@ -357,12 +363,12 @@ export default function ProductsPanel() {
     setMsg(null);
     const result = await duplicateParentProductAction(selectedSlug);
     if (result.ok && result.slug) {
-      setMsg({ text: "Parent product duplicated as an archived draft.", ok: true });
+      setMsg({ text: "Produit parent dupliqué comme brouillon archivé.", ok: true });
       await loadList();
       const item = { slug: result.slug } as ProductListItemDTO;
       await openParent(item);
     } else {
-      setMsg({ text: result.error ?? "Duplicate failed.", ok: false });
+      setMsg({ text: result.error ?? "Duplication impossible.", ok: false });
     }
     setSaving(false);
   }
@@ -373,12 +379,12 @@ export default function ProductsPanel() {
     setMsg(null);
     const result = await archiveParentProductAction(selectedSlug);
     if (result.ok) {
-      setMsg({ text: "Parent product archived.", ok: true });
+      setMsg({ text: "Produit parent archivé.", ok: true });
       invalidateCache(selectedSlug);
       await loadList();
       await refreshDetail();
     } else {
-      setMsg({ text: result.error ?? "Archive failed.", ok: false });
+      setMsg({ text: result.error ?? "Archivage impossible.", ok: false });
     }
     setSaving(false);
   }
@@ -398,8 +404,8 @@ export default function ProductsPanel() {
       setMsg({
         text:
           options.variantStrategy === "move"
-            ? "Duplicate parent merged and deleted."
-            : "Parent product deleted.",
+            ? "Produit parent fusionné puis supprimé."
+            : "Produit parent supprimé.",
         ok: true,
       });
       invalidateCache(selectedSlug);
@@ -409,7 +415,7 @@ export default function ProductsPanel() {
       setDeleteDialogOpen(false);
       await loadList();
     } else {
-      setMsg({ text: result.error ?? "Delete failed.", ok: false });
+      setMsg({ text: result.error ?? "Suppression impossible.", ok: false });
     }
     setSaving(false);
   }
@@ -424,13 +430,13 @@ export default function ProductsPanel() {
       removeSource,
     });
     if (result.ok) {
-      setMsg({ text: "Standalone product converted into a variant.", ok: true });
+      setMsg({ text: "Produit autonome converti en variante.", ok: true });
       invalidateCache(selectedSlug);
       invalidateCache(sourceSlug);
       await loadList();
       await refreshDetail();
     } else {
-      setMsg({ text: result.error ?? "Conversion failed.", ok: false });
+      setMsg({ text: result.error ?? "Conversion impossible.", ok: false });
     }
     setSaving(false);
   }
@@ -442,22 +448,22 @@ export default function ProductsPanel() {
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
-              <h2 className="text-sm font-bold text-white">Products</h2>
-              <p className="text-xs text-muted">{items.length} parent product{items.length !== 1 ? "s" : ""}</p>
+              <h2 className="text-sm font-bold text-white">Produits</h2>
+              <p className="text-xs text-muted">{items.length} produit{items.length !== 1 ? "s" : ""} parent{items.length !== 1 ? "s" : ""}</p>
             </div>
             <button type="button" onClick={openNew} className="btn-primary py-1 text-xs">
-              + New
+              + Nouveau
             </button>
           </div>
 
           {listLoading ? (
-            <p className="px-4 py-6 text-sm text-muted">Loading…</p>
+            <p className="px-4 py-6 text-sm text-muted">Chargement…</p>
           ) : listError ? (
             <p className="px-4 py-6 text-sm text-red-400 break-all">{listError}</p>
           ) : items.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted">
-              <p className="font-medium text-white">No products yet.</p>
-              <p className="mt-1 text-xs">Run the Supabase setup SQL to seed parent products, or click + New.</p>
+              <p className="font-medium text-white">Aucun produit pour le moment.</p>
+              <p className="mt-1 text-xs">Lancez le SQL d’initialisation Supabase ou cliquez sur + Nouveau.</p>
             </div>
           ) : (
             <div className="divide-y divide-border">
@@ -489,9 +495,9 @@ export default function ProductsPanel() {
                             {p.name}
                           </p>
                           <p className="text-xs text-muted">
-                            {p.variantCount} variant{p.variantCount !== 1 ? "s" : ""}
+                            {p.variantCount} variante{p.variantCount !== 1 ? "s" : ""}
                             {" · "}
-                            {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
+                            {p.active ? "Actif" : <span className="text-yellow-500">Masqué</span>}
                           </p>
                         </div>
                       </button>
@@ -518,9 +524,9 @@ export default function ProductsPanel() {
                       {p.name}
                     </p>
                     <p className="text-xs text-muted">
-                      {p.variantCount} variant{p.variantCount !== 1 ? "s" : ""}
+                      {p.variantCount} variante{p.variantCount !== 1 ? "s" : ""}
                       {" · "}
-                      {p.active ? "Active" : <span className="text-yellow-500">Hidden</span>}
+                      {p.active ? "Actif" : <span className="text-yellow-500">Masqué</span>}
                     </p>
                   </div>
                 </button>
@@ -533,13 +539,13 @@ export default function ProductsPanel() {
       {/* ── Right: editor ── */}
       {detailLoading ? (
         <div className="card flex items-center justify-center p-16 text-center">
-          <p className="text-sm text-muted">Loading…</p>
+          <p className="text-sm text-muted">Chargement…</p>
         </div>
       ) : !draft ? (
         <div className="card flex items-center justify-center p-16 text-center">
           <div>
             <p className="text-3xl">🛍️</p>
-            <p className="mt-2 text-sm text-muted">Select a product to edit, or click + New</p>
+            <p className="mt-2 text-sm text-muted">Sélectionnez un produit à modifier ou cliquez sur + Nouveau.</p>
           </div>
         </div>
       ) : (
@@ -547,8 +553,8 @@ export default function ProductsPanel() {
           {/* Header */}
           <div className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
             <div>
-              <h2 className="font-bold text-white">{draft.name || "New product"}</h2>
-              <p className="text-xs text-muted">{isNew ? "Unsaved" : draft.slug}</p>
+              <h2 className="font-bold text-white">{draft.name || "Nouveau produit"}</h2>
+              <p className="text-xs text-muted">{isNew ? "Non enregistré" : draft.slug}</p>
             </div>
             <div className="flex items-center gap-2">
               {msg && (
@@ -559,10 +565,10 @@ export default function ProductsPanel() {
               {!isNew && selectedSlug && (
                 <>
                   <button type="button" onClick={duplicateParent} className="btn-ghost text-sm" disabled={saving}>
-                    Duplicate
+                    Dupliquer
                   </button>
                   <button type="button" onClick={archiveParent} className="btn-ghost text-sm" disabled={saving || !draft.active}>
-                    Archive
+                    Archiver
                   </button>
                   <button
                     type="button"
@@ -570,15 +576,15 @@ export default function ProductsPanel() {
                     className="rounded-xl border border-red-500/40 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
                     disabled={saving}
                   >
-                    Delete
+                    Supprimer
                   </button>
                 </>
               )}
               <button type="button" onClick={cancel} className="btn-ghost text-sm" disabled={saving}>
-                Cancel
+                Annuler
               </button>
               <button type="button" onClick={save} className="btn-primary text-sm" disabled={saving}>
-                {saving ? "Saving…" : "Save product"}
+                {saving ? "Enregistrement…" : "Enregistrer le produit"}
               </button>
             </div>
           </div>
@@ -597,7 +603,7 @@ export default function ProductsPanel() {
                       : "text-muted hover:text-white"
                   }`}
                 >
-                  {tab}
+                  {TAB_LABELS[tab]}
                   {tab === "variants" && draft.variants.length > 0 && (
                     <span className="ml-1.5 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-bold text-muted">
                       {draft.variants.length}
@@ -672,11 +678,11 @@ function DeleteParentDialog({
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
       <div className="w-full max-w-lg rounded-2xl border border-border-strong bg-base p-5 shadow-card">
         <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
-          Delete parent product
+          Supprimer le produit parent
         </p>
         <h3 className="mt-2 text-lg font-bold text-white">{product.name}</h3>
         <p className="mt-2 text-sm text-muted">
-          This removes the parent product from Admin and the storefront. Merge duplicates into the real parent when they have inventory or order history.
+          Cette action retire le produit parent de l’admin et de la boutique. Fusionnez les doublons avec le vrai produit parent lorsqu’ils ont du stock ou un historique de commandes.
         </p>
 
         <div className="mt-5 space-y-3 text-sm">
@@ -688,9 +694,9 @@ function DeleteParentDialog({
               className="mt-1 accent-[#3e7bfa]"
             />
             <span>
-              <span className="font-medium text-white">Delete all child variants</span>
+              <span className="font-medium text-white">Supprimer toutes les variantes enfants</span>
               <span className="block text-xs text-muted">
-                Only works when this parent has no inventory or order history.
+                Fonctionne uniquement si ce produit parent n’a ni stock ni historique de commandes.
               </span>
             </span>
           </label>
@@ -702,9 +708,9 @@ function DeleteParentDialog({
               className="mt-1 accent-[#3e7bfa]"
             />
             <span className="min-w-0 flex-1">
-              <span className="font-medium text-white">Merge into another parent, then delete</span>
+              <span className="font-medium text-white">Fusionner avec un autre parent, puis supprimer</span>
               <span className="block text-xs text-muted">
-                Converts this duplicate into a variant and moves inventory, order references, and child variants.
+                Convertit ce doublon en variante et déplace le stock, les références de commande et les variantes enfants.
               </span>
               {variantStrategy === "move" && (
                 <select
@@ -712,7 +718,7 @@ function DeleteParentDialog({
                   value={targetParentSlug}
                   onChange={(event) => setTargetParentSlug(event.target.value)}
                 >
-                  <option value="">Choose target parent...</option>
+                  <option value="">Choisir le produit parent cible...</option>
                   {parentOptions.map((item) => (
                     <option key={item.slug} value={item.slug}>
                       {item.name}
@@ -726,7 +732,7 @@ function DeleteParentDialog({
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onCancel} className="btn-ghost text-sm" disabled={saving}>
-            Cancel
+            Annuler
           </button>
           <button
             type="button"
@@ -739,7 +745,7 @@ function DeleteParentDialog({
             }
             className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-50"
           >
-            {saving ? "Deleting..." : "Confirm delete"}
+            {saving ? "Suppression..." : "Confirmer la suppression"}
           </button>
         </div>
       </div>
@@ -748,7 +754,7 @@ function DeleteParentDialog({
 }
 
 function stockModeLabel(mode: string) {
-  return STOCK_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "Automatic";
+  return STOCK_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "Automatique";
 }
 
 function stockBadge(v: VariantDTO) {
@@ -828,7 +834,7 @@ function DetailsTab({
             placeholder="Valve"
           />
         </Field>
-        <Field label="Region">
+        <Field label="Région">
           <input
             className="input"
             value={draft.region}
@@ -836,28 +842,28 @@ function DetailsTab({
             placeholder="Maroc / Global"
           />
         </Field>
-        <Field label="Delivery type">
+        <Field label="Type de livraison">
           <input
             className="input"
             value={draft.deliveryType}
             onChange={(e) => update("deliveryType", e.target.value)}
-            placeholder="Code numérique - livraison rapide"
+            placeholder="Produit numérique - livraison rapide"
           />
         </Field>
       </div>
 
       <div className="flex items-center gap-6">
         <ToggleSwitch
-          label="Store visibility"
+          label="Visibilité boutique"
           checkedLabel="Visible"
           uncheckedLabel="Masqué"
           checked={draft.active}
           onChange={(v) => update("active", v)}
         />
         <ToggleSwitch
-          label="Parent featured"
-          checkedLabel="Featured"
-          uncheckedLabel="Non featured"
+          label="Produit parent mis en avant"
+          checkedLabel="Mis en avant"
+          uncheckedLabel="Non mis en avant"
           checked={draft.featured}
           onChange={(v) => update("featured", v)}
         />
@@ -877,36 +883,36 @@ function ContentTab({
 }) {
   return (
     <div className="space-y-5">
-      <Field label="Short description">
+      <Field label="Description courte">
         <input
           className="input"
           value={draft.shortDescription ?? ""}
           onChange={(e) => update("shortDescription", e.target.value || null)}
-          placeholder="One-line tagline shown on category pages"
+          placeholder="Accroche affichée sur les pages catégorie"
         />
       </Field>
-      <Field label="Long description">
+      <Field label="Description longue">
         <textarea
           className="input min-h-[100px] resize-y"
           value={draft.longDescription ?? ""}
           onChange={(e) => update("longDescription", e.target.value || null)}
-          placeholder="Full product description shown on the product page"
+          placeholder="Description complète affichée sur la page produit"
         />
       </Field>
-      <Field label="Description (meta / fallback)">
+      <Field label="Description (méta / secours)">
         <textarea
           className="input min-h-[80px] resize-y"
           value={draft.description}
           onChange={(e) => update("description", e.target.value)}
-          placeholder="Short description used as meta description and fallback"
+          placeholder="Description courte utilisée comme méta-description et texte de secours"
         />
       </Field>
-      <Field label="Redemption instructions">
+      <Field label="Instructions d’utilisation">
         <textarea
           className="input min-h-[120px] resize-y font-mono text-xs"
           value={draft.instructions ?? ""}
           onChange={(e) => update("instructions", e.target.value || null)}
-          placeholder={"1. Open Steam…\n2. Click…"}
+          placeholder={"1. Ouvrez Steam…\n2. Cliquez…"}
         />
       </Field>
     </div>
@@ -937,7 +943,7 @@ function VariantForm({
             />
           </Field>
         )}
-        <Field label="Variant name *">
+        <Field label="Nom de la variante *">
           <input
             className="input"
             value={v.name}
@@ -945,7 +951,7 @@ function VariantForm({
             placeholder="Steam Wallet 50 EUR"
           />
         </Field>
-        <Field label="Face value">
+        <Field label="Valeur faciale">
           <input
             className="input"
             type="number"
@@ -957,7 +963,7 @@ function VariantForm({
             }
           />
         </Field>
-        <Field label="Face currency">
+        <Field label="Devise faciale">
           <select
             className="input"
             value={v.faceCurrency}
@@ -966,7 +972,7 @@ function VariantForm({
             {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
           </select>
         </Field>
-        <Field label="Price (MAD)">
+        <Field label="Prix (MAD)">
           <input
             className="input"
             type="number"
@@ -975,7 +981,7 @@ function VariantForm({
             onChange={(e) => onChange("priceMad", Number(e.target.value))}
           />
         </Field>
-        <Field label="Supplier cost">
+        <Field label="Coût fournisseur">
           <input
             className="input"
             type="number"
@@ -987,7 +993,7 @@ function VariantForm({
             }
           />
         </Field>
-        <Field label="Supplier currency">
+        <Field label="Devise fournisseur">
           <select
             className="input"
             value={v.supplierCurrency}
@@ -996,7 +1002,7 @@ function VariantForm({
             {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
           </select>
         </Field>
-        <Field label="Stock control">
+        <Field label="Gestion du stock">
           <select
             className="input"
             value={v.stockControl}
@@ -1005,7 +1011,7 @@ function VariantForm({
             {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
           </select>
         </Field>
-        <Field label={`Stock display${!slugEditable ? ` · ${v.inventoryUnused} code(s)` : ""}`}>
+        <Field label={`Affichage du stock${!slugEditable ? ` · ${v.inventoryUnused} code(s)` : ""}`}>
           <select
             className="input"
             value={v.stockMode}
@@ -1019,7 +1025,7 @@ function VariantForm({
           </select>
         </Field>
         {!slugEditable && (
-          <Field label="Inventory (unused codes)">
+          <Field label="Stock (codes non utilisés)">
             <input className="input" value={v.inventoryUnused} disabled readOnly />
           </Field>
         )}
@@ -1027,15 +1033,15 @@ function VariantForm({
       <div className="mt-4 flex gap-6">
         <ToggleSwitch
           label="Variant"
-          checkedLabel="Active"
-          uncheckedLabel="Hidden"
+          checkedLabel="Actif"
+          uncheckedLabel="Masqué"
           checked={v.active}
           onChange={(val) => onChange("active", val)}
         />
         <ToggleSwitch
           label="Homepage"
-          checkedLabel="Featured"
-          uncheckedLabel="Non featured"
+          checkedLabel="Mis en avant"
+          uncheckedLabel="Non mis en avant"
           checked={v.featured}
           onChange={(val) => onChange("featured", val)}
         />
@@ -1092,14 +1098,14 @@ function VariantsTab({
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[220px] flex-1">
               <label className="mb-1.5 block text-xs font-medium text-white">
-                Convert standalone product into this parent
+                Convertir un produit autonome en variante
               </label>
               <select
                 className="input h-10 py-0 text-sm"
                 value={sourceSlug}
                 onChange={(event) => setSourceSlug(event.target.value)}
               >
-                <option value="">Choose a product to convert...</option>
+                <option value="">Choisir un produit à convertir...</option>
                 {parentOptions.map((item) => (
                   <option key={item.slug} value={item.slug}>
                     {item.name}
@@ -1114,7 +1120,7 @@ function VariantsTab({
                 onChange={(event) => setRemoveSource(event.target.checked)}
                 className="h-4 w-4 accent-[#3e7bfa]"
               />
-              Delete source parent after conversion
+              Supprimer le produit parent source après conversion
             </label>
             <button
               type="button"
@@ -1125,11 +1131,11 @@ function VariantsTab({
               }}
               className="btn-primary h-10 px-4 text-xs disabled:opacity-50"
             >
-              Convert
+              Convertir
             </button>
           </div>
           <p className="mt-2 text-xs text-muted">
-            Use this to remove duplicate standalone products and manage them as variants under this parent.
+            Utilisez cette option pour regrouper des produits autonomes en variantes de ce produit parent.
           </p>
         </div>
       )}
@@ -1142,14 +1148,14 @@ function VariantsTab({
           disabled={isAddingVariant || saving}
           className="btn-primary py-1.5 text-xs"
         >
-          + Add variant
+          + Ajouter une variante
         </button>
       </div>
 
       {/* New variant form */}
       {isAddingVariant && newVariantDraft && (
         <div className="rounded-xl border border-accent/40 bg-base p-4">
-          <p className="mb-4 text-sm font-semibold text-white">New variant</p>
+          <p className="mb-4 text-sm font-semibold text-white">Nouvelle variante</p>
           <VariantForm
             v={newVariantDraft}
             slugEditable
@@ -1162,7 +1168,7 @@ function VariantsTab({
               className="btn-ghost py-1.5 text-xs"
               disabled={saving}
             >
-              Cancel
+              Annuler
             </button>
             <button
               type="button"
@@ -1170,7 +1176,7 @@ function VariantsTab({
               className="btn-primary py-1.5 text-xs"
               disabled={saving}
             >
-              {saving ? "Saving…" : "Save variant"}
+              {saving ? "Enregistrement…" : "Enregistrer la variante"}
             </button>
           </div>
         </div>
@@ -1178,8 +1184,8 @@ function VariantsTab({
 
       {draft.variants.length === 0 && !isAddingVariant && (
         <div className="rounded-xl border border-border bg-base px-6 py-10 text-center text-sm text-muted">
-          <p>No variants yet.</p>
-          <p className="mt-1 text-xs">Click &ldquo;+ Add variant&rdquo; above to create the first denomination.</p>
+          <p>Aucune variante pour le moment.</p>
+          <p className="mt-1 text-xs">Cliquez sur « + Ajouter une variante » pour créer la première valeur.</p>
         </div>
       )}
 
@@ -1203,9 +1209,9 @@ function VariantsTab({
                   <p className="font-mono text-[11px] text-muted">SKU: {orig.slug}</p>
                 </div>
                 <span className={`chip ${v.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
-                  {v.active ? "Active" : "Hidden"}
+                  {v.active ? "Actif" : "Masqué"}
                 </span>
-                {v.featured && <span className="chip border-accent/30 text-accent">Featured</span>}
+                {v.featured && <span className="chip border-accent/30 text-accent">Mis en avant</span>}
               </div>
               <div className="flex items-center gap-3 text-sm text-muted">
                 {v.faceValue != null && (
@@ -1217,16 +1223,16 @@ function VariantsTab({
                 </span>
                 <ToggleSwitch
                   checked={v.active}
-                  checkedLabel="Active"
-                  uncheckedLabel="Hidden"
+                  checkedLabel="Actif"
+                  uncheckedLabel="Masqué"
                   onChange={(checked) => updateVariant(orig.slug, "active", checked)}
                   disabled={saving}
                   size="sm"
                 />
                 <ToggleSwitch
                   checked={v.featured}
-                  checkedLabel="Featured"
-                  uncheckedLabel="Non featured"
+                  checkedLabel="Mis en avant"
+                  uncheckedLabel="Non mis en avant"
                   onChange={(checked) => updateVariant(orig.slug, "featured", checked)}
                   disabled={saving}
                   size="sm"
@@ -1236,7 +1242,7 @@ function VariantsTab({
                   onChange={(event) => updateVariant(orig.slug, "stockMode", event.target.value)}
                   className="h-8 rounded-lg border border-border bg-surface px-2 text-xs text-white outline-none transition hover:border-border-strong focus:border-accent"
                   disabled={saving}
-                  title={`Stock mode: ${stockModeLabel(v.stockMode)}`}
+                  title={`Mode de stock : ${stockModeLabel(v.stockMode)}`}
                 >
                   {STOCK_MODE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1263,16 +1269,16 @@ function VariantsTab({
                     className="btn-primary h-8 px-3 text-xs"
                     disabled={saving}
                   >
-                    {saving ? "Saving..." : "Save changes"}
+                    {saving ? "Enregistrement..." : "Enregistrer"}
                   </button>
                 )}
                 {isEditing ? (
                   <div className="flex gap-1">
                     <button type="button" onClick={() => setEditingVariant(null)} className="btn-ghost py-1 text-xs" disabled={saving}>
-                      Cancel
+                      Annuler
                     </button>
                     <button type="button" onClick={() => onSaveVariant(orig.slug)} className="btn-primary py-1 text-xs" disabled={saving}>
-                      {saving ? "…" : "Save"}
+                      {saving ? "…" : "Enregistrer"}
                     </button>
                   </div>
                 ) : (
@@ -1283,7 +1289,7 @@ function VariantsTab({
                       className="text-xs font-medium text-accent hover:text-accent-hover"
                       disabled={saving}
                     >
-                      Edit
+                      Modifier
                     </button>
                     <button
                       type="button"
@@ -1291,25 +1297,25 @@ function VariantsTab({
                       className="text-xs font-medium text-muted hover:text-white"
                       disabled={saving}
                     >
-                      Duplicate
+                      Dupliquer
                     </button>
                     {isConfirming ? (
                       <div className="flex items-center gap-1">
-                        <span className="text-xs text-red-400">Delete?</span>
+                        <span className="text-xs text-red-400">Supprimer ?</span>
                         <button
                           type="button"
                           onClick={async () => { setConfirmDelete(null); await onDeleteVariant(orig.slug); }}
                           className="text-xs font-semibold text-red-400 hover:text-red-300"
                           disabled={saving}
                         >
-                          Yes
+                          Oui
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmDelete(null)}
                           className="text-xs text-muted hover:text-white"
                         >
-                          No
+                          Non
                         </button>
                       </div>
                     ) : (
@@ -1319,7 +1325,7 @@ function VariantsTab({
                         className="text-xs text-red-500/70 hover:text-red-400"
                         disabled={saving}
                       >
-                        Delete
+                        Supprimer
                       </button>
                     )}
                   </div>
@@ -1365,7 +1371,7 @@ function MediaTab({
       const url = await uploadImageFile(file);
       update("thumbnail", url);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed.");
+      setUploadError(err instanceof Error ? err.message : "Import impossible.");
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -1375,9 +1381,9 @@ function MediaTab({
   return (
     <div className="space-y-6">
       <div>
-        <p className="mb-2 text-sm font-medium text-white">Thumbnail image</p>
+        <p className="mb-2 text-sm font-medium text-white">Image du produit</p>
         <p className="mb-3 text-xs text-muted">
-          Used as the product card and detail page image. Leave blank to show the background gradient.
+          Utilisée sur la carte produit et la page détail. Laissez vide pour afficher le visuel de secours.
         </p>
 
         {/* Upload button */}
@@ -1397,7 +1403,7 @@ function MediaTab({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
               </svg>
-              <span className="text-sm text-accent">Uploading…</span>
+              <span className="text-sm text-accent">Import en cours…</span>
             </>
           ) : (
             <>
@@ -1407,7 +1413,7 @@ function MediaTab({
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
               <div className="text-center">
-                <p className="text-sm font-medium text-white">Click to upload</p>
+                <p className="text-sm font-medium text-white">Importer une image</p>
                 <p className="text-xs text-muted">PNG, JPG, WebP · max 5 MB</p>
               </div>
             </>
@@ -1420,7 +1426,7 @@ function MediaTab({
 
         {/* Manual URL fallback */}
         <div className="mt-3">
-          <p className="mb-1.5 text-xs text-muted">Or paste an image URL directly</p>
+          <p className="mb-1.5 text-xs text-muted">Ou collez directement l’URL d’une image</p>
           <input
             className="input text-xs"
             value={draft.thumbnail ?? ""}
@@ -1445,7 +1451,7 @@ function MediaTab({
                 onClick={() => update("thumbnail", null)}
                 className="mt-1 text-xs text-red-400 hover:text-red-300"
               >
-                Remove image
+                Retirer l’image
               </button>
             </div>
           </div>
@@ -1453,9 +1459,9 @@ function MediaTab({
       </div>
 
       <div>
-        <p className="mb-2 text-sm font-medium text-white">Background preset</p>
+        <p className="mb-2 text-sm font-medium text-white">Fond prédéfini</p>
         <p className="mb-3 text-xs text-muted">
-          Auto-selected from the category set in Details. Change the category to update the preset.
+          Sélectionné automatiquement selon la catégorie définie dans les détails.
         </p>
         <div className="flex flex-wrap gap-3">
           {Object.entries(BG_PRESETS).map(([key, p]) => (
@@ -1479,7 +1485,7 @@ function MediaTab({
 
       {/* Preview card */}
       <div>
-        <p className="mb-2 text-sm font-medium text-white">Preview</p>
+        <p className="mb-2 text-sm font-medium text-white">Aperçu</p>
         <ProductArt
           category={draft.category}
           imageUrl={draft.thumbnail}
@@ -1488,7 +1494,7 @@ function MediaTab({
         />
         {preset && (
           <p className="mt-2 text-xs text-muted">
-            Active preset: <span className="text-white">{preset.label}</span>
+            Fond actif : <span className="text-white">{preset.label}</span>
           </p>
         )}
       </div>

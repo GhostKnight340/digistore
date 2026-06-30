@@ -155,10 +155,10 @@ export default function PaymentsPanel() {
                     <td className="px-4 py-3">
                       {order.proofUploaded ? (
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/15 text-xs text-accent">
-                          Yes
+                          Oui
                         </span>
                       ) : (
-                        <span className="text-xs text-faint">None</span>
+                        <span className="text-xs text-faint">Aucun</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

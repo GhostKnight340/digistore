@@ -49,7 +49,7 @@ const trustIcons = [
 
 const howItWorksSteps = [
   { n: 1, title: "Choisissez un produit", text: "Sélectionnez une carte et la quantité." },
-  { n: 2, title: "Paiement sécurisé", text: "Entrez votre email et payez simplement." },
+  { n: 2, title: "Paiement sécurisé", text: "Renseignez votre e-mail et choisissez un mode de paiement." },
   { n: 3, title: "Recevez le code", text: "Votre code est livré après confirmation du paiement." },
 ];
 
@@ -231,7 +231,7 @@ function EditorCanvas() {
         </SectionWrapper>
 
         {/* Featured Products */}
-        <SectionWrapper sectionKey="showFeaturedProducts" label="Featured products">
+        <SectionWrapper sectionKey="showFeaturedProducts" label="Produits populaires">
           <section className="mt-10">
             <div className="flex items-end justify-between gap-6">
               <div>

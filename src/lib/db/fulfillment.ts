@@ -12,9 +12,9 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
     () => prisma.order.findUnique({ where: { id: orderId } }),
     (row) => (row ? 1 : 0),
   );
-  if (!order) return { ok: false, error: "Order not found." };
+  if (!order) return { ok: false, error: "Commande introuvable." };
   if (order.status === "payment_confirmed" || order.status === "delivered") {
-    return { ok: false, error: "Payment already confirmed." };
+    return { ok: false, error: "Paiement déjà confirmé." };
   }
 
   try {
@@ -29,7 +29,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
           type: "status_change",
           fromStatus: order.status,
           toStatus: "payment_confirmed",
-          note: "Admin confirmed payment.",
+          note: "Paiement confirmé par l’admin.",
         },
       });
       await tx.emailLog.create({
@@ -37,8 +37,8 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
           orderId,
           type: "payment_confirmed",
           recipient: order.customerEmail,
-          subject: "Paiement confirme",
-          body: "Your payment has been confirmed. Your code will be delivered shortly.",
+          subject: "Paiement confirmé",
+          body: "Votre paiement a été confirmé. Votre produit numérique sera disponible sous peu.",
         },
       });
     }), () => 3);
@@ -48,7 +48,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
     console.error("[confirmPayment]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Confirm failed.",
+      error: error instanceof Error ? error.message : "Confirmation impossible.",
     };
   }
 }
@@ -79,12 +79,12 @@ export async function deliverOrder(
       }),
     (row) => row?.items.length ?? 0,
   );
-  if (!order) return { ok: false, error: "Order not found." };
+  if (!order) return { ok: false, error: "Commande introuvable." };
   if (order.status === "delivered") {
-    return { ok: false, error: "Order is already delivered." };
+    return { ok: false, error: "Commande déjà livrée." };
   }
   if (order.status !== "payment_confirmed") {
-    return { ok: false, error: "Payment must be confirmed before delivery." };
+    return { ok: false, error: "Le paiement doit être confirmé avant la livraison." };
   }
 
   for (const item of order.items) {
@@ -95,7 +95,7 @@ export async function deliverOrder(
     if (entries.length < item.quantity) {
       return {
         ok: false,
-        error: "Assign a code to every unit before delivering.",
+        error: "Attribuez un code à chaque unité avant la livraison.",
       };
     }
   }
@@ -118,7 +118,7 @@ export async function deliverOrder(
               where: { id: entry.digitalCodeId },
             });
             if (!code || code.status === "used" || code.status === "disabled") {
-              throw new Error("Selected code is no longer available.");
+              throw new Error("Le code sélectionné n’est plus disponible.");
             }
 
             const claim = await tx.digitalCode.updateMany({
@@ -130,7 +130,7 @@ export async function deliverOrder(
               },
             });
             if (claim.count !== 1) {
-              throw new Error("Selected code is no longer available.");
+              throw new Error("Le code sélectionné n’est plus disponible.");
             }
             digitalCodeId = entry.digitalCodeId;
             deliveredValues.push(code.code);
@@ -161,7 +161,7 @@ export async function deliverOrder(
           type: "status_change",
           fromStatus: "payment_confirmed",
           toStatus: "delivered",
-          note: "Admin delivered code(s).",
+          note: "Code(s) livré(s) par l’admin.",
         },
       });
       await tx.emailLog.create({
@@ -170,7 +170,7 @@ export async function deliverOrder(
           type: "code_delivered",
           recipient: order.customerEmail,
           subject: "Votre code est disponible",
-          body: `Your payment was confirmed. Your code is now available.\n\nCodes:\n${deliveredValues.join("\n")}\n\nThank you for your purchase.`,
+          body: `Votre paiement a été confirmé. Votre produit numérique est maintenant disponible.\n\nCodes :\n${deliveredValues.join("\n")}\n\nMerci pour votre achat.`,
         },
       });
     }), () => assignments.length);
@@ -180,7 +180,7 @@ export async function deliverOrder(
     console.error("[deliverOrder]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Delivery failed.",
+      error: error instanceof Error ? error.message : "Livraison impossible.",
     };
   }
 }

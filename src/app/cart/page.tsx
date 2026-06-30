@@ -13,7 +13,7 @@ export default function CartPage() {
   if (!ready) {
     return (
       <div className="container-page py-20 text-center text-muted">
-        Chargement...
+        Chargement?
       </div>
     );
   }
@@ -30,7 +30,7 @@ export default function CartPage() {
             Votre panier est vide
           </p>
           <p className="mt-1 text-sm text-muted">
-            Parcourez le catalogue et ajoutez une carte pour commencer.
+            Parcourez le catalogue et ajoutez un produit pour commencer.
           </p>
           <Link href="/products" className="btn-primary mt-6">
             Parcourir le catalogue

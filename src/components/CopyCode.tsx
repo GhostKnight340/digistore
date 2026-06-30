@@ -38,7 +38,7 @@ export default function CopyCode({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wide text-faint">
-            Code livré{typeof index === "number" ? ` #${index + 1}` : ""}
+            Code disponible{typeof index === "number" ? ` #${index + 1}` : ""}
           </p>
           <code className="mt-2 flex min-h-[3rem] items-center break-all rounded-xl border border-white/10 bg-black/40 px-4 py-3 font-mono text-[1rem] font-semibold tracking-wider text-white">
             {revealed ? code : maskedCode}

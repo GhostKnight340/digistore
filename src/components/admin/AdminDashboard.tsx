@@ -19,20 +19,20 @@ const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"
 const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 
 const navSections = [
-  [{ id: "overview", label: "Overview", icon: "[]" }],
+  [{ id: "overview", label: "Vue d'ensemble", icon: "[]" }],
   [
-    { id: "products", label: "Products", icon: "PR" },
-    { id: "inventory", label: "Inventory", icon: "IN" },
-    { id: "orders", label: "Orders", icon: "OR" },
-    { id: "payments", label: "Payments", icon: "PM" },
-    { id: "customers", label: "Customers", icon: "CU" },
+    { id: "products", label: "Produits", icon: "PR" },
+    { id: "inventory", label: "Stock", icon: "IN" },
+    { id: "orders", label: "Commandes", icon: "OR" },
+    { id: "payments", label: "Paiements", icon: "PM" },
+    { id: "customers", label: "Clients", icon: "CU" },
   ],
-  [{ id: "suppliers", label: "Supplier API", icon: "API" }],
+  [{ id: "suppliers", label: "API fournisseur", icon: "API" }],
   [
-    { id: "payment-settings", label: "Payment settings", icon: "PS" },
-    { id: "refunds", label: "Refunds", icon: "RF" },
+    { id: "payment-settings", label: "Paramètres de paiement", icon: "PS" },
+    { id: "refunds", label: "Remboursements", icon: "RF" },
   ],
-  [{ id: "settings", label: "Store settings", icon: "SS" }],
+  [{ id: "settings", label: "Paramètres de la boutique", icon: "SS" }],
 ];
 
 const LOW_STOCK_MAX = 5;
@@ -64,7 +64,7 @@ export default function AdminDashboard() {
       });
     } catch (error) {
       console.error("Failed to load admin overview", error);
-      setOverviewError("Admin overview could not be loaded.");
+      setOverviewError("Impossible de charger la vue d'ensemble admin.");
     } finally {
       setOverviewLoading(false);
     }
@@ -113,16 +113,16 @@ export default function AdminDashboard() {
   );
 
   const panelFallback = (
-    <section className="card p-6 text-sm text-muted">Loading section...</section>
+    <section className="card p-6 text-sm text-muted">Chargement de la section...</section>
   );
 
   return (
     <div className="container-page py-10">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-white">Admin dashboard</h1>
+          <h1 className="text-3xl font-bold text-white">Tableau de bord admin</h1>
           <p className="mt-1 text-sm text-muted">
-            Store inventory, orders, payments, and configuration.
+            Stock, commandes, paiements et configuration de la boutique.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -130,9 +130,9 @@ export default function AdminDashboard() {
             href="/admin/editor"
             className="btn-ghost h-10 px-4 text-sm"
           >
-            Homepage Editor
+            Éditeur de la page d'accueil
           </Link>
-          <span className="chip border-accent/40 text-accent">Production data</span>
+          <span className="chip border-accent/40 text-accent">Données de production</span>
         </div>
       </div>
 
@@ -194,47 +194,47 @@ export default function AdminDashboard() {
           </Suspense>
         ) : activeTab === "suppliers" ? (
           <RestoredPanel
-            title="Supplier API"
-            eyebrow="Admin section restored"
-            text="Supplier API controls are available from the admin navigation. Existing supplier automation remains untouched."
+            title="API fournisseur"
+            eyebrow="Section admin restaurée"
+            text="Les contrôles de l'API fournisseur sont disponibles dans la navigation admin. Les automatisations existantes restent inchangées."
           />
         ) : activeTab === "refunds" ? (
           <RestoredPanel
-            title="Refunds"
-            eyebrow="Admin section restored"
-            text="Refund review is back in the admin navigation. Payment and order records continue to come from Supabase."
+            title="Remboursements"
+            eyebrow="Section admin restaurée"
+            text="La revue des remboursements est disponible dans la navigation admin. Les paiements et commandes restent synchronisés avec Supabase."
           />
         ) : (
           <div className="space-y-8">
             {overviewError ? (
               <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
-                <p className="font-semibold text-red-50">Admin data failed to load</p>
+                <p className="font-semibold text-red-50">Impossible de charger les données admin</p>
                 <p className="mt-1">{overviewError}</p>
                 <button
                   type="button"
                   onClick={loadOverview}
                   className="mt-2 text-xs font-medium text-red-300 hover:text-white"
                 >
-                  Retry
+                  Réessayer
                 </button>
               </div>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Stat
-                label="Total orders"
+                label="Commandes totales"
                 value={overviewLoading ? "..." : stats ? String(stats.totalOrders) : "-"}
               />
               <Stat
-                label="Pending fulfillment"
+                label="À traiter"
                 value={overviewLoading ? "..." : stats ? String(stats.pendingCount) : "-"}
               />
               <Stat
-                label="Total revenue"
+                label="Chiffre d'affaires"
                 value={overviewLoading ? "..." : stats ? formatMAD(stats.totalRevenue) : "-"}
               />
               <Stat
-                label="Customers"
+                label="Clients"
                 value={overviewLoading ? "..." : stats ? String(stats.customerCount) : "-"}
               />
             </div>
@@ -242,44 +242,44 @@ export default function AdminDashboard() {
             <section className="card overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
                 <div>
-                  <h2 className="font-bold text-white">Recent orders</h2>
+                  <h2 className="font-bold text-white">Commandes récentes</h2>
                   <p className="mt-1 text-xs text-muted">
-                    Latest bounded orders. Open Orders or Payments for work queues.
+                    Dernières commandes enregistrées. Ouvrez Commandes ou Paiements pour les files de traitement.
                   </p>
                 </div>
                 <div className="w-full sm:w-80">
                   <label className="sr-only" htmlFor="admin-order-search">
-                    Search orders
+                    Rechercher une commande
                   </label>
                   <input
                     id="admin-order-search"
                     className="input h-10 py-0 text-sm"
                     value={orderQuery}
                     onChange={(event) => setOrderQuery(event.target.value)}
-                    placeholder="Find an order..."
+                    placeholder="Rechercher une commande..."
                   />
                 </div>
               </div>
               {overviewLoading ? (
-                <p className="px-5 py-8 text-sm text-muted">Loading...</p>
+                <p className="px-5 py-8 text-sm text-muted">Chargement...</p>
               ) : recentOrders.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-muted">
-                  No orders yet. Place a test order to see it here.
+                  Aucune commande pour le moment. Passez une commande test pour l'afficher ici.
                 </p>
               ) : filteredOrders.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-muted">
-                  No orders match your search.
+                  Aucune commande ne correspond à votre recherche.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="text-xs uppercase text-muted">
                       <tr className="border-b border-border">
-                        <th className="px-5 py-3 font-medium">Order</th>
-                        <th className="px-5 py-3 font-medium">Customer</th>
+                        <th className="px-5 py-3 font-medium">Commande</th>
+                        <th className="px-5 py-3 font-medium">Client</th>
                         <th className="px-5 py-3 font-medium">Date</th>
                         <th className="px-5 py-3 font-medium">Total</th>
-                        <th className="px-5 py-3 font-medium">Status</th>
+                        <th className="px-5 py-3 font-medium">Statut</th>
                         <th className="px-5 py-3 font-medium">Action</th>
                       </tr>
                     </thead>
@@ -309,7 +309,7 @@ export default function AdminDashboard() {
                               href={`/admin/orders/${order.id}`}
                               className="text-xs font-medium text-accent hover:text-accent-hover"
                             >
-                              {order.status === "delivered" ? "View" : "Fulfill"}
+                              {order.status === "delivered" ? "Voir" : "Traiter"}
                             </Link>
                           </td>
                         </tr>
@@ -323,9 +323,9 @@ export default function AdminDashboard() {
             <section className="card p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-bold text-white">Inventory alerts</h2>
+                  <h2 className="font-bold text-white">Alertes de stock</h2>
                   <p className="mt-1 text-xs text-muted">
-                    Low and out-of-stock variants from the current inventory counts.
+                    Variantes en stock faible ou en rupture selon les quantités actuelles.
                   </p>
                 </div>
                 <button
@@ -333,18 +333,18 @@ export default function AdminDashboard() {
                   onClick={() => setActiveTab("inventory")}
                   className="text-xs font-medium text-accent hover:text-accent-hover"
                 >
-                  Manage codes
+                  Gérer les codes
                 </button>
               </div>
               {overviewLoading ? (
-                <p className="mt-4 text-sm text-muted">Loading...</p>
+                <p className="mt-4 text-sm text-muted">Chargement...</p>
               ) : inventoryProducts.length === 0 ? (
                 <p className="mt-4 text-sm text-muted">
-                  No inventory codes yet. Use Manage codes to add stock.
+                  Aucun code en stock pour le moment. Utilisez Gérer les codes pour ajouter du stock.
                 </p>
               ) : inventoryAlerts.length === 0 ? (
                 <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-200">
-                  All tracked variants are in stock.
+                  Toutes les variantes suivies sont en stock.
                 </div>
               ) : (
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -373,8 +373,8 @@ export default function AdminDashboard() {
                         </div>
                         <p className={`mt-1 text-xs ${out ? "text-red-300" : "text-amber-300"}`}>
                           {out
-                            ? "Out of stock"
-                            : `Only ${alert.unused} code${alert.unused === 1 ? "" : "s"} left`}
+                            ? "En rupture"
+                            : `Plus que ${alert.unused} code${alert.unused === 1 ? "" : "s"} disponible${alert.unused === 1 ? "" : "s"}`}
                         </p>
                       </button>
                     );

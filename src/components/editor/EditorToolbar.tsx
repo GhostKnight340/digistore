@@ -59,7 +59,7 @@ export default function EditorToolbar() {
           href="/admin/editor"
           className="rounded-lg border border-accent/40 bg-accent/15 px-3 py-1 text-xs font-medium text-white"
         >
-          Homepage Editor
+          Éditeur de la page d'accueil
         </Link>
 
         <div className="mx-1 h-4 w-px bg-border" />
@@ -90,7 +90,7 @@ export default function EditorToolbar() {
         <button
           type="button"
           onClick={togglePreview}
-          title={previewMode ? "Back to editing" : "Preview"}
+          title={previewMode ? "Retour à l'édition" : "Aperçu"}
           className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
             previewMode
               ? "bg-accent/15 text-accent"
@@ -98,7 +98,7 @@ export default function EditorToolbar() {
           }`}
         >
           <EyeIcon open={previewMode} />
-          {previewMode ? "Editing off" : "Preview"}
+          {previewMode ? "Édition désactivée" : "Aperçu"}
         </button>
 
         <div className="ml-auto flex items-center gap-3">
@@ -110,7 +110,7 @@ export default function EditorToolbar() {
             onClick={save}
             className="h-7 rounded-lg bg-accent px-3.5 text-xs font-semibold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
-            Save
+            Enregistrer
           </button>
         </div>
       </div>
