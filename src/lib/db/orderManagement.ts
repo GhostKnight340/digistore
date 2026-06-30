@@ -28,7 +28,7 @@ export async function deleteOrder(orderId: string): Promise<ActionResult> {
     await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
-        select: { id: true },
+        select: { id: true, customerId: true },
       });
       if (!order) throw new Error("Commande introuvable.");
 
@@ -42,6 +42,14 @@ export async function deleteOrder(orderId: string): Promise<ActionResult> {
       await tx.emailLog.deleteMany({ where: { orderId } });
       await tx.orderItem.deleteMany({ where: { orderId } });
       await tx.order.delete({ where: { id: orderId } });
+      if (order.customerId) {
+        await tx.customer.deleteMany({
+          where: {
+            id: order.customerId,
+            orders: { none: {} },
+          },
+        });
+      }
     });
 
     return { ok: true };
@@ -71,6 +79,7 @@ export async function clearAllOrders(
       await tx.emailLog.deleteMany();
       await tx.orderItem.deleteMany();
       await tx.order.deleteMany();
+      await tx.customer.deleteMany({ where: { orders: { none: {} } } });
     });
 
     void resetOrderNumbering;

@@ -278,7 +278,7 @@ export async function getAdminStats(): Promise<{
   customerCount: number;
 }> {
   await ensureDatabaseReady();
-  const [totalOrders, revenueResult, pendingCount, customerCount] = await Promise.all([
+  const [totalOrders, revenueResult, pendingCount, customerGroups] = await Promise.all([
     timeAdmin("admin.stats", "order.count.total", () => prisma.order.count(), (count) => count),
     timeAdmin(
       "admin.stats",
@@ -291,19 +291,24 @@ export async function getAdminStats(): Promise<{
       () => 1,
     ),
     timeAdmin("admin.stats", "order.count.pending", () => prisma.order.count({ where: { status: { not: "delivered" } } }), (count) => count),
-    timeAdmin("admin.stats", "customer.count", () => prisma.customer.count(), (count) => count),
+    timeAdmin(
+      "admin.stats",
+      "order.groupBy.customerEmail.count",
+      () => prisma.order.groupBy({ by: ["customerEmail"] }),
+      (rows) => rows.length,
+    ),
   ]);
   return {
     totalOrders,
     totalRevenue: revenueResult._sum.totalMad ?? 0,
     pendingCount,
-    customerCount,
+    customerCount: customerGroups.length,
   };
 }
 
 export async function getAdminOverview(): Promise<AdminOverviewDTO> {
   await ensureDatabaseReady();
-  const [totalOrders, pendingFulfillment, revenue, customers, recentOrders] =
+  const [totalOrders, pendingFulfillment, revenue, customerGroups, recentOrders] =
     await Promise.all([
       timeAdmin("admin.overview", "order.count.total", () => prisma.order.count(), (count) => count),
       timeAdmin("admin.overview", "order.count.pending", () => prisma.order.count({ where: { status: { not: "delivered" } } }), (count) => count),
@@ -317,7 +322,12 @@ export async function getAdminOverview(): Promise<AdminOverviewDTO> {
           }),
         () => 1,
       ),
-      timeAdmin("admin.overview", "customer.count", () => prisma.customer.count(), (count) => count),
+      timeAdmin(
+        "admin.overview",
+        "order.groupBy.customerEmail.count",
+        () => prisma.order.groupBy({ by: ["customerEmail"] }),
+        (rows) => rows.length,
+      ),
       getAdminOrdersPage({ take: 10 }),
     ]);
 
@@ -325,7 +335,7 @@ export async function getAdminOverview(): Promise<AdminOverviewDTO> {
     totalOrders,
     pendingFulfillment,
     totalRevenue: revenue._sum.totalMad ?? 0,
-    customers,
+    customers: customerGroups.length,
     recentOrders,
   };
 }
