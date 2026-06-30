@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import {
-  clearAllOrdersDevOnlyAction,
-  deleteOrderDevOnlyAction,
+  clearAllOrdersAction,
+  deleteOrderAction,
 } from "@/app/actions/admin";
 
 export function DevOrderRowDelete({
@@ -24,7 +24,7 @@ export function DevOrderRowDelete({
     if (!confirmed) return;
 
     setBusy(true);
-    const result = await deleteOrderDevOnlyAction(orderId);
+    const result = await deleteOrderAction(orderId);
     if (result.ok) onSuccess("Commande supprimée.");
     else onError(result.error ?? "Suppression impossible.");
     setBusy(false);
@@ -56,7 +56,7 @@ export default function DevOrderListTools({
 
   async function handleClearAllOrders() {
     setBusy(true);
-    const result = await clearAllOrdersDevOnlyAction(resetOrderNumbering);
+    const result = await clearAllOrdersAction(resetOrderNumbering);
     if (result.ok) {
       onSuccess(
         resetOrderNumbering
@@ -87,7 +87,7 @@ export default function DevOrderListTools({
           <div className="w-full max-w-xl rounded-2xl border border-red-500/40 bg-card p-5 shadow-card">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-wide text-red-300">Development only</p>
+                <p className="text-xs uppercase tracking-wide text-red-300">Danger zone</p>
                 <h3 className="mt-1 text-xl font-bold text-white">Clear All Orders</h3>
               </div>
               <button

@@ -4,7 +4,6 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
-import { DEV_ONLY_ORDER_TOOLS_ENABLED } from "@/lib/devMode";
 import {
   orderStatusShort,
   orderStatusBadgeClass,
@@ -13,16 +12,10 @@ import {
 import { getAdminFulfillmentOrdersAction } from "@/app/actions/admin";
 import type { AdminOrderSummaryDTO } from "@/lib/dto";
 
-const DevOrderListTools =
-  DEV_ONLY_ORDER_TOOLS_ENABLED
-    ? dynamic(() => import("@/components/admin/DevOrderListTools"))
-    : null;
-const DevOrderRowDelete =
-  DEV_ONLY_ORDER_TOOLS_ENABLED
-    ? dynamic(() =>
-        import("@/components/admin/DevOrderListTools").then((mod) => mod.DevOrderRowDelete),
-      )
-    : null;
+const OrderListDeleteTools = dynamic(() => import("@/components/admin/DevOrderListTools"));
+const OrderRowDelete = dynamic(() =>
+  import("@/components/admin/DevOrderListTools").then((mod) => mod.DevOrderRowDelete),
+);
 
 type Filter = "all" | "pending" | "awaiting" | "ready" | "delivered" | "refunded";
 
@@ -102,19 +95,17 @@ export default function FulfillmentPanel() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {DevOrderListTools ? (
-            <DevOrderListTools
-              onSuccess={async (successMessage) => {
-                setMessage(successMessage);
-                setLoadError("");
-                await load();
-              }}
-              onError={(errorMessage) => {
-                setLoadError(errorMessage);
-                setMessage("");
-              }}
-            />
-          ) : null}
+          <OrderListDeleteTools
+            onSuccess={async (successMessage) => {
+              setMessage(successMessage);
+              setLoadError("");
+              await load();
+            }}
+            onError={(errorMessage) => {
+              setLoadError(errorMessage);
+              setMessage("");
+            }}
+          />
           <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
             {FILTERS.map((item) => (
               <button
@@ -195,20 +186,18 @@ export default function FulfillmentPanel() {
                         >
                           {isDelivered(order.status) ? "Voir" : "Traiter"}
                         </Link>
-                        {DevOrderRowDelete ? (
-                          <DevOrderRowDelete
-                            orderId={order.id}
-                            onSuccess={async (successMessage) => {
-                              setMessage(successMessage);
-                              setLoadError("");
-                              await load();
-                            }}
-                            onError={(errorMessage) => {
-                              setLoadError(errorMessage);
-                              setMessage("");
-                            }}
-                          />
-                        ) : null}
+                        <OrderRowDelete
+                          orderId={order.id}
+                          onSuccess={async (successMessage) => {
+                            setMessage(successMessage);
+                            setLoadError("");
+                            await load();
+                          }}
+                          onError={(errorMessage) => {
+                            setLoadError(errorMessage);
+                            setMessage("");
+                          }}
+                        />
                       </div>
                     </td>
                   </tr>

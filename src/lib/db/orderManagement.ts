@@ -1,7 +1,6 @@
 import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
-import { DEV_ONLY_ORDER_TOOLS_ENABLED } from "@/lib/devMode";
 import type { ActionResult } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
 
@@ -22,15 +21,7 @@ export interface ChangeOrderStatusInput {
   note?: string;
 }
 
-function ensureDevOnly(): ActionResult | null {
-  if (DEV_ONLY_ORDER_TOOLS_ENABLED) return null;
-  return { ok: false, error: "Development-only order tools are disabled." };
-}
-
-export async function deleteOrderDevOnly(orderId: string): Promise<ActionResult> {
-  const blocked = ensureDevOnly();
-  if (blocked) return blocked;
-
+export async function deleteOrder(orderId: string): Promise<ActionResult> {
   await ensureDatabaseReady();
 
   try {
@@ -55,7 +46,7 @@ export async function deleteOrderDevOnly(orderId: string): Promise<ActionResult>
 
     return { ok: true };
   } catch (error) {
-    console.error("[deleteOrderDevOnly]", error);
+    console.error("[deleteOrder]", error);
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Suppression impossible.",
@@ -63,12 +54,9 @@ export async function deleteOrderDevOnly(orderId: string): Promise<ActionResult>
   }
 }
 
-export async function clearAllOrdersDevOnly(
+export async function clearAllOrders(
   resetOrderNumbering: boolean,
 ): Promise<ActionResult> {
-  const blocked = ensureDevOnly();
-  if (blocked) return blocked;
-
   await ensureDatabaseReady();
 
   try {
@@ -88,7 +76,7 @@ export async function clearAllOrdersDevOnly(
     void resetOrderNumbering;
     return { ok: true };
   } catch (error) {
-    console.error("[clearAllOrdersDevOnly]", error);
+    console.error("[clearAllOrders]", error);
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Purge impossible.",

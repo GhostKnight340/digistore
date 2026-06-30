@@ -28,8 +28,8 @@ import {
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
 import {
   changeOrderStatus,
-  clearAllOrdersDevOnly,
-  deleteOrderDevOnly,
+  clearAllOrders,
+  deleteOrder,
 } from "@/lib/db/orderManagement";
 import {
   updateMethodConfig,
@@ -196,8 +196,8 @@ export async function changeOrderStatusAction(
   return result;
 }
 
-export async function deleteOrderDevOnlyAction(orderId: string): Promise<ActionResult> {
-  const result = await deleteOrderDevOnly(orderId);
+export async function deleteOrderAction(orderId: string): Promise<ActionResult> {
+  const result = await deleteOrder(orderId);
   if (result.ok) {
     revalidatePath("/admin");
     revalidatePath(`/admin/orders/${orderId}`);
@@ -205,10 +205,10 @@ export async function deleteOrderDevOnlyAction(orderId: string): Promise<ActionR
   return result;
 }
 
-export async function clearAllOrdersDevOnlyAction(
+export async function clearAllOrdersAction(
   resetOrderNumbering: boolean,
 ): Promise<ActionResult> {
-  const result = await clearAllOrdersDevOnly(resetOrderNumbering);
+  const result = await clearAllOrders(resetOrderNumbering);
   if (result.ok) revalidatePath("/admin");
   return result;
 }

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
-import { DEV_ONLY_ORDER_TOOLS_ENABLED } from "@/lib/devMode";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   isDelivered,
@@ -32,10 +31,9 @@ import type {
 } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
 
-const DevOrderDetailTools =
-  DEV_ONLY_ORDER_TOOLS_ENABLED
-    ? dynamic(() => import("@/components/admin/orders/DevOrderDetailTools"))
-    : null;
+const OrderDetailDeleteTools = dynamic(() =>
+  import("@/components/admin/orders/DevOrderDetailTools"),
+);
 
 const METHOD_LABELS: Record<string, string> = {
   bank: "Virement bancaire",
@@ -426,12 +424,10 @@ export default function OrderDetailPage({
               >
                 Changer le statut
               </button>
-              {DevOrderDetailTools ? (
-                <DevOrderDetailTools
-                  orderId={order.id}
-                  onError={(errorMessage) => setError(errorMessage)}
-                />
-              ) : null}
+              <OrderDetailDeleteTools
+                orderId={order.id}
+                onError={(errorMessage) => setError(errorMessage)}
+              />
             </div>
             <p className="mt-3 text-xs text-muted">
               L'annulation et les notes internes ne sont pas configurées dans le flux actuel.

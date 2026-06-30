@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { deleteOrderDevOnlyAction } from "@/app/actions/admin";
+import { deleteOrderAction } from "@/app/actions/admin";
 
 export default function DevOrderDetailTools({
   orderId,
@@ -21,7 +21,7 @@ export default function DevOrderDetailTools({
     if (!confirmed) return;
 
     setBusy(true);
-    const result = await deleteOrderDevOnlyAction(orderId);
+    const result = await deleteOrderAction(orderId);
     if (result.ok) {
       router.push("/admin");
       router.refresh();
