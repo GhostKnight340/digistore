@@ -19,9 +19,10 @@ export default function AboutPage() {
             d'un support local qui comprend les clients au Maroc.
           </p>
           <p>
-            Cette version est un prototype phase 1. Les produits, les prix et
-            les codes sont fournis à titre de démonstration: aucun paiement réel
-            n'est traité et aucune vraie carte cadeau n'est livrée.
+            Que vous achetiez en tant qu'invité ou via votre compte, vous
+            recevez vos codes après confirmation du paiement et suivez vos
+            commandes par email et directement sur le site. Notre équipe support
+            reste disponible pour vous accompagner à chaque étape.
           </p>
         </div>
       </div>

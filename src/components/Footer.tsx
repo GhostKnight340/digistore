@@ -63,9 +63,10 @@ export default function Footer() {
         <FooterGroup
           title="Legal"
           links={[
-            { href: "/terms", label: "Conditions" },
+            { href: "/terms", label: "Conditions Générales de Vente" },
             { href: "/privacy", label: "Confidentialité" },
-            { href: "/support", label: "Remboursements" },
+            { href: "/refunds", label: "Remboursements" },
+            { href: "/legal", label: "Mentions légales" },
             ...socialLinks.map(([name, href]) => ({
               href,
               label: name.charAt(0).toUpperCase() + name.slice(1),

@@ -37,8 +37,8 @@ export default function ContactPage() {
         </form>
 
         <p className="mt-4 rounded-lg bg-surface px-3 py-2 text-center text-xs text-muted">
-          Interface de démonstration: les messages ne sont pas envoyés en phase
-          1. Écrivez directement à support@karta.ma.
+          Vous pouvez aussi nous écrire directement à support@karta.ma ou nous
+          contacter par WhatsApp au +212 600 000 000.
         </p>
       </div>
     </div>

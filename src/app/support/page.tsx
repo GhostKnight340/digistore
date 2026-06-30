@@ -1,19 +1,23 @@
 import Link from "next/link";
 
-export const metadata = { title: "Support - Karta" };
+export const metadata = { title: "Contact & Support - Karta" };
 
 const faqs = [
   {
-    q: "La livraison est-elle vraiment instantanée?",
-    a: "Oui. Votre code apparaît à l'écran dès que la commande est confirmée, et une copie vous est envoyée par email.",
+    q: "La livraison est-elle instantanée?",
+    a: "Pour les produits à traitement automatique, votre code apparaît à l'écran dès que le paiement est confirmé, et une copie vous est envoyée par email. Certains produits nécessitent une vérification manuelle et sont livrés dans les meilleurs délais.",
   },
   {
     q: "Quels moyens de paiement sont disponibles?",
-    a: "La phase 1 utilise un paiement test. Le virement bancaire, la crypto et PayPal sont affichés comme options prévues, mais ne sont pas encore actifs.",
+    a: "Vous pouvez payer par virement bancaire, PayPal, cryptomonnaie et les autres méthodes prises en charge par Karta. Selon le moyen choisi, un justificatif de paiement peut vous être demandé pour confirmer la transaction.",
+  },
+  {
+    q: "Comment suivre ma commande?",
+    a: "Vous recevez le statut de votre commande par email et vous pouvez le consulter à tout moment sur le site, depuis votre compte ou via le suivi de commande en tant qu'invité.",
   },
   {
     q: "Que faire si mon code ne fonctionne pas?",
-    a: "Ce prototype utilise des codes test qui ne peuvent pas être activés sur de vraies boutiques. En production, notre support local remplacera tout code défectueux.",
+    a: "Contactez-nous avec votre numéro de commande et le code concerné. Si le code est invalide ou inutilisable de notre fait, nous le remplaçons ou vous remboursons selon notre Politique de Remboursement.",
   },
   {
     q: "Le service est-il adapté aux clients au Maroc?",
@@ -26,16 +30,17 @@ export default function SupportPage() {
     <div className="container-page py-12">
       <div className="mx-auto max-w-3xl">
         <h1 className="text-3xl font-semibold tracking-tight text-white">
-          Support
+          Contact &amp; Support
         </h1>
         <p className="mt-2 text-muted">
-          Besoin d'aide? Retrouvez les réponses rapides ci-dessous ou contactez
-          notre équipe.
+          Besoin d&apos;aide? Retrouvez les réponses rapides ci-dessous ou
+          contactez notre équipe. Pour un traitement plus rapide, indiquez
+          toujours votre numéro de commande.
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           {[
-            ["Chat en direct", "Bientôt"],
+            ["WhatsApp", "+212 600 000 000"],
             ["Email", "support@karta.ma"],
             ["Horaires", "9:00 - 22:00 (GMT+1)"],
           ].map(([title, text]) => (
@@ -69,8 +74,11 @@ export default function SupportPage() {
           ))}
         </div>
 
-        <div className="mt-10 text-center">
-          <Link href="/products" className="btn-primary">
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
+          <Link href="/contact" className="btn-primary">
+            Nous écrire
+          </Link>
+          <Link href="/products" className="btn-ghost">
             Parcourir le catalogue
           </Link>
         </div>
