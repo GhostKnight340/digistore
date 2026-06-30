@@ -15,7 +15,12 @@ function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function buildCustomerDTO(data: OrderRecord, publicOrderNumber?: string): CustomerOrderDTO {
+function buildCustomerDTO(
+  data: OrderRecord,
+  publicOrderNumber?: string,
+  options: { includeUndeliveredCodes?: boolean } = {},
+): CustomerOrderDTO {
+  const canExposeCodes = data.status === "delivered" || options.includeUndeliveredCodes;
   return {
     id: data.id,
     publicOrderNumber,
@@ -32,11 +37,13 @@ function buildCustomerDTO(data: OrderRecord, publicOrderNumber?: string): Custom
       quantity: item.quantity,
       unitPriceMad: item.unitPriceMad,
     })),
-    deliveredCodes: data.deliveredCodes.map((delivered) => ({
-      productId: delivered.product.slug,
-      orderItemId: delivered.orderItemId,
-      code: delivered.digitalCode?.code ?? delivered.manualCode ?? "",
-    })),
+    deliveredCodes: canExposeCodes
+      ? data.deliveredCodes.map((delivered) => ({
+          productId: delivered.product.slug,
+          orderItemId: delivered.orderItemId,
+          code: delivered.digitalCode?.code ?? delivered.manualCode ?? "",
+        }))
+      : [],
     proofUploaded: !!data.paymentProof,
     paymentEvents: data.paymentEvents.map((event) => ({
       id: event.id,
@@ -221,7 +228,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
 
   if (!order) return null;
   return {
-    ...buildCustomerDTO(order),
+    ...buildCustomerDTO(order, undefined, { includeUndeliveredCodes: true }),
     emailLogs: emailLogs.map((log) => ({
       id: log.id,
       type: log.type,

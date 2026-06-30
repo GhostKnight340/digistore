@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
 import {
@@ -10,6 +11,17 @@ import {
 } from "@/lib/orderStatus";
 import { getAdminFulfillmentOrdersAction } from "@/app/actions/admin";
 import type { AdminOrderSummaryDTO } from "@/lib/dto";
+
+const DevOrderListTools =
+  process.env.NODE_ENV !== "production"
+    ? dynamic(() => import("@/components/admin/DevOrderListTools"))
+    : null;
+const DevOrderRowDelete =
+  process.env.NODE_ENV !== "production"
+    ? dynamic(() =>
+        import("@/components/admin/DevOrderListTools").then((mod) => mod.DevOrderRowDelete),
+      )
+    : null;
 
 type Filter = "all" | "pending" | "awaiting" | "ready" | "delivered" | "refunded";
 
@@ -40,6 +52,7 @@ export default function FulfillmentPanel() {
   const [orders, setOrders] = useState<AdminOrderSummaryDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
   const load = useCallback(async () => {
@@ -87,21 +100,42 @@ export default function FulfillmentPanel() {
             Vérifiez chaque commande, ouvrez le détail, attribuez les codes et livrez les produits.
           </p>
         </div>
-        <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
-          {FILTERS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setFilter(item.id)}
-              className={`rounded-md px-3 py-1.5 ${
-                filter === item.id ? "bg-accent/15 text-white" : "text-muted hover:text-white"
-              }`}
-            >
-              {item.label} ({countFor(item.id)})
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {DevOrderListTools ? (
+            <DevOrderListTools
+              onSuccess={async (successMessage) => {
+                setMessage(successMessage);
+                setLoadError("");
+                await load();
+              }}
+              onError={(errorMessage) => {
+                setLoadError(errorMessage);
+                setMessage("");
+              }}
+            />
+          ) : null}
+          <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
+            {FILTERS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setFilter(item.id)}
+                className={`rounded-md px-3 py-1.5 ${
+                  filter === item.id ? "bg-accent/15 text-white" : "text-muted hover:text-white"
+                }`}
+              >
+                {item.label} ({countFor(item.id)})
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {message ? (
+        <div className="rounded-2xl border border-green-500/40 bg-green-500/10 px-5 py-4 text-sm text-green-200">
+          {message}
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
@@ -153,12 +187,28 @@ export default function FulfillmentPanel() {
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <Link
-                        href={`/admin/orders/${order.id}`}
-                        className="text-xs font-medium text-accent hover:text-accent-hover"
-                      >
-                        {isDelivered(order.status) ? "Voir" : "Traiter"}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                          href={`/admin/orders/${order.id}`}
+                          className="text-xs font-medium text-accent hover:text-accent-hover"
+                        >
+                          {isDelivered(order.status) ? "Voir" : "Traiter"}
+                        </Link>
+                        {DevOrderRowDelete ? (
+                          <DevOrderRowDelete
+                            orderId={order.id}
+                            onSuccess={async (successMessage) => {
+                              setMessage(successMessage);
+                              setLoadError("");
+                              await load();
+                            }}
+                            onError={(errorMessage) => {
+                              setLoadError(errorMessage);
+                              setMessage("");
+                            }}
+                          />
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -167,6 +217,7 @@ export default function FulfillmentPanel() {
           </div>
         )}
       </section>
+
     </div>
   );
 }

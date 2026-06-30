@@ -27,6 +27,11 @@ import {
 } from "@/lib/db/inventory";
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
 import {
+  changeOrderStatus,
+  clearAllOrdersDevOnly,
+  deleteOrderDevOnly,
+} from "@/lib/db/orderManagement";
+import {
   updateMethodConfig,
   updateSupportConfig,
   addBank,
@@ -79,6 +84,7 @@ import type {
   SaveParentProductInput,
   SaveVariantInput,
 } from "@/lib/dto";
+import type { OrderStatus } from "@/lib/types";
 
 export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage({ take: 10 });
@@ -174,6 +180,37 @@ export async function deliverOrderAction(
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
   return deliverOrder(orderId, assignments);
+}
+
+export async function changeOrderStatusAction(
+  orderId: string,
+  toStatus: OrderStatus,
+  note?: string,
+): Promise<ActionResult> {
+  const result = await changeOrderStatus({ orderId, toStatus, note });
+  if (result.ok) {
+    revalidatePath("/admin");
+    revalidatePath(`/admin/orders/${orderId}`);
+    revalidatePath(`/payment/${orderId}`);
+  }
+  return result;
+}
+
+export async function deleteOrderDevOnlyAction(orderId: string): Promise<ActionResult> {
+  const result = await deleteOrderDevOnly(orderId);
+  if (result.ok) {
+    revalidatePath("/admin");
+    revalidatePath(`/admin/orders/${orderId}`);
+  }
+  return result;
+}
+
+export async function clearAllOrdersDevOnlyAction(
+  resetOrderNumbering: boolean,
+): Promise<ActionResult> {
+  const result = await clearAllOrdersDevOnly(resetOrderNumbering);
+  if (result.ok) revalidatePath("/admin");
+  return result;
 }
 
 export async function getParentProductsAction(): Promise<ParentProductDTO[]> {

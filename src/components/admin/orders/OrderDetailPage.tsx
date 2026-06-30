@@ -1,14 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   isDelivered,
+  orderStatusLabel,
   orderStatusBadgeClass,
   orderStatusShort,
 } from "@/lib/orderStatus";
 import {
+  changeOrderStatusAction,
   getAdminOrderDetailAction,
   getAvailableCodesAction,
   deliverOrderAction,
@@ -26,6 +29,12 @@ import type {
   AssignmentEntry,
   ItemAssignment,
 } from "@/lib/dto";
+import type { OrderStatus } from "@/lib/types";
+
+const DevOrderDetailTools =
+  process.env.NODE_ENV !== "production"
+    ? dynamic(() => import("@/components/admin/orders/DevOrderDetailTools"))
+    : null;
 
 const METHOD_LABELS: Record<string, string> = {
   bank: "Virement bancaire",
@@ -34,6 +43,16 @@ const METHOD_LABELS: Record<string, string> = {
   card: "Carte bancaire",
   test: "Test",
 };
+
+const STATUS_OPTIONS: OrderStatus[] = [
+  "pending_payment",
+  "payment_submitted",
+  "payment_confirmed",
+  "payment_issue",
+  "rejected",
+  "refunded",
+  "cancelled",
+];
 
 function orderNumber(id: string) {
   let hash = 0;
@@ -76,6 +95,9 @@ export default function OrderDetailPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [nextStatus, setNextStatus] = useState<OrderStatus>(initialOrder.status);
+  const [statusNote, setStatusNote] = useState("");
   const manualMode = settings.inventoryMode === "manual";
 
   const delivered = isDelivered(order.status);
@@ -202,6 +224,23 @@ export default function OrderDetailPage({
       codes: entries[item.id] ?? [],
     }));
     await runAction("Commande livrée.", () => deliverOrderAction(order.id, assignments));
+  }
+
+  async function handleStatusChange() {
+    if (nextStatus === order.status) {
+      setError("Choisissez un statut différent du statut actuel.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Confirmer le changement de statut de "${orderStatusShort(order.status)}" vers "${orderStatusShort(nextStatus)}" ? Un événement d'audit sera ajouté.`,
+    );
+    if (!confirmed) return;
+
+    await runAction("Statut de commande mis à jour.", () =>
+      changeOrderStatusAction(order.id, nextStatus, statusNote),
+    );
+    setStatusModalOpen(false);
+    setStatusNote("");
   }
 
   return (
@@ -375,6 +414,23 @@ export default function OrderDetailPage({
                   Attribuer et livrer les codes
                 </a>
               ) : null}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setNextStatus(order.status === "delivered" ? "payment_confirmed" : order.status);
+                  setStatusModalOpen(true);
+                }}
+                className="btn-ghost w-full justify-center disabled:opacity-50"
+              >
+                Changer le statut
+              </button>
+              {DevOrderDetailTools ? (
+                <DevOrderDetailTools
+                  orderId={order.id}
+                  onError={(errorMessage) => setError(errorMessage)}
+                />
+              ) : null}
             </div>
             <p className="mt-3 text-xs text-muted">
               L'annulation et les notes internes ne sont pas configurées dans le flux actuel.
@@ -382,6 +438,83 @@ export default function OrderDetailPage({
           </section>
         </aside>
       </div>
+
+      {statusModalOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-card">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-white">Changer le statut</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Statut actuel: {orderStatusLabel(order.status)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusModalOpen(false)}
+                className="text-sm text-muted hover:text-white"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <label className="block text-sm">
+                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
+                  Nouveau statut
+                </span>
+                <select
+                  value={nextStatus}
+                  onChange={(event) => setNextStatus(event.target.value as OrderStatus)}
+                  className="input h-11 py-0"
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {orderStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
+                  Note admin optionnelle
+                </span>
+                <textarea
+                  value={statusNote}
+                  onChange={(event) => setStatusNote(event.target.value)}
+                  rows={4}
+                  className="input min-h-28 py-3"
+                  placeholder="Raison du changement..."
+                />
+              </label>
+
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
+                Ce changement ajoute un evenement d'audit avec l'ancien statut, le nouveau statut,
+                l'horodatage et la note. Aucun email n'est envoye automatiquement.
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalOpen(false)}
+                  className="btn-ghost w-full justify-center"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || nextStatus === order.status}
+                  onClick={handleStatusChange}
+                  className="btn-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Confirmer le changement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
