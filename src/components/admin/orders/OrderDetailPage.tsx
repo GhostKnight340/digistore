@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
+import { DEV_ONLY_ORDER_TOOLS_ENABLED } from "@/lib/devMode";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   isDelivered,
@@ -32,7 +33,7 @@ import type {
 import type { OrderStatus } from "@/lib/types";
 
 const DevOrderDetailTools =
-  process.env.NODE_ENV !== "production"
+  DEV_ONLY_ORDER_TOOLS_ENABLED
     ? dynamic(() => import("@/components/admin/orders/DevOrderDetailTools"))
     : null;
 

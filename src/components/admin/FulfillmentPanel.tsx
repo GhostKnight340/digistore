@@ -4,6 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
+import { DEV_ONLY_ORDER_TOOLS_ENABLED } from "@/lib/devMode";
 import {
   orderStatusShort,
   orderStatusBadgeClass,
@@ -13,11 +14,11 @@ import { getAdminFulfillmentOrdersAction } from "@/app/actions/admin";
 import type { AdminOrderSummaryDTO } from "@/lib/dto";
 
 const DevOrderListTools =
-  process.env.NODE_ENV !== "production"
+  DEV_ONLY_ORDER_TOOLS_ENABLED
     ? dynamic(() => import("@/components/admin/DevOrderListTools"))
     : null;
 const DevOrderRowDelete =
-  process.env.NODE_ENV !== "production"
+  DEV_ONLY_ORDER_TOOLS_ENABLED
     ? dynamic(() =>
         import("@/components/admin/DevOrderListTools").then((mod) => mod.DevOrderRowDelete),
       )
