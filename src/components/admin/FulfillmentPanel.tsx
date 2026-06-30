@@ -95,17 +95,6 @@ export default function FulfillmentPanel() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <OrderListDeleteTools
-            onSuccess={async (successMessage) => {
-              setMessage(successMessage);
-              setLoadError("");
-              await load();
-            }}
-            onError={(errorMessage) => {
-              setLoadError(errorMessage);
-              setMessage("");
-            }}
-          />
           <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1 text-xs">
             {FILTERS.map((item) => (
               <button
@@ -122,6 +111,28 @@ export default function FulfillmentPanel() {
           </div>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-red-500/30 bg-red-500/5 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-red-100">Zone dangereuse des commandes</p>
+            <p className="mt-1 text-xs text-red-200/80">
+              Supprime toutes les commandes passées et leurs données liées. Les produits, le stock et les paramètres restent inchangés.
+            </p>
+          </div>
+          <OrderListDeleteTools
+            onSuccess={async (successMessage) => {
+              setMessage(successMessage);
+              setLoadError("");
+              await load();
+            }}
+            onError={(errorMessage) => {
+              setLoadError(errorMessage);
+              setMessage("");
+            }}
+          />
+        </div>
+      </section>
 
       {message ? (
         <div className="rounded-2xl border border-green-500/40 bg-green-500/10 px-5 py-4 text-sm text-green-200">

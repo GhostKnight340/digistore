@@ -37,7 +37,7 @@ export function DevOrderRowDelete({
       onClick={handleDeleteOrder}
       className="text-xs font-medium text-red-300 hover:text-red-200 disabled:opacity-50"
     >
-      Delete Order
+      Supprimer
     </button>
   );
 }
@@ -77,9 +77,9 @@ export default function DevOrderListTools({
         type="button"
         disabled={busy}
         onClick={() => setClearModalOpen(true)}
-        className="rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-50"
+        className="rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-50"
       >
-        Clear All Orders
+        Supprimer toutes les commandes
       </button>
 
       {clearModalOpen ? (
@@ -88,7 +88,7 @@ export default function DevOrderListTools({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-red-300">Danger zone</p>
-                <h3 className="mt-1 text-xl font-bold text-white">Clear All Orders</h3>
+                <h3 className="mt-1 text-xl font-bold text-white">Supprimer toutes les commandes</h3>
               </div>
               <button
                 type="button"
@@ -101,9 +101,9 @@ export default function DevOrderListTools({
 
             <div className="mt-5 space-y-4">
               <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-4 text-sm leading-relaxed text-red-100">
-                This permanently deletes every order and related test data: order items,
-                payment proofs, payment events, delivered-code rows, and order email logs.
-                Products, inventory records, settings, categories, and payment methods are left untouched.
+                Cette action supprime définitivement toutes les commandes et leurs données liées :
+                articles, preuves de paiement, événements de paiement, livraisons et journaux e-mail.
+                Les produits, le stock, les paramètres, les catégories et les méthodes de paiement restent inchangés.
               </div>
 
               <label className="block text-sm">
@@ -125,7 +125,7 @@ export default function DevOrderListTools({
                   onChange={(event) => setResetOrderNumbering(event.target.checked)}
                   className="h-4 w-4"
                 />
-                Reset order numbering so the next order is #000001
+                Réinitialiser la numérotation pour que la prochaine commande soit #000001
               </label>
 
               <div className="grid gap-2 sm:grid-cols-2">
@@ -142,7 +142,7 @@ export default function DevOrderListTools({
                   onClick={handleClearAllOrders}
                   className="w-full rounded-lg border border-red-500/60 bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Clear All Orders
+                  Supprimer toutes les commandes
                 </button>
               </div>
             </div>
