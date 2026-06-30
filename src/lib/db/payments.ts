@@ -2,8 +2,11 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
-import { getStoreSettings } from "./catalog";
-import { renderEmailTemplate, type EmailTemplateKey } from "@/lib/emailTemplates";
+import { type EmailTemplateKey } from "@/lib/emailTemplates";
+import {
+  renderTransactionalEmail,
+  sendTransactionalEmail,
+} from "@/lib/email/send-email";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
@@ -47,14 +50,6 @@ export async function submitPayment(
   }
 
   try {
-    const settings = await getStoreSettings();
-    const proofEmail = renderEmailTemplate(settings, "proof_received", {
-      customer_name: order.customerName,
-      order_number: order.id,
-      order_url: `/order/${order.id}`,
-      payment_url: `/payment/${order.id}`,
-      total: `${order.totalMad} MAD`,
-    });
     await prisma.$transaction(async (tx) => {
       const updated = await tx.order.updateMany({
         where: { id: orderId, status: "pending_payment" },
@@ -92,16 +87,26 @@ export async function submitPayment(
         },
       });
 
-      await tx.emailLog.create({
-        data: {
-          orderId,
-          type: "payment_submitted",
-          recipient: order.customerEmail,
-          subject: proofEmail.subject,
-          body: proofEmail.body,
+    });
+
+    try {
+      await sendTransactionalEmail({
+        to: order.customerEmail,
+        orderId,
+        customerId: order.customerId,
+        templateKey: "proof_received",
+        type: "payment_submitted",
+        variables: {
+          customer_name: order.customerName,
+          order_number: order.id,
+          order_url: `/order/${order.id}`,
+          payment_url: `/payment/${order.id}`,
+          total: `${order.totalMad} MAD`,
         },
       });
-    });
+    } catch (emailError) {
+      console.error("[email:proof_received]", emailError);
+    }
 
     return { ok: true };
   } catch (error) {
@@ -163,15 +168,6 @@ async function setPaymentStatus(
       : emailType === "payment_rejected"
         ? "payment_rejected"
         : "new_proof_requested";
-  const settings = await getStoreSettings();
-  const email = renderEmailTemplate(settings, templateKey, {
-    customer_name: order.customerName,
-    order_number: order.id,
-    order_url: `/order/${order.id}`,
-    payment_url: `/payment/${order.id}`,
-    total: `${order.totalMad} MAD`,
-    reason: note,
-  });
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -185,19 +181,106 @@ async function setPaymentStatus(
           note,
         },
       });
-      await tx.emailLog.create({
-        data: {
-          orderId,
-          type: emailType,
-          recipient: order.customerEmail,
-          subject: email.subject || subject,
-          body: email.body || body,
-        },
-      });
     });
+    try {
+      const preview = await renderPaymentStatusEmailPreview(orderId, templateKey, note);
+      await sendTransactionalEmail({
+        to: order.customerEmail,
+        orderId,
+        customerId: order.customerId,
+        templateKey,
+        type: emailType,
+        subject: preview.subject || subject,
+        text: preview.text || body,
+        html: preview.html,
+        variables: preview.variables,
+      });
+    } catch (emailError) {
+      console.error(`[email:${emailType}]`, emailError);
+    }
     return { ok: true };
   } catch (error) {
     console.error("[setPaymentStatus]", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Mise à jour impossible.",
+    };
+  }
+}
+
+export async function renderPaymentStatusEmailPreview(
+  orderId: string,
+  templateKey: EmailTemplateKey,
+  reason = "",
+) {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new Error("Commande introuvable.");
+  const variables = {
+    customer_name: order.customerName,
+    order_number: order.id,
+    order_url: `/order/${order.id}`,
+    payment_url: `/payment/${order.id}`,
+    total: `${order.totalMad} MAD`,
+    reason,
+  };
+  const rendered = await renderTransactionalEmail(templateKey, variables);
+  return { ...rendered, variables };
+}
+
+export async function applyPaymentStatusWithEmail(
+  orderId: string,
+  toStatus: string,
+  note: string,
+  emailType: string,
+  templateKey: EmailTemplateKey,
+  email: { subject: string; text: string; html?: string },
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) return { ok: false, error: "Commande introuvable." };
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({ where: { id: orderId }, data: { status: toStatus } });
+      await tx.paymentEvent.create({
+        data: {
+          orderId,
+          type: "status_change",
+          fromStatus: order.status,
+          toStatus,
+          note,
+        },
+      });
+    });
+
+    try {
+      await sendTransactionalEmail({
+        to: order.customerEmail,
+        orderId,
+        customerId: order.customerId,
+        templateKey,
+        type: emailType,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        manuallyEdited: true,
+        variables: {
+          customer_name: order.customerName,
+          order_number: order.id,
+          order_url: `/order/${order.id}`,
+          payment_url: `/payment/${order.id}`,
+          total: `${order.totalMad} MAD`,
+          reason: note,
+        },
+      });
+    } catch (emailError) {
+      console.error(`[email:${emailType}]`, emailError);
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error("[applyPaymentStatusWithEmail]", error);
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Mise à jour impossible.",

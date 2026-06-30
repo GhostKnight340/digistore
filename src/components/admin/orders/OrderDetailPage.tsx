@@ -18,8 +18,8 @@ import {
 } from "@/app/actions/admin";
 import {
   approvePaymentAction,
-  rejectPaymentAction,
-  markPaymentIssueAction,
+  getPaymentEmailPreviewAction,
+  sendPaymentReviewEmailAction,
   getPaymentProofAction,
 } from "@/app/actions/payments";
 import type {
@@ -97,6 +97,13 @@ export default function OrderDetailPage({
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [nextStatus, setNextStatus] = useState<OrderStatus>(initialOrder.status);
   const [statusNote, setStatusNote] = useState("");
+  const [reviewEmail, setReviewEmail] = useState<{
+    intent: "reject" | "request_proof" | "refund_update";
+    title: string;
+    subject: string;
+    text: string;
+    reason: string;
+  } | null>(null);
   const manualMode = settings.inventoryMode === "manual";
 
   const delivered = isDelivered(order.status);
@@ -210,6 +217,42 @@ export default function OrderDetailPage({
       setError(result.error ?? "Action impossible.");
     }
     setBusy(false);
+  }
+
+  async function openReviewEmail(
+    intent: "reject" | "request_proof" | "refund_update",
+    title: string,
+  ) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const preview = await getPaymentEmailPreviewAction(order.id, intent);
+      setReviewEmail({
+        intent,
+        title,
+        subject: preview.subject,
+        text: preview.text,
+        reason: "",
+      });
+    } catch (previewError) {
+      setError(previewError instanceof Error ? previewError.message : "Aperçu email impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendReviewEmail() {
+    if (!reviewEmail) return;
+    await runAction("Email envoyé et statut mis à jour.", () =>
+      sendPaymentReviewEmailAction(
+        order.id,
+        reviewEmail.intent,
+        { subject: reviewEmail.subject, text: reviewEmail.text },
+        reviewEmail.reason,
+      ),
+    );
+    setReviewEmail(null);
   }
 
   async function handleDeliver() {
@@ -355,6 +398,7 @@ export default function OrderDetailPage({
           ) : null}
 
           <TimelineSection order={order} />
+          <EmailLogsSection order={order} />
         </div>
 
         <aside className="space-y-6">
@@ -388,9 +432,7 @@ export default function OrderDetailPage({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() =>
-                    runAction("Problème de paiement signalé.", () => markPaymentIssueAction(order.id))
-                  }
+                  onClick={() => openReviewEmail("request_proof", "Demander un nouveau justificatif")}
                   className="w-full rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
                 >
                   Signaler un problème de paiement
@@ -400,9 +442,7 @@ export default function OrderDetailPage({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() =>
-                    runAction("Commande refusée.", () => rejectPaymentAction(order.id))
-                  }
+                  onClick={() => openReviewEmail("reject", "Refuser le paiement")}
                   className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
                 >
                   Refuser la commande
@@ -435,6 +475,105 @@ export default function OrderDetailPage({
           </section>
         </aside>
       </div>
+
+      {reviewEmail ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-card">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-white">{reviewEmail.title}</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Modifiez cet email si nécessaire. Les changements s'appliquent uniquement à cet envoi.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewEmail(null)}
+                className="text-sm text-muted hover:text-white"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <label className="block text-sm">
+                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
+                  Sujet
+                </span>
+                <input
+                  value={reviewEmail.subject}
+                  onChange={(event) =>
+                    setReviewEmail((current) =>
+                      current ? { ...current, subject: event.target.value } : current,
+                    )
+                  }
+                  className="input h-11 py-0"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
+                  Raison interne / client
+                </span>
+                <input
+                  value={reviewEmail.reason}
+                  onChange={(event) =>
+                    setReviewEmail((current) =>
+                      current ? { ...current, reason: event.target.value } : current,
+                    )
+                  }
+                  className="input h-11 py-0"
+                  placeholder="Optionnel"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
+                  Message
+                </span>
+                <textarea
+                  value={reviewEmail.text}
+                  onChange={(event) =>
+                    setReviewEmail((current) =>
+                      current ? { ...current, text: event.target.value } : current,
+                    )
+                  }
+                  rows={10}
+                  className="input min-h-64 py-3"
+                />
+              </label>
+
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs uppercase tracking-wide text-muted">Aperçu</p>
+                <h3 className="mt-2 text-base font-semibold text-white">
+                  {reviewEmail.subject}
+                </h3>
+                <pre className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted">
+                  {reviewEmail.text}
+                </pre>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setReviewEmail(null)}
+                  className="btn-ghost w-full justify-center"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !reviewEmail.subject.trim() || !reviewEmail.text.trim()}
+                  onClick={sendReviewEmail}
+                  className="btn-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Envoyer et appliquer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {statusModalOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
@@ -812,6 +951,73 @@ function TimelineSection({ order }: { order: AdminOrderDTO }) {
               </li>
             ))}
           </ol>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function EmailLogsSection({ order }: { order: AdminOrderDTO }) {
+  return (
+    <section className="card overflow-hidden">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="font-bold text-white">Emails transactionnels</h2>
+      </div>
+      <div className="divide-y divide-border">
+        {order.emailLogs.length === 0 ? (
+          <p className="px-5 py-5 text-sm text-muted">Aucun email journalisé.</p>
+        ) : (
+          order.emailLogs.map((log) => (
+            <article key={log.id} className="px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">{log.subject}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {log.recipient} · {formatDate(log.createdAt)}
+                  </p>
+                </div>
+                <span
+                  className={`chip ${
+                    log.status === "sent"
+                      ? "border-green-500/30 text-green-400"
+                      : log.status === "failed"
+                        ? "border-red-500/30 text-red-400"
+                        : "border-amber-500/30 text-amber-300"
+                  }`}
+                >
+                  {log.status}
+                </span>
+              </div>
+              <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                <InfoRow label="Provider" value={log.provider || "simulation"} />
+                <InfoRow label="Message ID" value={log.providerMessageId ?? "Non disponible"} />
+                <InfoRow label="Template" value={log.templateKey ?? log.type} />
+              </dl>
+              {log.errorMessage ? (
+                <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                  {log.errorMessage}
+                </p>
+              ) : null}
+              <details className="mt-3 rounded-xl border border-border bg-surface">
+                <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-muted">
+                  Voir le snapshot rendu
+                </summary>
+                <div className="space-y-3 border-t border-border p-4">
+                  <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted">
+                    {log.text || log.body}
+                  </pre>
+                  {log.html ? (
+                    <div className="rounded-lg border border-border bg-base p-3 text-xs text-muted">
+                      <p className="mb-2 font-semibold text-white">HTML</p>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap">
+                        {log.html}
+                      </pre>
+                    </div>
+                  ) : null}
+                </div>
+              </details>
+            </article>
+          ))
         )}
       </div>
     </section>

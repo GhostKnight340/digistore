@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { sendTestEmailAction } from "@/app/actions/admin";
+import type { EmailTemplateKey } from "@/lib/emailTemplates";
 
 const labels: Record<string, string> = {
   welcome: "Welcome",
@@ -40,6 +42,9 @@ export default function EmailTemplatesPanel() {
   const [active, setActive] = useState(keys[0] ?? "order_received");
   const [draft, setDraft] = useState(settings.emailTemplates);
   const [message, setMessage] = useState("");
+  const [testRecipient, setTestRecipient] = useState(
+    process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "",
+  );
   const template = draft[active];
   const preview = useMemo(
     () => ({
@@ -52,6 +57,11 @@ export default function EmailTemplatesPanel() {
   async function save() {
     const result = await saveSettings({ ...settings, emailTemplates: draft });
     setMessage(result.ok ? "Templates enregistrés." : result.error ?? "Enregistrement impossible.");
+  }
+
+  async function sendTest() {
+    const result = await sendTestEmailAction(testRecipient, active as EmailTemplateKey);
+    setMessage(result.ok ? "Email test traité. Consultez EmailLog pour le statut." : result.error ?? "Envoi impossible.");
   }
 
   return (
@@ -80,6 +90,21 @@ export default function EmailTemplatesPanel() {
           <button type="button" onClick={save} className="btn-primary h-10 px-4 text-xs">
             Enregistrer
           </button>
+          <div className="flex w-full flex-wrap gap-2">
+            <input
+              value={testRecipient}
+              onChange={(event) => setTestRecipient(event.target.value)}
+              className="input h-10 min-w-56 flex-1 py-0 text-xs"
+              placeholder="email@exemple.com"
+            />
+            <button
+              type="button"
+              onClick={sendTest}
+              className="btn-ghost h-10 px-4 text-xs"
+            >
+              Envoyer un test
+            </button>
+          </div>
           {message ? <p className="w-full text-xs text-muted">{message}</p> : null}
         </div>
 

@@ -157,6 +157,7 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   orders Order[]
+  emailLogs EmailLog[]
 
   @@index([updatedAt])
 }
@@ -197,18 +198,33 @@ model DeliveredCode {
 
 model EmailLog {
   id        String   @id @default(cuid())
-  orderId   String
+  orderId   String?
+  customerId String?
   // type: "order_received" | "payment_submitted" | "payment_confirmed"
   //      | "payment_rejected" | "payment_issue" | "code_delivered"
   type      String
+  templateKey String?
   recipient String
   subject   String
   body      String
+  html      String   @default("")
+  text      String   @default("")
+  provider  String   @default("simulation")
+  providerMessageId String?
+  status    String   @default("simulated")
+  errorMessage String?
+  manuallyEdited Boolean @default(false)
+  metadata Json?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
+  @@index([customerId])
+  @@index([status])
+  @@index([templateKey])
 }
 
 // Customer-uploaded payment proof (PNG / JPG / JPEG / PDF).

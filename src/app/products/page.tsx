@@ -25,7 +25,7 @@ export default async function ProductsPage({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="container-page py-10">
+    <div className="container-page pt-10 pb-20 sm:py-10">
       <header className="mb-8">
         <h1 className="text-3xl font-semibold tracking-tight text-white">
           Catalogue

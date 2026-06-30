@@ -6,7 +6,10 @@ import {
   rejectPayment,
   markPaymentIssue,
   getPaymentProof,
+  renderPaymentStatusEmailPreview,
+  applyPaymentStatusWithEmail,
 } from "@/lib/db/payments";
+import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import { getPaymentConfig, getAdminPaymentConfig } from "@/lib/db/paymentSettings";
 import { getCustomerOrder } from "@/lib/db/orders";
 import type {
@@ -88,6 +91,55 @@ export async function rejectPaymentAction(orderId: string): Promise<ActionResult
 
 export async function markPaymentIssueAction(orderId: string): Promise<ActionResult> {
   return markPaymentIssue(orderId);
+}
+
+export async function getPaymentEmailPreviewAction(
+  orderId: string,
+  intent: "reject" | "request_proof" | "refund_update",
+): Promise<{ subject: string; text: string; html: string }> {
+  const key: EmailTemplateKey =
+    intent === "reject"
+      ? "payment_rejected"
+      : intent === "refund_update"
+        ? "refund_update"
+        : "new_proof_requested";
+  return renderPaymentStatusEmailPreview(orderId, key, "");
+}
+
+export async function sendPaymentReviewEmailAction(
+  orderId: string,
+  intent: "reject" | "request_proof" | "refund_update",
+  email: { subject: string; text: string; html?: string },
+  reason?: string,
+): Promise<ActionResult> {
+  if (intent === "reject") {
+    return applyPaymentStatusWithEmail(
+      orderId,
+      "rejected",
+      reason || "Paiement refusé par l'admin.",
+      "payment_rejected",
+      "payment_rejected",
+      email,
+    );
+  }
+  if (intent === "refund_update") {
+    return applyPaymentStatusWithEmail(
+      orderId,
+      "refunded",
+      reason || "Mise à jour remboursement.",
+      "refund_update",
+      "refund_update",
+      email,
+    );
+  }
+  return applyPaymentStatusWithEmail(
+    orderId,
+    "payment_issue",
+    reason || "Nouveau justificatif demandé par l'admin.",
+    "payment_issue",
+    "new_proof_requested",
+    email,
+  );
 }
 
 /** Admin: fetch base64 proof for a given order. */

@@ -174,7 +174,7 @@ function getActiveProductRows(options: {
       active: true,
       category: options.category,
       categoryRecord: { is: { active: true } },
-      variants: { some: {} },
+      variants: { some: { active: true } },
       ...(options.query
         ? {
             OR: [
@@ -221,29 +221,6 @@ export async function getCatalogPage(options: {
   await ensureDatabaseReady();
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(200, Math.max(1, options.take ?? 24));
-  const where = {
-    active: true,
-    category: options.category,
-    categoryRecord: { is: { active: true } },
-    ...(options.query
-      ? {
-            OR: [
-              { name: { contains: options.query, mode: "insensitive" as const } },
-              { category: { contains: options.query, mode: "insensitive" as const } },
-              {
-                variants: {
-                  some: {
-                    OR: [
-                      { id: { contains: options.query, mode: "insensitive" as const } },
-                      { name: { contains: options.query, mode: "insensitive" as const } },
-                    ],
-                  },
-                },
-              },
-            ],
-          }
-        : {}),
-  };
   const [categoryRows, productRows] = await Promise.all([
     prisma.category.findMany({
       where: { active: true },
@@ -251,7 +228,13 @@ export async function getCatalogPage(options: {
       include: {
         _count: {
           select: {
-            products: { where: { active: true, variants: { some: {} } } },
+            products: {
+              where: {
+                active: true,
+                categoryRecord: { is: { active: true } },
+                variants: { some: { active: true } },
+              },
+            },
           },
         },
       },
@@ -283,8 +266,12 @@ export async function getCatalogPage(options: {
     .map((entry) => entry.product);
   const pagedProducts = variantProducts.slice((page - 1) * pageSize, page * pageSize);
 
+  const publicCategories = categoryRows
+    .map(toCategory)
+    .filter((category) => (category.productCount ?? 0) > 0);
+
   return {
-    categories: categoryRows.map(toCategory),
+    categories: publicCategories,
     products: pagedProducts,
     total: variantProducts.length,
     page,
@@ -303,7 +290,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     where: {
       slug,
       active: true,
-      variants: { some: {} },
+      variants: { some: { active: true } },
       categoryRecord: { is: { active: true } },
     },
     include: productCatalogInclude,
@@ -315,7 +302,11 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 export async function getParentProductSlugs(): Promise<string[]> {
   await ensureDatabaseReady();
   const products = await prisma.product.findMany({
-    where: { active: true, variants: { some: {} } },
+    where: {
+      active: true,
+      variants: { some: { active: true } },
+      categoryRecord: { is: { active: true } },
+    },
     select: { slug: true },
   });
   return products.map((product) => product.slug);
@@ -329,7 +320,7 @@ export async function getProductsByCategorySlug(
     where: {
       category,
       active: true,
-      variants: { some: {} },
+      variants: { some: { active: true } },
       categoryRecord: { is: { active: true } },
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],

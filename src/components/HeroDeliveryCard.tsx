@@ -82,16 +82,16 @@ export default function HeroDeliveryCard() {
   const status = statuses[step];
 
   return (
-    <div className="relative flex min-h-[430px] items-center justify-center">
+    <div className="relative flex min-h-[360px] w-full min-w-0 items-center justify-center overflow-visible pt-2 sm:min-h-[430px]">
       <div
-        className={`pointer-events-none absolute h-80 w-[360px] rounded-full bg-[radial-gradient(circle,rgba(62,123,250,0.3),transparent_62%)] blur-[64px] transition-opacity duration-1000 ${
+        className={`pointer-events-none absolute h-64 w-[min(300px,82vw)] rounded-full bg-[radial-gradient(circle,rgba(62,123,250,0.3),transparent_62%)] blur-[48px] transition-opacity duration-1000 sm:h-80 sm:w-[360px] sm:blur-[64px] ${
           active ? "opacity-80" : "opacity-55"
         }`}
       />
 
-      <div className="relative flex w-full max-w-[374px] flex-col gap-3.5">
+      <div className="relative flex w-full max-w-[374px] min-w-0 flex-col gap-3.5">
         <div
-          className={`relative overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(158deg,#1d2638_0%,#141a27_52%,#0d1017_100%)] p-[26px] pb-6 shadow-[0_28px_64px_rgba(0,0,0,0.55)] transition-transform duration-1000 ${
+          className={`relative overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(158deg,#1d2638_0%,#141a27_52%,#0d1017_100%)] p-5 pb-5 shadow-[0_28px_64px_rgba(0,0,0,0.55)] transition-transform duration-1000 sm:p-[26px] sm:pb-6 ${
             active ? "-translate-y-1.5" : ""
           }`}
         >
@@ -107,12 +107,12 @@ export default function HeroDeliveryCard() {
             }`}
           />
 
-          <div className="relative mb-9 flex items-center justify-between">
+          <div className="relative mb-7 flex items-center justify-between gap-3 sm:mb-9">
             <div className="flex items-center gap-3">
               <div className="grid h-[30px] w-[30px] place-items-center rounded-[9px] border border-white/10 bg-gradient-to-br from-[#2c3445] to-[#171b26]">
                 <div className="h-[11px] w-[11px] rounded-full border-2 border-accent-strong" />
               </div>
-              <span className="font-mono text-xs tracking-[0.22em] text-[#c4c9d4]">
+              <span className="min-w-0 truncate font-mono text-[11px] tracking-[0.16em] text-[#c4c9d4] sm:text-xs sm:tracking-[0.22em]">
                 STEAM WALLET
               </span>
             </div>
@@ -136,19 +136,19 @@ export default function HeroDeliveryCard() {
             <div className="mb-2 text-[11px] tracking-[0.07em] text-faint">
               SOLDE NUMÉRIQUE
             </div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-[42px] font-semibold leading-none tracking-[-0.03em] text-text">
+            <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
+              <span className="text-[34px] font-semibold leading-none text-text sm:text-[42px]">
                 100 MAD
               </span>
               <span className="font-mono text-[15px] text-muted">~ 9 EUR</span>
             </div>
           </div>
 
-          <div className="relative mt-8 flex items-center justify-between gap-4">
+          <div className="relative mt-7 flex items-center justify-between gap-4 sm:mt-8">
             <span className="text-xs text-muted">
               Produit numérique - Livraison rapide
             </span>
-            <span className="h-[26px] w-[34px] rounded-md border border-white/10 bg-[#20252f] bg-[linear-gradient(90deg,transparent_32%,rgba(0,0,0,0.25)_33%_34%,transparent_35%),linear-gradient(0deg,transparent_45%,rgba(0,0,0,0.25)_46%_47%,transparent_48%)]" />
+            <span className="h-[26px] w-[34px] shrink-0 rounded-md border border-white/10 bg-[#20252f] bg-[linear-gradient(90deg,transparent_32%,rgba(0,0,0,0.25)_33%_34%,transparent_35%),linear-gradient(0deg,transparent_45%,rgba(0,0,0,0.25)_46%_47%,transparent_48%)]" />
           </div>
         </div>
 

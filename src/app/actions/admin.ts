@@ -63,6 +63,8 @@ import {
   reorderCategories,
   saveCategory,
 } from "@/lib/db/categories";
+import { sendTransactionalEmail } from "@/lib/email/send-email";
+import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import type {
   ActionResult,
   AdminCategoryDTO,
@@ -88,8 +90,44 @@ import type {
 } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
 
+function revalidateStorefrontCatalog() {
+  revalidatePath("/", "layout");
+  revalidatePath("/", "page");
+  revalidatePath("/products", "page");
+  revalidatePath("/products/[id]", "page");
+}
+
 export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage({ take: 10 });
+}
+
+export async function sendTestEmailAction(
+  to: string,
+  templateKey: EmailTemplateKey,
+): Promise<ActionResult> {
+  const recipient = to.trim();
+  if (!recipient || !recipient.includes("@")) {
+    return { ok: false, error: "Adresse email invalide." };
+  }
+  const result = await sendTransactionalEmail({
+    to: recipient,
+    templateKey,
+    type: "test_email",
+    variables: {
+      customer_name: "Client test",
+      order_number: "#TEST",
+      order_url: "https://ghost.ma/order/test",
+      payment_url: "https://ghost.ma/payment/test",
+      delivery_url: "https://ghost.ma/delivery/test",
+      total: "100 MAD",
+      reason: "Test admin",
+    },
+    metadata: { source: "admin_test_email" },
+    manuallyEdited: false,
+  });
+  return result.ok
+    ? { ok: true }
+    : { ok: false, error: result.error ?? "Envoi email impossible." };
 }
 
 export async function getAdminPaymentOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
@@ -236,7 +274,7 @@ export async function createCategoryQuickAction(
 ): Promise<ActionResult & { category?: AdminCategoryDTO }> {
   const result = await createCategoryQuick(nameOrSlug);
   if (result.ok) {
-    revalidatePath("/", "layout");
+    revalidateStorefrontCatalog();
     revalidatePath("/admin");
   }
   return result;
@@ -247,7 +285,7 @@ export async function saveCategoryAction(
 ): Promise<ActionResult & { category?: AdminCategoryDTO }> {
   const result = await saveCategory(data);
   if (result.ok) {
-    revalidatePath("/", "layout");
+    revalidateStorefrontCatalog();
     revalidatePath("/admin");
   }
   return result;
@@ -256,7 +294,7 @@ export async function saveCategoryAction(
 export async function reorderCategoriesAction(ids: string[]): Promise<ActionResult> {
   const result = await reorderCategories(ids);
   if (result.ok) {
-    revalidatePath("/", "layout");
+    revalidateStorefrontCatalog();
     revalidatePath("/admin");
   }
   return result;
@@ -265,7 +303,7 @@ export async function reorderCategoriesAction(ids: string[]): Promise<ActionResu
 export async function deleteCategoryAction(id: string): Promise<ActionResult> {
   const result = await deleteCategory(id);
   if (result.ok) {
-    revalidatePath("/", "layout");
+    revalidateStorefrontCatalog();
     revalidatePath("/admin");
   }
   return result;
@@ -283,7 +321,7 @@ export async function saveParentProductAction(
   data: SaveParentProductInput,
 ): Promise<ActionResult> {
   const result = await saveParentProduct(data);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 
@@ -291,13 +329,13 @@ export async function duplicateParentProductAction(
   slug: string,
 ): Promise<ActionResult & { slug?: string }> {
   const result = await duplicateParentProduct(slug);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 
 export async function archiveParentProductAction(slug: string): Promise<ActionResult> {
   const result = await archiveParentProduct(slug);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 
@@ -305,7 +343,7 @@ export async function deleteParentProductAction(
   input: DeleteParentProductInput,
 ): Promise<ActionResult> {
   const result = await deleteParentProduct(input);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 
@@ -313,7 +351,7 @@ export async function convertProductToVariantAction(
   input: ConvertProductToVariantInput,
 ): Promise<ActionResult> {
   const result = await convertProductToVariant(input);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 
@@ -321,13 +359,13 @@ export async function saveVariantAction(
   data: SaveVariantInput,
 ): Promise<ActionResult> {
   const result = await saveVariant(data);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 
 export async function deleteVariantAction(slug: string): Promise<ActionResult> {
   const result = await deleteVariant(slug);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 
@@ -335,7 +373,7 @@ export async function duplicateVariantAction(
   variantId: string,
 ): Promise<ActionResult & { slug?: string }> {
   const result = await duplicateVariant(variantId);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) revalidateStorefrontCatalog();
   return result;
 }
 

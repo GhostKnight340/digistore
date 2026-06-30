@@ -18,7 +18,7 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-base/75 backdrop-blur-xl">
-      <nav className="container-page flex h-[66px] items-center gap-4 md:gap-7">
+      <nav className="container-page flex min-h-[66px] flex-wrap items-center gap-2 py-2 sm:flex-nowrap sm:gap-4 sm:py-0 md:gap-7">
         {/* Logo */}
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-accent to-[#2b5fd9] shadow-glow">
@@ -73,7 +73,7 @@ export default function Navbar() {
 
           <Link
             href="/cart"
-            className="relative rounded-xl px-2.5 py-2 text-muted transition hover:text-text"
+            className="relative grid h-10 w-10 place-items-center rounded-xl text-muted transition hover:text-text"
             aria-label="Panier"
           >
             <svg
@@ -97,11 +97,35 @@ export default function Navbar() {
 
           <Link
             href="/login"
-            className="rounded-lg border border-border-strong bg-surface2 px-4 py-2 text-sm font-medium text-text transition hover:bg-elevated"
+            className="rounded-lg border border-border-strong bg-surface2 px-3 py-2 text-sm font-medium text-text transition hover:bg-elevated sm:px-4"
           >
             Se connecter
           </Link>
         </div>
+
+        <form
+          action="/products"
+          className="relative flex h-10 w-full items-center md:hidden"
+          role="search"
+        >
+          <input
+            name="q"
+            placeholder="Rechercher..."
+            className="h-full w-full rounded-[10px] border border-border bg-surface px-10 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
+            aria-label="Rechercher des produits"
+          />
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.6" y2="16.6" />
+          </svg>
+        </form>
       </nav>
     </header>
   );

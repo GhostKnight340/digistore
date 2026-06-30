@@ -2,8 +2,7 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
-import { getStoreSettings } from "./catalog";
-import { renderEmailTemplate } from "@/lib/emailTemplates";
+import { sendTransactionalEmail } from "@/lib/email/send-email";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
@@ -18,14 +17,6 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
   if (order.status === "payment_confirmed" || order.status === "delivered") {
     return { ok: false, error: "Paiement déjà confirmé." };
   }
-  const settings = await getStoreSettings();
-  const paymentEmail = renderEmailTemplate(settings, "payment_confirmed", {
-    customer_name: order.customerName,
-    order_number: order.id,
-    order_url: `/order/${order.id}`,
-    total: `${order.totalMad} MAD`,
-  });
-
   try {
     await timeAdmin("admin.confirmPayment", "transaction.statusEmailEvent", () => prisma.$transaction(async (tx) => {
       await tx.order.update({
@@ -41,16 +32,25 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
           note: "Paiement confirmé par l’admin.",
         },
       });
-      await tx.emailLog.create({
-        data: {
-          orderId,
-          type: "payment_confirmed",
-          recipient: order.customerEmail,
-          subject: paymentEmail.subject,
-          body: paymentEmail.body,
+    }), () => 3);
+
+    try {
+      await sendTransactionalEmail({
+        to: order.customerEmail,
+        orderId,
+        customerId: order.customerId,
+        templateKey: "payment_confirmed",
+        type: "payment_confirmed",
+        variables: {
+          customer_name: order.customerName,
+          order_number: order.id,
+          order_url: `/order/${order.id}`,
+          total: `${order.totalMad} MAD`,
         },
       });
-    }), () => 3);
+    } catch (emailError) {
+      console.error("[email:payment_confirmed]", emailError);
+    }
 
     return { ok: true };
   } catch (error) {
@@ -76,7 +76,10 @@ export async function deliverOrder(
         select: {
           id: true,
           status: true,
+          customerId: true,
+          customerName: true,
           customerEmail: true,
+          totalMad: true,
           items: {
             select: {
               id: true,
@@ -111,9 +114,8 @@ export async function deliverOrder(
   }
 
   try {
-    const settings = await getStoreSettings();
+    const deliveredValues: string[] = [];
     await timeAdmin("admin.deliverOrder", "transaction.deliverCodes", () => prisma.$transaction(async (tx) => {
-      const deliveredValues: string[] = [];
       for (const item of order.items) {
         const assignment = assignments.find((entry) => entry.orderItemId === item.id);
         const entries = (assignment?.codes ?? [])
@@ -182,20 +184,26 @@ export async function deliverOrder(
           note: "Code(s) livré(s) par l’admin.",
         },
       });
-      await tx.emailLog.create({
-        data: {
-          orderId,
-          type: "code_delivered",
-          recipient: order.customerEmail,
-          ...renderEmailTemplate(settings, "order_delivered", {
-            customer_name: order.customerEmail,
-            order_number: orderId,
-            delivery_url: `/delivery/${orderId}`,
-            codes: deliveredValues.join("\n"),
-          }),
+    }), () => assignments.length);
+
+    try {
+      await sendTransactionalEmail({
+        to: order.customerEmail,
+        orderId,
+        customerId: order.customerId,
+        templateKey: "order_delivered",
+        type: "code_delivered",
+        variables: {
+          customer_name: order.customerName,
+          order_number: orderId,
+          delivery_url: `/delivery/${orderId}`,
+          total: `${order.totalMad} MAD`,
+          codes: deliveredValues.join("\n"),
         },
       });
-    }), () => assignments.length);
+    } catch (emailError) {
+      console.error("[email:order_delivered]", emailError);
+    }
 
     return { ok: true };
   } catch (error) {

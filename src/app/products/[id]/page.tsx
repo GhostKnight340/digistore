@@ -41,7 +41,7 @@ export default async function ProductDetailPage({
     .slice(0, 4);
 
   return (
-    <div className="container-page py-8 sm:py-10">
+    <div className="container-page pt-8 pb-20 sm:py-10">
       <nav className="mb-9 flex flex-wrap items-center gap-2 text-[13.5px] text-faint">
         <Link href="/" className="text-muted transition hover:text-white">
           Accueil
@@ -54,7 +54,7 @@ export default async function ProductDetailPage({
         <span className="text-text">{product.name}</span>
       </nav>
 
-      <div className="grid gap-10 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
+      <div className="grid min-w-0 gap-10 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
         <div>
           <ProductArt
             category={product.category}
@@ -105,11 +105,11 @@ export default async function ProductDetailPage({
             <span className="chip">{product.deliveryType}</span>
           </div>
 
-          <div className="mt-7 rounded-2xl border border-border bg-surface p-6">
+          <div className="mt-7 rounded-2xl border border-border bg-surface p-4 sm:p-6">
             {product.variants && product.variants.length > 0 && (
               <div className="mb-5">
                 <p className="mb-2 text-sm font-medium text-faint">Montant</p>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 min-[420px]:grid-cols-2">
                   {product.variants.map((item) => (
                     <Link
                       key={item.id}
@@ -136,7 +136,7 @@ export default async function ProductDetailPage({
             </div>
           </div>
 
-          <div className="mt-[18px] grid gap-2.5 sm:grid-cols-2">
+          <div className="mt-[18px] grid gap-2.5 min-[420px]:grid-cols-2">
             {["Reçu par e-mail", "Support local"].map((text) => (
               <div
                 key={text}
@@ -155,7 +155,7 @@ export default async function ProductDetailPage({
           <h2 className="text-xl font-semibold tracking-tight text-text">
             Plus de {product.categoryName}
           </h2>
-          <div className="mt-6 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-6 grid grid-cols-1 gap-[18px] min-[390px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
             {related.map((item) => (
               <ProductCard key={item.id} product={item} />
             ))}

@@ -2,8 +2,7 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
-import { getStoreSettings } from "./catalog";
-import { renderEmailTemplate } from "@/lib/emailTemplates";
+import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { formatPublicOrderNumber, parsePublicOrderNumber } from "@/lib/orderNumber";
 import type { OrderStatus } from "@/lib/types";
 import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
@@ -13,8 +12,59 @@ type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries
 
 const REVENUE_ORDER_STATUSES = ["payment_confirmed", "delivered", "fulfilled"];
 
+const emailLogSelect = {
+  id: true,
+  type: true,
+  templateKey: true,
+  recipient: true,
+  subject: true,
+  body: true,
+  html: true,
+  text: true,
+  provider: true,
+  providerMessageId: true,
+  status: true,
+  errorMessage: true,
+  manuallyEdited: true,
+  createdAt: true,
+} as const;
+
 function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function buildEmailLogDTO(log: {
+  id: string;
+  type: string;
+  templateKey: string | null;
+  recipient: string;
+  subject: string;
+  body: string;
+  html: string;
+  text: string;
+  provider: string;
+  providerMessageId: string | null;
+  status: string;
+  errorMessage: string | null;
+  manuallyEdited: boolean;
+  createdAt: Date | string;
+}) {
+  return {
+    id: log.id,
+    type: log.type,
+    templateKey: log.templateKey,
+    recipient: log.recipient,
+    subject: log.subject,
+    body: log.body,
+    html: log.html,
+    text: log.text,
+    provider: log.provider,
+    providerMessageId: log.providerMessageId,
+    status: log.status,
+    errorMessage: log.errorMessage,
+    manuallyEdited: log.manuallyEdited,
+    createdAt: iso(log.createdAt),
+  };
 }
 
 function orderItemName(item: {
@@ -247,14 +297,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
         prisma.emailLog.findMany({
           where: { orderId },
           orderBy: { createdAt: "asc" },
-          select: {
-            id: true,
-            type: true,
-            recipient: true,
-            subject: true,
-            body: true,
-            createdAt: true,
-          },
+          select: emailLogSelect,
         }),
       (rows) => rows.length,
     ),
@@ -263,14 +306,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
   if (!order) return null;
   return {
     ...buildCustomerDTO(order, undefined, { includeUndeliveredCodes: true }),
-    emailLogs: emailLogs.map((log) => ({
-      id: log.id,
-      type: log.type,
-      recipient: log.recipient,
-      subject: log.subject,
-      body: log.body,
-      createdAt: iso(log.createdAt),
-    })),
+    emailLogs: emailLogs.map(buildEmailLogDTO),
     proofMimeType: order.paymentProof?.mimeType ?? null,
   };
 }
@@ -284,25 +320,11 @@ export async function getOrderEmailLogs(orderId: string): Promise<import("@/lib/
       prisma.emailLog.findMany({
         where: { orderId },
         orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          type: true,
-          recipient: true,
-          subject: true,
-          body: true,
-          createdAt: true,
-        },
+        select: emailLogSelect,
       }),
     (rows) => rows.length,
   );
-  return logs.map((log) => ({
-    id: log.id,
-    type: log.type,
-    recipient: log.recipient,
-    subject: log.subject,
-    body: log.body,
-    createdAt: iso(log.createdAt),
-  }));
+  return logs.map(buildEmailLogDTO);
 }
 
 export async function getAdminStats(): Promise<{
@@ -427,13 +449,20 @@ export async function createOrder(
   const slugs = input.items.map((item) => item.productId);
   const [products, variants] = await Promise.all([
     prisma.product.findMany({
-      where: { slug: { in: slugs }, active: true },
+      where: {
+        slug: { in: slugs },
+        active: true,
+        categoryRecord: { is: { active: true } },
+      },
     }),
     prisma.productVariant.findMany({
       where: {
         id: { in: slugs },
         active: true,
-        product: { active: true },
+        product: {
+          active: true,
+          categoryRecord: { is: { active: true } },
+        },
       },
       include: { product: true },
     }),
@@ -471,15 +500,6 @@ export async function createOrder(
     (sum, item) => sum + item.unitPriceMad * item.quantity,
     0,
   );
-  const settings = await getStoreSettings();
-  const orderEmail = renderEmailTemplate(settings, "order_received", {
-    customer_name: input.customerName,
-    order_number: "",
-    payment_url: "",
-    order_url: "",
-    total: `${totalMad} MAD`,
-  });
-
   try {
     const order = await prisma.$transaction(async (tx) => {
       const customer = await tx.customer.upsert({
@@ -510,16 +530,6 @@ export async function createOrder(
         },
       });
 
-      await tx.emailLog.create({
-        data: {
-          orderId: created.id,
-          type: "order_received",
-          recipient: input.customerEmail,
-          subject: orderEmail.subject,
-          body: orderEmail.body,
-        },
-      });
-
       await tx.paymentEvent.create({
         data: {
           orderId: created.id,
@@ -531,6 +541,25 @@ export async function createOrder(
 
       return created;
     });
+
+    try {
+      await sendTransactionalEmail({
+        to: input.customerEmail,
+        orderId: order.id,
+        customerId: order.customerId,
+        templateKey: "order_received",
+        type: "order_received",
+        variables: {
+          customer_name: input.customerName,
+          order_number: order.id,
+          payment_url: `/payment/${order.id}`,
+          order_url: `/order/${order.id}`,
+          total: `${totalMad} MAD`,
+        },
+      });
+    } catch (emailError) {
+      console.error("[email:order_received]", emailError);
+    }
 
     return { id: order.id };
   } catch (error) {

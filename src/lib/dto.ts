@@ -46,9 +46,17 @@ export interface CustomerOrderDTO {
 export interface EmailLogDTO {
   id: string;
   type: string;
+  templateKey: string | null;
   recipient: string;
   subject: string;
   body: string;
+  html: string;
+  text: string;
+  provider: string;
+  providerMessageId: string | null;
+  status: string;
+  errorMessage: string | null;
+  manuallyEdited: boolean;
   createdAt: string;
 }
 
