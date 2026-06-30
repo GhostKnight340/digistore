@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { ensureCategoryForProduct } from "./categories";
 import { timeAdmin } from "./adminTiming";
 import type {
   ActionResult,
@@ -480,9 +481,14 @@ export async function saveParentProduct(
 
   await ensureDatabaseReady();
 
+  const category = await ensureCategoryForProduct(data.category);
+  if (!category.ok || !category.id) {
+    return { ok: false, error: category.error ?? "Catégorie introuvable." };
+  }
+
   const productData = {
     name: data.name,
-    category: data.category,
+    category: category.id,
     brand: data.brand,
     region: data.region,
     deliveryType: data.deliveryType,
@@ -523,6 +529,11 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
   await ensureDatabaseReady();
 
   try {
+    const category = await ensureCategoryForProduct(data.category);
+    if (!category.ok || !category.id) {
+      return { ok: false, error: category.error ?? "Catégorie introuvable." };
+    }
+
     const product = await timeAdmin(
       "admin.products.saveVariant",
       "product.findUnique.variants",
@@ -547,7 +558,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
           name: data.name,
           priceMad: data.priceMad,
           active: data.active,
-          category: data.category,
+          category: category.id,
           region: data.region,
           deliveryType: data.deliveryType,
         },

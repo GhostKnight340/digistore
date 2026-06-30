@@ -939,7 +939,9 @@ function CategoryCombobox({
         value={query}
         onFocus={() => setOpen(true)}
         onChange={(event) => {
-          setQuery(event.target.value);
+          const next = event.target.value;
+          setQuery(next);
+          onChange(next);
           setOpen(true);
         }}
         placeholder="Rechercher ou créer une catégorie"
