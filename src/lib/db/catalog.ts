@@ -126,18 +126,32 @@ function toParentProduct(
 
 function toCategory(row: {
   id: string;
+  slug: string;
   name: string;
+  description: string;
   tagline: string;
   gradient: string;
   icon: string;
+  iconUrl: string | null;
+  coverImageUrl: string | null;
+  accentColor: string;
+  active: boolean;
+  sortOrder: number;
   _count?: { products: number };
 }): Category {
   return {
     id: row.id,
+    slug: row.slug,
     name: row.name,
+    description: row.description,
     tagline: row.tagline,
     gradient: row.gradient,
     icon: row.icon,
+    iconUrl: row.iconUrl,
+    coverImageUrl: row.coverImageUrl,
+    accentColor: row.accentColor,
+    active: row.active,
+    sortOrder: row.sortOrder,
     productCount: row._count?.products ?? 0,
   };
 }
@@ -154,6 +168,7 @@ function getActiveProductRows(options: {
     where: {
       active: true,
       category: options.category,
+      categoryRecord: { is: { active: true } },
       variants: { some: {} },
       ...(options.query
         ? {
@@ -204,6 +219,7 @@ export async function getCatalogPage(options: {
   const where = {
     active: true,
     category: options.category,
+    categoryRecord: { is: { active: true } },
     ...(options.query
       ? {
             OR: [
@@ -265,7 +281,12 @@ export async function getProductCatalog(): Promise<Product[]> {
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   await ensureDatabaseReady();
   const product = await prisma.product.findFirst({
-    where: { slug, active: true, variants: { some: {} } },
+    where: {
+      slug,
+      active: true,
+      variants: { some: {} },
+      categoryRecord: { is: { active: true } },
+    },
     include: productCatalogInclude,
   });
   const settings = await getStoreSettings();
@@ -286,7 +307,12 @@ export async function getProductsByCategorySlug(
 ): Promise<Product[]> {
   await ensureDatabaseReady();
   const products = await prisma.product.findMany({
-    where: { category, active: true, variants: { some: {} } },
+    where: {
+      category,
+      active: true,
+      variants: { some: {} },
+      categoryRecord: { is: { active: true } },
+    },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: productCatalogInclude,
   });

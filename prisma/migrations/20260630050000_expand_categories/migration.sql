@@ -1,0 +1,13 @@
+ALTER TABLE "Category" ADD COLUMN IF NOT EXISTS "slug" TEXT;
+ALTER TABLE "Category" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Category" ADD COLUMN IF NOT EXISTS "iconUrl" TEXT;
+ALTER TABLE "Category" ADD COLUMN IF NOT EXISTS "coverImageUrl" TEXT;
+ALTER TABLE "Category" ADD COLUMN IF NOT EXISTS "accentColor" TEXT NOT NULL DEFAULT '#3e7bfa';
+
+UPDATE "Category"
+SET "slug" = "id"
+WHERE "slug" IS NULL OR "slug" = '';
+
+ALTER TABLE "Category" ALTER COLUMN "slug" SET NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS "Category_slug_key" ON "Category"("slug");

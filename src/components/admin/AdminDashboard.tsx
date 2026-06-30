@@ -12,6 +12,7 @@ import type { AdminOrderSummaryDTO, AdminStatsDTO, InventoryProductDTO } from "@
 
 const SettingsPanel = lazy(() => import("@/components/admin/SettingsPanel"));
 const ProductsPanel = lazy(() => import("@/components/admin/ProductsPanel"));
+const CategoriesPanel = lazy(() => import("@/components/admin/CategoriesPanel"));
 const InventoryPanel = lazy(() => import("@/components/admin/InventoryPanel"));
 const PaymentsPanel = lazy(() => import("@/components/admin/PaymentsPanel"));
 const PaymentSettingsPanel = lazy(() => import("@/components/admin/PaymentSettingsPanel"));
@@ -22,6 +23,7 @@ const navSections = [
   [{ id: "overview", label: "Vue d'ensemble", icon: "[]" }],
   [
     { id: "products", label: "Produits", icon: "PR" },
+    { id: "categories", label: "Catégories", icon: "CA" },
     { id: "inventory", label: "Stock", icon: "IN" },
     { id: "orders", label: "Commandes", icon: "OR" },
     { id: "payments", label: "Paiements", icon: "PM" },
@@ -171,6 +173,10 @@ export default function AdminDashboard() {
         ) : activeTab === "products" ? (
           <Suspense fallback={panelFallback}>
             <ProductsPanel />
+          </Suspense>
+        ) : activeTab === "categories" ? (
+          <Suspense fallback={panelFallback}>
+            <CategoriesPanel />
           </Suspense>
         ) : activeTab === "inventory" ? (
           <Suspense fallback={panelFallback}>

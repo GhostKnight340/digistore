@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ParentProductDTO, ProductListItemDTO, VariantDTO, SaveVariantInput } from "@/lib/dto";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AdminCategoryDTO, ParentProductDTO, ProductListItemDTO, VariantDTO, SaveVariantInput } from "@/lib/dto";
 import {
+  createCategoryQuickAction,
+  getCategoryOptionsAction,
   getProductListAction,
   getParentProductBySlugAction,
   saveParentProductAction,
@@ -19,17 +21,6 @@ import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const CATEGORIES = ["steam", "playstation", "xbox", "nintendo", "roblox", "valorant"] as const;
-
-const BG_PRESETS: Record<string, { label: string; from: string; to: string }> = {
-  steam:       { label: "Steam Dark",       from: "#1b2838", to: "#2a475e" },
-  playstation: { label: "PlayStation Blue", from: "#0033a0", to: "#0a6bff" },
-  xbox:        { label: "Xbox Green",       from: "#0e7a0d", to: "#16c60c" },
-  nintendo:    { label: "Nintendo Red",     from: "#b30000", to: "#ff4554" },
-  roblox:      { label: "Roblox Dark",      from: "#2b2b2b", to: "#5a5a5a" },
-  valorant:    { label: "Valorant Red",     from: "#7a1320", to: "#ff4655" },
-};
 
 const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
 const STOCK_CONTROLS = ["manual", "api"];
@@ -48,18 +39,11 @@ const TAB_LABELS: Record<EditorTab, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function gradientStyle(category: string) {
-  const p = BG_PRESETS[category];
-  return p
-    ? { background: `linear-gradient(135deg, ${p.from}, ${p.to})` }
-    : { background: "#1e2029" };
-}
-
-function emptyParent(): ParentProductDTO {
+function emptyParent(category = ""): ParentProductDTO {
   return {
     slug: "",
     name: "",
-    category: "steam",
+    category,
     brand: null,
     region: "",
     deliveryType: "Produit numérique - livraison rapide",
@@ -80,6 +64,7 @@ function emptyParent(): ParentProductDTO {
 export default function ProductsPanel() {
   // Lean list for the sidebar
   const [items, setItems] = useState<ProductListItemDTO[]>([]);
+  const [categories, setCategories] = useState<AdminCategoryDTO[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -104,8 +89,12 @@ export default function ProductsPanel() {
     setListLoading(true);
     setListError(null);
     try {
-      const data = await getProductListAction();
+      const [data, categoryData] = await Promise.all([
+        getProductListAction(),
+        getCategoryOptionsAction(),
+      ]);
       setItems(data);
+      setCategories(categoryData);
     } catch (e) {
       setListError(String(e));
     } finally {
@@ -148,7 +137,7 @@ export default function ProductsPanel() {
   }
 
   function openNew() {
-    const blank = emptyParent();
+    const blank = emptyParent(categories[0]?.id ?? "");
     setSelectedSlug("__new__");
     setIsNew(true);
     setDraft(blank);
@@ -157,6 +146,11 @@ export default function ProductsPanel() {
     setActiveTab("details");
     setMsg(null);
   }
+
+  const categoryMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
 
   function updateDraft<K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) {
     setDraft((d) => (d ? { ...d, [k]: v } : d));
@@ -184,6 +178,10 @@ export default function ProductsPanel() {
     if (!draft) return;
     if (!draft.slug.trim() || !draft.name.trim()) {
       setMsg({ text: "Le slug et le nom sont obligatoires.", ok: false });
+      return;
+    }
+    if (!draft.category.trim()) {
+      setMsg({ text: "Choisissez ou créez une catégorie.", ok: false });
       return;
     }
     setSaving(true);
@@ -467,14 +465,15 @@ export default function ProductsPanel() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {CATEGORIES.map((catId) => {
+              {categories.map((category) => {
+                const catId = category.id;
                 const group = items.filter((p) => p.category === catId);
                 if (group.length === 0) return null;
                 return (
                   <div key={catId}>
                     <div className="px-4 py-2">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-faint">
-                        {catId}
+                        {category.name}
                       </span>
                     </div>
                     {group.map((p) => (
@@ -488,7 +487,7 @@ export default function ProductsPanel() {
                       >
                         <div
                           className="h-8 w-8 flex-shrink-0 rounded-lg"
-                          style={gradientStyle(p.category)}
+                          style={{ background: category.accentColor }}
                         />
                         <div className="min-w-0">
                           <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
@@ -506,7 +505,7 @@ export default function ProductsPanel() {
                 );
               })}
               {/* Products with unknown/custom categories */}
-              {items.filter((p) => !(CATEGORIES as readonly string[]).includes(p.category)).map((p) => (
+              {items.filter((p) => !categoryMap.has(p.category)).map((p) => (
                 <button
                   key={p.slug}
                   type="button"
@@ -517,7 +516,7 @@ export default function ProductsPanel() {
                 >
                   <div
                     className="h-8 w-8 flex-shrink-0 rounded-lg"
-                    style={gradientStyle(p.category)}
+                    style={{ background: "#1e2029" }}
                   />
                   <div className="min-w-0">
                     <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
@@ -614,7 +613,19 @@ export default function ProductsPanel() {
             </div>
 
             <div className="p-5">
-              {activeTab === "details" && <DetailsTab draft={draft} update={updateDraft} />}
+              {activeTab === "details" && (
+                <DetailsTab
+                  draft={draft}
+                  categories={categories}
+                  update={updateDraft}
+                  onCategoryCreated={(category) => {
+                    setCategories((current) =>
+                      current.some((item) => item.id === category.id) ? current : [...current, category],
+                    );
+                    updateDraft("category", category.id);
+                  }}
+                />
+              )}
               {activeTab === "content" && <ContentTab draft={draft} update={updateDraft} />}
               {activeTab === "variants" && (
                 <VariantsTab
@@ -791,10 +802,14 @@ function isVariantDirty(original: VariantDTO, draft: VariantDTO) {
 
 function DetailsTab({
   draft,
+  categories,
   update,
+  onCategoryCreated,
 }: {
   draft: ParentProductDTO;
+  categories: AdminCategoryDTO[];
   update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
+  onCategoryCreated: (category: AdminCategoryDTO) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -815,16 +830,13 @@ function DetailsTab({
             placeholder="steam-wallet"
           />
         </Field>
-        <Field label="Category">
-          <select
-            className="input"
+        <Field label="Catégorie">
+          <CategoryCombobox
             value={draft.category}
-            onChange={(e) => update("category", e.target.value)}
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+            categories={categories}
+            onChange={(value) => update("category", value)}
+            onCategoryCreated={onCategoryCreated}
+          />
         </Field>
         <Field label="Brand / Platform">
           <input
@@ -868,6 +880,102 @@ function DetailsTab({
           onChange={(v) => update("featured", v)}
         />
       </div>
+    </div>
+  );
+}
+
+function CategoryCombobox({
+  value,
+  categories,
+  onChange,
+  onCategoryCreated,
+}: {
+  value: string;
+  categories: AdminCategoryDTO[];
+  onChange: (value: string) => void;
+  onCategoryCreated: (category: AdminCategoryDTO) => void;
+}) {
+  const selected = categories.find((category) => category.id === value);
+  const [query, setQuery] = useState(selected?.name ?? value);
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    const next = categories.find((category) => category.id === value);
+    setQuery(next?.name ?? value);
+  }, [categories, value]);
+
+  const filtered = categories.filter((category) => {
+    const needle = query.trim().toLowerCase();
+    return (
+      !needle ||
+      category.name.toLowerCase().includes(needle) ||
+      category.slug.toLowerCase().includes(needle)
+    );
+  });
+  const exact = categories.some(
+    (category) =>
+      category.name.toLowerCase() === query.trim().toLowerCase() ||
+      category.slug.toLowerCase() === query.trim().toLowerCase(),
+  );
+  const canCreate = query.trim().length > 1 && !exact;
+
+  async function create() {
+    setCreating(true);
+    const result = await createCategoryQuickAction(query);
+    if (result.ok && result.category) {
+      onCategoryCreated(result.category);
+      onChange(result.category.id);
+      setQuery(result.category.name);
+      setOpen(false);
+    }
+    setCreating(false);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        className="input"
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+        placeholder="Rechercher ou créer une catégorie"
+      />
+      {open ? (
+        <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-border bg-base p-1 shadow-card">
+          {filtered.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(category.id);
+                setQuery(category.name);
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-surface hover:text-white"
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.accentColor }} />
+              <span className="flex-1">{category.name}</span>
+              <span className="font-mono text-xs text-faint">{category.slug}</span>
+            </button>
+          ))}
+          {canCreate ? (
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={create}
+              disabled={creating}
+              className="mt-1 w-full rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-left text-sm font-medium text-accent disabled:opacity-50"
+            >
+              {creating ? "Création..." : `Créer la catégorie « ${query.trim()} »`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1358,7 +1466,6 @@ function MediaTab({
   draft: ParentProductDTO;
   update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
 }) {
-  const preset = BG_PRESETS[draft.category];
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -1458,31 +1565,6 @@ function MediaTab({
         )}
       </div>
 
-      <div>
-        <p className="mb-2 text-sm font-medium text-white">Fond prédéfini</p>
-        <p className="mb-3 text-xs text-muted">
-          Sélectionné automatiquement selon la catégorie définie dans les détails.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          {Object.entries(BG_PRESETS).map(([key, p]) => (
-            <button
-              key={key}
-              type="button"
-              title={p.label}
-              onClick={() => update("category", key)}
-              className={`relative h-14 w-24 rounded-xl transition-all ${
-                draft.category === key ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : "opacity-60 hover:opacity-100"
-              }`}
-              style={{ background: `linear-gradient(135deg, ${p.from}, ${p.to})` }}
-            >
-              <span className="absolute bottom-1 left-0 right-0 text-center text-[9px] font-semibold uppercase tracking-wide text-white/70">
-                {key}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Preview card */}
       <div>
         <p className="mb-2 text-sm font-medium text-white">Aperçu</p>
@@ -1492,11 +1574,7 @@ function MediaTab({
           label={draft.name || draft.category}
           className="aspect-[16/9] w-full max-w-sm rounded-[14px] border border-border"
         />
-        {preset && (
-          <p className="mt-2 text-xs text-muted">
-            Fond actif : <span className="text-white">{preset.label}</span>
-          </p>
-        )}
+        
       </div>
     </div>
   );

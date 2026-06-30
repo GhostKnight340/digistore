@@ -1,17 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-
-const productLinks = [
-  { href: "/products?category=steam", label: "Cartes Steam" },
-  { href: "/products?category=playstation", label: "PlayStation Store" },
-  { href: "/products?category=xbox", label: "Xbox" },
-  { href: "/products?category=nintendo", label: "Nintendo eShop" },
-];
 
 export default function Footer() {
   const { settings } = useStoreSettings();
+  const { categories } = useProductCatalog();
 
   if (!settings.homepage.showFooter) return null;
 
@@ -50,7 +45,13 @@ export default function Footer() {
           </div>
         </div>
 
-        <FooterGroup title="Produits" links={productLinks} />
+        <FooterGroup
+          title="Produits"
+          links={categories.slice(0, 4).map((category) => ({
+            href: `/products?category=${category.id}`,
+            label: category.name,
+          }))}
+        />
         <FooterGroup
           title="Aide"
           links={[

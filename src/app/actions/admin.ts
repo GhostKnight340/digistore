@@ -49,8 +49,17 @@ import {
   saveParentProduct,
   saveVariant,
 } from "@/lib/db/products";
+import {
+  createCategoryQuick,
+  deleteCategory,
+  getAdminCategories,
+  getCategoryOptions,
+  reorderCategories,
+  saveCategory,
+} from "@/lib/db/categories";
 import type {
   ActionResult,
+  AdminCategoryDTO,
   AdminCodeDTO,
   AdminOverviewDTO,
   CustomerDTO,
@@ -66,6 +75,7 @@ import type {
   DeleteParentProductInput,
   ParentProductDTO,
   ProductListItemDTO,
+  SaveCategoryInput,
   SaveParentProductInput,
   SaveVariantInput,
 } from "@/lib/dto";
@@ -172,6 +182,42 @@ export async function getParentProductsAction(): Promise<ParentProductDTO[]> {
 
 export async function getProductListAction(): Promise<ProductListItemDTO[]> {
   return getProductList();
+}
+
+export async function getAdminCategoriesAction(): Promise<AdminCategoryDTO[]> {
+  return getAdminCategories();
+}
+
+export async function getCategoryOptionsAction(): Promise<AdminCategoryDTO[]> {
+  return getCategoryOptions();
+}
+
+export async function createCategoryQuickAction(
+  nameOrSlug: string,
+): Promise<ActionResult & { category?: AdminCategoryDTO }> {
+  const result = await createCategoryQuick(nameOrSlug);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function saveCategoryAction(
+  data: SaveCategoryInput,
+): Promise<ActionResult & { category?: AdminCategoryDTO }> {
+  const result = await saveCategory(data);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function reorderCategoriesAction(ids: string[]): Promise<ActionResult> {
+  const result = await reorderCategories(ids);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function deleteCategoryAction(id: string): Promise<ActionResult> {
+  const result = await deleteCategory(id);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
 }
 
 export async function getParentProductBySlugAction(slug: string): Promise<ParentProductDTO | null> {

@@ -44,15 +44,20 @@ model Product {
 }
 
 model Category {
-  id        String   @id
-  name      String
-  tagline   String   @default("")
-  gradient  String   @default("from-[#1b2838] to-[#2a475e]")
-  icon      String   @default("")
-  active    Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id
+  slug          String   @unique
+  name          String
+  description   String   @default("")
+  tagline       String   @default("")
+  gradient      String   @default("from-[#1b2838] to-[#2a475e]")
+  icon          String   @default("")
+  iconUrl       String?
+  coverImageUrl String?
+  accentColor   String   @default("#3e7bfa")
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   products Product[]
 }

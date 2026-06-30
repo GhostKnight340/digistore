@@ -150,6 +150,33 @@ export interface ProductListItemDTO {
   variantCount: number;
 }
 
+export interface AdminCategoryDTO {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  iconUrl: string | null;
+  coverImageUrl: string | null;
+  accentColor: string;
+  active: boolean;
+  sortOrder: number;
+  productCount: number;
+}
+
+export interface SaveCategoryInput {
+  originalId?: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  iconUrl: string | null;
+  coverImageUrl: string | null;
+  accentColor: string;
+  active: boolean;
+  sortOrder: number;
+}
+
 export interface DeleteParentProductInput {
   slug: string;
   variantStrategy: "delete" | "move";

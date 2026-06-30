@@ -1,18 +1,19 @@
-export type CategoryId =
-  | "steam"
-  | "playstation"
-  | "xbox"
-  | "nintendo"
-  | "roblox"
-  | "valorant";
+export type CategoryId = string;
 
 export interface Category {
   id: string;
+  slug?: string;
   name: string;
+  description?: string;
   tagline: string;
   /** Tailwind gradient classes used for the placeholder artwork. */
   gradient: string;
   icon: string;
+  iconUrl?: string | null;
+  coverImageUrl?: string | null;
+  accentColor?: string;
+  active?: boolean;
+  sortOrder?: number;
   productCount?: number;
 }
 

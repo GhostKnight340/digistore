@@ -14,6 +14,7 @@ export default function CategoryCard({
   stockStatus?: StockStatus;
 }) {
   const productCount = count ?? category.productCount ?? 0;
+  const media = thumbnail ?? category.coverImageUrl ?? category.iconUrl ?? null;
   return (
     <Link
       href={`/products?category=${category.id}`}
@@ -21,7 +22,7 @@ export default function CategoryCard({
     >
       <ProductArt
         category={category.id}
-        imageUrl={thumbnail}
+        imageUrl={media}
         label={category.name}
         className="aspect-[16/10] w-full rounded-t-[14px]"
       />
