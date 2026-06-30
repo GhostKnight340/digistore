@@ -120,9 +120,6 @@ export async function getProductList(): Promise<ProductListItemDTO[]> {
     () =>
       prisma.product.findMany({
         take: 200,
-        where: {
-          variants: { some: {} },
-        },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         select: {
           slug: true,

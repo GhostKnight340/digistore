@@ -18,8 +18,7 @@ let ensurePromise: Promise<void> | null = null;
 
 export function ensureDatabaseReady(): Promise<void> {
   ensurePromise ??= ensureDatabaseSchema()
-    .then(seedCatalogProducts)
-    .then(cleanupEmptyParentProducts);
+    .then(seedCatalogProducts);
   return ensurePromise;
 }
 

@@ -174,15 +174,15 @@ export default function ProductsPanel() {
     setMsg(null);
   }
 
-  async function save() {
-    if (!draft) return;
+  async function save(): Promise<ParentProductDTO | null> {
+    if (!draft) return null;
     if (!draft.slug.trim() || !draft.name.trim()) {
       setMsg({ text: "Le slug et le nom sont obligatoires.", ok: false });
-      return;
+      return null;
     }
     if (!draft.category.trim()) {
       setMsg({ text: "Choisissez ou créez une catégorie.", ok: false });
-      return;
+      return null;
     }
     setSaving(true);
     setMsg(null);
@@ -214,21 +214,34 @@ export default function ProductsPanel() {
       if (detail) {
         setDraft({ ...detail, variants: detail.variants.map((v) => ({ ...v })) });
         setVariantDrafts(Object.fromEntries(detail.variants.map((v) => [v.slug, { ...v }])));
+        setSaving(false);
+        return detail;
       }
     } else {
       setMsg({ text: result.error ?? "Erreur inconnue.", ok: false });
     }
     setSaving(false);
+    return null;
   }
 
-  function startAddVariant() {
+  async function startAddVariant() {
     if (!draft) return;
+    let parent = draft;
+    if (isNew || selectedSlug === "__new__") {
+      const saved = await save();
+      if (!saved) {
+        setActiveTab("details");
+        setMsg({ text: "Enregistrez d'abord le produit avant d'ajouter des variantes.", ok: false });
+        return;
+      }
+      parent = saved;
+    }
     setIsAddingVariant(true);
     setEditingVariant(null);
     setNewVariantDraft({
       id: "",
-      slug: `${draft.slug}-`,
-      name: draft.name,
+      slug: "",
+      name: "",
       priceMad: 0,
       faceValue: null,
       faceCurrency: "MAD",
@@ -240,6 +253,7 @@ export default function ProductsPanel() {
       stockMode: "automatic",
       inventoryUnused: 0,
     });
+    setDraft(parent);
     setMsg(null);
   }
 
@@ -818,7 +832,14 @@ function DetailsTab({
           <input
             className="input"
             value={draft.name}
-            onChange={(e) => update("name", e.target.value)}
+            onChange={(e) => {
+              const name = e.target.value;
+              const previousAutoSlug = slugify(draft.name);
+              update("name", name);
+              if (!draft.slug.trim() || draft.slug === previousAutoSlug) {
+                update("slug", slugify(name));
+              }
+            }}
             placeholder="Steam Wallet"
           />
         </Field>
@@ -882,6 +903,16 @@ function DetailsTab({
       </div>
     </div>
   );
+}
+
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function CategoryCombobox({
@@ -1189,7 +1220,7 @@ function VariantsTab({
   saving: boolean;
   isAddingVariant: boolean;
   newVariantDraft: VariantDTO | null;
-  onAddVariant: () => void;
+  onAddVariant: () => void | Promise<void>;
   onNewVariantChange: (draft: VariantDTO) => void;
   onSaveNewVariant: () => Promise<void>;
   onCancelNewVariant: () => void;
@@ -1269,7 +1300,13 @@ function VariantsTab({
           <VariantForm
             v={newVariantDraft}
             slugEditable
-            onChange={(k, val) => onNewVariantChange({ ...newVariantDraft, [k]: val })}
+            onChange={(k, val) => {
+              const next = { ...newVariantDraft, [k]: val };
+              if (k === "name" && typeof val === "string" && !newVariantDraft.slug.trim()) {
+                next.slug = `${draft.slug}-${slugify(val)}`;
+              }
+              onNewVariantChange(next);
+            }}
           />
           <div className="mt-4 flex gap-2">
             <button
