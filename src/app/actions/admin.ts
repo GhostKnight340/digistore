@@ -233,7 +233,10 @@ export async function createCategoryQuickAction(
   nameOrSlug: string,
 ): Promise<ActionResult & { category?: AdminCategoryDTO }> {
   const result = await createCategoryQuick(nameOrSlug);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) {
+    revalidatePath("/", "layout");
+    revalidatePath("/admin");
+  }
   return result;
 }
 
@@ -241,19 +244,28 @@ export async function saveCategoryAction(
   data: SaveCategoryInput,
 ): Promise<ActionResult & { category?: AdminCategoryDTO }> {
   const result = await saveCategory(data);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) {
+    revalidatePath("/", "layout");
+    revalidatePath("/admin");
+  }
   return result;
 }
 
 export async function reorderCategoriesAction(ids: string[]): Promise<ActionResult> {
   const result = await reorderCategories(ids);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) {
+    revalidatePath("/", "layout");
+    revalidatePath("/admin");
+  }
   return result;
 }
 
 export async function deleteCategoryAction(id: string): Promise<ActionResult> {
   const result = await deleteCategory(id);
-  if (result.ok) revalidatePath("/", "layout");
+  if (result.ok) {
+    revalidatePath("/", "layout");
+    revalidatePath("/admin");
+  }
   return result;
 }
 

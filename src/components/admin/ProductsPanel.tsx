@@ -472,25 +472,31 @@ export default function ProductsPanel() {
             <p className="px-4 py-6 text-sm text-muted">Chargement…</p>
           ) : listError ? (
             <p className="px-4 py-6 text-sm text-red-400 break-all">{listError}</p>
-          ) : items.length === 0 ? (
+          ) : categories.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted">
-              <p className="font-medium text-white">Aucun produit pour le moment.</p>
-              <p className="mt-1 text-xs">Lancez le SQL d’initialisation Supabase ou cliquez sur + Nouveau.</p>
+              <p className="font-medium text-white">Aucune catégorie pour le moment.</p>
+              <p className="mt-1 text-xs">Créez une catégorie avant d'ajouter un produit.</p>
             </div>
           ) : (
             <div className="divide-y divide-border">
               {categories.map((category) => {
                 const catId = category.id;
                 const group = items.filter((p) => p.category === catId);
-                if (group.length === 0) return null;
                 return (
                   <div key={catId}>
-                    <div className="px-4 py-2">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-faint">
+                    <div className="flex items-center justify-between gap-3 px-4 py-2">
+                      <span className="truncate text-[10px] font-bold uppercase tracking-widest text-faint">
                         {category.name}
                       </span>
+                      <span className="shrink-0 text-[10px] text-faint">
+                        {group.length} produit{group.length === 1 ? "" : "s"}
+                      </span>
                     </div>
-                    {group.map((p) => (
+                    {group.length === 0 ? (
+                      <div className="px-4 pb-3 text-xs text-muted">
+                        Aucun produit dans cette catégorie.
+                      </div>
+                    ) : group.map((p) => (
                       <button
                         key={p.slug}
                         type="button"
