@@ -19,8 +19,7 @@ export async function getStorefrontProductAction(slug: string): Promise<Product 
 
 export async function getStorefrontFeaturedAction(): Promise<Product[]> {
   const products = await withStockStatus(await getProductCatalog());
-  const featured = products.filter((product) => product.featured);
-  return featured.length > 0 ? featured : products.slice(0, 8);
+  return products.filter((product) => product.featured);
 }
 
 export async function getStorefrontProductsByIdsAction(

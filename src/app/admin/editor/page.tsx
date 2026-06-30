@@ -11,12 +11,13 @@ import EditorToolbar from "@/components/editor/EditorToolbar";
 import EditableText from "@/components/editor/EditableText";
 import SectionWrapper from "@/components/editor/SectionWrapper";
 import {
-  getStorefrontFeaturedAction,
   getStorefrontProductsByIdsAction,
   getCategoryCountsAction,
   getCategoryStockStatusesAction,
 } from "@/app/actions/storefront";
+import { getFeaturedVariantOptionsAction } from "@/app/actions/admin";
 import type { Product, StockStatus } from "@/lib/types";
+import type { FeaturedVariantOptionDTO } from "@/lib/dto";
 
 const iconProps = {
   viewBox: "0 0 24 24",
@@ -53,8 +54,190 @@ const howItWorksSteps = [
   { n: 3, title: "Recevez le code", text: "Votre code est livré après confirmation du paiement." },
 ];
 
+function FeaturedProductsManager({
+  selectedIds,
+  onChange,
+  onSave,
+}: {
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  onSave: () => void;
+}) {
+  const [options, setOptions] = useState<FeaturedVariantOptionDTO[]>([]);
+  const [query, setQuery] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    getFeaturedVariantOptionsAction().then(setOptions);
+  }, []);
+
+  const byId = new Map(options.map((option) => [option.id, option]));
+  const selected = selectedIds
+    .map((id) => byId.get(id))
+    .filter((option): option is FeaturedVariantOptionDTO => Boolean(option));
+  const selectedSet = new Set(selectedIds);
+  const search = query.trim().toLowerCase();
+  const available = options
+    .filter((option) => option.productActive && option.variantActive)
+    .filter((option) => !selectedSet.has(option.id))
+    .filter((option) => {
+      if (!search) return true;
+      return [
+        option.id,
+        option.productName,
+        option.variantName,
+        option.displayName,
+        option.categoryName,
+      ].join(" ").toLowerCase().includes(search);
+    })
+    .slice(0, 8);
+
+  function move(id: string, direction: -1 | 1) {
+    const index = selectedIds.indexOf(id);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= selectedIds.length) return;
+    const next = [...selectedIds];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    onChange(next);
+    setSaved(false);
+  }
+
+  function add(id: string) {
+    onChange([...selectedIds, id]);
+    setQuery("");
+    setSaved(false);
+  }
+
+  function remove(id: string) {
+    onChange(selectedIds.filter((item) => item !== id));
+    setSaved(false);
+  }
+
+  function saveOrder() {
+    onSave();
+    setSaved(true);
+  }
+
+  return (
+    <div className="mt-8 rounded-xl border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Featured Products</h3>
+          <p className="mt-1 text-xs text-muted">
+            Manage storefront featured variants and their homepage order.
+          </p>
+        </div>
+        <button type="button" onClick={saveOrder} className="btn-primary h-9 px-4 text-xs">
+          Save order
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase text-muted">Currently featured</p>
+          <div className="space-y-2">
+            {selected.length === 0 ? (
+              <div className="rounded-lg border border-border bg-base px-4 py-6 text-center text-xs text-muted">
+                No featured variants selected.
+              </div>
+            ) : (
+              selected.map((option, index) => (
+                <div
+                  key={option.id}
+                  className="flex items-center gap-3 rounded-lg border border-border bg-base px-3 py-2"
+                >
+                  <span className="w-5 text-xs text-muted">{index + 1}</span>
+                  <VariantSummary option={option} />
+                  <div className="ml-auto flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => move(option.id, -1)}
+                      disabled={index === 0}
+                      className="btn-ghost h-8 px-2 text-xs disabled:opacity-40"
+                    >
+                      Up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => move(option.id, 1)}
+                      disabled={index === selected.length - 1}
+                      className="btn-ghost h-8 px-2 text-xs disabled:opacity-40"
+                    >
+                      Down
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(option.id)}
+                      className="h-8 rounded-lg px-2 text-xs font-medium text-red-300 hover:bg-red-500/10"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          {saved ? <p className="mt-2 text-xs text-green-400">Featured order saved.</p> : null}
+        </div>
+
+        <div>
+          <label className="mb-2 block text-xs font-medium uppercase text-muted">
+            Search active variants
+          </label>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="input h-10 py-0 text-sm"
+            placeholder="Search by product, variant, SKU, category..."
+          />
+          <div className="mt-3 space-y-2">
+            {available.length === 0 ? (
+              <div className="rounded-lg border border-border bg-base px-4 py-6 text-center text-xs text-muted">
+                No matching active variants.
+              </div>
+            ) : (
+              available.map((option) => (
+                <div
+                  key={option.id}
+                  className="flex items-center gap-3 rounded-lg border border-border bg-base px-3 py-2"
+                >
+                  <VariantSummary option={option} />
+                  <button
+                    type="button"
+                    onClick={() => add(option.id)}
+                    className="btn-ghost ml-auto h-8 px-3 text-xs"
+                  >
+                    Add
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VariantSummary({ option }: { option: FeaturedVariantOptionDTO }) {
+  const visible = option.productActive && option.variantActive;
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="truncate text-sm font-medium text-white">{option.displayName}</p>
+        <span className={`chip ${visible ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
+          {visible ? "Visible" : "Hidden"}
+        </span>
+      </div>
+      <p className="mt-0.5 truncate text-xs text-muted">
+        {option.productName} · {option.categoryName} · {option.priceMad} MAD · {option.id}
+      </p>
+    </div>
+  );
+}
+
 function EditorCanvas() {
-  const { draft, previewMode, set } = useEditor();
+  const { draft, previewMode, set, save } = useEditor();
   const { categories } = useProductCatalog();
   const s = draft;
 
@@ -77,7 +260,7 @@ function EditorCanvas() {
     if (s.featuredProductIds.length > 0) {
       getStorefrontProductsByIdsAction(s.featuredProductIds).then(setFeatured);
     } else {
-      getStorefrontFeaturedAction().then(setFeatured);
+      setFeatured([]);
     }
   }, [s.featuredProductIds]);
 
@@ -265,6 +448,18 @@ function EditorCanvas() {
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>
+            {editing ? (
+              <FeaturedProductsManager
+                selectedIds={s.featuredProductIds}
+                onChange={(ids) =>
+                  set((prev) => ({
+                    ...prev,
+                    featuredProductIds: ids,
+                  }))
+                }
+                onSave={save}
+              />
+            ) : null}
           </section>
         </SectionWrapper>
 

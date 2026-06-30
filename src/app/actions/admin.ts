@@ -48,6 +48,7 @@ import {
   archiveParentProduct,
   deleteParentProduct,
   convertProductToVariant,
+  getFeaturedVariantOptions,
   getParentProducts,
   getParentProductBySlug,
   getProductList,
@@ -72,6 +73,7 @@ import type {
   AdminOrderSummaryDTO,
   AdminStatsDTO,
   EmailLogDTO,
+  FeaturedVariantOptionDTO,
   InventoryGroupDTO,
   InventoryProductDTO,
   InventorySummaryDTO,
@@ -271,6 +273,10 @@ export async function deleteCategoryAction(id: string): Promise<ActionResult> {
 
 export async function getParentProductBySlugAction(slug: string): Promise<ParentProductDTO | null> {
   return getParentProductBySlug(slug);
+}
+
+export async function getFeaturedVariantOptionsAction(): Promise<FeaturedVariantOptionDTO[]> {
+  return getFeaturedVariantOptions();
 }
 
 export async function saveParentProductAction(

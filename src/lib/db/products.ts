@@ -8,6 +8,7 @@ import type {
   ActionResult,
   ConvertProductToVariantInput,
   DeleteParentProductInput,
+  FeaturedVariantOptionDTO,
   ParentProductDTO,
   ProductListItemDTO,
   SaveParentProductInput,
@@ -149,6 +150,49 @@ export async function getParentProductBySlug(slug: string): Promise<ParentProduc
     (result) => result.length,
   );
   return rows[0] ? toParent(rows[0]) : null;
+}
+
+export async function getFeaturedVariantOptions(): Promise<FeaturedVariantOptionDTO[]> {
+  await ensureDatabaseReady();
+  const rows = await prisma.productVariant.findMany({
+    orderBy: [
+      { featured: "desc" },
+      { product: { sortOrder: "asc" } },
+      { sortOrder: "asc" },
+      { name: "asc" },
+    ],
+    include: {
+      product: {
+        select: {
+          name: true,
+          category: true,
+          active: true,
+          categoryRecord: {
+            select: { name: true },
+          },
+        },
+      },
+    },
+  });
+
+  return rows.map((variant) => {
+    const displayName =
+      variant.faceValue != null
+        ? `${variant.product.name} ${variant.faceValue} ${variant.faceCurrency}`
+        : variant.name;
+    return {
+      id: variant.id,
+      productName: variant.product.name,
+      variantName: variant.name,
+      displayName,
+      priceMad: variant.priceMad,
+      category: variant.product.category,
+      categoryName: variant.product.categoryRecord?.name ?? variant.product.category,
+      productActive: variant.product.active,
+      variantActive: variant.active,
+      featured: variant.featured,
+    };
+  });
 }
 
 export async function duplicateVariant(variantId: string): Promise<ActionResult & { slug?: string }> {
@@ -524,8 +568,22 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
   }
 
   await ensureDatabaseReady();
+  const nextSlug = data.slug.trim();
+  const originalSlug = data.originalSlug?.trim() || nextSlug;
 
   try {
+    if (nextSlug.toLowerCase() !== originalSlug.toLowerCase()) {
+      const duplicate = await prisma.productVariant.findFirst({
+        where: {
+          id: { equals: nextSlug, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        return { ok: false, error: "Ce SKU existe déjà. Choisissez un SKU unique." };
+      }
+    }
+
     const category = await ensureCategoryForProduct(data.category);
     if (!category.ok || !category.id) {
       return { ok: false, error: category.error ?? "Catégorie introuvable." };
@@ -561,7 +619,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       featured: data.featured,
     };
 
-    if ((data.slug === product.slug || data.slug === product.id) && product.variants.length === 0) {
+    if ((originalSlug === product.slug || originalSlug === product.id) && product.variants.length === 0) {
       await prisma.$transaction([
         prisma.product.update({
           where: { id: product.id },
@@ -576,7 +634,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
         }),
         prisma.productVariant.create({
           data: {
-            id: data.slug,
+            id: nextSlug,
             productId: product.id,
             ...variantFields,
             sortOrder: 0,
@@ -587,18 +645,22 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
     }
 
     const existing =
-      product.variants.find((variant) => variant.id === data.slug) ??
+      product.variants.find((variant) => variant.id === originalSlug) ??
+      product.variants.find((variant) => variant.id === nextSlug) ??
       product.variants.find((variant) => variant.name === data.name);
 
     if (existing) {
       await prisma.productVariant.update({
         where: { id: existing.id },
-        data: variantFields,
+        data: {
+          id: nextSlug,
+          ...variantFields,
+        },
       });
     } else {
       await prisma.productVariant.create({
         data: {
-          id: data.slug,
+          id: nextSlug,
           productId: product.id,
           ...variantFields,
           sortOrder: product.variants.length,

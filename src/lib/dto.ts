@@ -243,6 +243,7 @@ export interface SaveParentProductInput {
 }
 
 export interface SaveVariantInput {
+  originalSlug?: string;
   slug: string;
   name: string;
   parentSlug: string;
@@ -258,6 +259,19 @@ export interface SaveVariantInput {
   featured: boolean;
   stockControl: string;
   stockMode: string;
+}
+
+export interface FeaturedVariantOptionDTO {
+  id: string;
+  productName: string;
+  variantName: string;
+  displayName: string;
+  priceMad: number;
+  category: string;
+  categoryName: string;
+  productActive: boolean;
+  variantActive: boolean;
+  featured: boolean;
 }
 
 export interface CustomerDTO {

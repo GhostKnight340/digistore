@@ -19,12 +19,15 @@ export default async function HomePage() {
     getStoreSettings(),
   ]);
 
-  const featured = products.filter(
-    (product) =>
-      product.featured &&
-      (settings.featuredOutOfStock === "show" ||
-        product.stockStatus !== "out_of_stock"),
-  );
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const featured = settings.featuredProductIds
+    .map((id) => productsById.get(id))
+    .filter((product): product is (typeof products)[number] => Boolean(product))
+    .filter(
+      (product) =>
+        settings.featuredOutOfStock === "show" ||
+        product.stockStatus !== "out_of_stock",
+    );
 
   return (
     <div className="container-page">

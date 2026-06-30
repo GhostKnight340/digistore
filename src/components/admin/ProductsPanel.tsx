@@ -160,8 +160,9 @@ export default function ProductsPanel() {
     setVariantDrafts((prev) => ({ ...prev, [slug]: { ...prev[slug], [k]: v } }));
   }
 
-  function variantSaveInput(parent: ParentProductDTO, variant: VariantDTO): SaveVariantInput {
+  function variantSaveInput(parent: ParentProductDTO, variant: VariantDTO, originalSlug?: string): SaveVariantInput {
     return {
+      originalSlug,
       slug: variant.slug,
       name: variant.name,
       parentSlug: parent.slug,
@@ -185,7 +186,7 @@ export default function ProductsPanel() {
       const variant = variantDrafts[original.slug];
       if (!variant || !isVariantDirty(original, variant)) continue;
 
-      const result = await saveVariantAction(variantSaveInput(parent, variant));
+      const result = await saveVariantAction(variantSaveInput(parent, variant, original.slug));
       if (!result.ok) {
         return {
           ok: false,
@@ -374,6 +375,7 @@ export default function ProductsPanel() {
     if (!v) return;
     setSaving(true);
     const input: SaveVariantInput = {
+      originalSlug: slug,
       slug: v.slug,
       name: v.name,
       parentSlug: draft.slug,
@@ -964,6 +966,32 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function generateSku(value: string) {
+  let next = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\bSTEAM\s+WALLET\b/g, "STEAM")
+    .replace(/\bWINDOWS\s+11\b/g, "WIN11")
+    .replace(/\bVALORANT\s+POINTS\b/g, "VALORANT")
+    .replace(/\bGIFT\s+CARDS?\b/g, "")
+    .replace(/\bSTORE\b/g, "")
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  next = next.replace(/-{2,}/g, "-");
+  return next || "SKU";
+}
+
+function normalizeSkuInput(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_]+/, "");
+}
+
 function CategoryCombobox({
   value,
   categories,
@@ -1113,31 +1141,40 @@ function ContentTab({
 
 function VariantForm({
   v,
-  slugEditable,
   onChange,
 }: {
   v: VariantDTO;
-  slugEditable?: boolean;
   onChange: <K extends keyof VariantDTO>(k: K, val: VariantDTO[K]) => void;
 }) {
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {slugEditable && (
-          <Field label="Slug *">
+        <Field label="SKU *">
+          <div className="flex gap-2">
             <input
               className="input font-mono"
               value={v.slug}
-              onChange={(e) => onChange("slug", e.target.value.toLowerCase().replace(/\s+/g, "-"))}
-              placeholder="steam-wallet-50-eur"
+              onChange={(e) => onChange("slug", normalizeSkuInput(e.target.value))}
+              placeholder="STEAM-10-EUR"
             />
-          </Field>
-        )}
+            <button
+              type="button"
+              onClick={() => onChange("slug", generateSku(v.name))}
+              className="btn-ghost shrink-0 px-3 text-xs"
+            >
+              Regenerate
+            </button>
+          </div>
+        </Field>
         <Field label="Nom de la variante *">
           <input
             className="input"
             value={v.name}
-            onChange={(e) => onChange("name", e.target.value)}
+            onChange={(e) => {
+              const name = e.target.value;
+              onChange("name", name);
+              if (!v.slug.trim()) onChange("slug", generateSku(name));
+            }}
             placeholder="Steam Wallet 50 EUR"
           />
         </Field>
@@ -1201,7 +1238,7 @@ function VariantForm({
             {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
           </select>
         </Field>
-        <Field label={`Affichage du stock${!slugEditable ? ` · ${v.inventoryUnused} code(s)` : ""}`}>
+        <Field label={`Affichage du stock · ${v.inventoryUnused} code(s)`}>
           <select
             className="input"
             value={v.stockMode}
@@ -1214,11 +1251,9 @@ function VariantForm({
             ))}
           </select>
         </Field>
-        {!slugEditable && (
-          <Field label="Stock (codes non utilisés)">
-            <input className="input" value={v.inventoryUnused} disabled readOnly />
-          </Field>
-        )}
+        <Field label="Stock (codes non utilisés)">
+          <input className="input" value={v.inventoryUnused} disabled readOnly />
+        </Field>
       </div>
       <div className="mt-4 flex gap-6">
         <ToggleSwitch
@@ -1348,11 +1383,10 @@ function VariantsTab({
           <p className="mb-4 text-sm font-semibold text-white">Nouvelle variante</p>
           <VariantForm
             v={newVariantDraft}
-            slugEditable
             onChange={(k, val) => {
               const next = { ...newVariantDraft, [k]: val };
               if (k === "name" && typeof val === "string" && !newVariantDraft.slug.trim()) {
-                next.slug = `${draft.slug}-${slugify(val)}`;
+                next.slug = generateSku(val);
               }
               onNewVariantChange(next);
             }}
@@ -1402,7 +1436,7 @@ function VariantsTab({
               <div className="flex items-center gap-3">
                 <div>
                   <p className="text-sm font-medium text-white">{variantTitle}</p>
-                  <p className="font-mono text-[11px] text-muted">SKU: {orig.slug}</p>
+                  <p className="font-mono text-[11px] text-muted">SKU: {v.slug}</p>
                 </div>
                 <span className={`chip ${v.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
                   {v.active ? "Actif" : "Masqué"}

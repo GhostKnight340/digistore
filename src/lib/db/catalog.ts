@@ -349,10 +349,21 @@ export const getStoreSettings = cache(async function getStoreSettings(): Promise
 export async function saveStoreSettings(settings: StoreSettings): Promise<void> {
   await ensureDatabaseReady();
   const merged = mergeStoreSettings(settings);
-  await prisma.storeSetting.upsert({
-    where: { id: "default" },
-    update: { value: merged },
-    create: { id: "default", value: merged },
+  await prisma.$transaction(async (tx) => {
+    await tx.storeSetting.upsert({
+      where: { id: "default" },
+      update: { value: merged },
+      create: { id: "default", value: merged },
+    });
+    await tx.productVariant.updateMany({
+      data: { featured: false },
+    });
+    if (merged.featuredProductIds.length > 0) {
+      await tx.productVariant.updateMany({
+        where: { id: { in: merged.featuredProductIds } },
+        data: { featured: true },
+      });
+    }
   });
 }
 

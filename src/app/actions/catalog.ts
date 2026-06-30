@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import {
   getCatalogData,
   getProductCatalog,
@@ -27,6 +28,8 @@ export async function saveStoreSettingsAction(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     await saveStoreSettings(settings);
+    revalidatePath("/", "layout");
+    revalidatePath("/admin/editor");
     return { ok: true };
   } catch (error) {
     return {
