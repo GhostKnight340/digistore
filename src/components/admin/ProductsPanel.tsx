@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AdminCategoryDTO, ParentProductDTO, ProductListItemDTO, VariantDTO, SaveVariantInput } from "@/lib/dto";
+import type { ActionResult, AdminCategoryDTO, ParentProductDTO, ProductListItemDTO, VariantDTO, SaveVariantInput } from "@/lib/dto";
 import {
   createCategoryQuickAction,
   getCategoryOptionsAction,
@@ -160,6 +160,42 @@ export default function ProductsPanel() {
     setVariantDrafts((prev) => ({ ...prev, [slug]: { ...prev[slug], [k]: v } }));
   }
 
+  function variantSaveInput(parent: ParentProductDTO, variant: VariantDTO): SaveVariantInput {
+    return {
+      slug: variant.slug,
+      name: variant.name,
+      parentSlug: parent.slug,
+      category: parent.category,
+      priceMad: variant.priceMad,
+      faceValue: variant.faceValue,
+      faceCurrency: variant.faceCurrency,
+      supplierCost: variant.supplierCost,
+      supplierCurrency: variant.supplierCurrency,
+      region: parent.region,
+      deliveryType: parent.deliveryType,
+      active: variant.active,
+      featured: variant.featured,
+      stockControl: variant.stockControl,
+      stockMode: variant.stockMode,
+    };
+  }
+
+  async function saveDirtyVariants(parent: ParentProductDTO): Promise<ActionResult> {
+    for (const original of parent.variants) {
+      const variant = variantDrafts[original.slug];
+      if (!variant || !isVariantDirty(original, variant)) continue;
+
+      const result = await saveVariantAction(variantSaveInput(parent, variant));
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: result.error ?? `Erreur lors de l'enregistrement de ${variant.name}.`,
+        };
+      }
+    }
+    return { ok: true };
+  }
+
   function cancel() {
     if (isNew) {
       setSelectedSlug(null);
@@ -204,6 +240,13 @@ export default function ProductsPanel() {
       featured: draft.featured,
     });
     if (result.ok) {
+      const variantResult = await saveDirtyVariants({ ...draft, slug: newSlug });
+      if (!variantResult.ok) {
+        setMsg({ text: variantResult.error ?? "Erreur inconnue.", ok: false });
+        setSaving(false);
+        return null;
+      }
+
       setMsg({ text: "Enregistré.", ok: true });
       setIsNew(false);
       if (selectedSlug && selectedSlug !== newSlug) invalidateCache(selectedSlug);
