@@ -13,7 +13,7 @@ export default function CartPage() {
   if (!ready) {
     return (
       <div className="container-page py-20 text-center text-muted">
-        Chargement?
+        Chargement...
       </div>
     );
   }

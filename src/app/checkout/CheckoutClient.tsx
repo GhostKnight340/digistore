@@ -62,6 +62,7 @@ export default function CheckoutClient({
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -132,12 +133,35 @@ export default function CheckoutClient({
     return options;
   }, [config, settings.paymentDisplay]);
 
-  if (ready && cart.length === 0) {
+  // While the order is being created / the redirect is in flight, keep a stable
+  // loading screen. This also prevents the empty-cart state below from flashing
+  // once the cart is cleared right before navigation completes.
+  if (redirecting) {
+    return (
+      <div className="container-page py-20">
+        <div className="card grid place-items-center px-6 py-20 text-center">
+          <span
+            className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-accent"
+            aria-hidden
+          />
+          <p className="mt-5 text-lg font-semibold text-white">
+            Redirection vers le paiement...
+          </p>
+          <p className="mt-1 text-sm text-muted">Un instant, votre commande est prête.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Only show the empty state when the cart is genuinely empty — never during
+  // submission or the redirect handoff.
+  if (ready && cart.length === 0 && !submitting) {
     return (
       <div className="container-page py-10">
         <div className="card grid place-items-center px-6 py-20 text-center">
-          <p className="text-lg font-semibold text-white">
-            Il n&apos;y a rien ? payer pour le moment
+          <p className="text-lg font-semibold text-white">Aucun paiement requis</p>
+          <p className="mt-1 text-sm text-muted">
+            Votre panier est vide. Ajoutez un produit pour passer commande.
           </p>
           <Link href="/products" className="btn-primary mt-6">
             Parcourir le catalogue
@@ -149,6 +173,7 @@ export default function CheckoutClient({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting || redirecting) return; // prevent duplicate submissions
     setError("");
 
     if (!email.trim() || !fullName.trim()) {
@@ -182,8 +207,12 @@ export default function CheckoutClient({
         return;
       }
 
-      clearCart();
+      // Order created successfully: switch to the stable redirecting screen,
+      // trigger navigation, then clear the cart. Clearing only now (behind the
+      // redirecting screen) avoids briefly rendering the empty-cart state.
+      setRedirecting(true);
       router.push(`/payment/${order.id}`);
+      clearCart();
     } catch {
       setSubmitting(false);
       setError("Une erreur est survenue. Veuillez réessayer.");
@@ -213,7 +242,7 @@ export default function CheckoutClient({
           <section className="card p-6">
             <h2 className="text-lg font-bold text-white">Vos informations</h2>
             <p className="mt-1 text-sm text-muted">
-              Nous vous tiendrons inform? du suivi de votre commande ? cette adresse e-mail.
+              Nous vous tiendrons informé du suivi de votre commande à cette adresse e-mail.
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field label="Nom complet">
@@ -321,7 +350,7 @@ export default function CheckoutClient({
                 return (
                   <li key={item.productId} className="flex justify-between gap-4 text-sm">
                     <span className="text-muted">
-                      {product.name} <span className="text-muted/70">?{item.quantity}</span>
+                      {product.name} <span className="text-muted/70">×{item.quantity}</span>
                     </span>
                     <span className="shrink-0 text-white">
                       {formatMAD(product.price * item.quantity)}
@@ -355,10 +384,14 @@ export default function CheckoutClient({
 
             <button
               type="submit"
-              disabled={submitting || configError || !config || enabledMethods.length === 0}
+              disabled={
+                submitting || redirecting || configError || !config || enabledMethods.length === 0
+              }
               className="btn-primary mt-6 w-full disabled:opacity-50"
             >
-              {submitting ? "Commande en cours?" : "Passer la commande"}
+              {submitting || redirecting
+                ? "Création de votre commande..."
+                : "Passer la commande"}
             </button>
             <p className="mt-3 text-center text-xs text-muted">
               Les instructions complètes de paiement seront affichées après la création de la commande.
