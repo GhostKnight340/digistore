@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
-import { formatPublicOrderNumber } from "@/lib/orderNumber";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   isDelivered,
@@ -344,9 +343,14 @@ export default function OrderDetailPage({
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Détail de commande admin</p>
           <h1 className="mt-1 text-3xl font-bold text-white">
-            Commande {order.publicOrderNumber ?? formatPublicOrderNumber(0)}
+            Commande {order.publicOrderNumber ?? "—"}
           </h1>
-          <p className="mt-1 font-mono text-xs text-muted">ID interne : {order.id}</p>
+          <details className="mt-2 text-xs text-muted">
+            <summary className="cursor-pointer select-none text-faint hover:text-muted">
+              Détails techniques
+            </summary>
+            <p className="mt-1 font-mono">ID interne : {order.id}</p>
+          </details>
         </div>
         <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
           {orderStatusShort(order.status)}
