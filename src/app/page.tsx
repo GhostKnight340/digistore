@@ -32,7 +32,7 @@ export default async function HomePage() {
   return (
     <div className="container-page pb-20 sm:pb-0">
       {settings.homepage.showHero && (
-        <section className="relative overflow-visible py-10 sm:py-16 lg:overflow-hidden lg:py-24">
+        <section className="relative overflow-visible py-10 sm:py-16 lg:py-24">
           <div className="pointer-events-none absolute -right-10 -top-10 hidden h-72 w-72 rounded-full bg-accent/15 blur-3xl sm:block" />
           <div className="relative grid min-w-0 items-center gap-8 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
             <div className="min-w-0">
