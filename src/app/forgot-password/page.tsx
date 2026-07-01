@@ -20,8 +20,8 @@ export default function ForgotPasswordPage() {
   return (
     <div className="container-page py-16">
       <div className="mx-auto max-w-md card p-8">
-        <h1 className="text-2xl font-bold text-white">Mot de passe oublie</h1>
-        <p className="mt-1 text-sm text-muted">Recevez un lien securise pour choisir un nouveau mot de passe.</p>
+        <h1 className="text-2xl font-bold text-white">Mot de passe oublié</h1>
+        <p className="mt-1 text-sm text-muted">Recevez un lien sécurisé pour choisir un nouveau mot de passe.</p>
         <form onSubmit={submit} className="mt-6 space-y-4">
           <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@example.com" />
           {message && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}

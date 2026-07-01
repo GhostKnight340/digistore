@@ -49,7 +49,7 @@ export async function registerCustomerAction(input: {
     await ensureDatabaseReady();
     const name = input.name.trim();
     const email = normalizeEmail(input.email);
-    if (!name || !isEmail(email)) return { ok: false, error: "Veuillez verifier vos informations." };
+    if (!name || !isEmail(email)) return { ok: false, error: "Veuillez vérifier vos informations." };
     if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
     if (input.password !== input.confirmPassword) {
       return { ok: false, error: "Les mots de passe ne correspondent pas." };
@@ -59,7 +59,7 @@ export async function registerCustomerAction(input: {
 
     const existing = await prisma.customer.findUnique({ where: { email } });
     if (existing?.passwordHash) {
-      return { ok: false, error: "Un compte existe deja avec cette adresse e-mail." };
+      return { ok: false, error: "Un compte existe déjà avec cette adresse e-mail." };
     }
 
     const passwordHash = await hashPassword(input.password);
@@ -120,11 +120,11 @@ export async function registerCustomerAction(input: {
           : undefined,
     });
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { ok: false, error: "Un compte existe deja avec cette adresse e-mail." };
+      return { ok: false, error: "Un compte existe déjà avec cette adresse e-mail." };
     }
     return {
       ok: false,
-      error: "Impossible de creer le compte pour le moment. Veuillez reessayer.",
+      error: "Impossible de créer le compte pour le moment. Veuillez réessayer.",
     };
   }
 }
@@ -137,7 +137,7 @@ export async function loginCustomerAction(input: {
   await ensureDatabaseReady();
   const email = normalizeEmail(input.email);
   if (!checkLoginRateLimit(email)) {
-    return { ok: false, error: "Connexion momentanement indisponible. Reessayez plus tard." };
+    return { ok: false, error: "Connexion momentanément indisponible. Réessayez plus tard." };
   }
   const customer = await prisma.customer.findUnique({ where: { email } });
   const valid = await verifyPassword(input.password, customer?.passwordHash ?? null);
@@ -170,7 +170,7 @@ export async function requestPasswordResetAction(emailInput: string): Promise<Au
   }
   return {
     ok: true,
-    message: "Si un compte existe pour cette adresse, un lien de reinitialisation vient d'etre envoye.",
+    message: "Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.",
   };
 }
 
@@ -187,7 +187,7 @@ export async function resetPasswordAction(input: {
   if (passwordError) return { ok: false, error: passwordError };
 
   const customer = await consumeAuthToken(input.token, "password_reset");
-  if (!customer) return { ok: false, error: "Lien invalide ou expire." };
+  if (!customer) return { ok: false, error: "Lien invalide ou expiré." };
   const updated = await prisma.customer.update({
     where: { id: customer.id },
     data: {
@@ -196,13 +196,13 @@ export async function resetPasswordAction(input: {
     },
   });
   await sendPasswordChangedEmail(updated);
-  return { ok: true, message: "Mot de passe modifie.", redirectTo: "/login" };
+  return { ok: true, message: "Mot de passe modifié.", redirectTo: "/login" };
 }
 
 export async function verifyEmailAction(token: string): Promise<AuthActionResult> {
   await ensureDatabaseReady();
   const customer = await consumeAuthToken(token, "email_verification");
-  if (!customer) return { ok: false, error: "Lien invalide ou expire." };
+  if (!customer) return { ok: false, error: "Lien invalide ou expiré." };
   const firstVerification = !customer.emailVerified;
   const updated = await prisma.customer.update({
     where: { id: customer.id },
@@ -210,15 +210,39 @@ export async function verifyEmailAction(token: string): Promise<AuthActionResult
   });
   if (firstVerification) await sendWelcomeEmail(updated);
   revalidatePath("/account");
-  return { ok: true, message: "Votre e-mail est verifie.", redirectTo: "/account" };
+  return { ok: true, message: "Votre e-mail est vérifié.", redirectTo: "/account" };
 }
 
 export async function resendVerificationAction(): Promise<AuthActionResult> {
   const customer = await getCurrentCustomer();
   if (!customer) return { ok: false, error: "Veuillez vous connecter." };
-  if (customer.emailVerified) return { ok: true, message: "Votre e-mail est deja verifie." };
-  await sendVerificationEmail(customer);
-  return { ok: true, message: "Un nouveau lien de verification vient d'etre envoye." };
+  if (customer.emailVerified) return { ok: true, message: "Votre e-mail est déjà vérifié." };
+  try {
+    const result = await sendVerificationEmail(customer);
+    if (!result.ok) {
+      console.error("[auth:resend_verification:email_failed]", {
+        customerId: customer.id,
+        email: customer.email,
+        status: result.status,
+        error: result.error,
+      });
+      return {
+        ok: false,
+        error: "L'e-mail de vérification n'a pas pu être envoyé. Vérifiez la configuration e-mail.",
+      };
+    }
+    return { ok: true, message: "E-mail de vérification envoyé." };
+  } catch (error) {
+    console.error("[auth:resend_verification:error]", {
+      customerId: customer.id,
+      email: customer.email,
+      error,
+    });
+    return {
+      ok: false,
+      error: "L'e-mail de vérification n'a pas pu être envoyé. Réessayez plus tard.",
+    };
+  }
 }
 
 export async function changePasswordAction(input: {
@@ -248,5 +272,5 @@ export async function changePasswordAction(input: {
   });
   await sendPasswordChangedEmail(updated);
   revalidatePath("/account/security");
-  return { ok: true, message: "Mot de passe modifie." };
+  return { ok: true, message: "Mot de passe modifié." };
 }

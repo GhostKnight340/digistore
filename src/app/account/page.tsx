@@ -18,7 +18,7 @@ export default async function AccountPage() {
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             <Metric label="Nom" value={customer.name} />
             <Metric label="E-mail" value={customer.email} />
-            <Metric label="Statut" value={customer.emailVerified ? "Verifie" : "A verifier"} />
+            <Metric label="Statut" value={customer.emailVerified ? "Vérifié" : "À vérifier"} />
           </div>
           <div className="card mt-6 p-6">
             <div className="flex items-center justify-between gap-4">

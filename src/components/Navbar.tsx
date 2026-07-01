@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { logoutCustomerAction } from "@/app/actions/auth";
 import { useStore } from "@/context/StoreContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 
@@ -11,7 +13,11 @@ const links = [
   { href: "/support", label: "Aide" },
 ];
 
-export default function Navbar() {
+export default function Navbar({
+  customer,
+}: {
+  customer?: { name: string; email: string } | null;
+}) {
   const { cartCount, ready } = useStore();
   const { settings } = useStoreSettings();
   const pathname = usePathname();
@@ -95,12 +101,16 @@ export default function Navbar() {
             )}
           </Link>
 
-          <Link
-            href="/login"
-            className="rounded-lg border border-border-strong bg-surface2 px-3 py-2 text-sm font-medium text-text transition hover:bg-elevated sm:px-4"
-          >
-            Se connecter
-          </Link>
+          {customer ? (
+            <AccountMenu customer={customer} />
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-lg border border-border-strong bg-surface2 px-3 py-2 text-sm font-medium text-text transition hover:bg-elevated sm:px-4"
+            >
+              Se connecter
+            </Link>
+          )}
         </div>
 
         <form
@@ -128,5 +138,68 @@ export default function Navbar() {
         </form>
       </nav>
     </header>
+  );
+}
+
+function AccountMenu({ customer }: { customer: { name: string; email: string } }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const initial = customer.name.trim().slice(0, 1).toUpperCase() || "C";
+
+  function logout() {
+    startTransition(async () => {
+      await logoutCustomerAction();
+      setOpen(false);
+      router.refresh();
+      router.push("/login");
+    });
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex h-10 items-center gap-2 rounded-lg border border-border-strong bg-surface2 px-2 text-sm font-medium text-text transition hover:bg-elevated sm:px-3"
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-accent/20 text-xs font-bold text-accent">
+          {initial}
+        </span>
+        <span className="hidden max-w-28 truncate sm:block">{customer.name}</span>
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-card"
+          role="menu"
+        >
+          <div className="border-b border-border px-4 py-3">
+            <p className="truncate text-sm font-semibold text-white">{customer.name}</p>
+            <p className="truncate text-xs text-muted">{customer.email}</p>
+          </div>
+          <Link role="menuitem" href="/account" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-muted hover:bg-surface hover:text-white">
+            Mon compte
+          </Link>
+          <Link role="menuitem" href="/account/orders" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-muted hover:bg-surface hover:text-white">
+            Mes commandes
+          </Link>
+          <Link role="menuitem" href="/account/security" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-muted hover:bg-surface hover:text-white">
+            Sécurité
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={logout}
+            disabled={pending}
+            className="block w-full px-4 py-2.5 text-left text-sm text-muted hover:bg-surface hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pending ? "Déconnexion..." : "Déconnexion"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

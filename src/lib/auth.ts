@@ -97,7 +97,7 @@ export async function verifyPassword(password: string, stored: string | null) {
 }
 
 export function validatePassword(password: string) {
-  if (password.length < 8) return "Le mot de passe doit contenir au moins 8 caracteres.";
+  if (password.length < 8) return "Le mot de passe doit contenir au moins 8 caractères.";
   if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
     return "Utilisez au moins une lettre et un chiffre.";
   }

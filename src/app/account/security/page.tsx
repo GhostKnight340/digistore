@@ -13,11 +13,11 @@ export default async function AccountSecurityPage() {
       <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
         <AccountNav name={customer.name} email={customer.email} />
         <section>
-          <h1 className="text-3xl font-bold text-white">Securite</h1>
+          <h1 className="text-3xl font-bold text-white">Sécurité</h1>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <Info label="E-mail" value={customer.emailVerified ? "Verifie" : "Non verifie"} />
-            <Info label="Derniere connexion" value={customer.lastLoginAt ? formatDate(customer.lastLoginAt.toISOString()) : "Jamais"} />
-            <Info label="Mot de passe" value={customer.lastPasswordChangeAt ? formatDate(customer.lastPasswordChangeAt.toISOString()) : "Pas encore modifie"} />
+            <Info label="E-mail" value={customer.emailVerified ? "Vérifié" : "Non vérifié"} />
+            <Info label="Dernière connexion" value={customer.lastLoginAt ? formatDate(customer.lastLoginAt.toISOString()) : "Jamais"} />
+            <Info label="Mot de passe" value={customer.lastPasswordChangeAt ? formatDate(customer.lastPasswordChangeAt.toISOString()) : "Pas encore modifié"} />
           </div>
           <SecurityClient />
         </section>

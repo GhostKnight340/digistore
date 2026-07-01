@@ -56,12 +56,12 @@ export default function CustomersPanel() {
               <tr className="border-b border-border">
                 <th className="px-5 py-3 font-medium">Client</th>
                 <th className="px-5 py-3 font-medium">Type</th>
-                <th className="px-5 py-3 font-medium">Verifie</th>
+                <th className="px-5 py-3 font-medium">Vérifié</th>
                 <th className="px-5 py-3 font-medium">Commandes</th>
                 <th className="px-5 py-3 font-medium">LTV</th>
-                <th className="px-5 py-3 font-medium">Derniere connexion</th>
+                <th className="px-5 py-3 font-medium">Dernière connexion</th>
                 <th className="px-5 py-3 font-medium">Creation</th>
-                <th className="px-5 py-3 font-medium">Derniere commande</th>
+                <th className="px-5 py-3 font-medium">Dernière commande</th>
               </tr>
             </thead>
             <tbody>

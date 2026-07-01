@@ -27,11 +27,11 @@ export default async function VerifyEmailPage({
     <div className="container-page py-16">
       <div className="mx-auto max-w-md card p-8 text-center">
         <h1 className="text-2xl font-bold text-white">
-          {ok ? "E-mail verifie" : "Lien invalide ou expire"}
+          {ok ? "E-mail vérifié" : "Lien invalide ou expiré"}
         </h1>
         <p className="mt-2 text-sm text-muted">
           {ok
-            ? "Votre compte ghost.ma est maintenant verifie."
+            ? "Votre compte ghost.ma est maintenant vérifié."
             : "Demandez un nouveau lien depuis votre espace securite."}
         </p>
         <Link href={ok ? "/account" : "/login"} className="btn-primary mt-6">

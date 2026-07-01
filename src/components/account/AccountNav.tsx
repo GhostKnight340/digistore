@@ -24,10 +24,10 @@ export default function AccountNav({ name, email }: { name: string; email: strin
         <nav className="mt-5 space-y-1 text-sm">
           <Link href="/account" className="block rounded-lg px-3 py-2 text-muted hover:text-white">Tableau de bord</Link>
           <Link href="/account/orders" className="block rounded-lg px-3 py-2 text-muted hover:text-white">Commandes</Link>
-          <Link href="/account/security" className="block rounded-lg px-3 py-2 text-muted hover:text-white">Securite</Link>
+          <Link href="/account/security" className="block rounded-lg px-3 py-2 text-muted hover:text-white">Sécurité</Link>
         </nav>
         <form action={logout}>
-          <button className="btn-ghost mt-4 w-full" type="submit">Deconnexion</button>
+          <button className="btn-ghost mt-4 w-full" type="submit">Déconnexion</button>
         </form>
       </div>
     </aside>

@@ -27,7 +27,7 @@ export default function ResetPasswordPage() {
       setError(result.error || "Lien invalide.");
       return;
     }
-    setMessage(result.message || "Mot de passe modifie.");
+    setMessage(result.message || "Mot de passe modifié.");
     setTimeout(() => router.push(result.redirectTo || "/login"), 700);
   }
 
@@ -38,7 +38,7 @@ export default function ResetPasswordPage() {
         <form onSubmit={submit} className="mt-6 space-y-4">
           <input className="input" name="password" type="password" placeholder="Nouveau mot de passe" autoComplete="new-password" />
           <input className="input" name="confirmPassword" type="password" placeholder="Confirmer" autoComplete="new-password" />
-          <p className="text-xs text-muted">Au moins 8 caracteres, avec une lettre et un chiffre.</p>
+          <p className="text-xs text-muted">Au moins 8 caractères, avec une lettre et un chiffre.</p>
           {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
           {message && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}
           <button className="btn-primary w-full disabled:opacity-60" disabled={loading || !token}>

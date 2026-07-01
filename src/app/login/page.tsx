@@ -42,10 +42,15 @@ export default function LoginPage() {
         return;
       }
       if (result.message) setMessage(result.message);
-      if (result.redirectTo && currentMode === "login") router.push(result.redirectTo);
+      if (result.redirectTo && currentMode === "login") {
+        router.push(result.redirectTo);
+        router.refresh();
+      } else {
+        router.refresh();
+      }
     } catch (err) {
       console.error("[login:submit]", err);
-      setError("Une erreur est survenue. Veuillez reessayer.");
+      setError("Une erreur est survenue. Veuillez réessayer.");
     } finally {
       setLoading(false);
     }
@@ -75,12 +80,12 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-2xl font-bold text-white">
-            {mode === "login" ? "Bon retour parmi nous" : "Creer un compte"}
+            {mode === "login" ? "Bon retour parmi nous" : "Créer un compte"}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {mode === "login"
               ? "Connectez-vous pour retrouver vos commandes et vos codes."
-              : "Creez un compte pour suivre vos commandes et retrouver vos codes."}
+              : "Créez un compte pour suivre vos commandes et retrouver vos codes."}
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={submit}>
@@ -98,7 +103,7 @@ export default function LoginPage() {
                   className="input"
                   name="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Minimum 8 caracteres"
+                  placeholder="Minimum 8 caractères"
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                 />
                 <button type="button" className="btn-ghost px-3" onClick={() => setShowPassword((v) => !v)}>
@@ -106,7 +111,7 @@ export default function LoginPage() {
                 </button>
               </div>
               {mode === "register" && (
-                <p className="mt-1 text-xs text-muted">Au moins 8 caracteres, avec une lettre et un chiffre.</p>
+                <p className="mt-1 text-xs text-muted">Au moins 8 caractères, avec une lettre et un chiffre.</p>
               )}
             </Field>
             {mode === "register" && (
@@ -118,12 +123,12 @@ export default function LoginPage() {
                   <input name="acceptTerms" type="checkbox" className="mt-1" />
                   <span>
                     J'accepte les <Link href="/terms" className="text-accent">conditions</Link> et la{" "}
-                    <Link href="/privacy" className="text-accent">confidentialite</Link>.
+                    <Link href="/privacy" className="text-accent">confidentialité</Link>.
                   </span>
                 </label>
                 <label className="flex gap-2 text-sm text-muted">
                   <input name="marketing" type="checkbox" className="mt-1" />
-                  <span>Recevoir les nouveautes et offres ghost.ma.</span>
+                  <span>Recevoir les nouveautés et offres ghost.ma.</span>
                 </label>
               </>
             )}
@@ -134,14 +139,14 @@ export default function LoginPage() {
                   Se souvenir de moi
                 </label>
                 <Link href="/forgot-password" className="text-accent hover:text-accent-hover">
-                  Mot de passe oublie?
+                  Mot de passe oublié?
                 </Link>
               </div>
             )}
             {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
             {message && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}
             <button className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={loading}>
-              {loading ? "Veuillez patienter..." : mode === "login" ? "Se connecter" : "Creer le compte"}
+              {loading ? "Veuillez patienter..." : mode === "login" ? "Se connecter" : "Créer le compte"}
             </button>
           </form>
         </div>

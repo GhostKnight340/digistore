@@ -7,6 +7,7 @@ import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import { getCurrentCustomer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,10 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [catalog, settings] = await Promise.all([
+  const [catalog, settings, customer] = await Promise.all([
     getCatalogData().catch(() => ({ categories: [], products: [] })),
     getStoreSettings().catch(() => undefined),
+    getCurrentCustomer().catch(() => null),
   ]);
   const pathname = (await headers()).get("x-current-path") ?? "/";
   const maintenanceAllowed =
@@ -80,7 +82,15 @@ export default async function RootLayout({
                 </main>
               ) : (
                 <div className="flex min-h-screen flex-col">
-                  {pathname.startsWith("/admin") ? null : <Navbar />}
+                  {pathname.startsWith("/admin") ? null : (
+                    <Navbar
+                      customer={
+                        customer
+                          ? { name: customer.name, email: customer.email }
+                          : null
+                      }
+                    />
+                  )}
                   <main className="flex-1">{children}</main>
                   {pathname.startsWith("/admin") ? null : <Footer />}
                 </div>
