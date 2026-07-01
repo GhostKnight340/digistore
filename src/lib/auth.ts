@@ -6,6 +6,7 @@ import { randomBytes, scrypt, timingSafeEqual, createHash, createHmac } from "cr
 import { promisify } from "util";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
+import { formatPublicOrderNumber } from "@/lib/orderNumber";
 
 const scryptAsync = promisify(scrypt);
 const SESSION_COOKIE = "ghost_customer_session";
@@ -296,7 +297,7 @@ export async function consumeAuthToken(token: string, type: AuthTokenType) {
 
 export async function getAccountOrders(customerId: string) {
   await ensureDatabaseReady();
-  return prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: { customerId },
     orderBy: { createdAt: "desc" },
     take: 25,
@@ -316,6 +317,23 @@ export async function getAccountOrders(customerId: string) {
       },
     },
   });
+
+  return Promise.all(
+    orders.map(async (order) => {
+      const earlierOrders = await prisma.order.count({
+        where: {
+          OR: [
+            { createdAt: { lt: order.createdAt } },
+            { createdAt: order.createdAt, id: { lt: order.id } },
+          ],
+        },
+      });
+      return {
+        ...order,
+        publicOrderNumber: formatPublicOrderNumber(earlierOrders + 1),
+      };
+    }),
+  );
 }
 
 export { normalizeEmail };
