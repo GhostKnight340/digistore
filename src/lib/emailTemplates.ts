@@ -1,4 +1,5 @@
 import type { StoreSettings } from "./storeSettings";
+import { absoluteAppUrl } from "./orderNumber";
 
 export type EmailTemplateKey =
   | "welcome"
@@ -36,6 +37,10 @@ function variableString(variables: Variables, key: string) {
   return String(variables[key] ?? "");
 }
 
+function emailLogoUrl() {
+  return absoluteAppUrl("/ghost-logo.png");
+}
+
 function brandedButton(label: string, href: string) {
   if (!href) return "";
   const safeHref = escapeHtml(href);
@@ -48,6 +53,35 @@ function brandedButton(label: string, href: string) {
           </a>
         </td>
       </tr>
+    </table>`;
+}
+
+function codeListHtml(codesValue: string) {
+  const codes = codesValue
+    .split(/\r?\n/)
+    .map((code) => code.trim())
+    .filter(Boolean);
+  if (codes.length === 0) return "";
+
+  const rows = codes
+    .map(
+      (code, index) => `
+        <tr>
+          <td style="padding: ${index === 0 ? "0" : "10px"} 0 0;">
+            <p style="margin: 0 0 6px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;">
+              Votre code${codes.length > 1 ? ` ${index + 1}` : ""}
+            </p>
+            <div style="border: 1px solid #2f3954; border-radius: 12px; background: #0a0d14; padding: 13px 14px; color: #ffffff; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 700; letter-spacing: .05em; word-break: break-all;">
+              ${escapeHtml(code)}
+            </div>
+          </td>
+        </tr>`,
+    )
+    .join("");
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0 0;">
+      ${rows}
     </table>`;
 }
 
@@ -67,6 +101,8 @@ function brandedEmailHtml(
   const orderUrl = variableString(variables, "order_url");
   const paymentUrl = variableString(variables, "payment_url");
   const deliveryUrl = variableString(variables, "delivery_url");
+  const codes = variableString(variables, "codes");
+  const logoUrl = emailLogoUrl();
 
   const config: Record<
     string,
@@ -101,13 +137,13 @@ function brandedEmailHtml(
       ctaLabel: "Réinitialiser mon mot de passe",
       ctaUrl: resetUrl,
       fallbackLabel: "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :",
-      notice: "Ce lien expire bientôt. Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.",
+      notice: "Ce lien expire bientôt. Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.",
     },
     password_changed: {
-      title: "Mot de passe modifié",
+      title: "Votre mot de passe a été modifié",
       intro:
-        "Votre mot de passe ghost.ma vient d'être modifié. Si vous n'êtes pas à l'origine de cette action, contactez le support immédiatement.",
-      ctaLabel: "Ouvrir la sécurité du compte",
+        "Le mot de passe de votre compte ghost.ma vient d’être modifié. Si vous n’êtes pas à l’origine de cette action, contactez immédiatement le support.",
+      ctaLabel: "Sécuriser mon compte",
       ctaUrl: accountUrl,
     },
     email_confirmation: {
@@ -154,7 +190,10 @@ function brandedEmailHtml(
     },
     order_delivered: {
       title: subject,
-      intro: text,
+      intro: `Votre commande ${variableString(
+        variables,
+        "order_number",
+      )} est disponible. Vos codes sont prêts ci-dessous et restent accessibles depuis votre page de livraison.`,
       ctaLabel: "Voir ma livraison",
       ctaUrl: deliveryUrl || orderUrl,
     },
@@ -191,8 +230,8 @@ function brandedEmailHtml(
               <td style="padding: 0 0 18px;">
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                   <tr>
-                    <td style="width: 36px; height: 36px; border-radius: 10px; background: #3e7bfa; color: #ffffff; font-family: Arial, sans-serif; font-weight: 800; text-align: center; vertical-align: middle;">
-                      g
+                    <td style="width: 36px; height: 36px; vertical-align: middle;">
+                      <img src="${escapeHtml(logoUrl)}" width="36" height="36" alt="ghost.ma" style="display: block; width: 36px; height: 36px; border: 0; border-radius: 10px;" />
                     </td>
                     <td style="padding-left: 12px; color: #ffffff; font-family: Arial, sans-serif; font-size: 20px; font-weight: 800;">
                       ghost.ma
@@ -215,6 +254,7 @@ function brandedEmailHtml(
                 <p style="margin: 10px 0 0; color: #c4cce0; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7;">
                   ${escapeHtml(selected.intro)}
                 </p>
+                ${key === "order_delivered" ? codeListHtml(codes) : ""}
                 ${brandedButton(selected.ctaLabel ?? "Ouvrir ghost.ma", selected.ctaUrl ?? "")}
                 ${
                   fallbackUrl && selected.fallbackLabel
@@ -235,7 +275,7 @@ function brandedEmailHtml(
             </tr>
             <tr>
               <td style="padding: 22px 8px 0; color: #7f899c; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.7; text-align: center;">
-                Besoin d'aide ? Contactez-nous à
+                Besoin d’aide ? Contactez-nous à
                 <a href="mailto:${escapeHtml(supportEmail)}" style="color: #9fb4ff;">${escapeHtml(supportEmail)}</a>
                 ${supportWhatsapp ? `ou WhatsApp ${escapeHtml(supportWhatsapp)}` : ""}.<br />
                 © ${escapeHtml(currentYear)} ghost.ma
@@ -269,8 +309,34 @@ export function renderEmailTemplate(
       String(baseVariables[name] ?? ""),
     );
 
-  const subject = render(template.subject);
-  const text = render(template.body);
+  const subject =
+    key === "password_changed"
+      ? "Votre mot de passe ghost.ma a été modifié"
+      : render(template.subject);
+  const renderedBody = render(template.body);
+  const text =
+    key === "password_changed"
+      ? [
+          `Bonjour ${variableString(baseVariables, "customer_name") || "client"},`,
+          "",
+          "Le mot de passe de votre compte ghost.ma vient d’être modifié.",
+          "",
+          "Si vous n’êtes pas à l’origine de cette action, contactez immédiatement le support.",
+        ].join("\n")
+      : key === "order_delivered"
+      ? [
+          `Bonjour ${variableString(baseVariables, "customer_name") || "client"},`,
+          "",
+          `Votre commande ${variableString(baseVariables, "order_number")} est disponible.`,
+          "",
+          "Vos codes :",
+          variableString(baseVariables, "codes"),
+          "",
+          `Livraison : ${variableString(baseVariables, "delivery_url")}`,
+          "",
+          "Merci pour votre achat.",
+        ].join("\n")
+      : renderedBody;
   return {
     subject,
     text,

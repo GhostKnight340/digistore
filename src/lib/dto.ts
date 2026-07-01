@@ -30,7 +30,8 @@ export interface PaymentEventDTO {
 /** Customer-safe order view — only this order's delivered codes, no inventory. */
 export interface CustomerOrderDTO {
   id: string;
-  publicOrderNumber?: string;
+  publicOrderNumber: string;
+  publicOrderPathSegment: string;
   status: OrderStatus;
   customerName: string;
   customerEmail: string;

@@ -3,6 +3,7 @@ import AccountNav from "@/components/account/AccountNav";
 import { getAccountOrders, requireCustomer } from "@/lib/auth";
 import { formatMAD } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
+import { getPublicOrderLabel } from "@/lib/orderNumber";
 
 export const dynamic = "force-dynamic";
 
@@ -71,11 +72,11 @@ export default async function AccountOrdersPage() {
                 {orders.map((order) => (
                   <Link
                     key={order.id}
-                    href={`/order/${order.id}`}
+                    href={`/order/${order.publicOrderPathSegment}`}
                     className="grid gap-3 px-5 py-4 text-sm transition hover:bg-surface/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent md:grid-cols-[1.15fr_1.25fr_1fr_0.8fr_0.95fr] md:items-center md:gap-4"
                   >
                     <div>
-                      <p className="font-semibold text-white">{order.publicOrderNumber}</p>
+                      <p className="font-semibold text-white">{getPublicOrderLabel(order)}</p>
                       <p className="mt-1 text-xs text-muted md:hidden">
                         {formatFrenchDate(order.createdAt)}
                       </p>

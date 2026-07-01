@@ -6,7 +6,7 @@ import { randomBytes, scrypt, timingSafeEqual, createHash, createHmac } from "cr
 import { promisify } from "util";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
-import { formatPublicOrderNumber } from "@/lib/orderNumber";
+import { formatPublicOrderNumber, formatPublicOrderPathSegment } from "@/lib/orderNumber";
 
 const scryptAsync = promisify(scrypt);
 const SESSION_COOKIE = "ghost_customer_session";
@@ -20,6 +20,8 @@ export type AuthCustomer = {
   name: string;
   email: string;
   phone: string | null;
+  image: string | null;
+  googleId: string | null;
   emailVerified: boolean;
   emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
@@ -249,6 +251,8 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
       name: true,
       email: true,
       phone: true,
+      image: true,
+      googleId: true,
       emailVerified: true,
       emailVerifiedAt: true,
       lastLoginAt: true,
@@ -257,12 +261,14 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
       passwordHash: true,
     },
   });
-  if (!customer?.passwordHash) return null;
+  if (!customer || (!customer.passwordHash && !customer.googleId)) return null;
   return {
     id: customer.id,
     name: customer.name,
     email: customer.email,
     phone: customer.phone,
+    image: customer.image,
+    googleId: customer.googleId,
     emailVerified: customer.emailVerified,
     emailVerifiedAt: customer.emailVerifiedAt,
     lastLoginAt: customer.lastLoginAt,
@@ -331,6 +337,7 @@ export async function getAccountOrders(customerId: string) {
       return {
         ...order,
         publicOrderNumber: formatPublicOrderNumber(earlierOrders + 1),
+        publicOrderPathSegment: formatPublicOrderPathSegment(earlierOrders + 1),
       };
     }),
   );

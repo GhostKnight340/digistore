@@ -8,9 +8,9 @@ import { useStore } from "@/context/StoreContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 
 const links = [
-  { href: "/products", label: "Catégories" },
-  { href: "/find-order", label: "Retrouver ma commande" },
-  { href: "/support", label: "Aide" },
+  { href: "/products", label: "Catalogue" },
+  { href: "/find-order", label: "Suivi commande" },
+  { href: "/support", label: "Support" },
 ];
 
 export default function Navbar({
@@ -21,10 +21,28 @@ export default function Navbar({
   const { cartCount, ready } = useStore();
   const { settings } = useStoreSettings();
   const pathname = usePathname();
+  const router = useRouter();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setSearchOpen(false);
+    setMenuOpen(false);
+  }, [pathname]);
+
+  function logout() {
+    startTransition(async () => {
+      await logoutCustomerAction();
+      setMenuOpen(false);
+      router.refresh();
+      router.push("/login");
+    });
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-base/75 backdrop-blur-xl">
-      <nav className="container-page flex min-h-[66px] flex-wrap items-center gap-2 py-2 sm:flex-nowrap sm:gap-4 sm:py-0 md:gap-7">
+      <nav className="container-page flex min-h-[66px] flex-wrap items-center gap-2 py-2 sm:gap-4 sm:py-0 md:flex-nowrap md:gap-7">
         {/* Logo */}
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-accent to-[#2b5fd9] shadow-glow">
@@ -43,7 +61,7 @@ export default function Navbar({
         >
           <input
             name="q"
-            placeholder="Rechercher un produit numérique..."
+            placeholder={"Rechercher un produit num\u00e9rique..."}
             className="h-full w-full rounded-[10px] border border-border bg-surface px-10 pr-14 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
             aria-label="Rechercher des produits"
           />
@@ -59,7 +77,7 @@ export default function Navbar({
             <line x1="21" y1="21" x2="16.6" y2="16.6" />
           </svg>
           <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-border px-1.5 py-0.5 font-mono text-[11px] text-faint lg:block">
-            ⌘K
+            Ctrl K
           </span>
         </form>
 
@@ -69,13 +87,38 @@ export default function Navbar({
             <Link
               key={l.href}
               href={l.href}
-              className={`hidden rounded-lg px-3 py-2 text-sm font-medium transition hover:text-text sm:block ${
+              className={`hidden rounded-lg px-3 py-2 text-sm font-medium transition hover:text-text md:block ${
                 pathname.startsWith(l.href) ? "text-text" : "text-muted"
               }`}
             >
               {l.label}
             </Link>
           ))}
+
+          <button
+            type="button"
+            onClick={() => {
+              setSearchOpen((value) => !value);
+              setMenuOpen(false);
+            }}
+            className={`grid h-10 w-10 place-items-center rounded-xl transition md:hidden ${
+              searchOpen ? "bg-surface2 text-text" : "text-muted hover:text-text"
+            }`}
+            aria-label="Rechercher"
+            aria-expanded={searchOpen}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className="h-5 w-5"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.6" y2="16.6" />
+            </svg>
+          </button>
 
           <Link
             href="/cart"
@@ -101,41 +144,124 @@ export default function Navbar({
             )}
           </Link>
 
-          {customer ? (
-            <AccountMenu customer={customer} />
-          ) : (
-            <Link
-              href="/login"
-              className="rounded-lg border border-border-strong bg-surface2 px-3 py-2 text-sm font-medium text-text transition hover:bg-elevated sm:px-4"
+          <div className="hidden md:block">
+            {customer ? (
+              <AccountMenu customer={customer} />
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-lg border border-border-strong bg-surface2 px-3 py-2 text-sm font-medium text-text transition hover:bg-elevated sm:px-4"
+              >
+                Se connecter
+              </Link>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen((value) => !value);
+              setSearchOpen(false);
+            }}
+            className={`grid h-10 w-10 place-items-center rounded-xl transition md:hidden ${
+              menuOpen ? "bg-surface2 text-text" : "text-muted hover:text-text"
+            }`}
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              className="h-5 w-5"
+              aria-hidden
             >
-              Se connecter
-            </Link>
-          )}
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
+            </svg>
+          </button>
         </div>
 
-        <form
-          action="/products"
-          className="relative flex h-10 w-full items-center md:hidden"
-          role="search"
+        <div
+          className={`w-full overflow-hidden transition-all duration-200 ease-out md:hidden ${
+            searchOpen ? "max-h-14 opacity-100" : "max-h-0 opacity-0"
+          }`}
         >
-          <input
-            name="q"
-            placeholder="Rechercher..."
-            className="h-full w-full rounded-[10px] border border-border bg-surface px-10 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
-            aria-label="Rechercher des produits"
-          />
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
-            aria-hidden
+          <form
+            action="/products"
+            className="relative flex h-11 w-full items-center pt-1"
+            role="search"
           >
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.6" y2="16.6" />
-          </svg>
-        </form>
+            <input
+              name="q"
+              placeholder="Rechercher..."
+              className="h-10 w-full rounded-[10px] border border-border bg-surface px-10 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
+              aria-label="Rechercher des produits"
+            />
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className="pointer-events-none absolute left-3.5 top-[calc(50%+2px)] h-4 w-4 -translate-y-1/2 text-faint"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.6" y2="16.6" />
+            </svg>
+          </form>
+        </div>
+
+        {menuOpen && (
+          <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-card md:hidden">
+            <div className="grid p-1">
+              {links.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-lg px-4 py-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-white"
+                >
+                  {link.label}
+                </Link>
+              ))}
+              <div className="my-1 border-t border-border" />
+              {customer ? (
+                <>
+                  <Link
+                    href="/account"
+                    className="rounded-lg px-4 py-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-white"
+                  >
+                    Mon compte
+                  </Link>
+                  <Link
+                    href="/account/orders"
+                    className="rounded-lg px-4 py-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-white"
+                  >
+                    Mes commandes
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    disabled={pending}
+                    className="rounded-lg px-4 py-3 text-left text-sm font-medium text-muted transition hover:bg-surface hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {pending ? "D\u00e9connexion..." : "D\u00e9connexion"}
+                  </button>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="rounded-lg px-4 py-3 text-sm font-medium text-muted transition hover:bg-surface hover:text-white"
+                >
+                  Se connecter
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </nav>
     </header>
   );
@@ -216,7 +342,7 @@ function AccountMenu({ customer }: { customer: { name: string; email: string } }
             Mes commandes
           </Link>
           <Link role="menuitem" href="/account/security" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-muted hover:bg-surface hover:text-white">
-            Sécurité
+            {"S\u00e9curit\u00e9"}
           </Link>
           <button
             type="button"

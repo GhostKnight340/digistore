@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireCustomer, getAccountOrders } from "@/lib/auth";
 import { formatDate, formatMAD } from "@/lib/format";
+import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
+import { getPublicOrderLabel } from "@/lib/orderNumber";
 import AccountNav from "@/components/account/AccountNav";
 import AccountProfileForm from "./AccountProfileForm";
 
@@ -35,12 +37,17 @@ export default async function AccountPage() {
                 <p className="text-sm text-muted">Aucune commande pour le moment.</p>
               ) : (
                 orders.slice(0, 5).map((order) => (
-                  <Link key={order.id} href={`/order/${order.id}`} className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
+                  <Link key={order.id} href={`/order/${order.publicOrderPathSegment}`} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface px-4 py-3">
                     <span>
-                      <span className="block font-medium text-white">{order.id}</span>
+                      <span className="block font-medium text-white">{getPublicOrderLabel(order)}</span>
                       <span className="text-xs text-muted">{formatDate(order.createdAt.toISOString())}</span>
                     </span>
-                    <span className="font-semibold text-white">{formatMAD(order.totalMad)}</span>
+                    <span className="text-right">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${orderStatusBadgeClass(order.status)}`}>
+                        {orderStatusShort(order.status)}
+                      </span>
+                      <span className="mt-1 block font-semibold text-white">{formatMAD(order.totalMad)}</span>
+                    </span>
                   </Link>
                 ))
               )}

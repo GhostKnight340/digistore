@@ -2,7 +2,6 @@ import Link from "next/link";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
-import HeroDeliveryCard from "@/components/HeroDeliveryCard";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 
 export const revalidate = 3600;
@@ -30,23 +29,22 @@ export default async function HomePage() {
     );
 
   return (
-    <div className="container-page pb-20 sm:pb-0">
+    <div className="container-page pb-14 sm:pb-0">
       {settings.homepage.showHero && (
-        <section className="relative overflow-visible py-10 sm:py-16 lg:py-24">
-          <div className="pointer-events-none absolute -right-10 -top-10 hidden h-72 w-72 rounded-full bg-accent/15 blur-3xl sm:block" />
-          <div className="relative grid min-w-0 items-center gap-8 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
-            <div className="min-w-0">
+        <section className="relative py-8 sm:py-14 lg:py-16">
+          <div className="relative min-w-0">
+            <div className="min-w-0 max-w-3xl">
               <span className="chip">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_10px_var(--tw-shadow-color)] shadow-accent" />
                 Produits numériques
               </span>
-              <h1 className="mt-6 max-w-xl text-[clamp(2.35rem,11vw,3.4rem)] font-semibold leading-[1.04] text-text sm:text-6xl">
+              <h1 className="mt-5 max-w-xl text-[clamp(2.25rem,10vw,3.4rem)] font-semibold leading-[1.04] text-text sm:mt-6 sm:text-6xl">
                 {settings.branding.heroTitle}
               </h1>
-              <p className="mt-5 max-w-lg text-base leading-relaxed text-muted sm:text-lg">
+              <p className="mt-4 max-w-lg text-base leading-relaxed text-muted sm:mt-5 sm:text-lg">
                 {settings.branding.heroSubtitle}
               </p>
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
                 <Link href="/products" className="btn-primary h-12 w-full px-6 text-[15px] sm:w-auto">
                   {settings.branding.primaryCtaLabel}
                 </Link>
@@ -55,14 +53,13 @@ export default async function HomePage() {
                 </Link>
               </div>
             </div>
-            <HeroDeliveryCard />
           </div>
         </section>
       )}
 
       {settings.homepage.showCategories && (
-        <section className="mt-10">
-          <div className="flex items-end justify-between gap-6">
+        <section className="mt-7 sm:mt-10">
+          <div className="flex items-end justify-between gap-4 sm:gap-6">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text">
                 {settings.homepage.categoriesTitle}
@@ -84,8 +81,8 @@ export default async function HomePage() {
       )}
 
       {settings.homepage.showFeaturedProducts && (
-        <section className="mt-16">
-          <div className="flex items-end justify-between gap-6">
+        <section className="mt-7 sm:mt-10">
+          <div className="flex items-end justify-between gap-4 sm:gap-6">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-text">
                 {settings.homepage.featuredTitle}
@@ -103,9 +100,9 @@ export default async function HomePage() {
               Aucun produit populaire n&apos;est disponible pour le moment.
             </div>
           ) : (
-            <div className="mt-8 grid grid-cols-1 gap-[18px] min-[390px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-6 grid grid-cols-1 gap-5 min-[430px]:grid-cols-2 sm:mt-7 sm:grid-cols-3 lg:grid-cols-4">
               {featured.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} featured />
               ))}
             </div>
           )}

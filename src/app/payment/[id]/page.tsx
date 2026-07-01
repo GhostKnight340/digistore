@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatMAD, formatDate } from "@/lib/format";
 import {
   orderStatusBadgeClass,
+  orderStatusLabel,
   isDelivered,
   isPendingPayment,
   isPaymentSubmitted,
@@ -22,6 +23,7 @@ import {
   resolvePaymentDisplay,
   walletDisplayKey,
 } from "@/lib/paymentDisplay";
+import { getPublicOrderLabel } from "@/lib/orderNumber";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
 import type { BankDTO, CryptoWalletDTO, PaymentMethodConfigDTO } from "@/lib/dto";
 
@@ -103,7 +105,7 @@ export default function PaymentPage({
   const { order, config } = data;
   const methodConfig = config.methods[order.paymentMethod] ?? null;
   const whatsapp = config.support.whatsappNumber.replace(/\s/g, "");
-  const publicOrderNumber = order.publicOrderNumber ?? `#${order.id.slice(-8).toUpperCase()}`;
+  const publicOrderNumber = getPublicOrderLabel(order);
 
   return (
     <div className="container-page py-10">
@@ -681,8 +683,9 @@ function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
       {order.items.map((item) => {
         const product = getProduct(item.productId);
         const codes = order.deliveredCodes
-          .filter((d) => d.productId === item.productId)
-          .map((d) => d.code);
+          .filter((d) => d.orderItemId === item.id || (!d.orderItemId && d.productId === item.productId))
+          .map((d) => d.code)
+          .filter(Boolean);
 
         return (
           <article key={item.id} className="card overflow-hidden">
@@ -705,9 +708,15 @@ function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
                 Code{codes.length > 1 ? "s" : ""} livrés
               </p>
               <div className="space-y-3">
-                {codes.map((code, i) => (
-                  <CopyCode key={`${code}-${i}`} code={code} index={i} />
-                ))}
+                {codes.length === 0 ? (
+                  <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
+                    Aucun code n’a encore été attribué à cette commande.
+                  </p>
+                ) : (
+                  codes.map((code, i) => (
+                    <CopyCode key={`${code}-${i}`} code={code} index={i} />
+                  ))
+                )}
               </div>
             </div>
           </article>
@@ -862,17 +871,7 @@ function VaultMeta({ label, value }: { label: string; value: string }) {
 }
 
 function statusLabel(status: string): string {
-  const map: Record<string, string> = {
-    pending_payment: "En attente de paiement",
-    payment_submitted: "Vérification en cours",
-    payment_confirmed: "Paiement confirmé",
-    payment_issue: "Problème de paiement",
-    rejected: "Paiement refusé",
-    delivered: "Commande livrée",
-    refunded: "Remboursé",
-    cancelled: "Annulée",
-  };
-  return map[status] ?? status;
+  return orderStatusLabel(status);
 }
 
 function pageTitle(status: string): string {

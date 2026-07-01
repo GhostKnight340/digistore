@@ -16,7 +16,7 @@ export async function createOrderAction(input: {
   customerPhone?: string;
   paymentMethod: string;
   items: { productId: string; quantity: number }[];
-}): Promise<{ id: string } | null> {
+}): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
   return createOrder(input);
 }
 
@@ -47,6 +47,6 @@ export async function findOrderAction(
   return {
     found: true,
     id: order.id,
-    redirectTo: customerOrderRedirectPath(order.status, order.id),
+    redirectTo: customerOrderRedirectPath(order.status, order.publicOrderPathSegment),
   };
 }

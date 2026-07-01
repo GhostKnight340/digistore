@@ -3,6 +3,8 @@ import "server-only";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
+import { publicOrderReference } from "@/lib/db/orders";
+import { absoluteAppUrl } from "@/lib/orderNumber";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
@@ -34,6 +36,8 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
       });
     }), () => 3);
 
+    const reference = await publicOrderReference(order);
+
     try {
       await sendTransactionalEmail({
         to: order.customerEmail,
@@ -43,8 +47,8 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
         type: "payment_confirmed",
         variables: {
           customer_name: order.customerName,
-          order_number: order.id,
-          order_url: `/order/${order.id}`,
+          order_number: reference.number,
+          order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
           total: `${order.totalMad} MAD`,
         },
       });
@@ -80,6 +84,7 @@ export async function deliverOrder(
           customerName: true,
           customerEmail: true,
           totalMad: true,
+          createdAt: true,
           items: {
             select: {
               id: true,
@@ -186,6 +191,8 @@ export async function deliverOrder(
       });
     }), () => assignments.length);
 
+    const reference = await publicOrderReference(order);
+
     try {
       await sendTransactionalEmail({
         to: order.customerEmail,
@@ -195,8 +202,8 @@ export async function deliverOrder(
         type: "code_delivered",
         variables: {
           customer_name: order.customerName,
-          order_number: orderId,
-          delivery_url: `/delivery/${orderId}`,
+          order_number: reference.number,
+          delivery_url: absoluteAppUrl(`/delivery/${reference.pathSegment}`),
           total: `${order.totalMad} MAD`,
           codes: deliveredValues.join("\n"),
         },

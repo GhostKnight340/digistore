@@ -179,11 +179,11 @@ export const defaultStoreSettings: StoreSettings = {
       body: "Bonjour {{customer_name}},\n\nUtilisez le lien reçu pour réinitialiser votre mot de passe. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
     },
     password_changed: {
-      subject: "Mot de passe ghost.ma modifié",
-      body: "Bonjour {{customer_name}},\n\nVotre mot de passe ghost.ma vient d'être modifié.\n\nSi vous n'êtes pas à l'origine de cette action, contactez-nous immédiatement : {{support_email}}.\n\nEspace sécurité : {{account_url}}",
+      subject: "Votre mot de passe ghost.ma a été modifié",
+      body: "Bonjour {{customer_name}},\n\nLe mot de passe de votre compte ghost.ma vient d’être modifié.\n\nSi vous n’êtes pas à l’origine de cette action, contactez immédiatement le support.",
     },
     order_received: {
-      subject: "Commande {{order_number}} reçue",
+      subject: "Votre commande {{order_number}} a bien été reçue",
       body: "Bonjour {{customer_name}},\n\nNous avons reçu votre commande {{order_number}} d'un total de {{total}}.\n\nFinalisez le paiement ici : {{payment_url}}\n\nMerci pour votre confiance.",
     },
     awaiting_payment: {
@@ -191,7 +191,7 @@ export const defaultStoreSettings: StoreSettings = {
       body: "Bonjour {{customer_name}},\n\nVotre commande {{order_number}} est en attente de paiement : {{payment_url}}.",
     },
     proof_received: {
-      subject: "Justificatif reçu pour {{order_number}}",
+      subject: "Paiement reçu pour {{order_number}}",
       body: "Bonjour {{customer_name}},\n\nNous avons reçu votre justificatif de paiement pour {{order_number}}. Notre équipe le vérifie rapidement.",
     },
     new_proof_requested: {
@@ -203,11 +203,11 @@ export const defaultStoreSettings: StoreSettings = {
       body: "Bonjour {{customer_name}},\n\nLe paiement de votre commande {{order_number}} n'a pas pu être validé.\n\nRaison : {{reason}}\n\nContactez-nous à {{support_email}}.",
     },
     payment_confirmed: {
-      subject: "Paiement confirmé pour {{order_number}}",
+      subject: "Votre paiement pour {{order_number}} est confirmé",
       body: "Bonjour {{customer_name}},\n\nVotre paiement pour {{order_number}} est confirmé. Votre produit numérique sera disponible sous peu.",
     },
     order_delivered: {
-      subject: "Votre commande {{order_number}} est disponible",
+      subject: "Votre commande {{order_number}} est prête",
       body: "Bonjour {{customer_name}},\n\nVotre commande {{order_number}} est disponible ici : {{delivery_url}}\n\nCodes :\n{{codes}}\n\nMerci pour votre achat.",
     },
     refund_update: {

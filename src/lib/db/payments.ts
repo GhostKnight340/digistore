@@ -7,6 +7,8 @@ import {
   renderTransactionalEmail,
   sendTransactionalEmail,
 } from "@/lib/email/send-email";
+import { absoluteAppUrl } from "@/lib/orderNumber";
+import { publicOrderReference } from "@/lib/db/orders";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
@@ -89,6 +91,8 @@ export async function submitPayment(
 
     });
 
+    const reference = await publicOrderReference(order);
+
     try {
       await sendTransactionalEmail({
         to: order.customerEmail,
@@ -98,9 +102,9 @@ export async function submitPayment(
         type: "payment_submitted",
         variables: {
           customer_name: order.customerName,
-          order_number: order.id,
-          order_url: `/order/${order.id}`,
-          payment_url: `/payment/${order.id}`,
+          order_number: reference.number,
+          order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
+          payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
           total: `${order.totalMad} MAD`,
         },
       });
@@ -216,11 +220,12 @@ export async function renderPaymentStatusEmailPreview(
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Commande introuvable.");
+  const reference = await publicOrderReference(order);
   const variables = {
     customer_name: order.customerName,
-    order_number: order.id,
-    order_url: `/order/${order.id}`,
-    payment_url: `/payment/${order.id}`,
+    order_number: reference.number,
+    order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
+    payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
     total: `${order.totalMad} MAD`,
     reason,
   };
@@ -254,6 +259,8 @@ export async function applyPaymentStatusWithEmail(
       });
     });
 
+    const reference = await publicOrderReference(order);
+
     try {
       await sendTransactionalEmail({
         to: order.customerEmail,
@@ -267,9 +274,9 @@ export async function applyPaymentStatusWithEmail(
         manuallyEdited: true,
         variables: {
           customer_name: order.customerName,
-          order_number: order.id,
-          order_url: `/order/${order.id}`,
-          payment_url: `/payment/${order.id}`,
+          order_number: reference.number,
+          order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
+          payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
           total: `${order.totalMad} MAD`,
           reason: note,
         },

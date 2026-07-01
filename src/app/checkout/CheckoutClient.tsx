@@ -192,7 +192,7 @@ export default function CheckoutClient({
       }
 
       clearCart();
-      router.push(`/payment/${order.id}`);
+      router.push(`/payment/${order.publicOrderPathSegment}`);
     } catch {
       setSubmitting(false);
       setError("Une erreur est survenue. Veuillez réessayer.");

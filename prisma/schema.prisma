@@ -154,6 +154,9 @@ model Customer {
   name                 String
   email                String    @unique
   phone                String?
+  image                String?
+  googleId             String?   @unique
+  authProvider         String?
   passwordHash         String?
   emailVerified        Boolean   @default(false)
   emailVerifiedAt      DateTime?
