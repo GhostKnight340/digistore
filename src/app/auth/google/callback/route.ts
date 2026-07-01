@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
 import { setCustomerSession } from "@/lib/auth";
+import { splitFullName } from "@/lib/customerName";
 
 const GOOGLE_STATE_COOKIE = "ghost_google_oauth_state";
 
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
   await ensureDatabaseReady();
   const email = profile.email.trim().toLowerCase();
   const name = profile.name?.trim() || profile.given_name?.trim() || email.split("@")[0] || "Client";
+  const { firstName, lastName } = splitFullName(name);
   const now = new Date();
 
   const existingByGoogleId = await prisma.customer.findFirst({ where: { googleId: profile.sub } });
@@ -102,11 +104,13 @@ export async function GET(request: Request) {
   const existing = existingByGoogleId ?? existingByEmail;
 
   try {
+    // Only seed firstName/lastName from the Google profile when the customer
+    // is first created. On later logins we keep whatever the customer has
+    // saved from the account page instead of overwriting their edits.
     const customer = existing
       ? await prisma.customer.update({
           where: { id: existing.id },
           data: {
-            name,
             email,
             image: profile.picture ?? existing.image,
             googleId: profile.sub,
@@ -119,7 +123,8 @@ export async function GET(request: Request) {
         })
       : await prisma.customer.create({
           data: {
-            name,
+            firstName,
+            lastName,
             email,
             image: profile.picture ?? null,
             googleId: profile.sub,

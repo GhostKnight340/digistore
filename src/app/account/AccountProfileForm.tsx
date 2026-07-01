@@ -1,10 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateCustomerPhoneAction } from "@/app/actions/auth";
+import { updateCustomerProfileAction } from "@/app/actions/auth";
 
-export default function AccountProfileForm({ phone }: { phone: string | null }) {
-  const [value, setValue] = useState(phone ?? "");
+export default function AccountProfileForm({
+  firstName,
+  lastName,
+  phone,
+}: {
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+}) {
+  const [firstNameValue, setFirstNameValue] = useState(firstName);
+  const [lastNameValue, setLastNameValue] = useState(lastName);
+  const [phoneValue, setPhoneValue] = useState(phone ?? "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -13,21 +23,66 @@ export default function AccountProfileForm({ phone }: { phone: string | null }) 
     event.preventDefault();
     setMessage("");
     setError("");
+
+    const trimmedFirstName = firstNameValue.trim();
+    const trimmedLastName = lastNameValue.trim();
+    if (!trimmedFirstName) {
+      setError("Le prénom est obligatoire.");
+      return;
+    }
+    if (trimmedFirstName.length > 50 || trimmedLastName.length > 50) {
+      setError("Le prénom et le nom ne peuvent pas dépasser 50 caractères.");
+      return;
+    }
+
     startTransition(async () => {
-      const result = await updateCustomerPhoneAction(value);
+      const result = await updateCustomerProfileAction({
+        firstName: trimmedFirstName,
+        lastName: trimmedLastName,
+        phone: phoneValue,
+      });
       if (!result.ok) setError(result.error ?? "Enregistrement impossible.");
-      else setMessage(result.message ?? "Numéro de téléphone enregistré.");
+      else {
+        setFirstNameValue(trimmedFirstName);
+        setLastNameValue(trimmedLastName);
+        setMessage(result.message ?? "Vos informations ont été mises à jour.");
+      }
     });
   }
 
   return (
     <form onSubmit={save} className="card mt-6 p-6">
       <h2 className="text-lg font-bold text-white">Informations personnelles</h2>
-      <label className="mt-5 block">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-white">Prénom</span>
+          <input
+            value={firstNameValue}
+            onChange={(event) => setFirstNameValue(event.target.value)}
+            className="input"
+            placeholder="Votre prénom"
+            autoComplete="given-name"
+            maxLength={50}
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-white">Nom</span>
+          <input
+            value={lastNameValue}
+            onChange={(event) => setLastNameValue(event.target.value)}
+            className="input"
+            placeholder="Votre nom"
+            autoComplete="family-name"
+            maxLength={50}
+          />
+        </label>
+      </div>
+      <label className="mt-4 block">
         <span className="mb-1.5 block text-sm font-medium text-white">Numéro de téléphone</span>
         <input
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
+          value={phoneValue}
+          onChange={(event) => setPhoneValue(event.target.value)}
           className="input"
           placeholder="+212 6 00 00 00 00"
           autoComplete="tel"

@@ -18,6 +18,7 @@ import {
   verifyPassword,
   type AuthActionResult,
 } from "@/lib/auth";
+import { splitFullName } from "@/lib/customerName";
 
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -73,14 +74,15 @@ export async function registerCustomerAction(input: {
       return { ok: false, error: "Un compte existe déjà avec cette adresse e-mail." };
     }
 
+    const { firstName, lastName } = splitFullName(name);
     const passwordHash = await hashPassword(input.password);
     const customer = existing
       ? await prisma.customer.update({
           where: { id: existing.id },
-          data: { name, passwordHash, emailVerified: false, emailVerifiedAt: null },
+          data: { firstName, lastName, passwordHash, emailVerified: false, emailVerifiedAt: null },
         })
       : await prisma.customer.create({
-          data: { name, email, passwordHash, emailVerified: false },
+          data: { firstName, lastName, email, passwordHash, emailVerified: false },
         });
 
     let verificationEmailSent = true;
@@ -261,24 +263,49 @@ export async function resendVerificationAction(): Promise<AuthActionResult> {
   }
 }
 
-export async function updateCustomerPhoneAction(phoneInput: string): Promise<AuthActionResult> {
+const NAME_PART_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M}\s'-]*$/u;
+
+function isValidNamePart(value: string) {
+  return NAME_PART_PATTERN.test(value);
+}
+
+export async function updateCustomerProfileAction(input: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+}): Promise<AuthActionResult> {
   await ensureDatabaseReady();
   const customer = await getCurrentCustomer();
   if (!customer) return { ok: false, error: "Veuillez vous connecter." };
 
-  const phone = normalizePhone(phoneInput);
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+
+  if (!firstName) return { ok: false, error: "Le prénom est obligatoire." };
+  if (firstName.length > 50) return { ok: false, error: "Le prénom ne peut pas dépasser 50 caractères." };
+  if (lastName.length > 50) return { ok: false, error: "Le nom ne peut pas dépasser 50 caractères." };
+  if (!isValidNamePart(firstName)) {
+    return { ok: false, error: "Le prénom contient des caractères non autorisés." };
+  }
+  if (lastName && !isValidNamePart(lastName)) {
+    return { ok: false, error: "Le nom contient des caractères non autorisés." };
+  }
+
+  const phone = normalizePhone(input.phone);
   if (!isValidOptionalPhone(phone)) {
-    return { ok: false, error: "Veuillez saisir un numÃ©ro de tÃ©lÃ©phone valide." };
+    return { ok: false, error: "Veuillez saisir un numéro de téléphone valide." };
   }
 
   await prisma.customer.update({
     where: { id: customer.id },
-    data: { phone: phone || null },
+    data: { firstName, lastName, phone: phone || null },
   });
   revalidatePath("/account");
+  revalidatePath("/account/orders");
+  revalidatePath("/account/security");
   revalidatePath("/checkout");
   revalidatePath("/admin");
-  return { ok: true, message: "NumÃ©ro de tÃ©lÃ©phone enregistrÃ©." };
+  return { ok: true, message: "Vos informations ont été mises à jour." };
 }
 
 export async function changePasswordAction(input: {

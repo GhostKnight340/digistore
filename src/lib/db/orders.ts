@@ -4,6 +4,7 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
+import { customerFullName, splitFullName } from "@/lib/customerName";
 import {
   absoluteAppUrl,
   formatPublicOrderNumber,
@@ -471,7 +472,8 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             email: true,
             phone: true,
             googleId: true,
@@ -493,7 +495,8 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
         where: { email: { in: emails } },
         select: {
           id: true,
-          name: true,
+          firstName: true,
+          lastName: true,
           email: true,
           phone: true,
           googleId: true,
@@ -513,7 +516,7 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
     const customer = customerByEmail.get(group.customerEmail);
     return {
       id: customer?.id ?? null,
-      name: customer?.name ?? group.customerEmail,
+      name: customer ? customerFullName(customer.firstName, customer.lastName) : group.customerEmail,
       email: group.customerEmail,
       phone: customer?.phone ?? null,
       kind: customer?.passwordHash || customer?.googleId ? "registered" : "guest",
@@ -530,7 +533,7 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
     if (groupByEmail.has(customer.email)) continue;
     rows.push({
       id: customer.id,
-      name: customer.name,
+      name: customerFullName(customer.firstName, customer.lastName),
       email: customer.email,
       phone: customer.phone,
       kind: "registered",
@@ -636,17 +639,21 @@ export async function createOrder(
       const customer = sessionCustomer
         ? await tx.customer.update({
             where: { id: sessionCustomer.id },
-            data: { name: customerName, phone: customerPhone ?? undefined },
+            data: { phone: customerPhone ?? undefined },
           })
-        : await tx.customer.upsert({
-            where: { email: customerEmail },
-            update: { name: customerName, phone: customerPhone ?? undefined },
-            create: {
-              name: customerName,
-              email: customerEmail,
-              phone: customerPhone,
-            },
-          });
+        : await (async () => {
+            const { firstName, lastName } = splitFullName(customerName);
+            return tx.customer.upsert({
+              where: { email: customerEmail },
+              update: { firstName, lastName, phone: customerPhone ?? undefined },
+              create: {
+                firstName,
+                lastName,
+                email: customerEmail,
+                phone: customerPhone,
+              },
+            });
+          })();
 
       const created = await tx.order.create({
         data: {

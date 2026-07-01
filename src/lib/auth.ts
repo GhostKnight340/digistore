@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { formatPublicOrderNumber, formatPublicOrderPathSegment } from "@/lib/orderNumber";
+import { customerFullName } from "@/lib/customerName";
 
 const scryptAsync = promisify(scrypt);
 const SESSION_COOKIE = "ghost_customer_session";
@@ -17,6 +18,8 @@ type AuthTokenType = "email_verification" | "password_reset";
 
 export type AuthCustomer = {
   id: string;
+  firstName: string;
+  lastName: string;
   name: string;
   email: string;
   phone: string | null;
@@ -153,11 +156,9 @@ async function createToken(customerId: string, type: AuthTokenType) {
   return token;
 }
 
-export async function sendVerificationEmail(customer: {
-  id: string;
-  name: string;
-  email: string;
-}) {
+type EmailCustomer = { id: string; firstName: string; lastName: string; email: string };
+
+export async function sendVerificationEmail(customer: EmailCustomer) {
   const token = await createToken(customer.id, "email_verification");
   return sendTransactionalEmail({
     to: customer.email,
@@ -165,7 +166,7 @@ export async function sendVerificationEmail(customer: {
     templateKey: "email_verification",
     type: "email_verification",
     variables: {
-      customer_name: customer.name,
+      customer_name: customerFullName(customer.firstName, customer.lastName),
       verification_url: await tokenUrl("/verify-email", token),
       account_url: `${await baseUrl()}/account`,
     },
@@ -173,11 +174,7 @@ export async function sendVerificationEmail(customer: {
   });
 }
 
-export async function sendPasswordResetEmail(customer: {
-  id: string;
-  name: string;
-  email: string;
-}) {
+export async function sendPasswordResetEmail(customer: EmailCustomer) {
   const token = await createToken(customer.id, "password_reset");
   return sendTransactionalEmail({
     to: customer.email,
@@ -185,7 +182,7 @@ export async function sendPasswordResetEmail(customer: {
     templateKey: "password_reset",
     type: "password_reset",
     variables: {
-      customer_name: customer.name,
+      customer_name: customerFullName(customer.firstName, customer.lastName),
       reset_password_url: await tokenUrl("/reset-password", token),
       account_url: `${await baseUrl()}/account`,
     },
@@ -193,32 +190,28 @@ export async function sendPasswordResetEmail(customer: {
   });
 }
 
-export async function sendPasswordChangedEmail(customer: {
-  id: string;
-  name: string;
-  email: string;
-}) {
+export async function sendPasswordChangedEmail(customer: EmailCustomer) {
   return sendTransactionalEmail({
     to: customer.email,
     customerId: customer.id,
     templateKey: "password_changed",
     type: "password_changed",
     variables: {
-      customer_name: customer.name,
+      customer_name: customerFullName(customer.firstName, customer.lastName),
       account_url: `${await baseUrl()}/account/security`,
     },
     metadata: { auth_event: "password_changed" },
   });
 }
 
-export async function sendWelcomeEmail(customer: { id: string; name: string; email: string }) {
+export async function sendWelcomeEmail(customer: EmailCustomer) {
   return sendTransactionalEmail({
     to: customer.email,
     customerId: customer.id,
     templateKey: "welcome",
     type: "welcome",
     variables: {
-      customer_name: customer.name,
+      customer_name: customerFullName(customer.firstName, customer.lastName),
       account_url: `${await baseUrl()}/account`,
     },
     metadata: { auth_event: "welcome" },
@@ -248,7 +241,8 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     where: { id: customerId },
     select: {
       id: true,
-      name: true,
+      firstName: true,
+      lastName: true,
       email: true,
       phone: true,
       image: true,
@@ -264,7 +258,9 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
   if (!customer || (!customer.passwordHash && !customer.googleId)) return null;
   return {
     id: customer.id,
-    name: customer.name,
+    firstName: customer.firstName,
+    lastName: customer.lastName,
+    name: customerFullName(customer.firstName, customer.lastName),
     email: customer.email,
     phone: customer.phone,
     image: customer.image,

@@ -151,7 +151,8 @@ model Order {
 
 model Customer {
   id                   String    @id @default(cuid())
-  name                 String
+  firstName            String
+  lastName             String    @default("")
   email                String    @unique
   phone                String?
   image                String?

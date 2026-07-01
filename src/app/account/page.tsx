@@ -23,7 +23,11 @@ export default async function AccountPage() {
             <Metric label="E-mail" value={customer.email} />
             <Metric label="Statut" value={customer.emailVerified ? "Vérifié" : "À vérifier"} />
           </div>
-          <AccountProfileForm phone={customer.phone} />
+          <AccountProfileForm
+            firstName={customer.firstName}
+            lastName={customer.lastName}
+            phone={customer.phone}
+          />
           <div className="card mt-6 p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
