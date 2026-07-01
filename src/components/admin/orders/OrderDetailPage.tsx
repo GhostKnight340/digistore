@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
+import { formatPublicOrderNumber } from "@/lib/orderNumber";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   isDelivered,
@@ -53,13 +54,6 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "cancelled",
 ];
 
-function orderNumber(id: string) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index += 1) {
-    hash = (hash * 31 + id.charCodeAt(index)) % 1000000;
-  }
-  return `#${String(hash).padStart(6, "0")}`;
-}
 
 function formatBytes(value: number | null) {
   if (value == null) return "Non disponible";
@@ -287,7 +281,7 @@ export default function OrderDetailPage({
     const key = REVIEW_TEMPLATE_KEYS[reviewEmail.intent];
     const variables: Record<string, string> = {
       customer_name: order.customerName,
-      order_number: order.id,
+      order_number: order.publicOrderNumber ?? "",
       total: `${order.totalMad} MAD`,
       support_email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? settings.footer.contactEmail,
       support_whatsapp: settings.footer.whatsappNumber,
@@ -350,9 +344,9 @@ export default function OrderDetailPage({
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Détail de commande admin</p>
           <h1 className="mt-1 text-3xl font-bold text-white">
-            Commande {orderNumber(order.id)}
+            Commande {order.publicOrderNumber ?? formatPublicOrderNumber(0)}
           </h1>
-          <p className="mt-1 font-mono text-xs text-muted">{order.id}</p>
+          <p className="mt-1 font-mono text-xs text-muted">ID interne : {order.id}</p>
         </div>
         <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
           {orderStatusShort(order.status)}

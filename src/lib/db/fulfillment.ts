@@ -3,6 +3,7 @@ import "server-only";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
+import { formatPublicOrderNumber } from "@/lib/orderNumber";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
@@ -43,7 +44,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
         type: "payment_confirmed",
         variables: {
           customer_name: order.customerName,
-          order_number: order.id,
+          order_number: formatPublicOrderNumber(order.orderSeq),
           order_url: `/order/${order.id}`,
           total: `${order.totalMad} MAD`,
         },
@@ -75,6 +76,7 @@ export async function deliverOrder(
         where: { id: orderId },
         select: {
           id: true,
+          orderSeq: true,
           status: true,
           customerId: true,
           customerName: true,
@@ -195,7 +197,7 @@ export async function deliverOrder(
         type: "code_delivered",
         variables: {
           customer_name: order.customerName,
-          order_number: orderId,
+          order_number: formatPublicOrderNumber(order.orderSeq),
           delivery_url: `/delivery/${orderId}`,
           total: `${order.totalMad} MAD`,
           codes: deliveredValues.join("\n"),

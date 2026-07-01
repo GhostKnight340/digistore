@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { sendTestEmailAction } from "@/app/actions/admin";
+import { getEmailDiagnosticsAction, sendTestEmailAction } from "@/app/actions/admin";
+import type { EmailDiagnostics } from "@/lib/email/config";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 
 const labels: Record<string, string> = {
@@ -45,6 +46,13 @@ export default function EmailTemplatesPanel() {
   const [testRecipient, setTestRecipient] = useState(
     process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "",
   );
+  const [diagnostics, setDiagnostics] = useState<EmailDiagnostics | null>(null);
+
+  useEffect(() => {
+    getEmailDiagnosticsAction()
+      .then(setDiagnostics)
+      .catch(() => setDiagnostics(null));
+  }, []);
   const template = draft[active];
   const preview = useMemo(
     () => ({
@@ -109,6 +117,40 @@ export default function EmailTemplatesPanel() {
         </div>
 
         <section className="card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-white">Diagnostic Resend</h3>
+            <span className="text-xs text-muted">
+              Environnement : {diagnostics?.environment ?? "…"}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <DiagnosticRow
+              label="Clé API Resend configurée"
+              ok={diagnostics?.resendKeyConfigured}
+            />
+            <DiagnosticRow
+              label="Emails réels activés"
+              ok={diagnostics?.realEmailsEnabled}
+            />
+            <DiagnosticRow
+              label="Adresse d'envoi configurée"
+              ok={diagnostics?.fromAddressConfigured}
+              detail={diagnostics?.fromAddress}
+            />
+            <DiagnosticRow
+              label="Reply-to configuré"
+              ok={diagnostics?.replyToConfigured}
+              detail={diagnostics?.replyToAddress}
+            />
+          </div>
+          <p className="mt-3 text-xs text-muted">
+            La valeur de la clé n'est jamais affichée. Si la clé est absente en
+            production, ajoutez RESEND_API_KEY au projet Vercel (scope
+            Production) puis redéployez.
+          </p>
+        </section>
+
+        <section className="card p-5">
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-white">Sujet</span>
             <input
@@ -147,5 +189,32 @@ export default function EmailTemplatesPanel() {
         </section>
       </div>
     </section>
+  );
+}
+
+function DiagnosticRow({
+  label,
+  ok,
+  detail,
+}: {
+  label: string;
+  ok?: boolean;
+  detail?: string;
+}) {
+  const state = ok === undefined ? "…" : ok ? "Oui" : "Non";
+  const tone =
+    ok === undefined
+      ? "border-border text-muted"
+      : ok
+        ? "border-green-500/30 text-green-400"
+        : "border-red-500/30 text-red-400";
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-xs text-white">{label}</p>
+        {detail ? <p className="truncate text-[11px] text-muted">{detail}</p> : null}
+      </div>
+      <span className={`chip shrink-0 ${tone}`}>{state}</span>
+    </div>
   );
 }

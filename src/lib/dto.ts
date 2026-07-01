@@ -77,6 +77,7 @@ export interface AdminPaymentProofDTO {
 
 export interface AdminOrderSummaryDTO {
   id: string;
+  publicOrderNumber: string;
   status: OrderStatus;
   customerName: string;
   customerEmail: string;

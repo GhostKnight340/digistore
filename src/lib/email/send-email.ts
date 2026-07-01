@@ -9,6 +9,12 @@ import {
   renderEmailTemplate,
   textToHtml,
 } from "@/lib/emailTemplates";
+import {
+  getFromHeader,
+  getReplyToAddress,
+  getResendApiKey,
+  realEmailsEnabled,
+} from "@/lib/email/config";
 
 type EmailMetadata = Record<string, string | number | boolean | null | undefined>;
 
@@ -33,16 +39,6 @@ type EmailSendResult = {
   providerMessageId?: string;
   error?: string;
 };
-
-function fromAddress() {
-  const name = process.env.EMAIL_FROM_NAME || "ghost.ma";
-  const address = process.env.EMAIL_FROM_ADDRESS || "no-reply@ghost.ma";
-  return `${name} <${address}>`;
-}
-
-function shouldSendRealEmail() {
-  return process.env.NODE_ENV === "production" || process.env.ENABLE_REAL_EMAILS === "true";
-}
 
 function metadataToJson(metadata?: EmailMetadata): Prisma.InputJsonValue | undefined {
   if (!metadata) return undefined;
@@ -88,17 +84,17 @@ export async function sendTransactionalEmail(
       text: rendered.text,
       html: rendered.html,
       provider: "resend",
-      status: shouldSendRealEmail() ? "pending" : "simulated",
+      status: realEmailsEnabled() ? "pending" : "simulated",
       manuallyEdited: Boolean(input.manuallyEdited),
       metadata: metadataToJson(input.metadata),
     },
   });
 
-  if (!shouldSendRealEmail()) {
+  if (!realEmailsEnabled()) {
     return { ok: true, status: "simulated", logId: log.id };
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = getResendApiKey();
   if (!apiKey) {
     const error = "RESEND_API_KEY is not configured.";
     await prisma.emailLog.update({
@@ -116,11 +112,12 @@ export async function sendTransactionalEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: fromAddress(),
+        from: getFromHeader(),
         to: [input.to],
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
+        ...(getReplyToAddress() ? { reply_to: getReplyToAddress() } : {}),
       }),
     });
 

@@ -137,7 +137,7 @@ export default function PaymentsPanel() {
                 {visible.map((order) => (
                   <tr key={order.id} className="border-b border-border/60 hover:bg-surface/40">
                     <td className="px-4 py-3 font-mono text-xs text-white">
-                      {order.id.slice(0, 12)}...
+                      {order.publicOrderNumber}
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-white">{order.customerName}</p>

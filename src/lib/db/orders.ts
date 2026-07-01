@@ -83,13 +83,12 @@ function orderItemName(item: {
 
 function buildCustomerDTO(
   data: OrderRecord,
-  publicOrderNumber?: string,
   options: { includeUndeliveredCodes?: boolean } = {},
 ): CustomerOrderDTO {
   const canExposeCodes = data.status === "delivered" || options.includeUndeliveredCodes;
   return {
     id: data.id,
-    publicOrderNumber,
+    publicOrderNumber: formatPublicOrderNumber(data.orderSeq),
     status: data.status as OrderStatus,
     customerName: data.customerName,
     customerEmail: data.customerEmail,
@@ -127,6 +126,7 @@ function loadOrder(id: string) {
     where: { id },
     select: {
       id: true,
+      orderSeq: true,
       status: true,
       customerName: true,
       customerEmail: true,
@@ -181,6 +181,7 @@ function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] }
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      orderSeq: true,
       status: true,
       customerName: true,
       customerEmail: true,
@@ -212,6 +213,7 @@ function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] }
 function buildAdminSummaryDTO(order: AdminOrderSummaryRecord): AdminOrderSummaryDTO {
   return {
     id: order.id,
+    publicOrderNumber: formatPublicOrderNumber(order.orderSeq),
     status: order.status as OrderStatus,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
@@ -237,16 +239,7 @@ export async function getCustomerOrder(
   const data = await loadOrder(id);
   if (!data) return null;
 
-  const earlierOrders = await prisma.order.count({
-    where: {
-      OR: [
-        { createdAt: { lt: data.createdAt } },
-        { createdAt: data.createdAt, id: { lt: data.id } },
-      ],
-    },
-  });
-
-  return buildCustomerDTO(data, formatPublicOrderNumber(earlierOrders + 1));
+  return buildCustomerDTO(data);
 }
 
 export async function getOrderSummaries(
@@ -305,7 +298,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
 
   if (!order) return null;
   return {
-    ...buildCustomerDTO(order, undefined, { includeUndeliveredCodes: true }),
+    ...buildCustomerDTO(order, { includeUndeliveredCodes: true }),
     emailLogs: emailLogs.map(buildEmailLogDTO),
     proofMimeType: order.paymentProof?.mimeType ?? null,
   };
@@ -551,7 +544,7 @@ export async function createOrder(
         type: "order_received",
         variables: {
           customer_name: input.customerName,
-          order_number: order.id,
+          order_number: formatPublicOrderNumber(order.orderSeq),
           payment_url: `/payment/${order.id}`,
           order_url: `/order/${order.id}`,
           total: `${totalMad} MAD`,
@@ -577,18 +570,17 @@ export async function findOrderByEmailAndId(
   const publicOrderNumber = parsePublicOrderNumber(id);
 
   if (publicOrderNumber !== null) {
-    const [order] = await prisma.order.findMany({
-      skip: publicOrderNumber - 1,
-      take: 1,
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, status: true, customerEmail: true },
+    const order = await prisma.order.findFirst({
+      where: {
+        orderSeq: publicOrderNumber,
+        customerEmail: { equals: normalizedEmail, mode: "insensitive" },
+      },
+      select: { id: true, status: true },
     });
-
-    if (order?.customerEmail.toLowerCase() === normalizedEmail) {
-      return { id: order.id, status: order.status };
-    }
+    if (order) return order;
   }
 
+  // Fallback: allow lookup by the raw internal id for support/legacy links.
   const order = await prisma.order.findFirst({
     where: { id: id.trim(), customerEmail: { equals: normalizedEmail, mode: "insensitive" } },
     select: { id: true, status: true },

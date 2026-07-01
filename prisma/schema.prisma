@@ -124,6 +124,10 @@ model DigitalCode {
 
 model Order {
   id            String   @id @default(cuid())
+  // Human-readable sequential order number (e.g. #000001). Stable across
+  // deletes; used for all customer-facing displays and emails. The internal
+  // `id` stays the routing/lookup key.
+  orderSeq      Int      @unique @default(autoincrement())
   customerId    String?
   customerName  String
   customerEmail String

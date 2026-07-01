@@ -64,6 +64,7 @@ import {
   saveCategory,
 } from "@/lib/db/categories";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
+import { getEmailDiagnostics, type EmailDiagnostics } from "@/lib/email/config";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import type {
   ActionResult,
@@ -99,6 +100,14 @@ function revalidateStorefrontCatalog() {
 
 export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage({ take: 10 });
+}
+
+/**
+ * Secret-safe email/Resend configuration diagnostic for the admin panel.
+ * Never returns the API key value — only whether each setting is present.
+ */
+export async function getEmailDiagnosticsAction(): Promise<EmailDiagnostics> {
+  return getEmailDiagnostics();
 }
 
 export async function sendTestEmailAction(

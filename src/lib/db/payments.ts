@@ -3,6 +3,7 @@ import "server-only";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { type EmailTemplateKey } from "@/lib/emailTemplates";
+import { formatPublicOrderNumber } from "@/lib/orderNumber";
 import {
   renderTransactionalEmail,
   sendTransactionalEmail,
@@ -98,7 +99,7 @@ export async function submitPayment(
         type: "payment_submitted",
         variables: {
           customer_name: order.customerName,
-          order_number: order.id,
+          order_number: formatPublicOrderNumber(order.orderSeq),
           order_url: `/order/${order.id}`,
           payment_url: `/payment/${order.id}`,
           total: `${order.totalMad} MAD`,
@@ -218,7 +219,7 @@ export async function renderPaymentStatusEmailPreview(
   if (!order) throw new Error("Commande introuvable.");
   const variables = {
     customer_name: order.customerName,
-    order_number: order.id,
+    order_number: formatPublicOrderNumber(order.orderSeq),
     order_url: `/order/${order.id}`,
     payment_url: `/payment/${order.id}`,
     total: `${order.totalMad} MAD`,
@@ -268,7 +269,7 @@ export async function applyPaymentStatusWithEmail(
         manuallyEdited,
         variables: {
           customer_name: order.customerName,
-          order_number: order.id,
+          order_number: formatPublicOrderNumber(order.orderSeq),
           order_url: `/order/${order.id}`,
           payment_url: `/payment/${order.id}`,
           total: `${order.totalMad} MAD`,
