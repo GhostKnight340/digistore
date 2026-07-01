@@ -6,8 +6,8 @@ import { getStoreSettings } from "@/lib/db/catalog";
 import {
   type EmailTemplateKey,
   type RenderedEmailTemplate,
+  renderBrandedHtml,
   renderEmailTemplate,
-  textToHtml,
 } from "@/lib/emailTemplates";
 import {
   getFromHeader,
@@ -54,12 +54,22 @@ export async function renderTransactionalEmail(
 ): Promise<RenderedEmailTemplate> {
   const settings = await getStoreSettings();
   const rendered = renderEmailTemplate(settings, templateKey, variables);
+  const subject = overrides.subject ?? rendered.subject;
   const text = overrides.text ?? rendered.text;
-  return {
-    subject: overrides.subject ?? rendered.subject,
-    text,
-    html: overrides.html ?? textToHtml(text),
-  };
+
+  // Always send branded HTML. If the caller supplied its own HTML use it;
+  // if it supplied edited text (admin one-off), re-wrap that text in the
+  // branded layout; otherwise use the branded template render.
+  let html: string;
+  if (overrides.html) {
+    html = overrides.html;
+  } else if (overrides.text !== undefined) {
+    html = renderBrandedHtml(settings, templateKey, subject, text, variables);
+  } else {
+    html = rendered.html;
+  }
+
+  return { subject, text, html };
 }
 
 export async function sendTransactionalEmail(
