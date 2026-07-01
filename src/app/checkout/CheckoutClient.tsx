@@ -39,8 +39,10 @@ function isMethodUsable(config: PaymentConfigDTO, method: PaymentMethod): boolea
 
 export default function CheckoutClient({
   initialConfig = null,
+  initialCustomer = null,
 }: {
   initialConfig?: PaymentConfigDTO | null;
+  initialCustomer?: { name: string; email: string } | null;
 }) {
   const { cart, ready, cartTotal, clearCart } = useStore();
   const { getProduct } = useProductCatalog();
@@ -59,8 +61,8 @@ export default function CheckoutClient({
     () => enabledMethods[0] ?? "",
   );
   const [selectedBankId, setSelectedBankId] = useState("");
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState(initialCustomer?.email ?? "");
+  const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 

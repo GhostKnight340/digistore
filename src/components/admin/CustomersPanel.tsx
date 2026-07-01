@@ -33,7 +33,7 @@ export default function CustomersPanel() {
         <div>
           <h2 className="font-bold text-white">Clients</h2>
           <p className="mt-0.5 text-xs text-muted">
-            Les 100 derniers acheteurs enregistrés.
+            Comptes clients et acheteurs invites suivis par commande.
           </p>
         </div>
         <button type="button" onClick={load} className="btn-ghost py-1 text-xs">
@@ -47,7 +47,7 @@ export default function CustomersPanel() {
         <p className="px-5 py-8 text-sm text-red-400">{error}</p>
       ) : customers.length === 0 ? (
         <p className="px-5 py-8 text-sm text-muted">
-          Aucun client pour le moment. Les commandes apparaîtront ici une fois passées.
+          Aucun client pour le moment.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -55,24 +55,40 @@ export default function CustomersPanel() {
             <thead className="text-xs uppercase text-muted">
               <tr className="border-b border-border">
                 <th className="px-5 py-3 font-medium">Client</th>
+                <th className="px-5 py-3 font-medium">Type</th>
+                <th className="px-5 py-3 font-medium">Verifie</th>
                 <th className="px-5 py-3 font-medium">Commandes</th>
-                <th className="px-5 py-3 font-medium">Total dépensé</th>
-                <th className="px-5 py-3 font-medium">Dernière commande</th>
+                <th className="px-5 py-3 font-medium">LTV</th>
+                <th className="px-5 py-3 font-medium">Derniere connexion</th>
+                <th className="px-5 py-3 font-medium">Creation</th>
+                <th className="px-5 py-3 font-medium">Derniere commande</th>
               </tr>
             </thead>
             <tbody>
               {customers.map((customer) => (
-                <tr key={customer.email} className="border-b border-border/60">
+                <tr key={`${customer.kind}:${customer.email}`} className="border-b border-border/60">
                   <td className="px-5 py-3">
                     <p className="font-medium text-white">{customer.name}</p>
                     <p className="text-xs text-muted">{customer.email}</p>
+                  </td>
+                  <td className="px-5 py-3 text-muted">
+                    {customer.kind === "registered" ? "Compte" : "Invite"}
+                  </td>
+                  <td className="px-5 py-3 text-muted">
+                    {customer.emailVerified ? "Oui" : "Non"}
                   </td>
                   <td className="px-5 py-3 text-muted">{customer.orderCount}</td>
                   <td className="px-5 py-3 font-semibold text-white">
                     {formatMAD(customer.totalSpent)}
                   </td>
                   <td className="px-5 py-3 text-muted">
-                    {formatDate(customer.lastOrderAt)}
+                    {customer.lastLoginAt ? formatDate(customer.lastLoginAt) : "-"}
+                  </td>
+                  <td className="px-5 py-3 text-muted">
+                    {customer.createdAt ? formatDate(customer.createdAt) : "-"}
+                  </td>
+                  <td className="px-5 py-3 text-muted">
+                    {customer.orderCount > 0 ? formatDate(customer.lastOrderAt) : "-"}
                   </td>
                 </tr>
               ))}

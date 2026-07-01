@@ -1,56 +1,60 @@
 import Link from "next/link";
+import { requireCustomer, getAccountOrders } from "@/lib/auth";
+import { formatDate, formatMAD } from "@/lib/format";
+import AccountNav from "@/components/account/AccountNav";
 
-export default function AccountPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AccountPage() {
+  const customer = await requireCustomer();
+  const orders = await getAccountOrders(customer.id);
+
   return (
     <div className="container-page py-10">
       <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-        <aside className="h-fit">
-          <div className="card p-5">
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-accent/15 text-lg">
-                #
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-white">Invit?</p>
-                <p className="text-xs text-muted">Non connect?</p>
-              </div>
-            </div>
-            <nav className="mt-5 space-y-1 text-sm">
-              <span className="block rounded-lg bg-accent/10 px-3 py-2 font-medium text-white">
-                Suivi de commande
-              </span>
-              <span className="block rounded-lg px-3 py-2 text-muted">
-                Profil (bientôt)
-              </span>
-              <span className="block rounded-lg px-3 py-2 text-muted">
-                Paramètres (bientôt)
-              </span>
-            </nav>
-            <Link href="/login" className="btn-ghost mt-4 w-full">
-              Connexion / Inscription
-            </Link>
-          </div>
-          <p className="mt-3 px-1 text-xs text-muted">
-            Les commandes sont enregistrées dans Supabase. Le suivi se fait par lien de commande jusqu'à l'ajout d'une authentification complète.
-          </p>
-        </aside>
-
+        <AccountNav name={customer.name} email={customer.email} />
         <section>
-          <h1 className="text-3xl font-bold text-white">Suivi de commande</h1>
-          <div className="card mt-8 grid place-items-center px-6 py-20 text-center">
-            <span className="text-4xl">#</span>
-            <p className="mt-4 text-lg font-semibold text-white">
-              Ouvrez le lien de votre commande
-            </p>
-            <p className="mt-1 max-w-md text-sm text-muted">
-              Sans compte client, l'historique des commandes n'est pas conservé dans ce navigateur. Utilisez le lien reçu après paiement ou contactez le support avec votre numéro de commande.
-            </p>
-            <Link href="/products" className="btn-primary mt-6">
-              Parcourir le catalogue
-            </Link>
+          <h1 className="text-3xl font-bold text-white">Mon compte</h1>
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <Metric label="Nom" value={customer.name} />
+            <Metric label="E-mail" value={customer.email} />
+            <Metric label="Statut" value={customer.emailVerified ? "Verifie" : "A verifier"} />
+          </div>
+          <div className="card mt-6 p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-white">Commandes recentes</h2>
+                <p className="mt-1 text-sm text-muted">Vos derniers achats lies a ce compte.</p>
+              </div>
+              <Link href="/account/orders" className="btn-ghost text-sm">Tout voir</Link>
+            </div>
+            <div className="mt-5 space-y-3">
+              {orders.slice(0, 5).length === 0 ? (
+                <p className="text-sm text-muted">Aucune commande pour le moment.</p>
+              ) : (
+                orders.slice(0, 5).map((order) => (
+                  <Link key={order.id} href={`/order/${order.id}`} className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
+                    <span>
+                      <span className="block font-medium text-white">{order.id}</span>
+                      <span className="text-xs text-muted">{formatDate(order.createdAt.toISOString())}</span>
+                    </span>
+                    <span className="font-semibold text-white">{formatMAD(order.totalMad)}</span>
+                  </Link>
+                ))
+              )}
+            </div>
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card p-5">
+      <p className="text-xs uppercase text-muted">{label}</p>
+      <p className="mt-2 break-words text-lg font-bold text-white">{value}</p>
     </div>
   );
 }

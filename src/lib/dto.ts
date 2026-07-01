@@ -286,11 +286,16 @@ export interface FeaturedVariantOptionDTO {
 }
 
 export interface CustomerDTO {
+  id: string | null;
   email: string;
   name: string;
+  kind: "registered" | "guest";
+  emailVerified: boolean;
   orderCount: number;
   totalSpent: number;
   lastOrderAt: string;
+  lastLoginAt: string | null;
+  createdAt: string | null;
 }
 
 export interface AdminOverviewDTO {

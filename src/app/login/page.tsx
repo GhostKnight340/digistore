@@ -2,9 +2,46 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { loginCustomerAction, registerCustomerAction } from "@/app/actions/auth";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setMessage("");
+    const form = new FormData(e.currentTarget);
+    const result =
+      mode === "login"
+        ? await loginCustomerAction({
+            email: String(form.get("email") || ""),
+            password: String(form.get("password") || ""),
+            remember: form.get("remember") === "on",
+          })
+        : await registerCustomerAction({
+            name: String(form.get("name") || ""),
+            email: String(form.get("email") || ""),
+            password: String(form.get("password") || ""),
+            confirmPassword: String(form.get("confirmPassword") || ""),
+            acceptTerms: form.get("acceptTerms") === "on",
+            marketingOptIn: form.get("marketing") === "on",
+          });
+    setLoading(false);
+    if (!result.ok) {
+      setError(result.error || "Une erreur est survenue.");
+      return;
+    }
+    if (result.message) setMessage(result.message);
+    if (result.redirectTo) router.push(result.redirectTo);
+  }
 
   return (
     <div className="container-page py-16">
@@ -14,11 +51,14 @@ export default function LoginPage() {
             {(["login", "register"] as const).map((item) => (
               <button
                 key={item}
-                onClick={() => setMode(item)}
+                type="button"
+                onClick={() => {
+                  setMode(item);
+                  setError("");
+                  setMessage("");
+                }}
                 className={`rounded-lg py-2 text-sm font-semibold transition ${
-                  mode === item
-                    ? "bg-accent text-white"
-                    : "text-muted hover:text-white"
+                  mode === item ? "bg-accent text-white" : "text-muted hover:text-white"
                 }`}
               >
                 {item === "login" ? "Connexion" : "Inscription"}
@@ -27,61 +67,86 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-2xl font-bold text-white">
-            {mode === "login" ? "Bon retour parmi nous" : "Créer un compte"}
+            {mode === "login" ? "Bon retour parmi nous" : "Creer un compte"}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {mode === "login"
               ? "Connectez-vous pour retrouver vos commandes et vos codes."
-              : "Créez un compte pour suivre vos commandes et retrouver vos codes."}
+              : "Creez un compte pour suivre vos commandes et retrouver vos codes."}
           </p>
 
-          <form
-            className="mt-6 space-y-4"
-            onSubmit={(e) => e.preventDefault()}
-          >
+          <form className="mt-6 space-y-4" onSubmit={submit}>
             {mode === "register" && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-white">
-                  Nom complet
+              <Field label="Nom complet">
+                <input className="input" name="name" placeholder="Votre nom" autoComplete="name" />
+              </Field>
+            )}
+            <Field label="E-mail">
+              <input className="input" name="email" type="email" placeholder="vous@example.com" autoComplete="email" />
+            </Field>
+            <Field label="Mot de passe">
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Minimum 8 caracteres"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                />
+                <button type="button" className="btn-ghost px-3" onClick={() => setShowPassword((v) => !v)}>
+                  {showPassword ? "Masquer" : "Voir"}
+                </button>
+              </div>
+              {mode === "register" && (
+                <p className="mt-1 text-xs text-muted">Au moins 8 caracteres, avec une lettre et un chiffre.</p>
+              )}
+            </Field>
+            {mode === "register" && (
+              <>
+                <Field label="Confirmer le mot de passe">
+                  <input className="input" name="confirmPassword" type="password" autoComplete="new-password" />
+                </Field>
+                <label className="flex gap-2 text-sm text-muted">
+                  <input name="acceptTerms" type="checkbox" className="mt-1" />
+                  <span>
+                    J'accepte les <Link href="/terms" className="text-accent">conditions</Link> et la{" "}
+                    <Link href="/privacy" className="text-accent">confidentialite</Link>.
+                  </span>
                 </label>
-                <input className="input" placeholder="Votre nom" />
+                <label className="flex gap-2 text-sm text-muted">
+                  <input name="marketing" type="checkbox" className="mt-1" />
+                  <span>Recevoir les nouveautes et offres ghost.ma.</span>
+                </label>
+              </>
+            )}
+            {mode === "login" && (
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <label className="flex items-center gap-2 text-muted">
+                  <input name="remember" type="checkbox" />
+                  Se souvenir de moi
+                </label>
+                <Link href="/forgot-password" className="text-accent hover:text-accent-hover">
+                  Mot de passe oublie?
+                </Link>
               </div>
             )}
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-white">
-                E-mail
-              </label>
-              <input
-                className="input"
-                type="email"
-                placeholder="vous@example.com"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-white">
-                Mot de passe
-              </label>
-              <input className="input" type="password" placeholder="••••••••" />
-            </div>
-
-            <button className="btn-primary w-full" type="submit">
-              {mode === "login" ? "Se connecter" : "Créer le compte"}
+            {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
+            {message && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}
+            <button className="btn-primary w-full disabled:opacity-60" type="submit" disabled={loading}>
+              {loading ? "Veuillez patienter..." : mode === "login" ? "Se connecter" : "Creer le compte"}
             </button>
           </form>
-
-          <p className="mt-4 rounded-lg bg-surface px-3 py-2 text-center text-xs text-muted">
-            Interface de démonstration: l'authentification n'est pas encore
-            connectée en phase 1.
-          </p>
         </div>
-
-        <p className="mt-4 text-center text-sm text-muted">
-          Vous voulez simplement acheter un produit ?{" "}
-          <Link href="/products" className="text-accent hover:text-accent-hover">
-            Parcourir le catalogue
-          </Link>
-        </p>
       </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-white">{label}</label>
+      {children}
     </div>
   );
 }

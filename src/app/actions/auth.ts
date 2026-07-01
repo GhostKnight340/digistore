@@ -1,0 +1,203 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
+import {
+  clearCustomerSession,
+  consumeAuthToken,
+  getCurrentCustomer,
+  hashPassword,
+  normalizeEmail,
+  sendPasswordChangedEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendWelcomeEmail,
+  setCustomerSession,
+  validatePassword,
+  verifyPassword,
+  type AuthActionResult,
+} from "@/lib/auth";
+
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function checkLoginRateLimit(email: string) {
+  const now = Date.now();
+  const key = email.toLowerCase();
+  const bucket = loginAttempts.get(key);
+  if (!bucket || bucket.resetAt < now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= 8;
+}
+
+export async function registerCustomerAction(input: {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  acceptTerms: boolean;
+  marketingOptIn?: boolean;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const name = input.name.trim();
+  const email = normalizeEmail(input.email);
+  if (!name || !isEmail(email)) return { ok: false, error: "Veuillez verifier vos informations." };
+  if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
+  if (input.password !== input.confirmPassword) {
+    return { ok: false, error: "Les mots de passe ne correspondent pas." };
+  }
+  const passwordError = validatePassword(input.password);
+  if (passwordError) return { ok: false, error: passwordError };
+
+  const existing = await prisma.customer.findUnique({ where: { email } });
+  if (existing?.passwordHash) {
+    return { ok: false, error: "Impossible de creer ce compte avec ces informations." };
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const customer = existing
+    ? await prisma.customer.update({
+        where: { id: existing.id },
+        data: { name, passwordHash, emailVerified: false, emailVerifiedAt: null },
+      })
+    : await prisma.customer.create({
+        data: { name, email, passwordHash, emailVerified: false },
+      });
+
+  await sendVerificationEmail(customer);
+  await setCustomerSession(customer.id, false);
+  revalidatePath("/account");
+  return {
+    ok: true,
+    message: "Compte cree. Verifiez votre e-mail pour activer toutes les options.",
+    redirectTo: "/account",
+  };
+}
+
+export async function loginCustomerAction(input: {
+  email: string;
+  password: string;
+  remember: boolean;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const email = normalizeEmail(input.email);
+  if (!checkLoginRateLimit(email)) {
+    return { ok: false, error: "Connexion momentanement indisponible. Reessayez plus tard." };
+  }
+  const customer = await prisma.customer.findUnique({ where: { email } });
+  const valid = await verifyPassword(input.password, customer?.passwordHash ?? null);
+  if (!customer || !valid) {
+    return { ok: false, error: "E-mail ou mot de passe incorrect." };
+  }
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: { lastLoginAt: new Date() },
+  });
+  await setCustomerSession(customer.id, input.remember);
+  revalidatePath("/account");
+  return { ok: true, redirectTo: "/account/orders" };
+}
+
+export async function logoutCustomerAction(): Promise<AuthActionResult> {
+  await clearCustomerSession();
+  revalidatePath("/account");
+  return { ok: true, redirectTo: "/login" };
+}
+
+export async function requestPasswordResetAction(emailInput: string): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const email = normalizeEmail(emailInput);
+  const customer = isEmail(email)
+    ? await prisma.customer.findUnique({ where: { email } })
+    : null;
+  if (customer?.passwordHash) {
+    await sendPasswordResetEmail(customer);
+  }
+  return {
+    ok: true,
+    message: "Si un compte existe pour cette adresse, un lien de reinitialisation vient d'etre envoye.",
+  };
+}
+
+export async function resetPasswordAction(input: {
+  token: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  if (input.password !== input.confirmPassword) {
+    return { ok: false, error: "Les mots de passe ne correspondent pas." };
+  }
+  const passwordError = validatePassword(input.password);
+  if (passwordError) return { ok: false, error: passwordError };
+
+  const customer = await consumeAuthToken(input.token, "password_reset");
+  if (!customer) return { ok: false, error: "Lien invalide ou expire." };
+  const updated = await prisma.customer.update({
+    where: { id: customer.id },
+    data: {
+      passwordHash: await hashPassword(input.password),
+      lastPasswordChangeAt: new Date(),
+    },
+  });
+  await sendPasswordChangedEmail(updated);
+  return { ok: true, message: "Mot de passe modifie.", redirectTo: "/login" };
+}
+
+export async function verifyEmailAction(token: string): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const customer = await consumeAuthToken(token, "email_verification");
+  if (!customer) return { ok: false, error: "Lien invalide ou expire." };
+  const firstVerification = !customer.emailVerified;
+  const updated = await prisma.customer.update({
+    where: { id: customer.id },
+    data: { emailVerified: true, emailVerifiedAt: new Date() },
+  });
+  if (firstVerification) await sendWelcomeEmail(updated);
+  revalidatePath("/account");
+  return { ok: true, message: "Votre e-mail est verifie.", redirectTo: "/account" };
+}
+
+export async function resendVerificationAction(): Promise<AuthActionResult> {
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+  if (customer.emailVerified) return { ok: true, message: "Votre e-mail est deja verifie." };
+  await sendVerificationEmail(customer);
+  return { ok: true, message: "Un nouveau lien de verification vient d'etre envoye." };
+}
+
+export async function changePasswordAction(input: {
+  currentPassword: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const sessionCustomer = await getCurrentCustomer();
+  if (!sessionCustomer) return { ok: false, error: "Veuillez vous connecter." };
+  if (input.password !== input.confirmPassword) {
+    return { ok: false, error: "Les mots de passe ne correspondent pas." };
+  }
+  const passwordError = validatePassword(input.password);
+  if (passwordError) return { ok: false, error: passwordError };
+
+  const customer = await prisma.customer.findUnique({ where: { id: sessionCustomer.id } });
+  const valid = await verifyPassword(input.currentPassword, customer?.passwordHash ?? null);
+  if (!customer || !valid) return { ok: false, error: "Mot de passe actuel incorrect." };
+
+  const updated = await prisma.customer.update({
+    where: { id: customer.id },
+    data: {
+      passwordHash: await hashPassword(input.password),
+      lastPasswordChangeAt: new Date(),
+    },
+  });
+  await sendPasswordChangedEmail(updated);
+  revalidatePath("/account/security");
+  return { ok: true, message: "Mot de passe modifie." };
+}

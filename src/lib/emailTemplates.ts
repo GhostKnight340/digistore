@@ -2,8 +2,10 @@ import type { StoreSettings } from "./storeSettings";
 
 export type EmailTemplateKey =
   | "welcome"
+  | "email_verification"
   | "email_confirmation"
   | "password_reset"
+  | "password_changed"
   | "order_received"
   | "awaiting_payment"
   | "proof_received"

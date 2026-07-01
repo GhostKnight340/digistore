@@ -3,6 +3,7 @@ import "server-only";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
+import { getCurrentCustomer } from "@/lib/auth";
 import { formatPublicOrderNumber, parsePublicOrderNumber } from "@/lib/orderNumber";
 import type { OrderStatus } from "@/lib/types";
 import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
@@ -398,20 +399,40 @@ export async function getAdminOverview(): Promise<AdminOverviewDTO> {
 
 export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
   await ensureDatabaseReady();
-  const groups = await timeAdmin(
-    "admin.customers",
-    "order.groupBy.customerEmail",
-    () =>
-      prisma.order.groupBy({
-        by: ["customerEmail"],
-        take,
-        _count: { _all: true },
-        _sum: { totalMad: true },
-        _max: { createdAt: true },
-        orderBy: { _max: { createdAt: "desc" } },
-      }),
-    (rows) => rows.length,
-  );
+  const [groups, registeredCustomers] = await Promise.all([
+    timeAdmin(
+      "admin.customers",
+      "order.groupBy.customerEmail",
+      () =>
+        prisma.order.groupBy({
+          by: ["customerEmail"],
+          _count: { _all: true },
+          _sum: { totalMad: true },
+          _max: { createdAt: true },
+          orderBy: { _max: { createdAt: "desc" } },
+        }),
+      (rows) => rows.length,
+    ),
+    timeAdmin(
+      "admin.customers",
+      "customer.findMany.registered",
+      () =>
+        prisma.customer.findMany({
+          where: { passwordHash: { not: null } },
+          take,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            emailVerified: true,
+            lastLoginAt: true,
+            createdAt: true,
+          },
+        }),
+      (rows) => rows.length,
+    ),
+  ]);
 
   const emails = groups.map((group) => group.customerEmail);
   const customers = await timeAdmin(
@@ -420,19 +441,61 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
     () =>
       prisma.customer.findMany({
         where: { email: { in: emails } },
-        select: { name: true, email: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          passwordHash: true,
+          emailVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+        },
       }),
     (rows) => rows.length,
   );
-  const names = new Map(customers.map((customer) => [customer.email, customer.name]));
+  const customerByEmail = new Map(customers.map((customer) => [customer.email, customer]));
+  const groupByEmail = new Map(groups.map((group) => [group.customerEmail, group]));
+  const emptyDate = new Date(0).toISOString();
 
-  return groups.map((group) => ({
-    name: names.get(group.customerEmail) ?? group.customerEmail,
-    email: group.customerEmail,
-    orderCount: group._count._all,
-    totalSpent: group._sum.totalMad ?? 0,
-    lastOrderAt: group._max.createdAt?.toISOString() ?? new Date(0).toISOString(),
-  }));
+  const rows: CustomerDTO[] = groups.map((group) => {
+    const customer = customerByEmail.get(group.customerEmail);
+    return {
+      id: customer?.id ?? null,
+      name: customer?.name ?? group.customerEmail,
+      email: group.customerEmail,
+      kind: customer?.passwordHash ? "registered" : "guest",
+      emailVerified: customer?.emailVerified ?? false,
+      orderCount: group._count._all,
+      totalSpent: group._sum.totalMad ?? 0,
+      lastOrderAt: group._max.createdAt?.toISOString() ?? emptyDate,
+      lastLoginAt: customer?.lastLoginAt?.toISOString() ?? null,
+      createdAt: customer?.createdAt?.toISOString() ?? null,
+    };
+  });
+
+  for (const customer of registeredCustomers) {
+    if (groupByEmail.has(customer.email)) continue;
+    rows.push({
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      kind: "registered",
+      emailVerified: customer.emailVerified,
+      orderCount: 0,
+      totalSpent: 0,
+      lastOrderAt: emptyDate,
+      lastLoginAt: customer.lastLoginAt?.toISOString() ?? null,
+      createdAt: customer.createdAt.toISOString(),
+    });
+  }
+
+  return rows
+    .sort((a, b) => {
+      const aDate = a.orderCount > 0 ? a.lastOrderAt : a.createdAt ?? "";
+      const bDate = b.orderCount > 0 ? b.lastOrderAt : b.createdAt ?? "";
+      return bDate.localeCompare(aDate);
+    })
+    .slice(0, take);
 }
 
 interface CreateOrderInput {
@@ -501,21 +564,29 @@ export async function createOrder(
     0,
   );
   try {
+    const sessionCustomer = await getCurrentCustomer();
+    const customerName = sessionCustomer?.name ?? input.customerName;
+    const customerEmail = sessionCustomer?.email ?? input.customerEmail.trim().toLowerCase();
     const order = await prisma.$transaction(async (tx) => {
-      const customer = await tx.customer.upsert({
-        where: { email: input.customerEmail },
-        update: { name: input.customerName },
-        create: {
-          name: input.customerName,
-          email: input.customerEmail,
-        },
-      });
+      const customer = sessionCustomer
+        ? await tx.customer.update({
+            where: { id: sessionCustomer.id },
+            data: { name: customerName },
+          })
+        : await tx.customer.upsert({
+            where: { email: customerEmail },
+            update: { name: customerName },
+            create: {
+              name: customerName,
+              email: customerEmail,
+            },
+          });
 
       const created = await tx.order.create({
         data: {
           customerId: customer.id,
-          customerName: input.customerName,
-          customerEmail: input.customerEmail,
+          customerName,
+          customerEmail,
           paymentMethod: input.paymentMethod,
           status: "pending_payment",
           totalMad,
@@ -544,13 +615,13 @@ export async function createOrder(
 
     try {
       await sendTransactionalEmail({
-        to: input.customerEmail,
+        to: customerEmail,
         orderId: order.id,
         customerId: order.customerId,
         templateKey: "order_received",
         type: "order_received",
         variables: {
-          customer_name: input.customerName,
+          customer_name: customerName,
           order_number: order.id,
           payment_url: `/payment/${order.id}`,
           order_url: `/order/${order.id}`,

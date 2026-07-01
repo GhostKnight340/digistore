@@ -75,6 +75,8 @@ export async function sendTransactionalEmail(
     html: input.html,
     text: input.text,
   });
+  const settings = await getStoreSettings();
+  const replyTo = process.env.SUPPORT_EMAIL || settings.footer.contactEmail;
 
   const log = await prisma.emailLog.create({
     data: {
@@ -118,6 +120,7 @@ export async function sendTransactionalEmail(
       body: JSON.stringify({
         from: fromAddress(),
         to: [input.to],
+        reply_to: replyTo,
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
