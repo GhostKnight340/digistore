@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import {
   clearCustomerSession,
@@ -44,40 +45,81 @@ export async function registerCustomerAction(input: {
   acceptTerms: boolean;
   marketingOptIn?: boolean;
 }): Promise<AuthActionResult> {
-  await ensureDatabaseReady();
-  const name = input.name.trim();
-  const email = normalizeEmail(input.email);
-  if (!name || !isEmail(email)) return { ok: false, error: "Veuillez verifier vos informations." };
-  if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
-  if (input.password !== input.confirmPassword) {
-    return { ok: false, error: "Les mots de passe ne correspondent pas." };
-  }
-  const passwordError = validatePassword(input.password);
-  if (passwordError) return { ok: false, error: passwordError };
+  try {
+    await ensureDatabaseReady();
+    const name = input.name.trim();
+    const email = normalizeEmail(input.email);
+    if (!name || !isEmail(email)) return { ok: false, error: "Veuillez verifier vos informations." };
+    if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
+    if (input.password !== input.confirmPassword) {
+      return { ok: false, error: "Les mots de passe ne correspondent pas." };
+    }
+    const passwordError = validatePassword(input.password);
+    if (passwordError) return { ok: false, error: passwordError };
 
-  const existing = await prisma.customer.findUnique({ where: { email } });
-  if (existing?.passwordHash) {
-    return { ok: false, error: "Impossible de creer ce compte avec ces informations." };
-  }
+    const existing = await prisma.customer.findUnique({ where: { email } });
+    if (existing?.passwordHash) {
+      return { ok: false, error: "Un compte existe deja avec cette adresse e-mail." };
+    }
 
-  const passwordHash = await hashPassword(input.password);
-  const customer = existing
-    ? await prisma.customer.update({
-        where: { id: existing.id },
-        data: { name, passwordHash, emailVerified: false, emailVerifiedAt: null },
-      })
-    : await prisma.customer.create({
-        data: { name, email, passwordHash, emailVerified: false },
+    const passwordHash = await hashPassword(input.password);
+    const customer = existing
+      ? await prisma.customer.update({
+          where: { id: existing.id },
+          data: { name, passwordHash, emailVerified: false, emailVerifiedAt: null },
+        })
+      : await prisma.customer.create({
+          data: { name, email, passwordHash, emailVerified: false },
+        });
+
+    let verificationEmailSent = true;
+    try {
+      const emailResult = await sendVerificationEmail(customer);
+      verificationEmailSent = emailResult.ok;
+      if (!emailResult.ok) {
+        console.error("[auth:register:verification_email_failed]", {
+          customerId: customer.id,
+          email,
+          status: emailResult.status,
+          error: emailResult.error,
+        });
+      }
+    } catch (error) {
+      verificationEmailSent = false;
+      console.error("[auth:register:verification_email_error]", {
+        customerId: customer.id,
+        email,
+        error,
       });
+    }
 
-  await sendVerificationEmail(customer);
-  await setCustomerSession(customer.id, false);
-  revalidatePath("/account");
-  return {
-    ok: true,
-    message: "Compte cree. Verifiez votre e-mail pour activer toutes les options.",
-    redirectTo: "/account",
-  };
+    try {
+      await setCustomerSession(customer.id, false);
+    } catch (error) {
+      console.error("[auth:register:session_error]", {
+        customerId: customer.id,
+        email,
+        error,
+      });
+    }
+
+    revalidatePath("/account");
+    return {
+      ok: true,
+      message: verificationEmailSent
+        ? "Compte créé. Vérifiez votre e-mail pour activer votre compte."
+        : "Compte créé, mais l’e-mail de vérification n’a pas pu être envoyé. Vous pourrez le renvoyer.",
+    };
+  } catch (error) {
+    console.error("[auth:register:error]", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { ok: false, error: "Un compte existe deja avec cette adresse e-mail." };
+    }
+    return {
+      ok: false,
+      error: "Impossible de creer le compte pour le moment. Veuillez reessayer.",
+    };
+  }
 }
 
 export async function loginCustomerAction(input: {

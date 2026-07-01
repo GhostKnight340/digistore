@@ -15,32 +15,40 @@ export default function LoginPage() {
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
     setMessage("");
-    const form = new FormData(e.currentTarget);
-    const result =
-      mode === "login"
-        ? await loginCustomerAction({
-            email: String(form.get("email") || ""),
-            password: String(form.get("password") || ""),
-            remember: form.get("remember") === "on",
-          })
-        : await registerCustomerAction({
-            name: String(form.get("name") || ""),
-            email: String(form.get("email") || ""),
-            password: String(form.get("password") || ""),
-            confirmPassword: String(form.get("confirmPassword") || ""),
-            acceptTerms: form.get("acceptTerms") === "on",
-            marketingOptIn: form.get("marketing") === "on",
-          });
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.error || "Une erreur est survenue.");
-      return;
+    try {
+      const form = new FormData(e.currentTarget);
+      const currentMode = mode;
+      const result =
+        currentMode === "login"
+          ? await loginCustomerAction({
+              email: String(form.get("email") || ""),
+              password: String(form.get("password") || ""),
+              remember: form.get("remember") === "on",
+            })
+          : await registerCustomerAction({
+              name: String(form.get("name") || ""),
+              email: String(form.get("email") || ""),
+              password: String(form.get("password") || ""),
+              confirmPassword: String(form.get("confirmPassword") || ""),
+              acceptTerms: form.get("acceptTerms") === "on",
+              marketingOptIn: form.get("marketing") === "on",
+            });
+      if (!result.ok) {
+        setError(result.error || "Une erreur est survenue.");
+        return;
+      }
+      if (result.message) setMessage(result.message);
+      if (result.redirectTo && currentMode === "login") router.push(result.redirectTo);
+    } catch (err) {
+      console.error("[login:submit]", err);
+      setError("Une erreur est survenue. Veuillez reessayer.");
+    } finally {
+      setLoading(false);
     }
-    if (result.message) setMessage(result.message);
-    if (result.redirectTo) router.push(result.redirectTo);
   }
 
   return (
@@ -132,7 +140,7 @@ export default function LoginPage() {
             )}
             {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
             {message && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}
-            <button className="btn-primary w-full disabled:opacity-60" type="submit" disabled={loading}>
+            <button className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={loading}>
               {loading ? "Veuillez patienter..." : mode === "login" ? "Se connecter" : "Creer le compte"}
             </button>
           </form>
