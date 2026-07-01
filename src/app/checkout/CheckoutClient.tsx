@@ -42,7 +42,7 @@ export default function CheckoutClient({
   initialCustomer = null,
 }: {
   initialConfig?: PaymentConfigDTO | null;
-  initialCustomer?: { name: string; email: string } | null;
+  initialCustomer?: { name: string; email: string; phone?: string | null } | null;
 }) {
   const { cart, ready, cartTotal, clearCart } = useStore();
   const { getProduct } = useProductCatalog();
@@ -63,6 +63,7 @@ export default function CheckoutClient({
   const [selectedBankId, setSelectedBankId] = useState("");
   const [email, setEmail] = useState(initialCustomer?.email ?? "");
   const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
+  const [phone, setPhone] = useState(initialCustomer?.phone ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -161,6 +162,11 @@ export default function CheckoutClient({
       setError("Veuillez saisir une adresse e-mail valide.");
       return;
     }
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phone.trim() && (!/^\+?[0-9][0-9\s().-]*$/.test(phone.trim()) || phoneDigits.length < 9 || phoneDigits.length > 15)) {
+      setError("Veuillez saisir un numéro de téléphone valide.");
+      return;
+    }
     if (!method) {
       setError("Veuillez choisir un mode de paiement.");
       return;
@@ -171,6 +177,7 @@ export default function CheckoutClient({
       const order = await createOrderAction({
         customerName: fullName.trim(),
         customerEmail: email.trim(),
+        customerPhone: phone.trim(),
         paymentMethod: method,
         items: cart.map((i) => ({
           productId: i.productId,
@@ -235,6 +242,16 @@ export default function CheckoutClient({
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="vous@example.com"
                   autoComplete="email"
+                />
+              </Field>
+              <Field label="Numéro de téléphone">
+                <input
+                  className="input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+212 6 00 00 00 00"
+                  autoComplete="tel"
+                  inputMode="tel"
                 />
               </Field>
             </div>

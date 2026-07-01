@@ -25,6 +25,17 @@ function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function normalizePhone(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function isValidOptionalPhone(value: string) {
+  if (!value) return true;
+  if (!/^\+?[0-9][0-9\s().-]*$/.test(value)) return false;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 9 && digits.length <= 15;
+}
+
 function checkLoginRateLimit(email: string) {
   const now = Date.now();
   const key = email.toLowerCase();
@@ -150,6 +161,7 @@ export async function loginCustomerAction(input: {
   });
   await setCustomerSession(customer.id, input.remember);
   revalidatePath("/account");
+  revalidatePath("/account/security");
   return { ok: true, redirectTo: "/account/orders" };
 }
 
@@ -210,6 +222,7 @@ export async function verifyEmailAction(token: string): Promise<AuthActionResult
   });
   if (firstVerification) await sendWelcomeEmail(updated);
   revalidatePath("/account");
+  revalidatePath("/account/security");
   return { ok: true, message: "Votre e-mail est vérifié.", redirectTo: "/account" };
 }
 
@@ -246,6 +259,26 @@ export async function resendVerificationAction(): Promise<AuthActionResult> {
       error: "L'e-mail de vérification n'a pas pu être envoyé. Réessayez plus tard.",
     };
   }
+}
+
+export async function updateCustomerPhoneAction(phoneInput: string): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+
+  const phone = normalizePhone(phoneInput);
+  if (!isValidOptionalPhone(phone)) {
+    return { ok: false, error: "Veuillez saisir un numÃ©ro de tÃ©lÃ©phone valide." };
+  }
+
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: { phone: phone || null },
+  });
+  revalidatePath("/account");
+  revalidatePath("/checkout");
+  revalidatePath("/admin");
+  return { ok: true, message: "NumÃ©ro de tÃ©lÃ©phone enregistrÃ©." };
 }
 
 export async function changePasswordAction(input: {

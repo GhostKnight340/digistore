@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { renderLegalContent } from "@/lib/legalPages";
+import { normalizeLegalHtml, sanitizeLegalHtml } from "@/lib/legalHtml";
 import LegalContent from "@/components/legal/LegalContent";
 
 const labels: Record<string, string> = {
@@ -19,8 +20,15 @@ export default function LegalPagesPanel() {
   const [active, setActive] = useState(keys[0] ?? "terms");
   const [draft, setDraft] = useState(settings.legalPages);
   const [message, setMessage] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<HTMLDivElement | null>(null);
   const page = draft[active];
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const normalized = normalizeLegalHtml(page.content);
+    if (editor.innerHTML !== normalized) editor.innerHTML = normalized;
+  }, [active, page.content]);
 
   async function save() {
     const result = await saveSettings({ ...settings, legalPages: draft });
@@ -67,36 +75,28 @@ export default function LegalPagesPanel() {
             <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
               <span className="block text-sm font-medium text-white">Contenu</span>
               <div className="flex flex-wrap gap-2">
-                <FormatButton label="H2" onClick={() => wrapSelection("## ", "")} />
-                <FormatButton label="H3" onClick={() => wrapSelection("### ", "")} />
-                <FormatButton label="B" onClick={() => wrapSelection("**", "**", "texte en gras")} />
-                <FormatButton label="I" onClick={() => wrapSelection("*", "*", "texte en italique")} />
-                <FormatButton label="U" onClick={() => wrapSelection("<u>", "</u>", "texte soulignÃ©")} />
-                <FormatButton label="â€¢ Liste" onClick={() => insertBlock("- Ã‰lÃ©ment de liste")} />
-                <FormatButton label="1. Liste" onClick={() => insertBlock("1. Premier Ã©lÃ©ment")} />
-                <FormatButton label="Lien" onClick={() => wrapSelection("[", "](https://example.com)", "texte du lien")} />
-                <FormatButton label="SÃ©parateur" onClick={() => insertBlock("---")} />
+                <FormatButton label="H2" onClick={() => formatBlock("h2")} />
+                <FormatButton label="H3" onClick={() => formatBlock("h3")} />
+                <FormatButton label="B" onClick={() => format("bold")} />
+                <FormatButton label="I" onClick={() => format("italic")} />
+                <FormatButton label="U" onClick={() => format("underline")} />
+                <FormatButton label="â€¢ Liste" onClick={() => format("insertUnorderedList")} />
+                <FormatButton label="1. Liste" onClick={() => format("insertOrderedList")} />
+                <FormatButton label="Lien" onClick={insertLink} />
+                <FormatButton label="SÃ©parateur" onClick={() => insertHtml("<hr>")} />
               </div>
             </div>
-            <textarea
-              ref={textareaRef}
-              value={page.content}
-              onChange={(event) => update(active, "content", event.target.value)}
-              rows={18}
-              className="input min-h-[30rem] py-3 font-mono text-sm leading-6"
-              placeholder={[
-                "## Titre de section",
-                "",
-                "Texte avec **gras**, *italique*, <u>soulignÃ©</u> et [lien](https://ghost.ma).",
-                "",
-                "- Ã‰lÃ©ment de liste",
-                "- Autre Ã©lÃ©ment",
-                "",
-                "---",
-              ].join("\n")}
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={syncEditorContent}
+              onBlur={syncEditorContent}
+              onPaste={handlePaste}
+              className="legal-content input min-h-[30rem] max-w-none overflow-y-auto bg-surface py-3 text-sm leading-6 text-text focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
             />
             <p className="mt-2 text-xs text-muted">
-              Format pris en charge : titres Markdown, gras, italique, soulignÃ©, listes, liens et sÃ©parateurs.
+              Format pris en charge : titres, gras, italique, soulignÃ©, listes imbriquÃ©es, liens et sÃ©parateurs.
             </p>
           </div>
         </section>
@@ -127,39 +127,47 @@ export default function LegalPagesPanel() {
     }));
   }
 
-  function replaceContent(value: string, cursorPosition?: number) {
-    update(active, "content", value);
-    window.requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-      if (cursorPosition != null) {
-        textareaRef.current?.setSelectionRange(cursorPosition, cursorPosition);
-      }
-    });
+  function syncEditorContent() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    update(active, "content", sanitizeLegalHtml(editor.innerHTML));
   }
 
-  function wrapSelection(prefix: string, suffix: string, fallback = "texte") {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = page.content.slice(start, end) || fallback;
-    const replacement = `${prefix}${selected}${suffix}`;
-    replaceContent(
-      `${page.content.slice(0, start)}${replacement}${page.content.slice(end)}`,
-      start + replacement.length,
-    );
+  function focusEditor() {
+    editorRef.current?.focus();
   }
 
-  function insertBlock(markdown: string) {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const before = page.content.slice(0, start);
-    const after = page.content.slice(start);
-    const prefix = before.endsWith("\n\n") || before.length === 0 ? "" : before.endsWith("\n") ? "\n" : "\n\n";
-    const suffix = after.startsWith("\n") || after.length === 0 ? "" : "\n\n";
-    const replacement = `${prefix}${markdown}${suffix}`;
-    replaceContent(`${before}${replacement}${after}`, start + replacement.length);
+  function format(command: string) {
+    focusEditor();
+    document.execCommand(command);
+    syncEditorContent();
+  }
+
+  function formatBlock(tagName: "h2" | "h3") {
+    focusEditor();
+    document.execCommand("formatBlock", false, tagName);
+    syncEditorContent();
+  }
+
+  function insertHtml(html: string) {
+    focusEditor();
+    document.execCommand("insertHTML", false, sanitizeLegalHtml(html));
+    syncEditorContent();
+  }
+
+  function insertLink() {
+    focusEditor();
+    const href = window.prompt("URL du lien", "https://example.com");
+    if (!href) return;
+    document.execCommand("createLink", false, href);
+    syncEditorContent();
+  }
+
+  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const html = event.clipboardData.getData("text/html");
+    const text = event.clipboardData.getData("text/plain");
+    insertHtml(normalizeLegalHtml(html || text));
   }
 }
 

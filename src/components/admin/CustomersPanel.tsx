@@ -70,6 +70,7 @@ export default function CustomersPanel() {
                   <td className="px-5 py-3">
                     <p className="font-medium text-white">{customer.name}</p>
                     <p className="text-xs text-muted">{customer.email}</p>
+                    {customer.phone ? <p className="text-xs text-muted">{customer.phone}</p> : null}
                   </td>
                   <td className="px-5 py-3 text-muted">
                     {customer.kind === "registered" ? "Compte" : "Invite"}

@@ -19,7 +19,7 @@ export default async function AccountSecurityPage() {
             <Info label="Dernière connexion" value={customer.lastLoginAt ? formatDate(customer.lastLoginAt.toISOString()) : "Jamais"} />
             <Info label="Mot de passe" value={customer.lastPasswordChangeAt ? formatDate(customer.lastPasswordChangeAt.toISOString()) : "Pas encore modifié"} />
           </div>
-          <SecurityClient />
+          <SecurityClient emailVerified={customer.emailVerified} />
         </section>
       </div>
     </div>

@@ -8,7 +8,7 @@ export default async function CheckoutPage() {
   return (
     <CheckoutClient
       initialCustomer={
-        customer ? { name: customer.name, email: customer.email } : null
+        customer ? { name: customer.name, email: customer.email, phone: customer.phone } : null
       }
     />
   );

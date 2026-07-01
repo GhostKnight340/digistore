@@ -142,6 +142,7 @@ async function ensureDatabaseSchema(): Promise<void> {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
     `ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "passwordHash" TEXT`,
+    `ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "phone" TEXT`,
     `ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "emailVerified" BOOLEAN NOT NULL DEFAULT false`,
     `ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "emailVerifiedAt" TIMESTAMP(3)`,
     `ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3)`,

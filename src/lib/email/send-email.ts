@@ -1,13 +1,13 @@
 import "server-only";
 
 import { Prisma } from "@prisma/client";
+import { Resend } from "resend";
 import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
 import { getStoreSettings } from "@/lib/db/catalog";
 import {
   type EmailTemplateKey,
   type RenderedEmailTemplate,
   renderEmailTemplate,
-  textToHtml,
 } from "@/lib/emailTemplates";
 
 type EmailMetadata = Record<string, string | number | boolean | null | undefined>;
@@ -62,7 +62,7 @@ export async function renderTransactionalEmail(
   return {
     subject: overrides.subject ?? rendered.subject,
     text,
-    html: overrides.html ?? textToHtml(text),
+    html: overrides.html ?? rendered.html,
   };
 }
 
@@ -111,32 +111,27 @@ export async function sendTransactionalEmail(
   }
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(15000),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: fromAddress(),
-        to: [input.to],
-        reply_to: replyTo,
-        subject: rendered.subject,
-        html: rendered.html,
-        text: rendered.text,
-      }),
+    const resend = new Resend(apiKey);
+    const from = fromAddress();
+    const to = input.to;
+    const subject = rendered.subject;
+    const html = rendered.html;
+    const text = rendered.text;
+
+    console.log(html);
+
+    const { data, error: resendError } = await resend.emails.send({
+      from,
+      to,
+      subject,
+      html,
+      text,
+      replyTo,
     });
 
-    const payload = (await response.json().catch(() => ({}))) as {
-      id?: string;
-      message?: string;
-      error?: string;
-      name?: string;
-    };
-
-    if (!response.ok || !payload.id) {
-      const error = payload.message || payload.error || `Resend returned ${response.status}.`;
+    if (resendError || !data?.id) {
+      const error =
+        resendError?.message || resendError?.name || "Resend did not return a message id.";
       await prisma.emailLog.update({
         where: { id: log.id },
         data: { status: "failed", errorMessage: error },
@@ -148,7 +143,7 @@ export async function sendTransactionalEmail(
       where: { id: log.id },
       data: {
         status: "sent",
-        providerMessageId: payload.id,
+        providerMessageId: data.id,
         errorMessage: null,
       },
     });
@@ -156,7 +151,7 @@ export async function sendTransactionalEmail(
       ok: true,
       status: "sent",
       logId: log.id,
-      providerMessageId: payload.id,
+      providerMessageId: data.id,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Resend send failed.";

@@ -111,6 +111,15 @@ body {
     @apply list-decimal;
   }
 
+  .legal-content.input {
+    @apply mt-0;
+  }
+
+  .legal-content li > ul,
+  .legal-content li > ol {
+    @apply mt-2;
+  }
+
   .legal-content li {
     @apply pl-1;
   }

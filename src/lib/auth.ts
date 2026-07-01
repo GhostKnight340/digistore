@@ -18,6 +18,7 @@ export type AuthCustomer = {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   emailVerified: boolean;
   emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
@@ -246,6 +247,7 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
       id: true,
       name: true,
       email: true,
+      phone: true,
       emailVerified: true,
       emailVerifiedAt: true,
       lastLoginAt: true,
@@ -259,6 +261,7 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     id: customer.id,
     name: customer.name,
     email: customer.email,
+    phone: customer.phone,
     emailVerified: customer.emailVerified,
     emailVerifiedAt: customer.emailVerifiedAt,
     lastLoginAt: customer.lastLoginAt,

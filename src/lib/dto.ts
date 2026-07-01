@@ -288,6 +288,7 @@ export interface FeaturedVariantOptionDTO {
 export interface CustomerDTO {
   id: string | null;
   email: string;
+  phone: string | null;
   name: string;
   kind: "registered" | "guest";
   emailVerified: boolean;

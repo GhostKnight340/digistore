@@ -4,7 +4,7 @@ import { useState } from "react";
 import { changePasswordAction, resendVerificationAction } from "@/app/actions/auth";
 import PasswordField from "@/components/ui/PasswordField";
 
-export default function SecurityClient() {
+export default function SecurityClient({ emailVerified }: { emailVerified: boolean }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ export default function SecurityClient() {
   }
 
   async function resend() {
-    if (resendLoading || resendCooldown) return;
+    if (resendLoading || resendCooldown || emailVerified) return;
     setResendLoading(true);
     setResendError("");
     setResendMessage("");
@@ -55,30 +55,54 @@ export default function SecurityClient() {
 
   return (
     <div className="card mt-8 p-6">
-      <div className="flex items-center justify-between gap-4 border-b border-border pb-5">
-        <div>
-          <h2 className="text-lg font-bold text-white">Vérification e-mail</h2>
-          <p className="mt-1 text-sm text-muted">Besoin d'un nouveau lien ? Envoyez-le depuis ce compte.</p>
-          {resendError && (
-            <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
-              {resendError}
+      <div className="border-b border-border pb-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-white">Statut e-mail</h2>
+            <p className="mt-1 text-sm text-muted">
+              {emailVerified
+                ? "Votre adresse e-mail est vérifiée."
+                : "Votre adresse e-mail n'est pas encore vérifiée."}
             </p>
-          )}
-          {resendMessage && (
-            <p className="mt-3 rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">
-              {resendMessage}
-            </p>
-          )}
+            {emailVerified ? (
+              <p className="mt-3 rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">
+                Votre adresse e-mail est vérifiée.
+              </p>
+            ) : null}
+            {!emailVerified && resendError ? (
+              <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+                {resendError}
+              </p>
+            ) : null}
+            {!emailVerified && resendMessage ? (
+              <p className="mt-3 rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">
+                {resendMessage}
+              </p>
+            ) : null}
+          </div>
+          <span className={`chip ${emailVerified ? "border-green-500/30 text-green-300" : "border-amber-500/30 text-amber-300"}`}>
+            {emailVerified ? "Vérifié" : "Non vérifié"}
+          </span>
         </div>
-        <button
-          type="button"
-          onClick={resend}
-          disabled={resendLoading || resendCooldown}
-          className="btn-ghost text-sm disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {resendLoading ? "Envoi..." : resendCooldown ? "Envoyé" : "Renvoyer"}
-        </button>
+
+        {!emailVerified ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Vérification e-mail</h3>
+              <p className="mt-1 text-xs text-muted">Besoin d'un nouveau lien ? Envoyez-le depuis ce compte.</p>
+            </div>
+            <button
+              type="button"
+              onClick={resend}
+              disabled={resendLoading || resendCooldown}
+              className="btn-ghost text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {resendLoading ? "Envoi..." : resendCooldown ? "Envoyé" : "Renvoyer"}
+            </button>
+          </div>
+        ) : null}
       </div>
+
       <form onSubmit={changePassword} className="mt-6 space-y-4">
         <PasswordField name="currentPassword" placeholder="Mot de passe actuel" autoComplete="current-password" />
         <PasswordField name="password" placeholder="Nouveau mot de passe" autoComplete="new-password" />

@@ -425,6 +425,7 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
             id: true,
             name: true,
             email: true,
+            phone: true,
             emailVerified: true,
             lastLoginAt: true,
             createdAt: true,
@@ -445,6 +446,7 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
           id: true,
           name: true,
           email: true,
+          phone: true,
           passwordHash: true,
           emailVerified: true,
           lastLoginAt: true,
@@ -463,6 +465,7 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
       id: customer?.id ?? null,
       name: customer?.name ?? group.customerEmail,
       email: group.customerEmail,
+      phone: customer?.phone ?? null,
       kind: customer?.passwordHash ? "registered" : "guest",
       emailVerified: customer?.emailVerified ?? false,
       orderCount: group._count._all,
@@ -479,6 +482,7 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
       id: customer.id,
       name: customer.name,
       email: customer.email,
+      phone: customer.phone,
       kind: "registered",
       emailVerified: customer.emailVerified,
       orderCount: 0,
@@ -501,8 +505,17 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
 interface CreateOrderInput {
   customerName: string;
   customerEmail: string;
+  customerPhone?: string;
   paymentMethod: string;
   items: { productId: string; quantity: number }[];
+}
+
+function normalizeOptionalPhone(value?: string) {
+  const phone = value?.replace(/\s+/g, " ").trim() ?? "";
+  if (!phone) return null;
+  if (!/^\+?[0-9][0-9\s().-]*$/.test(phone)) return undefined;
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 9 && digits.length <= 15 ? phone : undefined;
 }
 
 export async function createOrder(
@@ -567,18 +580,21 @@ export async function createOrder(
     const sessionCustomer = await getCurrentCustomer();
     const customerName = sessionCustomer?.name ?? input.customerName;
     const customerEmail = sessionCustomer?.email ?? input.customerEmail.trim().toLowerCase();
+    const customerPhone = normalizeOptionalPhone(input.customerPhone);
+    if (customerPhone === undefined) return null;
     const order = await prisma.$transaction(async (tx) => {
       const customer = sessionCustomer
         ? await tx.customer.update({
             where: { id: sessionCustomer.id },
-            data: { name: customerName },
+            data: { name: customerName, phone: customerPhone ?? undefined },
           })
         : await tx.customer.upsert({
             where: { email: customerEmail },
-            update: { name: customerName },
+            update: { name: customerName, phone: customerPhone ?? undefined },
             create: {
               name: customerName,
               email: customerEmail,
+              phone: customerPhone,
             },
           });
 

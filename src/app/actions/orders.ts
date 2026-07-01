@@ -13,6 +13,7 @@ import type { CustomerOrderDTO } from "@/lib/dto";
 export async function createOrderAction(input: {
   customerName: string;
   customerEmail: string;
+  customerPhone?: string;
   paymentMethod: string;
   items: { productId: string; quantity: number }[];
 }): Promise<{ id: string } | null> {
