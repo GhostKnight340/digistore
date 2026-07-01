@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import { consumeAuthToken, sendWelcomeEmail } from "@/lib/auth";
 
@@ -20,6 +21,8 @@ export default async function VerifyEmailPage({
       data: { emailVerified: true, emailVerifiedAt: new Date() },
     });
     if (firstVerification) await sendWelcomeEmail(updated);
+    revalidatePath("/account");
+    revalidatePath("/account/security");
     ok = true;
   }
 

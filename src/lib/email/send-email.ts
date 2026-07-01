@@ -34,6 +34,13 @@ type EmailSendResult = {
   error?: string;
 };
 
+const AUTH_TEMPLATE_KEYS = new Set<EmailTemplateKey>([
+  "email_verification",
+  "welcome",
+  "password_reset",
+  "password_changed",
+]);
+
 function fromAddress() {
   const name = process.env.EMAIL_FROM_NAME || "ghost.ma";
   const address = process.env.EMAIL_FROM_ADDRESS || "no-reply@ghost.ma";
@@ -51,6 +58,17 @@ function metadataToJson(metadata?: EmailMetadata): Prisma.InputJsonValue | undef
   ) as Prisma.InputJsonObject;
 }
 
+function isBrandedHtml(html: string) {
+  return (
+    html.includes("<!DOCTYPE html>") &&
+    html.includes("<table") &&
+    html.includes("style=") &&
+    html.includes("background") &&
+    html.includes("border-radius") &&
+    !html.trim().startsWith("<p>")
+  );
+}
+
 export async function renderTransactionalEmail(
   templateKey: EmailTemplateKey,
   variables: EmailMetadata = {},
@@ -59,10 +77,16 @@ export async function renderTransactionalEmail(
   const settings = await getStoreSettings();
   const rendered = renderEmailTemplate(settings, templateKey, variables);
   const text = overrides.text ?? rendered.text;
+  const html = AUTH_TEMPLATE_KEYS.has(templateKey)
+    ? rendered.html
+    : overrides.html ?? rendered.html;
+  if (AUTH_TEMPLATE_KEYS.has(templateKey) && !isBrandedHtml(html)) {
+    throw new Error(`Auth email template ${templateKey} did not render branded HTML.`);
+  }
   return {
     subject: overrides.subject ?? rendered.subject,
     text,
-    html: overrides.html ?? rendered.html,
+    html,
   };
 }
 

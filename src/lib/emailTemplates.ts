@@ -36,13 +36,6 @@ function variableString(variables: Variables, key: string) {
   return String(variables[key] ?? "");
 }
 
-export function textToHtml(text: string) {
-  return text
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
-    .join("\n");
-}
-
 function brandedButton(label: string, href: string) {
   if (!href) return "";
   const safeHref = escapeHtml(href);
