@@ -1,0 +1,2 @@
+ALTER TABLE "EmailLog"
+ALTER COLUMN "orderId" DROP NOT NULL;

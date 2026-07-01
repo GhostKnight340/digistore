@@ -133,6 +133,7 @@ async function ensureDatabaseSchema(): Promise<void> {
       CONSTRAINT "EmailLog_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
       CONSTRAINT "EmailLog_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE SET NULL ON UPDATE CASCADE
     )`,
+    `ALTER TABLE "EmailLog" ALTER COLUMN "orderId" DROP NOT NULL`,
     `CREATE TABLE IF NOT EXISTS "Customer" (
       "id" TEXT NOT NULL PRIMARY KEY,
       "name" TEXT NOT NULL,
