@@ -680,9 +680,14 @@ function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
 
       {order.items.map((item) => {
         const product = getProduct(item.productId);
+        // Join on orderItemId: item.productId is the variant id for variant
+        // products, while a delivered code carries the parent product slug, so
+        // matching on productId would miss variant deliveries. orderItemId is
+        // the unambiguous link and covers inventory + manual codes alike.
         const codes = order.deliveredCodes
-          .filter((d) => d.productId === item.productId)
-          .map((d) => d.code);
+          .filter((d) => d.orderItemId === item.id)
+          .map((d) => d.code)
+          .filter(Boolean);
 
         return (
           <article key={item.id} className="card overflow-hidden">
@@ -702,13 +707,20 @@ function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
             </div>
             <div className="border-t border-border bg-base/35 p-5">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-faint">
-                Code{codes.length > 1 ? "s" : ""} livrés
+                Code{codes.length > 1 ? "s" : ""} livré{codes.length > 1 ? "s" : ""}
               </p>
-              <div className="space-y-3">
-                {codes.map((code, i) => (
-                  <CopyCode key={`${code}-${i}`} code={code} index={i} />
-                ))}
-              </div>
+              {codes.length > 0 ? (
+                <div className="space-y-3">
+                  {codes.map((code, i) => (
+                    <CopyCode key={`${code}-${i}`} code={code} index={i} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">
+                  Votre code sera affiché ici sous peu. Contactez le support si vous ne le
+                  recevez pas rapidement.
+                </p>
+              )}
             </div>
           </article>
         );
