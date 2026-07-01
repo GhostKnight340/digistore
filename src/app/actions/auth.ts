@@ -111,7 +111,14 @@ export async function registerCustomerAction(input: {
         : "Compte créé, mais l’e-mail de vérification n’a pas pu être envoyé. Vous pourrez le renvoyer.",
     };
   } catch (error) {
-    console.error("[auth:register:error]", error);
+    console.error("[auth:register:error]", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : String(error),
+      code:
+        error instanceof Prisma.PrismaClientKnownRequestError
+          ? error.code
+          : undefined,
+    });
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return { ok: false, error: "Un compte existe deja avec cette adresse e-mail." };
     }
