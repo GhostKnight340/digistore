@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { changePasswordAction, resendVerificationAction } from "@/app/actions/auth";
+import PasswordField from "@/components/ui/PasswordField";
 
 export default function SecurityClient() {
   const [message, setMessage] = useState("");
@@ -57,7 +58,7 @@ export default function SecurityClient() {
       <div className="flex items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <h2 className="text-lg font-bold text-white">Vérification e-mail</h2>
-          <p className="mt-1 text-sm text-muted">Besoin d'un nouveau lien? Envoyez-le depuis ce compte.</p>
+          <p className="mt-1 text-sm text-muted">Besoin d'un nouveau lien ? Envoyez-le depuis ce compte.</p>
           {resendError && (
             <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
               {resendError}
@@ -79,9 +80,9 @@ export default function SecurityClient() {
         </button>
       </div>
       <form onSubmit={changePassword} className="mt-6 space-y-4">
-        <input className="input" name="currentPassword" type="password" placeholder="Mot de passe actuel" autoComplete="current-password" />
-        <input className="input" name="password" type="password" placeholder="Nouveau mot de passe" autoComplete="new-password" />
-        <input className="input" name="confirmPassword" type="password" placeholder="Confirmer le nouveau mot de passe" autoComplete="new-password" />
+        <PasswordField name="currentPassword" placeholder="Mot de passe actuel" autoComplete="current-password" />
+        <PasswordField name="password" placeholder="Nouveau mot de passe" autoComplete="new-password" />
+        <PasswordField name="confirmPassword" placeholder="Confirmer le nouveau mot de passe" autoComplete="new-password" />
         <p className="text-xs text-muted">Au moins 8 caractères, avec une lettre et un chiffre.</p>
         {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
         {message && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}

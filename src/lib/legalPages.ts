@@ -12,7 +12,3 @@ export function renderLegalContent(
     .replaceAll("{{business_register}}", "[registre de commerce]")
     .replaceAll("{{business_tax_id}}", "[identifiant fiscal]");
 }
-
-export function legalParagraphs(content: string): string[] {
-  return content.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
-}

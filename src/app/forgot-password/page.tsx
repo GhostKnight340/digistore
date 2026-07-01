@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
             {loading ? "Envoi..." : "Envoyer le lien"}
           </button>
         </form>
-        <Link href="/login" className="mt-4 block text-center text-sm text-accent">Retour a la connexion</Link>
+        <Link href="/login" className="mt-4 block text-center text-sm text-accent">Retour à la connexion</Link>
       </div>
     </div>
   );

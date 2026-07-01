@@ -4,11 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginCustomerAction, registerCustomerAction } from "@/app/actions/auth";
+import PasswordField from "@/components/ui/PasswordField";
 
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -34,7 +34,7 @@ export default function LoginPage() {
               email: String(form.get("email") || ""),
               password: String(form.get("password") || ""),
               confirmPassword: String(form.get("confirmPassword") || ""),
-              acceptTerms: form.get("acceptTerms") === "on",
+              acceptTerms: true,
               marketingOptIn: form.get("marketing") === "on",
             });
       if (!result.ok) {
@@ -98,18 +98,11 @@ export default function LoginPage() {
               <input className="input" name="email" type="email" placeholder="vous@example.com" autoComplete="email" />
             </Field>
             <Field label="Mot de passe">
-              <div className="flex gap-2">
-                <input
-                  className="input"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Minimum 8 caractères"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                />
-                <button type="button" className="btn-ghost px-3" onClick={() => setShowPassword((v) => !v)}>
-                  {showPassword ? "Masquer" : "Voir"}
-                </button>
-              </div>
+              <PasswordField
+                name="password"
+                placeholder="Minimum 8 caractères"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+              />
               {mode === "register" && (
                 <p className="mt-1 text-xs text-muted">Au moins 8 caractères, avec une lettre et un chiffre.</p>
               )}
@@ -117,15 +110,8 @@ export default function LoginPage() {
             {mode === "register" && (
               <>
                 <Field label="Confirmer le mot de passe">
-                  <input className="input" name="confirmPassword" type="password" autoComplete="new-password" />
+                  <PasswordField name="confirmPassword" autoComplete="new-password" />
                 </Field>
-                <label className="flex gap-2 text-sm text-muted">
-                  <input name="acceptTerms" type="checkbox" className="mt-1" />
-                  <span>
-                    J'accepte les <Link href="/terms" className="text-accent">conditions</Link> et la{" "}
-                    <Link href="/privacy" className="text-accent">confidentialité</Link>.
-                  </span>
-                </label>
                 <label className="flex gap-2 text-sm text-muted">
                   <input name="marketing" type="checkbox" className="mt-1" />
                   <span>Recevoir les nouveautés et offres ghost.ma.</span>
@@ -139,15 +125,28 @@ export default function LoginPage() {
                   Se souvenir de moi
                 </label>
                 <Link href="/forgot-password" className="text-accent hover:text-accent-hover">
-                  Mot de passe oublié?
+                  Mot de passe oublié ?
                 </Link>
               </div>
             )}
             {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>}
             {message && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>}
             <button className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={loading}>
-              {loading ? "Veuillez patienter..." : mode === "login" ? "Se connecter" : "Créer le compte"}
+              {loading ? "Veuillez patienter..." : mode === "login" ? "Se connecter" : "S’inscrire"}
             </button>
+            {mode === "register" && (
+              <p className="text-center text-xs leading-relaxed text-muted">
+                En créant un compte, je confirme avoir 16 ans ou plus et accepter les{" "}
+                <Link href="/conditions" className="text-accent hover:text-accent-hover">
+                  conditions générales
+                </Link>{" "}
+                et l’{" "}
+                <Link href="/privacy" className="text-accent hover:text-accent-hover">
+                  avis de confidentialité
+                </Link>
+                .
+              </p>
+            )}
           </form>
         </div>
       </div>
