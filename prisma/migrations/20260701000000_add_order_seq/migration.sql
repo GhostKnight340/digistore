@@ -29,3 +29,15 @@ ALTER TABLE "Order" ALTER COLUMN "orderSeq" SET DEFAULT nextval('"Order_orderSeq
 ALTER TABLE "Order" ALTER COLUMN "orderSeq" SET NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "Order_orderSeq_key" ON "Order"("orderSeq");
+
+-- Rewrite historical EmailLog snapshots that stored the internal cuid as the
+-- order number, replacing it with the human #000000 form while preserving the
+-- id inside routing URLs (not preceded by a slash).
+UPDATE "EmailLog" e
+SET
+  "subject" = REPLACE(e."subject", o."id", '#' || LPAD(o."orderSeq"::text, 6, '0')),
+  "body"    = regexp_replace(e."body", '(^|[^/])' || o."id", '\1#' || LPAD(o."orderSeq"::text, 6, '0'), 'g'),
+  "text"    = regexp_replace(e."text", '(^|[^/])' || o."id", '\1#' || LPAD(o."orderSeq"::text, 6, '0'), 'g'),
+  "html"    = regexp_replace(e."html", '(^|[^/])' || o."id", '\1#' || LPAD(o."orderSeq"::text, 6, '0'), 'g')
+FROM "Order" o
+WHERE e."orderId" = o."id" AND e."subject" LIKE '%' || o."id" || '%';

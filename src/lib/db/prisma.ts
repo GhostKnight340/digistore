@@ -293,6 +293,20 @@ async function ensureDatabaseSchema(): Promise<void> {
         END IF;
       END $$`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Order_orderSeq_key" ON "Order"("orderSeq")`,
+    // Backfill historical EmailLog snapshots that captured the internal cuid as
+    // the order number (written before orderSeq existed). Replaces the id with
+    // the human #000000 form in subject/body/text/html, but preserves the id
+    // where it appears inside routing URLs (/payment/<id>, /order/<id>, …) via
+    // the "not preceded by a slash" guard. Idempotent: the subject filter no
+    // longer matches once a row has been rewritten.
+    `UPDATE "EmailLog" e
+      SET
+        "subject" = REPLACE(e."subject", o."id", '#' || LPAD(o."orderSeq"::text, 6, '0')),
+        "body"    = regexp_replace(e."body", '(^|[^/])' || o."id", '\\1#' || LPAD(o."orderSeq"::text, 6, '0'), 'g'),
+        "text"    = regexp_replace(e."text", '(^|[^/])' || o."id", '\\1#' || LPAD(o."orderSeq"::text, 6, '0'), 'g'),
+        "html"    = regexp_replace(e."html", '(^|[^/])' || o."id", '\\1#' || LPAD(o."orderSeq"::text, 6, '0'), 'g')
+      FROM "Order" o
+      WHERE e."orderId" = o."id" AND e."subject" LIKE '%' || o."id" || '%'`,
     // ────────────────────────────────────────────────────────────────────────
     `CREATE UNIQUE INDEX IF NOT EXISTS "Product_slug_key" ON "Product"("slug")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Category_slug_key" ON "Category"("slug")`,
