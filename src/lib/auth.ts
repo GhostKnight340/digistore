@@ -49,7 +49,13 @@ function authSecret() {
 async function baseUrl() {
   const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
   if (configured) return configured.replace(/\/$/, "");
-  const host = (await headers()).get("host") || "localhost:3000";
+  let host = "localhost:3000";
+  try {
+    host = (await headers()).get("host") || host;
+  } catch {
+    // Some server-side invocations do not expose request headers. Use a stable
+    // fallback instead of failing token-email generation.
+  }
   const proto = host.includes("localhost") ? "http" : "https";
   return `${proto}://${host}`;
 }
@@ -113,6 +119,7 @@ async function tokenUrl(path: string, token: string) {
 }
 
 async function createToken(customerId: string, type: AuthTokenType) {
+  await ensureDatabaseReady();
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(
     Date.now() +
@@ -120,13 +127,24 @@ async function createToken(customerId: string, type: AuthTokenType) {
         ? EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000
         : PASSWORD_RESET_TTL_MINUTES * 60 * 1000),
   );
-  await prisma.authToken.create({
-    data: {
-      customerId,
-      type,
-      tokenHash: hashToken(token),
-      expiresAt,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.authToken.updateMany({
+      where: {
+        customerId,
+        type,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { usedAt: new Date() },
+    });
+    await tx.authToken.create({
+      data: {
+        customerId,
+        type,
+        tokenHash: hashToken(token),
+        expiresAt,
+      },
+    });
   });
   return token;
 }

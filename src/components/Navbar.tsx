@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logoutCustomerAction } from "@/app/actions/auth";
@@ -143,9 +143,38 @@ export default function Navbar({
 
 function AccountMenu({ customer }: { customer: { name: string; email: string } }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const initial = customer.name.trim().slice(0, 1).toUpperCase() || "C";
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   function logout() {
     startTransition(async () => {
@@ -157,7 +186,7 @@ function AccountMenu({ customer }: { customer: { name: string; email: string } }
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={menuRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}

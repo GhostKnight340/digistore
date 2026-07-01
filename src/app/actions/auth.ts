@@ -214,29 +214,32 @@ export async function verifyEmailAction(token: string): Promise<AuthActionResult
 }
 
 export async function resendVerificationAction(): Promise<AuthActionResult> {
-  const customer = await getCurrentCustomer();
-  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
-  if (customer.emailVerified) return { ok: true, message: "Votre e-mail est déjà vérifié." };
   try {
+    const customer = await getCurrentCustomer();
+    if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+    if (customer.emailVerified) return { ok: true, message: "Votre e-mail est déjà vérifié." };
+
     const result = await sendVerificationEmail(customer);
     if (!result.ok) {
       console.error("[auth:resend_verification:email_failed]", {
         customerId: customer.id,
         email: customer.email,
         status: result.status,
+        logId: result.logId,
         error: result.error,
+        hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
+        enableRealEmails: process.env.ENABLE_REAL_EMAILS,
       });
       return {
         ok: false,
-        error: "L'e-mail de vérification n'a pas pu être envoyé. Vérifiez la configuration e-mail.",
+        error: "L'e-mail de vérification n'a pas pu être envoyé. Réessayez plus tard.",
       };
     }
     return { ok: true, message: "E-mail de vérification envoyé." };
   } catch (error) {
     console.error("[auth:resend_verification:error]", {
-      customerId: customer.id,
-      email: customer.email,
-      error,
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : String(error),
     });
     return {
       ok: false,
