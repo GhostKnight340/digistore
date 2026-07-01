@@ -12,11 +12,13 @@ export default async function AccountPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
 
-  // Prefill first/last name. Fall back to splitting the existing display name
-  // (first word -> first name, remaining -> last name) for records created
-  // before those columns were populated.
+  // Prefill first/last name defensively for records created before those
+  // columns were populated: fall back to splitting the existing display name
+  // (first word -> first name, remaining -> last name), then to the email
+  // local part for the first name so the field is never blank.
   const nameParts = customer.name.trim().split(/\s+/).filter(Boolean);
-  const firstName = customer.firstName ?? nameParts[0] ?? "";
+  const emailLocalPart = customer.email.split("@")[0] ?? "";
+  const firstName = customer.firstName ?? nameParts[0] ?? emailLocalPart;
   const lastName = customer.lastName ?? nameParts.slice(1).join(" ");
 
   return (
