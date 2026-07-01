@@ -52,7 +52,7 @@ export default function FeaturedProductsPanel() {
         <div>
           <h2 className="text-xl font-bold text-white">Produits populaires</h2>
           <p className="mt-1 text-sm text-muted">
-            Sélectionnez les variantes affichées sur la page d'accueil, dans l'ordre sauvegardé.
+            Sélectionnez les variantes affichées sur la page d&apos;accueil, dans l&apos;ordre sauvegardé.
           </p>
         </div>
         {message ? <p className="text-xs text-muted">{message}</p> : null}

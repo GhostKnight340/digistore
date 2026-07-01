@@ -89,7 +89,7 @@ export default function SecurityClient({ emailVerified }: { emailVerified: boole
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4">
             <div>
               <h3 className="text-sm font-semibold text-white">Vérification e-mail</h3>
-              <p className="mt-1 text-xs text-muted">Besoin d'un nouveau lien ? Envoyez-le depuis ce compte.</p>
+              <p className="mt-1 text-xs text-muted">Besoin d&apos;un nouveau lien ? Envoyez-le depuis ce compte.</p>
             </div>
             <button
               type="button"

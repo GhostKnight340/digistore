@@ -470,7 +470,7 @@ export default function OrderDetailPage({
               />
             </div>
             <p className="mt-3 text-xs text-muted">
-              L'annulation et les notes internes ne sont pas configurées dans le flux actuel.
+              L&apos;annulation et les notes internes ne sont pas configurées dans le flux actuel.
             </p>
           </section>
         </aside>
@@ -483,7 +483,7 @@ export default function OrderDetailPage({
               <div>
                 <h2 className="text-lg font-bold text-white">{reviewEmail.title}</h2>
                 <p className="mt-1 text-sm text-muted">
-                  Modifiez cet email si nécessaire. Les changements s'appliquent uniquement à cet envoi.
+                  Modifiez cet email si nécessaire. Les changements s&apos;appliquent uniquement à cet envoi.
                 </p>
               </div>
               <button
@@ -626,8 +626,8 @@ export default function OrderDetailPage({
               </label>
 
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-                Ce changement ajoute un evenement d'audit avec l'ancien statut, le nouveau statut,
-                l'horodatage et la note. Aucun email n'est envoye automatiquement.
+                Ce changement ajoute un evenement d&apos;audit avec l&apos;ancien statut, le nouveau statut,
+                l&apos;horodatage et la note. Aucun email n&apos;est envoye automatiquement.
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">

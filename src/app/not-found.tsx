@@ -9,7 +9,7 @@ export default function NotFound() {
           Page introuvable
         </h1>
         <p className="mt-2 text-sm text-muted">
-          La page que vous cherchez n'existe pas ou a été déplacée.
+          La page que vous cherchez n&apos;existe pas ou a été déplacée.
         </p>
         <Link href="/" className="btn-primary mt-6">
           Retour à la boutique

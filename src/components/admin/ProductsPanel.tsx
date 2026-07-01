@@ -520,7 +520,7 @@ export default function ProductsPanel() {
           ) : categories.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted">
               <p className="font-medium text-white">Aucune catégorie pour le moment.</p>
-              <p className="mt-1 text-xs">Créez une catégorie avant d'ajouter un produit.</p>
+              <p className="mt-1 text-xs">Créez une catégorie avant d&apos;ajouter un produit.</p>
             </div>
           ) : (
             <div className="divide-y divide-border">

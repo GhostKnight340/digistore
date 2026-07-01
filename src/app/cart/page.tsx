@@ -73,7 +73,7 @@ export default function CartPage() {
                     </button>
                   </div>
                   <span className="text-sm text-muted">
-                    {formatMAD(product.price)} l'unité
+                    {formatMAD(product.price)} l&apos;unité
                   </span>
 
                   <div className="mt-auto flex items-center justify-between pt-3">

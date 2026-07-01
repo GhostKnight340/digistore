@@ -152,7 +152,7 @@ export default function AdminDashboard() {
             href="/admin/editor"
             className="btn-ghost h-10 px-4 text-sm"
           >
-            Éditeur de la page d'accueil
+            Éditeur de la page d&apos;accueil
           </Link>
           <span className="chip border-accent/40 text-accent">Données de production</span>
         </div>
@@ -309,7 +309,7 @@ export default function AdminDashboard() {
                 <p className="px-5 py-8 text-sm text-muted">Chargement...</p>
               ) : recentOrders.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-muted">
-                  Aucune commande pour le moment. Passez une commande test pour l'afficher ici.
+                  Aucune commande pour le moment. Passez une commande test pour l&apos;afficher ici.
                 </p>
               ) : filteredOrders.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-muted">

@@ -68,7 +68,7 @@ export default function CopyCode({
 
       <div className="mt-3 rounded-xl border border-border bg-surface/70 px-3 py-2 text-xs leading-relaxed text-muted">
         Code sécurisé: affichez-le uniquement lorsque vous êtes prêt à
-        l'utiliser. Il reste sauvegardé dans votre historique de commandes.
+        l&apos;utiliser. Il reste sauvegardé dans votre historique de commandes.
       </div>
     </div>
   );

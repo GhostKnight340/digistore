@@ -59,7 +59,7 @@ export default function EditorToolbar() {
           href="/admin/editor"
           className="rounded-lg border border-accent/40 bg-accent/15 px-3 py-1 text-xs font-medium text-white"
         >
-          Éditeur de la page d'accueil
+          Éditeur de la page d&apos;accueil
         </Link>
 
         <div className="mx-1 h-4 w-px bg-border" />

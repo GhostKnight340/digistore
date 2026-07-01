@@ -189,7 +189,7 @@ export default function SettingsPanel() {
 
       <Panel title="Images des catégories">
         <p className="mb-4 text-sm text-muted">
-          Importez ou indiquez une image pour chaque catégorie affichée en page d'accueil. Laissez vide pour utiliser le visuel par défaut.
+          Importez ou indiquez une image pour chaque catégorie affichée en page d&apos;accueil. Laissez vide pour utiliser le visuel par défaut.
         </p>
         <div className="space-y-4">
           {categories.map((cat) => (
@@ -311,7 +311,7 @@ export default function SettingsPanel() {
 
       <Panel title="Stock des catégories">
         <p className="mb-4 text-sm text-muted">
-          Remplacez l'affichage du stock pour chaque catégorie de la page d'accueil.
+          Remplacez l&apos;affichage du stock pour chaque catégorie de la page d&apos;accueil.
         </p>
         <div className="space-y-3">
           {categories.map((cat) => {

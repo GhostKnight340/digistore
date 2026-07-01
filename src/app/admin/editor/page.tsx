@@ -260,7 +260,7 @@ function EditorCanvas() {
     if (s.featuredProductIds.length > 0) {
       getStorefrontProductsByIdsAction(s.featuredProductIds).then(setFeatured);
     } else {
-      setFeatured([]);
+      Promise.resolve<Product[]>([]).then(setFeatured);
     }
   }, [s.featuredProductIds]);
 

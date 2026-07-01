@@ -16,12 +16,12 @@ export default function AboutPage() {
           <p>
             Notre objectif est simple: proposer une boutique claire, fiable et
             rapide pour acheter un code après confirmation du paiement et profiter
-            d'un support local qui comprend les clients au Maroc.
+            d&apos;un support local qui comprend les clients au Maroc.
           </p>
           <p>
             Cette version est un prototype phase 1. Les produits, les prix et
             les codes sont fournis à titre de démonstration: aucun paiement réel
-            n'est traité et aucune vraie carte cadeau n'est livrée.
+            n&apos;est traité et aucune vraie carte cadeau n&apos;est livrée.
           </p>
         </div>
       </div>

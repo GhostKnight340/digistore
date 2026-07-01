@@ -261,7 +261,7 @@ export default function CheckoutClient({
             <div>
               <h2 className="text-lg font-bold text-white">Mode de paiement</h2>
               <p className="mt-1 text-sm text-muted">
-                Sélectionnez une option. Les instructions s'afficheront après la création de la commande.
+                Sélectionnez une option. Les instructions s&apos;afficheront après la création de la commande.
               </p>
             </div>
 

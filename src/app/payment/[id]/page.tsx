@@ -207,7 +207,7 @@ export default function PaymentPage({
 
         {/* ── Support footer ── */}
         <section className="card p-5">
-          <h2 className="text-sm font-semibold text-white">Besoin d'aide?</h2>
+          <h2 className="text-sm font-semibold text-white">Besoin d&apos;aide?</h2>
           <p className="mt-1 text-xs text-muted">
             Contactez le support avec votre numéro de commande:{" "}
             <span className="font-mono text-text">{publicOrderNumber}</span>

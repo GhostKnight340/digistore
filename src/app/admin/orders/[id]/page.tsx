@@ -19,11 +19,11 @@ export default async function AdminOrderPage({
     <div className="container-page py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Link href="/admin" className="text-sm text-muted hover:text-white">
-          Retour à l'admin
+          Retour à l&apos;admin
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/admin/editor" className="btn-ghost h-10 px-4 text-sm">
-            Éditeur de la page d'accueil
+            Éditeur de la page d&apos;accueil
           </Link>
           <span className="chip border-accent/40 text-accent">Données de production</span>
         </div>

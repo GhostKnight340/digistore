@@ -35,7 +35,7 @@ export default async function ProductsPage({
           {query && (
             <>
               {" "}
-              pour <span className="text-white">"{q}"</span>
+              pour <span className="text-white">&quot;{q}&quot;</span>
             </>
           )}
         </p>
