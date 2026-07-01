@@ -12,6 +12,13 @@ export default async function AccountPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
 
+  // Prefill first/last name. Fall back to splitting the existing display name
+  // (first word -> first name, remaining -> last name) for records created
+  // before those columns were populated.
+  const nameParts = customer.name.trim().split(/\s+/).filter(Boolean);
+  const firstName = customer.firstName ?? nameParts[0] ?? "";
+  const lastName = customer.lastName ?? nameParts.slice(1).join(" ");
+
   return (
     <div className="container-page py-10">
       <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
@@ -23,7 +30,7 @@ export default async function AccountPage() {
             <Metric label="E-mail" value={customer.email} />
             <Metric label="Statut" value={customer.emailVerified ? "Vérifié" : "À vérifier"} />
           </div>
-          <AccountProfileForm phone={customer.phone} />
+          <AccountProfileForm firstName={firstName} lastName={lastName} phone={customer.phone} />
           <div className="card mt-6 p-6">
             <div className="flex items-center justify-between gap-4">
               <div>

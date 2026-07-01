@@ -1,9 +1,21 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateCustomerPhoneAction } from "@/app/actions/auth";
+import { useRouter } from "next/navigation";
+import { updateCustomerProfileAction } from "@/app/actions/auth";
 
-export default function AccountProfileForm({ phone }: { phone: string | null }) {
+export default function AccountProfileForm({
+  firstName,
+  lastName,
+  phone,
+}: {
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+}) {
+  const router = useRouter();
+  const [firstNameValue, setFirstNameValue] = useState(firstName ?? "");
+  const [lastNameValue, setLastNameValue] = useState(lastName ?? "");
   const [value, setValue] = useState(phone ?? "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -14,16 +26,50 @@ export default function AccountProfileForm({ phone }: { phone: string | null }) 
     setMessage("");
     setError("");
     startTransition(async () => {
-      const result = await updateCustomerPhoneAction(value);
-      if (!result.ok) setError(result.error ?? "Enregistrement impossible.");
-      else setMessage(result.message ?? "Numéro de téléphone enregistré.");
+      const result = await updateCustomerProfileAction({
+        firstName: firstNameValue,
+        lastName: lastNameValue,
+        phone: value,
+      });
+      if (!result.ok) {
+        setError(result.error ?? "Enregistrement impossible.");
+      } else {
+        setMessage(result.message ?? "Vos informations ont été mises à jour.");
+        // Refresh so the top navigation/profile display reflects the new name.
+        router.refresh();
+      }
     });
   }
 
   return (
     <form onSubmit={save} className="card mt-6 p-6">
       <h2 className="text-lg font-bold text-white">Informations personnelles</h2>
-      <label className="mt-5 block">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-white">Prénom</span>
+          <input
+            value={firstNameValue}
+            onChange={(event) => setFirstNameValue(event.target.value)}
+            className="input"
+            placeholder="Votre prénom"
+            autoComplete="given-name"
+            maxLength={50}
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-white">Nom</span>
+          <input
+            value={lastNameValue}
+            onChange={(event) => setLastNameValue(event.target.value)}
+            className="input"
+            placeholder="Votre nom"
+            autoComplete="family-name"
+            maxLength={50}
+          />
+        </label>
+      </div>
+      <label className="mt-4 block">
         <span className="mb-1.5 block text-sm font-medium text-white">Numéro de téléphone</span>
         <input
           value={value}

@@ -281,6 +281,50 @@ export async function updateCustomerPhoneAction(phoneInput: string): Promise<Aut
   return { ok: true, message: "NumÃ©ro de tÃ©lÃ©phone enregistrÃ©." };
 }
 
+export async function updateCustomerProfileAction(input: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  // Session lookup guarantees the user can only edit their own profile.
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  if (!firstName) return { ok: false, error: "Le prénom est requis." };
+  if (firstName.length > 50 || lastName.length > 50) {
+    return { ok: false, error: "Le prénom et le nom doivent contenir au plus 50 caractères." };
+  }
+
+  const phone = normalizePhone(input.phone);
+  if (!isValidOptionalPhone(phone)) {
+    return { ok: false, error: "Veuillez saisir un numéro de téléphone valide." };
+  }
+
+  // Keep the local display name in sync so the top navigation reflects edits.
+  // This only touches our own record, never the linked Google profile.
+  const name = [firstName, lastName].filter(Boolean).join(" ");
+
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: {
+      firstName,
+      lastName: lastName || null,
+      name,
+      phone: phone || null,
+    },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/account");
+  revalidatePath("/account/security");
+  revalidatePath("/checkout");
+  revalidatePath("/admin");
+  return { ok: true, message: "Vos informations ont été mises à jour." };
+}
+
 export async function changePasswordAction(input: {
   currentPassword: string;
   password: string;

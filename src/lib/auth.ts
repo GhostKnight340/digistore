@@ -18,6 +18,8 @@ type AuthTokenType = "email_verification" | "password_reset";
 export type AuthCustomer = {
   id: string;
   name: string;
+  firstName: string | null;
+  lastName: string | null;
   email: string;
   phone: string | null;
   image: string | null;
@@ -249,6 +251,8 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     select: {
       id: true,
       name: true,
+      firstName: true,
+      lastName: true,
       email: true,
       phone: true,
       image: true,
@@ -265,6 +269,8 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
   return {
     id: customer.id,
     name: customer.name,
+    firstName: customer.firstName,
+    lastName: customer.lastName,
     email: customer.email,
     phone: customer.phone,
     image: customer.image,
