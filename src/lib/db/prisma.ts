@@ -261,6 +261,38 @@ async function ensureDatabaseSchema(): Promise<void> {
       ) only_variant
       WHERE dc."variantId" IS NULL
         AND dc."productId" = only_variant."productId"`,
+    // ── Human-readable sequential order number (migration 20260701000000) ─────
+    // Guarded so the one-time backfill + sequence setup runs only when the
+    // column is first added; every statement is idempotent and non-throwing so
+    // a re-run (or concurrent boot) never bricks the memoized ensure promise.
+    `DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'Order' AND column_name = 'orderSeq'
+        ) THEN
+          ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "orderSeq" INTEGER;
+
+          WITH ordered AS (
+            SELECT "id", ROW_NUMBER() OVER (ORDER BY "createdAt" ASC, "id" ASC) AS seq
+            FROM "Order"
+          )
+          UPDATE "Order" o
+          SET "orderSeq" = ordered.seq
+          FROM ordered
+          WHERE o."id" = ordered."id" AND o."orderSeq" IS NULL;
+
+          CREATE SEQUENCE IF NOT EXISTS "Order_orderSeq_seq" OWNED BY "Order"."orderSeq";
+          PERFORM setval(
+            '"Order_orderSeq_seq"',
+            COALESCE((SELECT MAX("orderSeq") FROM "Order"), 0) + 1,
+            false
+          );
+          ALTER TABLE "Order" ALTER COLUMN "orderSeq" SET DEFAULT nextval('"Order_orderSeq_seq"');
+          ALTER TABLE "Order" ALTER COLUMN "orderSeq" SET NOT NULL;
+        END IF;
+      END $$`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Order_orderSeq_key" ON "Order"("orderSeq")`,
     // ────────────────────────────────────────────────────────────────────────
     `CREATE UNIQUE INDEX IF NOT EXISTS "Product_slug_key" ON "Product"("slug")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Category_slug_key" ON "Category"("slug")`,
