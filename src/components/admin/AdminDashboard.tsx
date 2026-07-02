@@ -49,8 +49,6 @@ function renderPanel(activeTab: string) {
       return <FeaturedProductsPanel />;
     case "inventory":
       return <InventoryPanel />;
-    case "payments":
-      return <PaymentsPanel />;
     case "payment-settings":
       return <PaymentSettingsPanel />;
     case "email-templates":
@@ -125,6 +123,10 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
           firstName={admin.name.trim().split(/\s+/)[0] ?? ""}
           onOpenReviewQueue={() => setActiveTab("payments")}
         />
+      ) : activeTab === "payments" ? (
+        <Suspense fallback={<div style={{ padding: "26px 28px" }}>{panelFallback}</div>}>
+          <PaymentsPanel />
+        </Suspense>
       ) : (
         <div style={{ height: "100%", overflowY: "auto" }}>
           <div style={{ padding: "26px 28px" }}>
