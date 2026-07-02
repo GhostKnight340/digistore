@@ -11,7 +11,7 @@ import {
   parsePublicOrderNumber,
 } from "@/lib/orderNumber";
 import type { OrderStatus } from "@/lib/types";
-import type { AdminOverviewDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
+import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
@@ -408,6 +408,166 @@ export async function getAdminStats(): Promise<{
     totalRevenue: revenueResult._sum.totalMad ?? 0,
     pendingCount,
     customerCount: customerGroups.length,
+  };
+}
+
+export async function getAdminNavCounts(): Promise<{
+  activeOrders: number;
+  paymentReview: number;
+}> {
+  await ensureDatabaseReady();
+  const [activeOrders, paymentReview] = await Promise.all([
+    timeAdmin(
+      "admin.navCounts",
+      "order.count.active",
+      () => prisma.order.count({ where: { status: { not: "delivered" } } }),
+      (count) => count,
+    ),
+    timeAdmin(
+      "admin.navCounts",
+      "order.count.paymentReview",
+      () => prisma.order.count({ where: { status: "payment_submitted" } }),
+      (count) => count,
+    ),
+  ]);
+  return { activeOrders, paymentReview };
+}
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank: "Virement bancaire",
+  usdt: "Crypto",
+  crypto: "Crypto",
+  card: "Carte",
+  test: "Test",
+};
+
+function paymentMethodLabel(method: string) {
+  return PAYMENT_METHOD_LABELS[method] ?? method;
+}
+
+/**
+ * Rich metrics for the Overview dashboard: trailing-7-day revenue and order
+ * counts with week-over-week deltas, the daily revenue series for the bar
+ * chart, and the payment-review queue preview.
+ */
+export async function getAdminOverviewMetrics(): Promise<AdminOverviewMetricsDTO> {
+  await ensureDatabaseReady();
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const now = new Date();
+
+  // Seven day-buckets ending today (local start-of-day boundaries).
+  const buckets = Array.from({ length: 7 }, (_, i) => {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (6 - i));
+    const label = new Intl.DateTimeFormat("fr-FR", { weekday: "short" })
+      .format(start)
+      .replace(/\.$/, "");
+    return {
+      start: start.getTime(),
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+      value: 0,
+    };
+  });
+  const windowStart = buckets[0].start;
+  const prevWindowStart = windowStart - 7 * DAY_MS;
+
+  const [paidOrders14, orders7, ordersPrev7, reviewOrders, queueSummaries] =
+    await Promise.all([
+      timeAdmin(
+        "admin.overviewMetrics",
+        "order.findMany.paid14",
+        () =>
+          prisma.order.findMany({
+            where: {
+              status: { in: REVENUE_ORDER_STATUSES },
+              createdAt: { gte: new Date(prevWindowStart) },
+            },
+            select: { totalMad: true, createdAt: true },
+          }),
+        (rows) => rows.length,
+      ),
+      timeAdmin(
+        "admin.overviewMetrics",
+        "order.count.orders7",
+        () => prisma.order.count({ where: { createdAt: { gte: new Date(windowStart) } } }),
+        (count) => count,
+      ),
+      timeAdmin(
+        "admin.overviewMetrics",
+        "order.count.ordersPrev7",
+        () =>
+          prisma.order.count({
+            where: { createdAt: { gte: new Date(prevWindowStart), lt: new Date(windowStart) } },
+          }),
+        (count) => count,
+      ),
+      timeAdmin(
+        "admin.overviewMetrics",
+        "order.findMany.review",
+        () =>
+          prisma.order.findMany({
+            where: { status: "payment_submitted" },
+            select: { createdAt: true },
+          }),
+        (rows) => rows.length,
+      ),
+      getAdminOrdersPage({ take: 5, statuses: ["payment_submitted"] }),
+    ]);
+
+  // Bucket paid orders into the trailing 7 days and the previous 7 days.
+  let revenuePrev7 = 0;
+  for (const order of paidOrders14) {
+    const t = new Date(order.createdAt).getTime();
+    if (t < windowStart) {
+      revenuePrev7 += order.totalMad;
+      continue;
+    }
+    const index = Math.floor((t - windowStart) / DAY_MS);
+    if (index >= 0 && index < 7) buckets[index].value += order.totalMad;
+  }
+
+  const revenue7 = buckets.reduce((sum, b) => sum + b.value, 0);
+  const maxBucket = buckets.reduce((max, b) => Math.max(max, b.value), 0);
+  const revenueSeries = buckets.map((b) => ({
+    label: b.label,
+    value: b.value,
+    highlight: maxBucket > 0 && b.value === maxBucket,
+  }));
+
+  const pct = (current: number, previous: number): number | null =>
+    previous > 0 ? Math.round(((current - previous) / previous) * 1000) / 10 : null;
+
+  const oldestReviewMs = reviewOrders.reduce<number | null>((oldest, o) => {
+    const t = new Date(o.createdAt).getTime();
+    return oldest === null || t < oldest ? t : oldest;
+  }, null);
+
+  return {
+    revenue7,
+    revenueDeltaPct: pct(revenue7, revenuePrev7),
+    orders7,
+    ordersDeltaPct: pct(orders7, ordersPrev7),
+    awaitingReview: reviewOrders.length,
+    oldestReviewWaitMin:
+      oldestReviewMs === null ? null : Math.max(0, Math.round((now.getTime() - oldestReviewMs) / 60000)),
+    revenueSeries,
+    revenueAvgPerDay: Math.round(revenue7 / 7),
+    queue: queueSummaries.map((order) => {
+      const first = order.items[0];
+      const itemLabel = first
+        ? first.quantity > 1
+          ? `${first.name} ×${first.quantity}`
+          : first.name
+        : "Commande";
+      return {
+        id: order.id,
+        ref: `#${order.id.slice(-6).toUpperCase()}`,
+        label: `${itemLabel} · ${paymentMethodLabel(order.paymentMethod)}`,
+        waitMin: Math.max(0, Math.round((now.getTime() - new Date(order.createdAt).getTime()) / 60000)),
+      };
+    }),
   };
 }
 

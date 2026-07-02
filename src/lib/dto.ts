@@ -308,6 +308,25 @@ export interface AdminOverviewDTO {
   recentOrders: AdminOrderSummaryDTO[];
 }
 
+export interface AdminOverviewMetricsDTO {
+  /** Revenue over the trailing 7 days, in MAD. */
+  revenue7: number;
+  /** Percentage change vs the previous 7 days, or null when there is no baseline. */
+  revenueDeltaPct: number | null;
+  /** Order count over the trailing 7 days. */
+  orders7: number;
+  ordersDeltaPct: number | null;
+  /** Orders sitting in payment review. */
+  awaitingReview: number;
+  /** Minutes the oldest payment-review order has been waiting, or null when the queue is empty. */
+  oldestReviewWaitMin: number | null;
+  /** Daily revenue for the trailing 7 days (oldest → newest), for the bar chart. */
+  revenueSeries: { label: string; value: number; highlight: boolean }[];
+  revenueAvgPerDay: number;
+  /** The payment-review queue preview (oldest first). */
+  queue: { id: string; ref: string; label: string; waitMin: number }[];
+}
+
 /** A single delivery assignment entry: either an inventory code or a manual one. */
 export interface AssignmentEntry {
   digitalCodeId?: string;
