@@ -411,6 +411,28 @@ export async function getAdminStats(): Promise<{
   };
 }
 
+export async function getAdminNavCounts(): Promise<{
+  activeOrders: number;
+  paymentReview: number;
+}> {
+  await ensureDatabaseReady();
+  const [activeOrders, paymentReview] = await Promise.all([
+    timeAdmin(
+      "admin.navCounts",
+      "order.count.active",
+      () => prisma.order.count({ where: { status: { not: "delivered" } } }),
+      (count) => count,
+    ),
+    timeAdmin(
+      "admin.navCounts",
+      "order.count.paymentReview",
+      () => prisma.order.count({ where: { status: "payment_submitted" } }),
+      (count) => count,
+    ),
+  ]);
+  return { activeOrders, paymentReview };
+}
+
 export async function getAdminOverview(): Promise<AdminOverviewDTO> {
   await ensureDatabaseReady();
   const [totalOrders, pendingFulfillment, revenue, customerGroups, recentOrders] =
