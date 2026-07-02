@@ -8,6 +8,7 @@ import {
   getAdminOrdersPage,
   getAdminNavCounts,
   getAdminOverview,
+  getAdminOverviewMetrics,
   getAdminStats,
   getOrderEmailLogs,
 } from "@/lib/db/orders";
@@ -66,6 +67,7 @@ import type {
   AdminCategoryDTO,
   AdminCodeDTO,
   AdminOverviewDTO,
+  AdminOverviewMetricsDTO,
   CustomerDTO,
   AdminOrderDTO,
   AdminOrderSummaryDTO,
@@ -162,6 +164,11 @@ export async function getAdminNavCountsAction(): Promise<{
 export async function getAdminOverviewAction(): Promise<AdminOverviewDTO> {
   await assertAdminAccess();
   return getAdminOverview();
+}
+
+export async function getAdminOverviewMetricsAction(): Promise<AdminOverviewMetricsDTO> {
+  await assertAdminAccess();
+  return getAdminOverviewMetrics();
 }
 
 export async function getAdminOrderDetailAction(orderId: string): Promise<AdminOrderDTO | null> {
