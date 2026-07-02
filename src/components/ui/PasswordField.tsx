@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 type PasswordFieldProps = {
   name: string;
   placeholder?: string;
   autoComplete?: string;
   className?: string;
+  label?: string;
+  inputClassName?: string;
 };
 
 export default function PasswordField({
@@ -14,28 +16,39 @@ export default function PasswordField({
   placeholder,
   autoComplete,
   className = "",
+  label,
+  inputClassName = "input",
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
-  const label = visible ? "Masquer le mot de passe" : "Afficher le mot de passe";
+  const toggleLabel = visible ? "Masquer le mot de passe" : "Afficher le mot de passe";
+  const id = useId();
 
   return (
-    <div className={`relative ${className}`}>
-      <input
-        className="input pr-12"
-        name={name}
-        type={visible ? "text" : "password"}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-      />
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        onClick={() => setVisible((value) => !value)}
-        className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-surface2 hover:text-white"
-      >
-        {visible ? <EyeOffIcon /> : <EyeIcon />}
-      </button>
+    <div className={className}>
+      {label ? (
+        <label htmlFor={id} className="acct-label">
+          {label}
+        </label>
+      ) : null}
+      <div className="relative">
+        <input
+          id={id}
+          className={`${inputClassName} pr-12`}
+          name={name}
+          type={visible ? "text" : "password"}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+        />
+        <button
+          type="button"
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          onClick={() => setVisible((value) => !value)}
+          className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-surface2 hover:text-white"
+        >
+          {visible ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
     </div>
   );
 }
