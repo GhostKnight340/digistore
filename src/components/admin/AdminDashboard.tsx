@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, lazy, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getAdminNavCountsAction } from "@/app/actions/admin";
 import AdminShell, { type AdminIdentity, type NavCounts } from "@/components/admin/AdminShell";
 import AdminOverview from "@/components/admin/AdminOverview";
@@ -85,8 +86,18 @@ function renderPanel(activeTab: string) {
 }
 
 export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
-  const [activeTab, setActiveTab] = useState("overview");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(tabParam ?? "overview");
   const [navCounts, setNavCounts] = useState<NavCounts | null>(null);
+
+  // Honor deep links like /admin?tab=orders (used by standalone routes such as
+  // the order-detail page navigating back through the sidebar).
+  useEffect(() => {
+    if (tabParam && tabParam !== activeTab) setActiveTab(tabParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,8 +111,15 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
     };
   }, [activeTab]);
 
+  function handleNavigate(id: string) {
+    setActiveTab(id);
+    // Keep the URL in sync without a full navigation so refresh/back behave.
+    const query = id === "overview" ? "/admin" : `/admin?tab=${id}`;
+    router.replace(query, { scroll: false });
+  }
+
   return (
-    <AdminShell active={activeTab} onNavigate={setActiveTab} counts={navCounts} admin={admin}>
+    <AdminShell active={activeTab} onNavigate={handleNavigate} counts={navCounts} admin={admin}>
       {activeTab === "overview" ? (
         <AdminOverview
           firstName={admin.name.trim().split(/\s+/)[0] ?? ""}

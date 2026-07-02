@@ -1,15 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import {
-  isDelivered,
-  orderStatusLabel,
-  orderStatusBadgeClass,
-  orderStatusShort,
-} from "@/lib/orderStatus";
+import { isDelivered, orderStatusLabel, orderStatusShort } from "@/lib/orderStatus";
 import {
   changeOrderStatusAction,
   getAdminOrderDetailAction,
@@ -34,6 +30,46 @@ import type { OrderStatus } from "@/lib/types";
 const OrderDetailDeleteTools = dynamic(() =>
   import("@/components/admin/orders/DevOrderDetailTools"),
 );
+
+/** Literal design tokens from the admin handoff (docs/admin-handoff/05-Design-Tokens.md). */
+const C = {
+  base: "#0C0D11",
+  panel: "#0F1015",
+  panelSunken: "#0C0D11",
+  surfaceInput: "#121319",
+  text: "#F3F4F7",
+  muted: "#9A9FAB",
+  faint: "#646A77",
+  fainter: "#4d525d",
+  accent: "#3E7BFA",
+  accentSoft: "rgba(62,123,250,0.13)",
+  accentBorder: "rgba(62,123,250,0.3)",
+  accentText: "#9FB8FF",
+  warning: "#E8A838",
+  warningSoft: "rgba(232,168,56,0.14)",
+  warningBorder: "rgba(232,168,56,0.28)",
+  success: "#2EA067",
+  successText: "#5BC98C",
+  successSoft: "rgba(46,160,103,0.12)",
+  successBorder: "rgba(46,160,103,0.28)",
+  danger: "#E05C5C",
+  dangerSoft: "rgba(224,92,92,0.08)",
+  dangerBorder: "rgba(224,92,92,0.3)",
+  borderHairline: "rgba(255,255,255,0.06)",
+  border: "rgba(255,255,255,0.07)",
+  borderInput: "rgba(255,255,255,0.08)",
+  borderStrong: "rgba(255,255,255,0.1)",
+  borderStronger: "rgba(255,255,255,0.12)",
+} as const;
+
+const MONO = "var(--font-mono)";
+
+const cardStyle: CSSProperties = {
+  borderRadius: 14,
+  background: C.panel,
+  border: `1px solid ${C.border}`,
+  overflow: "hidden",
+};
 
 const METHOD_LABELS: Record<string, string> = {
   bank: "Virement bancaire",
@@ -81,6 +117,42 @@ function eventNote(order: AdminOrderDTO, toStatus: string) {
   return order.paymentEvents.find((event) => event.toStatus === toStatus)?.note ?? null;
 }
 
+function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return ((parts[0][0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+type Tone = { color: string; bg: string; border: string };
+
+function statusTone(status: string): Tone {
+  switch (status) {
+    case "delivered":
+      return { color: C.successText, bg: C.successSoft, border: C.successBorder };
+    case "payment_confirmed":
+    case "payment_submitted":
+    case "payment_issue":
+    case "processing":
+      return { color: C.accentText, bg: C.accentSoft, border: C.accentBorder };
+    case "rejected":
+    case "cancelled":
+      return { color: C.danger, bg: "rgba(224,92,92,0.12)", border: C.dangerBorder };
+    case "refunded":
+      return { color: "#C79BFF", bg: "rgba(160,110,240,0.12)", border: "rgba(160,110,240,0.3)" };
+    default:
+      return { color: C.warning, bg: C.warningSoft, border: C.warningBorder };
+  }
+}
+
+function formatWaiting(ms: number) {
+  const mins = Math.max(0, Math.floor(ms / 60000));
+  if (mins < 60) return `${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} h ${mins % 60} min`;
+  const days = Math.floor(hours / 24);
+  return `${days} j ${hours % 24} h`;
+}
+
 export default function OrderDetailPage({
   initialOrder,
 }: {
@@ -97,6 +169,8 @@ export default function OrderDetailPage({
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [nextStatus, setNextStatus] = useState<OrderStatus>(initialOrder.status);
   const [statusNote, setStatusNote] = useState("");
+  const [proofModalOpen, setProofModalOpen] = useState(false);
+  const [waiting, setWaiting] = useState<string | null>(null);
   const [reviewEmail, setReviewEmail] = useState<{
     intent: "reject" | "request_proof" | "refund_update";
     title: string;
@@ -127,6 +201,9 @@ export default function OrderDetailPage({
     eventNote(order, "payment_issue") ??
     eventNote(order, "rejected") ??
     null;
+  const tone = statusTone(order.status);
+  const displayNumber = order.publicOrderNumber || orderNumber(order.id);
+  const paymentReference = order.publicOrderNumber || displayNumber;
 
   const refreshOrder = useCallback(async () => {
     const fresh = await getAdminOrderDetailAction(order.id);
@@ -142,6 +219,20 @@ export default function OrderDetailPage({
         setProof(null);
       });
   }, [order.id]);
+
+  // Live "waiting" clock — mounted-only so SSR/CSR stay consistent.
+  useEffect(() => {
+    const reference = submittedAt ?? order.createdAt;
+    if (!reference || delivered || order.status === "rejected" || order.status === "cancelled") {
+      setWaiting(null);
+      return;
+    }
+    const anchor = new Date(reference).getTime();
+    const update = () => setWaiting(formatWaiting(Date.now() - anchor));
+    update();
+    const timer = setInterval(update, 60000);
+    return () => clearInterval(timer);
+  }, [submittedAt, order.createdAt, order.status, delivered]);
 
   useEffect(() => {
     const init: Record<string, AssignmentEntry[]> = {};
@@ -193,6 +284,15 @@ export default function OrderDetailPage({
       .filter(Boolean);
     return codes.length === item.quantity;
   });
+
+  const totalCodes = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const readyCodes = order.items.reduce((sum, item) => {
+    const filled = (entries[item.id] ?? [])
+      .slice(0, item.quantity)
+      .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim()).length;
+    return sum + filled;
+  }, 0);
+  const deliverReady = (manualMode ? manualCountsValid : allFilled) && canDeliver;
 
   function setEntry(itemId: string, index: number, entry: AssignmentEntry) {
     setEntries((previous) => {
@@ -286,516 +386,965 @@ export default function OrderDetailPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Détail de commande admin</p>
-          <h1 className="mt-1 text-3xl font-bold text-white">
-            Commande {orderNumber(order.id)}
-          </h1>
-          <p className="mt-1 font-mono text-xs text-muted">{order.id}</p>
-        </div>
-        <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
-          {orderStatusShort(order.status)}
-        </span>
-      </div>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <style>{`
+        .s4-body { display:grid; grid-template-columns:1fr 372px; flex:1; min-height:0; }
+        .s4-col { overflow-y:auto; }
+        .s4-pay { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+        @media (max-width:1120px){
+          .s4-body { grid-template-columns:1fr; overflow-y:auto; }
+          .s4-col { overflow:visible; }
+          .s4-right { border-left:none !important; border-top:1px solid ${C.border}; }
+        }
+        @media (max-width:640px){ .s4-pay { grid-template-columns:1fr; } .s4-actions { width:100%; } }
+        .s4-input::placeholder { color:${C.faint}; }
+      `}</style>
 
-      {message ? (
-        <div className="rounded-2xl border border-green-500/40 bg-green-500/10 px-5 py-4 text-sm text-green-200">
-          {message}
-        </div>
-      ) : null}
-      {error ? (
-        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
-          {error}
-        </div>
-      ) : null}
-
-      <section className="grid gap-4 lg:grid-cols-4">
-        <SummaryCard label="Client" value={order.customerName} detail={order.customerEmail} />
-        <SummaryCard label="Date" value={formatDate(order.createdAt)} />
-        <SummaryCard label="Total" value={formatMAD(order.totalMad)} />
-        <SummaryCard
-          label="Livraison"
-          value={delivered ? "Livrée" : canDeliver ? "Prête à livrer" : "En attente"}
-          detail={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
-        />
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <section className="card overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
-              <h2 className="font-bold text-white">Articles commandés</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase text-muted">
-                  <tr className="border-b border-border">
-                    <th className="px-5 py-3 font-medium">Produit</th>
-                    <th className="px-5 py-3 font-medium">Qté</th>
-                    <th className="px-5 py-3 font-medium">Prix unitaire</th>
-                    <th className="px-5 py-3 font-medium">Total</th>
-                    <th className="px-5 py-3 font-medium">Code attribué</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.items.map((item) => {
-                    const codes = order.deliveredCodes.filter(
-                      (code) => code.orderItemId === item.id || code.productId === item.productId,
-                    );
-                    return (
-                      <tr key={item.id} className="border-b border-border/60">
-                        <td className="px-5 py-3 text-white">{item.name}</td>
-                        <td className="px-5 py-3 text-muted">{item.quantity}</td>
-                        <td className="px-5 py-3 text-muted">{formatMAD(item.unitPriceMad)}</td>
-                        <td className="px-5 py-3 text-white">
-                          {formatMAD(item.unitPriceMad * item.quantity)}
-                        </td>
-                        <td className="px-5 py-3">
-                          {codes.length === 0 ? (
-                            <span className="text-xs text-faint">Non attribué</span>
-                          ) : (
-                            <div className="space-y-1">
-                              {codes.map((code, index) => (
-                                <div
-                                  key={`${code.code}-${index}`}
-                                  className="rounded-lg border border-white/10 bg-black/30 px-2 py-1 font-mono text-xs text-white"
-                                >
-                                  {code.code}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <PaymentProofSection proof={proof} />
-
-          {canDeliver || delivered ? (
-            <DeliverySection
-              order={order}
-              delivered={delivered}
-              available={available}
-              entries={entries}
-              chosenIds={chosenIds}
-              busy={busy}
-              allFilled={manualMode ? manualCountsValid : allFilled}
-              manualMode={manualMode}
-              onSetEntry={setEntry}
-              onDeliver={handleDeliver}
-              onSaveDraft={() => {
-                setError("");
-                setMessage("Draft codes saved on this page. Deliver when ready.");
+      {/* ===== Header strip ===== */}
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "18px 28px",
+          borderBottom: `1px solid ${C.border}`,
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <Link
+          href="/admin?tab=orders"
+          aria-label="Retour aux commandes"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 9,
+            border: `1px solid ${C.borderStrong}`,
+            background: C.surfaceInput,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: C.muted,
+            textDecoration: "none",
+            flexShrink: 0,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </Link>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap" }}>
+            <h3
+              style={{
+                fontSize: 20,
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                margin: 0,
+                fontFamily: MONO,
+                color: C.text,
               }}
-            />
+            >
+              {displayNumber}
+            </h3>
+            <span
+              style={{
+                fontSize: 11.5,
+                fontWeight: 600,
+                color: tone.color,
+                background: tone.bg,
+                border: `1px solid ${tone.border}`,
+                borderRadius: 6,
+                padding: "2px 9px",
+              }}
+            >
+              {orderStatusShort(order.status)}
+            </span>
+          </div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginTop: 3 }}>
+            Passée le {formatDate(order.createdAt)}
+            {waiting ? ` · en attente ${waiting}` : null}
+          </div>
+        </div>
+
+        <div className="s4-actions" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {canReject ? (
+            <HeaderButton
+              tone="danger"
+              disabled={busy}
+              onClick={() => openReviewEmail("reject", "Refuser le paiement")}
+            >
+              Refuser
+            </HeaderButton>
           ) : null}
+          {canIssue ? (
+            <HeaderButton
+              tone="neutral"
+              disabled={busy}
+              onClick={() => openReviewEmail("request_proof", "Demander un nouveau justificatif")}
+            >
+              Demander un justificatif
+            </HeaderButton>
+          ) : null}
+          <HeaderButton
+            tone="neutral"
+            disabled={busy}
+            onClick={() => {
+              setNextStatus(order.status === "delivered" ? "payment_confirmed" : order.status);
+              setStatusModalOpen(true);
+            }}
+          >
+            Changer le statut
+          </HeaderButton>
+          {canApprove ? (
+            <HeaderButton
+              tone="success"
+              disabled={busy}
+              onClick={() => runAction("Paiement confirmé.", () => approvePaymentAction(order.id))}
+              icon={
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              }
+            >
+              Confirmer le paiement
+            </HeaderButton>
+          ) : null}
+        </div>
+      </div>
 
-          <TimelineSection order={order} />
-          <EmailLogsSection order={order} />
+      {/* ===== Toast strip ===== */}
+      {message || error ? (
+        <div style={{ flexShrink: 0, padding: "12px 28px 0" }}>
+          {message ? (
+            <Banner tone="success" onClose={() => setMessage("")}>
+              {message}
+            </Banner>
+          ) : null}
+          {error ? (
+            <Banner tone="danger" onClose={() => setError("")}>
+              {error}
+            </Banner>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* ===== Split body ===== */}
+      <div className="s4-body">
+        {/* Left */}
+        <div
+          className="s4-col"
+          style={{
+            padding: "22px 26px",
+            borderRight: `1px solid ${C.border}`,
+            display: "flex",
+            flexDirection: "column",
+            gap: 18,
+          }}
+        >
+          <ItemsCard order={order} />
+
+          <div className="s4-pay">
+            <PaymentCard
+              method={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
+              reference={paymentReference}
+              total={formatMAD(order.totalMad)}
+              submittedAt={submittedAt ? formatDate(submittedAt) : "Non soumis"}
+              confirmedAt={confirmedAt ? formatDate(confirmedAt) : "Non confirmé"}
+              issueReason={issueReason}
+            />
+            <ProofCard proof={proof} onViewFull={() => setProofModalOpen(true)} />
+          </div>
+
+          <DeliverySection
+            order={order}
+            delivered={delivered}
+            canDeliver={canDeliver}
+            available={available}
+            entries={entries}
+            chosenIds={chosenIds}
+            busy={busy}
+            manualMode={manualMode}
+            readyCodes={readyCodes}
+            totalCodes={totalCodes}
+            deliverReady={deliverReady}
+            onSetEntry={setEntry}
+            onDeliver={handleDeliver}
+          />
         </div>
 
-        <aside className="space-y-6">
-          <section className="card p-5">
-            <h2 className="font-bold text-white">Paiement</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <InfoRow label="Mode" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
-              <InfoRow label="Statut" value={orderStatusShort(order.status)} />
-              <InfoRow label="Soumis" value={submittedAt ? formatDate(submittedAt) : "Non soumis"} />
-              <InfoRow label="Confirmé" value={confirmedAt ? formatDate(confirmedAt) : "Non confirmé"} />
-              {issueReason ? <InfoRow label="Motif" value={issueReason} /> : null}
-            </dl>
-          </section>
+        {/* Right */}
+        <div
+          className="s4-col s4-right"
+          style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}
+        >
+          <CustomerCard
+            name={order.customerName}
+            email={order.customerEmail}
+            total={formatMAD(order.totalMad)}
+            itemCount={totalCodes}
+          />
+          <TimelineCard order={order} />
+          <EmailsCard order={order} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setNextStatus(order.status);
+                setStatusModalOpen(true);
+              }}
+              style={{
+                height: 38,
+                borderRadius: 9,
+                border: `1px solid ${C.borderStrong}`,
+                background: "transparent",
+                color: C.muted,
+                fontSize: 12.5,
+                fontWeight: 500,
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              + Ajouter une note interne
+            </button>
+            <OrderDetailDeleteTools orderId={order.id} onError={(m) => setError(m)} />
+          </div>
+        </div>
+      </div>
 
-          <section className="card p-5">
-            <h2 className="font-bold text-white">Actions</h2>
-            <div className="mt-4 space-y-2">
-              {canApprove ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    runAction("Paiement confirmé.", () => approvePaymentAction(order.id))
-                  }
-                  className="btn-primary w-full justify-center disabled:opacity-50"
-                >
-                  Confirmer le paiement
-                </button>
-              ) : null}
-              {canIssue ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => openReviewEmail("request_proof", "Demander un nouveau justificatif")}
-                  className="w-full rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                >
-                  Signaler un problème de paiement
-                </button>
-              ) : null}
-              {canReject ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => openReviewEmail("reject", "Refuser le paiement")}
-                  className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
-                >
-                  Refuser la commande
-                </button>
-              ) : null}
-              {canDeliver ? (
-                <a href="#assign-codes" className="btn-ghost block w-full text-center">
-                  Attribuer et livrer les codes
-                </a>
-              ) : null}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setNextStatus(order.status === "delivered" ? "payment_confirmed" : order.status);
-                  setStatusModalOpen(true);
+      {/* ===== Proof modal ===== */}
+      {proofModalOpen && proof && proof !== "loading" ? (
+        <ModalShell onClose={() => setProofModalOpen(false)} maxWidth={880}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: C.text }}>
+                Justificatif de paiement
+              </h2>
+              <p style={{ fontSize: 12.5, color: C.faint, margin: "4px 0 0", fontFamily: MONO }}>
+                {proof.fileName} · {formatBytes(proof.sizeBytes)}
+              </p>
+            </div>
+            <CloseButton onClick={() => setProofModalOpen(false)} />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            {proof.mimeType.startsWith("image/") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={proofHref(proof)}
+                alt="Justificatif de paiement"
+                style={{
+                  width: "100%",
+                  maxHeight: "70vh",
+                  objectFit: "contain",
+                  borderRadius: 10,
+                  border: `1px solid ${C.borderInput}`,
+                  background: C.surfaceInput,
                 }}
-                className="btn-ghost w-full justify-center disabled:opacity-50"
-              >
-                Changer le statut
-              </button>
-              <OrderDetailDeleteTools
-                orderId={order.id}
-                onError={(errorMessage) => setError(errorMessage)}
               />
-            </div>
-            <p className="mt-3 text-xs text-muted">
-              L'annulation et les notes internes ne sont pas configurées dans le flux actuel.
-            </p>
-          </section>
-        </aside>
-      </div>
-
-      {reviewEmail ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-card">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-white">{reviewEmail.title}</h2>
-                <p className="mt-1 text-sm text-muted">
-                  Modifiez cet email si nécessaire. Les changements s'appliquent uniquement à cet envoi.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReviewEmail(null)}
-                className="text-sm text-muted hover:text-white"
-              >
-                Fermer
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <label className="block text-sm">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
-                  Sujet
-                </span>
-                <input
-                  value={reviewEmail.subject}
-                  onChange={(event) =>
-                    setReviewEmail((current) =>
-                      current ? { ...current, subject: event.target.value } : current,
-                    )
-                  }
-                  className="input h-11 py-0"
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
-                  Raison interne / client
-                </span>
-                <input
-                  value={reviewEmail.reason}
-                  onChange={(event) =>
-                    setReviewEmail((current) =>
-                      current ? { ...current, reason: event.target.value } : current,
-                    )
-                  }
-                  className="input h-11 py-0"
-                  placeholder="Optionnel"
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
-                  Message
-                </span>
-                <textarea
-                  value={reviewEmail.text}
-                  onChange={(event) =>
-                    setReviewEmail((current) =>
-                      current ? { ...current, text: event.target.value } : current,
-                    )
-                  }
-                  rows={10}
-                  className="input min-h-64 py-3"
-                />
-              </label>
-
-              <div className="rounded-xl border border-border bg-surface p-4">
-                <p className="text-xs uppercase tracking-wide text-muted">Aperçu</p>
-                <h3 className="mt-2 text-base font-semibold text-white">
-                  {reviewEmail.subject}
-                </h3>
-                <pre className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted">
-                  {reviewEmail.text}
-                </pre>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setReviewEmail(null)}
-                  className="btn-ghost w-full justify-center"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || !reviewEmail.subject.trim() || !reviewEmail.text.trim()}
-                  onClick={sendReviewEmail}
-                  className="btn-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Envoyer et appliquer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {statusModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8">
-          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-card">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-white">Changer le statut</h2>
-                <p className="mt-1 text-sm text-muted">
-                  Statut actuel: {orderStatusLabel(order.status)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setStatusModalOpen(false)}
-                className="text-sm text-muted hover:text-white"
-              >
-                Fermer
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <label className="block text-sm">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
-                  Nouveau statut
-                </span>
-                <select
-                  value={nextStatus}
-                  onChange={(event) => setNextStatus(event.target.value as OrderStatus)}
-                  className="input h-11 py-0"
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {orderStatusLabel(status)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-muted">
-                  Note admin optionnelle
-                </span>
-                <textarea
-                  value={statusNote}
-                  onChange={(event) => setStatusNote(event.target.value)}
-                  rows={4}
-                  className="input min-h-28 py-3"
-                  placeholder="Raison du changement..."
-                />
-              </label>
-
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-                Ce changement ajoute un evenement d'audit avec l'ancien statut, le nouveau statut,
-                l'horodatage et la note. Aucun email n'est envoye automatiquement.
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setStatusModalOpen(false)}
-                  className="btn-ghost w-full justify-center"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || nextStatus === order.status}
-                  onClick={handleStatusChange}
-                  className="btn-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Confirmer le changement
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <div className="card p-5">
-      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-2 break-words text-lg font-bold text-white">{value}</p>
-      {detail ? <p className="mt-1 break-words text-xs text-muted">{detail}</p> : null}
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="mt-1 break-words text-white">{value}</dd>
-    </div>
-  );
-}
-
-function PaymentProofSection({
-  proof,
-}: {
-  proof: AdminPaymentProofDTO | null | "loading";
-}) {
-  const href = proof && proof !== "loading" ? proofHref(proof) : "";
-  const isImage = proof && proof !== "loading" && proof.mimeType.startsWith("image/");
-  const isPdf = proof && proof !== "loading" && proof.mimeType === "application/pdf";
-
-  return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Justificatif de paiement</h2>
-      </div>
-      <div className="px-5 py-5">
-        {proof === "loading" ? (
-          <p className="text-sm text-muted">Chargement du justificatif...</p>
-        ) : proof === null ? (
-          <p className="text-sm text-muted">Aucun justificatif téléchargé.</p>
-        ) : (
-          <div className="space-y-4">
-            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <InfoRow label="Nom du fichier" value={proof.fileName} />
-              <InfoRow label="Importé le" value={formatDate(proof.uploadedAt)} />
-              <InfoRow label="Type de fichier" value={proof.mimeType} />
-              <InfoRow label="Taille" value={formatBytes(proof.sizeBytes)} />
-            </dl>
-
-            {isImage ? (
-              <div className="rounded-xl border border-border bg-surface p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={href}
-                  alt="Justificatif de paiement"
-                  className="max-h-[620px] w-full rounded-lg object-contain"
-                />
-              </div>
-            ) : null}
-
-            {isPdf ? (
+            ) : proof.mimeType === "application/pdf" ? (
+              <iframe
+                title="Justificatif PDF"
+                src={proofHref(proof)}
+                style={{ width: "100%", height: "70vh", borderRadius: 10, border: `1px solid ${C.borderInput}` }}
+              />
+            ) : (
+              <p style={{ fontSize: 13, color: C.muted }}>Aperçu indisponible pour ce type de fichier.</p>
+            )}
+            <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
               <a
-                href={href}
+                href={proofHref(proof)}
                 target="_blank"
                 rel="noreferrer"
-                className="btn-primary inline-flex"
+                style={ghostLinkStyle}
               >
-                Ouvrir le PDF
+                Ouvrir dans un onglet
               </a>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              <a href={href} target="_blank" rel="noreferrer" className="btn-ghost">
-                Ouvrir le justificatif
-              </a>
-              <a href={href} download={proof.fileName} className="btn-ghost">
-                Télécharger le justificatif
+              <a href={proofHref(proof)} download={proof.fileName} style={ghostLinkStyle}>
+                Télécharger
               </a>
             </div>
           </div>
-        )}
+        </ModalShell>
+      ) : null}
+
+      {/* ===== Review email modal ===== */}
+      {reviewEmail ? (
+        <ModalShell onClose={() => setReviewEmail(null)} maxWidth={680}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: C.text }}>{reviewEmail.title}</h2>
+              <p style={{ fontSize: 12.5, color: C.faint, margin: "4px 0 0" }}>
+                Modifiez cet email si nécessaire. Les changements s'appliquent uniquement à cet envoi.
+              </p>
+            </div>
+            <CloseButton onClick={() => setReviewEmail(null)} />
+          </div>
+          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+            <Field label="Sujet">
+              <input
+                className="s4-input"
+                value={reviewEmail.subject}
+                onChange={(event) =>
+                  setReviewEmail((current) => (current ? { ...current, subject: event.target.value } : current))
+                }
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Raison interne / client">
+              <input
+                className="s4-input"
+                value={reviewEmail.reason}
+                onChange={(event) =>
+                  setReviewEmail((current) => (current ? { ...current, reason: event.target.value } : current))
+                }
+                placeholder="Optionnel"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Message">
+              <textarea
+                className="s4-input"
+                value={reviewEmail.text}
+                onChange={(event) =>
+                  setReviewEmail((current) => (current ? { ...current, text: event.target.value } : current))
+                }
+                rows={9}
+                style={{ ...inputStyle, height: "auto", padding: "10px 13px", resize: "vertical", lineHeight: 1.5 }}
+              />
+            </Field>
+            <div style={{ ...cardStyle, background: C.surfaceInput, padding: 16 }}>
+              <p style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: C.faint, margin: 0 }}>
+                Aperçu
+              </p>
+              <h3 style={{ fontSize: 14.5, fontWeight: 600, color: C.text, margin: "8px 0 0" }}>
+                {reviewEmail.subject}
+              </h3>
+              <pre
+                style={{
+                  marginTop: 10,
+                  whiteSpace: "pre-wrap",
+                  fontSize: 12.5,
+                  lineHeight: 1.6,
+                  color: C.muted,
+                  fontFamily: "inherit",
+                }}
+              >
+                {reviewEmail.text}
+              </pre>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <SecondaryButton onClick={() => setReviewEmail(null)}>Annuler</SecondaryButton>
+              <PrimaryButton
+                disabled={busy || !reviewEmail.subject.trim() || !reviewEmail.text.trim()}
+                onClick={sendReviewEmail}
+              >
+                Envoyer et appliquer
+              </PrimaryButton>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {/* ===== Status change modal ===== */}
+      {statusModalOpen ? (
+        <ModalShell onClose={() => setStatusModalOpen(false)} maxWidth={520}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: C.text }}>Changer le statut</h2>
+              <p style={{ fontSize: 12.5, color: C.faint, margin: "4px 0 0" }}>
+                Statut actuel : {orderStatusLabel(order.status)}
+              </p>
+            </div>
+            <CloseButton onClick={() => setStatusModalOpen(false)} />
+          </div>
+          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+            <Field label="Nouveau statut">
+              <select
+                value={nextStatus}
+                onChange={(event) => setNextStatus(event.target.value as OrderStatus)}
+                style={inputStyle}
+              >
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {orderStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Note admin (interne)">
+              <textarea
+                className="s4-input"
+                value={statusNote}
+                onChange={(event) => setStatusNote(event.target.value)}
+                rows={4}
+                placeholder="Raison du changement…"
+                style={{ ...inputStyle, height: "auto", padding: "10px 13px", resize: "vertical", lineHeight: 1.5 }}
+              />
+            </Field>
+            <div
+              style={{
+                borderRadius: 11,
+                border: `1px solid ${C.warningBorder}`,
+                background: C.warningSoft,
+                padding: "10px 13px",
+                fontSize: 11.5,
+                lineHeight: 1.55,
+                color: "#F0D6A0",
+              }}
+            >
+              Ce changement ajoute un événement d'audit avec l'ancien statut, le nouveau statut,
+              l'horodatage et la note. Aucun email n'est envoyé automatiquement.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <SecondaryButton onClick={() => setStatusModalOpen(false)}>Annuler</SecondaryButton>
+              <PrimaryButton disabled={busy || nextStatus === order.status} onClick={handleStatusChange}>
+                Confirmer le changement
+              </PrimaryButton>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+    </div>
+  );
+}
+
+/* ============================ shared building blocks ============================ */
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  height: 40,
+  padding: "0 13px",
+  background: C.surfaceInput,
+  border: `1px solid ${C.borderInput}`,
+  borderRadius: 9,
+  color: C.text,
+  fontSize: 13,
+  outline: "none",
+};
+
+const ghostLinkStyle: CSSProperties = {
+  height: 36,
+  padding: "0 14px",
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 9,
+  border: `1px solid ${C.borderStrong}`,
+  background: C.surfaceInput,
+  color: C.text,
+  fontSize: 13,
+  fontWeight: 500,
+  textDecoration: "none",
+};
+
+const cardHeaderStyle: CSSProperties = {
+  padding: "13px 16px",
+  borderBottom: `1px solid ${C.borderHairline}`,
+  fontSize: 13,
+  fontWeight: 600,
+  color: C.text,
+};
+
+function HeaderButton({
+  children,
+  tone,
+  disabled,
+  onClick,
+  icon,
+}: {
+  children: ReactNode;
+  tone: "success" | "danger" | "neutral";
+  disabled?: boolean;
+  onClick: () => void;
+  icon?: ReactNode;
+}) {
+  const styles: Record<string, CSSProperties> = {
+    success: {
+      border: "none",
+      background: C.success,
+      color: "#fff",
+      boxShadow: "0 6px 18px rgba(46,160,103,0.3)",
+    },
+    danger: {
+      border: `1px solid ${C.dangerBorder}`,
+      background: C.dangerSoft,
+      color: C.danger,
+    },
+    neutral: {
+      border: `1px solid ${C.borderStronger}`,
+      background: C.surfaceInput,
+      color: C.text,
+    },
+  };
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        height: 38,
+        padding: icon ? "0 16px" : "0 15px",
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        borderRadius: 9,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+        ...styles[tone],
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+function PrimaryButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        height: 40,
+        borderRadius: 10,
+        border: "none",
+        background: C.accent,
+        color: "#fff",
+        fontSize: 13.5,
+        fontWeight: 600,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        height: 40,
+        borderRadius: 10,
+        border: `1px solid ${C.borderStrong}`,
+        background: "transparent",
+        color: C.muted,
+        fontSize: 13.5,
+        fontWeight: 500,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CloseButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Fermer"
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 8,
+        border: `1px solid ${C.borderStrong}`,
+        background: C.surfaceInput,
+        color: C.muted,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
+  );
+}
+
+function Banner({
+  children,
+  tone,
+  onClose,
+}: {
+  children: ReactNode;
+  tone: "success" | "danger";
+  onClose: () => void;
+}) {
+  const map = {
+    success: { color: C.successText, bg: C.successSoft, border: C.successBorder },
+    danger: { color: C.danger, bg: "rgba(224,92,92,0.1)", border: C.dangerBorder },
+  }[tone];
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        borderRadius: 11,
+        border: `1px solid ${map.border}`,
+        background: map.bg,
+        color: map.color,
+        padding: "11px 14px",
+        fontSize: 13,
+        marginBottom: 6,
+      }}
+    >
+      <span style={{ flex: 1 }}>{children}</span>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Fermer"
+        style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={{ display: "block" }}>
+      <span
+        style={{
+          display: "block",
+          fontSize: 12,
+          color: C.muted,
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function ModalShell({
+  children,
+  onClose,
+  maxWidth,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+  maxWidth: number;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        display: "grid",
+        placeItems: "center",
+        background: "rgba(0,0,0,0.72)",
+        padding: "32px 16px",
+      }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth,
+          maxHeight: "90vh",
+          overflowY: "auto",
+          borderRadius: 16,
+          border: `1px solid ${C.border}`,
+          background: C.panel,
+          padding: 20,
+          boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
+        }}
+      >
+        {children}
       </div>
-    </section>
+    </div>
+  );
+}
+
+/* ============================ left column cards ============================ */
+
+function ItemsCard({ order }: { order: AdminOrderDTO }) {
+  return (
+    <div style={cardStyle}>
+      <div style={cardHeaderStyle}>Articles</div>
+      {order.items.map((item, index) => {
+        const codes = order.deliveredCodes.filter(
+          (code) => code.orderItemId === item.id || code.productId === item.productId,
+        );
+        return (
+          <div
+            key={item.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 13,
+              padding: "14px 16px",
+              borderBottom: index < order.items.length - 1 ? `1px solid ${C.borderHairline}` : "none",
+            }}
+          >
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 9,
+                background: "linear-gradient(145deg,#1d2638,#0d1017)",
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text }}>{item.name}</div>
+              <div style={{ fontSize: 11.5, color: C.faint, fontFamily: MONO }}>
+                {item.productId} × {item.quantity}
+              </div>
+              {codes.length > 0 ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                  {codes.map((code, codeIndex) => (
+                    <span
+                      key={`${code.code}-${codeIndex}`}
+                      style={{
+                        fontFamily: MONO,
+                        fontSize: 11,
+                        color: C.successText,
+                        background: C.successSoft,
+                        border: `1px solid ${C.successBorder}`,
+                        borderRadius: 6,
+                        padding: "2px 7px",
+                      }}
+                    >
+                      {code.code}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <span style={{ fontSize: 13.5, fontFamily: MONO, color: C.text, whiteSpace: "nowrap" }}>
+              {formatMAD(item.unitPriceMad * item.quantity)}
+            </span>
+          </div>
+        );
+      })}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "13px 16px",
+          background: C.panelSunken,
+          borderTop: `1px solid ${C.borderHairline}`,
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Total</span>
+        <span style={{ fontSize: 16, fontWeight: 600, fontFamily: MONO, color: C.text }}>
+          {formatMAD(order.totalMad)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PaymentCard({
+  method,
+  reference,
+  total,
+  submittedAt,
+  confirmedAt,
+  issueReason,
+}: {
+  method: string;
+  reference: string;
+  total: string;
+  submittedAt: string;
+  confirmedAt: string;
+  issueReason: string | null;
+}) {
+  const rows: [string, string][] = [
+    ["Mode", method],
+    ["Référence", reference],
+    ["Montant", total],
+    ["Soumis", submittedAt],
+    ["Confirmé", confirmedAt],
+  ];
+  if (issueReason) rows.push(["Motif", issueReason]);
+  return (
+    <div style={{ ...cardStyle, padding: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Paiement</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        {rows.map(([label, value]) => (
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+            <span style={{ color: C.muted, flexShrink: 0 }}>{label}</span>
+            <span
+              style={{
+                color: C.text,
+                fontFamily: label === "Référence" || label === "Montant" ? MONO : undefined,
+                textAlign: "right",
+                wordBreak: "break-word",
+              }}
+            >
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProofCard({
+  proof,
+  onViewFull,
+}: {
+  proof: AdminPaymentProofDTO | null | "loading";
+  onViewFull: () => void;
+}) {
+  const hasProof = proof && proof !== "loading";
+  const isImage = hasProof && proof.mimeType.startsWith("image/");
+  return (
+    <div style={{ ...cardStyle, padding: 16, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Justificatif de paiement</span>
+        {hasProof ? (
+          <button
+            type="button"
+            onClick={onViewFull}
+            style={{ fontSize: 11, color: C.accentText, background: "none", border: "none", cursor: "pointer" }}
+          >
+            Voir en grand
+          </button>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={hasProof ? onViewFull : undefined}
+        disabled={!hasProof}
+        style={{
+          flex: 1,
+          minHeight: 96,
+          borderRadius: 10,
+          border: `1px solid ${C.borderInput}`,
+          background:
+            hasProof && isImage
+              ? C.surfaceInput
+              : "repeating-linear-gradient(135deg,#15161d,#15161d 8px,#121319 8px,#121319 16px)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          color: C.faint,
+          cursor: hasProof ? "pointer" : "default",
+          padding: 10,
+          overflow: "hidden",
+        }}
+      >
+        {proof === "loading" ? (
+          <span style={{ fontSize: 11.5 }}>Chargement…</span>
+        ) : proof === null ? (
+          <>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+            </svg>
+            <span style={{ fontSize: 11 }}>En attente du justificatif</span>
+          </>
+        ) : isImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={proofHref(proof)}
+            alt="Justificatif de paiement"
+            style={{ maxHeight: 130, maxWidth: "100%", objectFit: "contain", borderRadius: 6 }}
+          />
+        ) : (
+          <>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            <span style={{ fontSize: 10.5, fontFamily: MONO }}>{proof.fileName}</span>
+          </>
+        )}
+      </button>
+    </div>
   );
 }
 
 function DeliverySection({
   order,
   delivered,
+  canDeliver,
   available,
   entries,
   chosenIds,
   busy,
-  allFilled,
   manualMode,
+  readyCodes,
+  totalCodes,
+  deliverReady,
   onSetEntry,
   onDeliver,
-  onSaveDraft,
 }: {
   order: AdminOrderDTO;
   delivered: boolean;
+  canDeliver: boolean;
   available: Record<string, AdminCodeDTO[]>;
   entries: Record<string, AssignmentEntry[]>;
   chosenIds: Set<string>;
   busy: boolean;
-  allFilled: boolean;
   manualMode: boolean;
+  readyCodes: number;
+  totalCodes: number;
+  deliverReady: boolean;
   onSetEntry: (itemId: string, index: number, entry: AssignmentEntry) => void;
-  onDeliver: () => Promise<void>;
-  onSaveDraft: () => void;
+  onDeliver: () => void;
 }) {
-  function updateManualCodes(itemId: string, quantity: number, value: string) {
-    const lines = value
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, quantity);
-    for (let index = 0; index < quantity; index += 1) {
-      onSetEntry(itemId, index, lines[index] ? { manualCode: lines[index] } : {});
-    }
-  }
+  const editable = canDeliver && !delivered;
 
   return (
-    <section id="assign-codes" className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">
-          {manualMode ? "Saisir et livrer les codes" : "Attribuer et livrer les codes"}
-        </h2>
-        {manualMode ? (
-          <p className="mt-1 text-xs text-muted">
-            La saisie manuelle est active. Le stock ne sera ni réservé ni consommé.
-          </p>
-        ) : null}
+    <div style={{ ...cardStyle, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Livraison des codes</span>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: manualMode ? C.muted : C.accentText,
+            background: manualMode ? "rgba(255,255,255,0.06)" : C.accentSoft,
+            borderRadius: 6,
+            padding: "2px 8px",
+          }}
+        >
+          {manualMode ? "Saisie manuelle" : "Stock automatique"}
+        </span>
+        <span style={{ marginLeft: "auto", fontSize: 11.5, color: C.faint }}>
+          {delivered ? "Livré" : `${readyCodes} / ${totalCodes} code${totalCodes > 1 ? "s" : ""} prêt${readyCodes > 1 ? "s" : ""}`}
+        </span>
       </div>
-      <div className="space-y-4 px-5 py-5">
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
         {order.items.map((item) => {
           const stock = available[item.productId] ?? [];
           const list = entries[item.id] ?? [];
@@ -803,223 +1352,399 @@ function DeliverySection({
             (code) => code.orderItemId === item.id || code.productId === item.productId,
           );
 
-          return (
-            <div key={item.id} className="rounded-xl border border-border bg-surface p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-white">{item.name}</p>
-                <span className="text-xs text-muted">
-                  {item.quantity} unité{item.quantity === 1 ? "" : "s"} · {stock.length} disponible{stock.length === 1 ? "" : "s"}
-                </span>
-              </div>
-
-              {delivered ? (
-                <div className="mt-3 space-y-2">
-                  {deliveredCodes.map((code, index) => (
-                    <div
-                      key={`${code.code}-${index}`}
-                      className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-sm text-white"
-                    >
-                      {code.code}
-                    </div>
-                  ))}
-                </div>
-              ) : manualMode ? (
-                <div className="mt-4">
-                  <label className="mb-2 block text-xs font-medium text-muted">
-                    Collez un code par ligne
-                  </label>
-                  <textarea
-                    value={(entries[item.id] ?? [])
-                      .slice(0, item.quantity)
-                      .map((entry) => entry.manualCode ?? "")
-                      .join("\n")}
-                    onChange={(event) =>
-                      updateManualCodes(item.id, item.quantity, event.target.value)
-                    }
-                    rows={Math.max(3, item.quantity + 1)}
-                    placeholder={Array.from({ length: item.quantity }, (_, index) =>
-                      index === 0 ? "AAAA-BBBB-CCCC" : "DDDD-EEEE-FFFF",
-                    ).join("\n")}
-                    className="input min-h-28 py-3 font-mono text-sm"
-                  />
-                  <p className="mt-2 text-xs text-muted">
-                    Requis : {item.quantity} code{item.quantity === 1 ? "" : "s"}. Saisi(s) :{" "}
-                    {(entries[item.id] ?? [])
-                      .slice(0, item.quantity)
-                      .filter((entry) => entry.manualCode?.trim()).length}
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {Array.from({ length: item.quantity }).map((_, index) => {
-                    const entry = list[index] ?? {};
-                    return (
-                      <div key={index} className="grid gap-2 md:grid-cols-2">
-                        <select
-                          value={entry.digitalCodeId ?? ""}
-                          onChange={(event) =>
-                            onSetEntry(
-                              item.id,
-                              index,
-                              event.target.value ? { digitalCodeId: event.target.value } : {},
-                            )
-                          }
-                          className="input h-10 py-0 text-sm"
-                        >
-                          <option value="">Choisir un code en stock...</option>
-                          {stock.map((code) => (
-                            <option
-                              key={code.id}
-                              value={code.id}
-                              disabled={
-                                chosenIds.has(code.id) && entry.digitalCodeId !== code.id
-                              }
-                            >
-                              {code.code}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          value={entry.manualCode ?? ""}
-                          onChange={(event) =>
-                            onSetEntry(item.id, index, { manualCode: event.target.value })
-                          }
-                          placeholder="Ou saisir un code manuellement"
-                          className="input h-10 py-0 font-mono text-sm"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {!delivered ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {manualMode ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onSaveDraft}
-                className="btn-ghost w-full disabled:opacity-50"
+          if (delivered) {
+            return deliveredCodes.map((code, index) => (
+              <CodeRow
+                key={`${item.id}-${index}`}
+                label={item.name}
+                border={C.successBorder}
               >
-                Enregistrer le brouillon
-              </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={!allFilled || busy}
-              onClick={onDeliver}
-              className={`${manualMode ? "" : "sm:col-span-2"} btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50`}
-            >
-              {busy ? "Livraison en cours..." : "Livrer les codes"}
-            </button>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
-            Livré. Le client peut consulter le code attribué.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function TimelineSection({ order }: { order: AdminOrderDTO }) {
-  return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Historique</h2>
-      </div>
-      <div className="px-5 py-5">
-        {order.paymentEvents.length === 0 ? (
-          <p className="text-sm text-muted">Aucun événement pour le moment.</p>
-        ) : (
-          <ol className="space-y-4">
-            {order.paymentEvents.map((event) => (
-              <li key={event.id} className="flex gap-3">
-                <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-accent" />
-                <div>
-                  <p className="text-sm text-white">
-                    {event.note ??
-                      `${event.fromStatus ?? "Début"} → ${event.toStatus ?? event.type}`}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">{formatDate(event.createdAt)}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function EmailLogsSection({ order }: { order: AdminOrderDTO }) {
-  return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Emails transactionnels</h2>
-      </div>
-      <div className="divide-y divide-border">
-        {order.emailLogs.length === 0 ? (
-          <p className="px-5 py-5 text-sm text-muted">Aucun email journalisé.</p>
-        ) : (
-          order.emailLogs.map((log) => (
-            <article key={log.id} className="px-5 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-white">{log.subject}</p>
-                  <p className="mt-1 text-xs text-muted">
-                    {log.recipient} · {formatDate(log.createdAt)}
-                  </p>
-                </div>
-                <span
-                  className={`chip ${
-                    log.status === "sent"
-                      ? "border-green-500/30 text-green-400"
-                      : log.status === "failed"
-                        ? "border-red-500/30 text-red-400"
-                        : "border-amber-500/30 text-amber-300"
-                  }`}
-                >
-                  {log.status}
+                <span style={{ flex: 1, fontSize: 12.5, fontFamily: MONO, color: C.successText, wordBreak: "break-all" }}>
+                  {code.code}
                 </span>
+                <span style={{ fontSize: 11, color: C.successText, flexShrink: 0 }}>✓ livré</span>
+              </CodeRow>
+            ));
+          }
+
+          if (!editable) {
+            // Not yet deliverable (payment not confirmed): show awaited slots.
+            return Array.from({ length: item.quantity }).map((_, index) => (
+              <CodeRow key={`${item.id}-${index}`} label={item.name} border={C.borderInput}>
+                <span style={{ flex: 1, fontSize: 12.5, color: C.faint }}>En attente de confirmation</span>
+                <span style={{ fontSize: 11, color: C.faint, flexShrink: 0 }}>#{index + 1}</span>
+              </CodeRow>
+            ));
+          }
+
+          return Array.from({ length: item.quantity }).map((_, index) => {
+            const entry = list[index] ?? {};
+            const filled = Boolean(entry.digitalCodeId || entry.manualCode?.trim());
+            return (
+              <CodeRow
+                key={`${item.id}-${index}`}
+                label={item.name}
+                border={filled ? C.successBorder : C.accentBorder}
+              >
+                {manualMode ? (
+                  <input
+                    className="s4-input"
+                    value={entry.manualCode ?? ""}
+                    onChange={(event) => onSetEntry(item.id, index, { manualCode: event.target.value })}
+                    placeholder="Saisir le code…"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      background: "transparent",
+                      border: "none",
+                      outline: "none",
+                      color: filled ? C.successText : C.text,
+                      fontSize: 12.5,
+                      fontFamily: MONO,
+                    }}
+                  />
+                ) : (
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select
+                      value={entry.digitalCodeId ?? ""}
+                      onChange={(event) =>
+                        onSetEntry(item.id, index, event.target.value ? { digitalCodeId: event.target.value } : {})
+                      }
+                      style={{
+                        flex: "1 1 140px",
+                        minWidth: 0,
+                        height: 28,
+                        background: C.surfaceInput,
+                        border: `1px solid ${C.borderInput}`,
+                        borderRadius: 7,
+                        color: C.text,
+                        fontSize: 12,
+                        padding: "0 8px",
+                      }}
+                    >
+                      <option value="">Code en stock…</option>
+                      {stock.map((code) => (
+                        <option
+                          key={code.id}
+                          value={code.id}
+                          disabled={chosenIds.has(code.id) && entry.digitalCodeId !== code.id}
+                        >
+                          {code.code}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={entry.manualCode ?? ""}
+                      onChange={(event) => onSetEntry(item.id, index, { manualCode: event.target.value })}
+                      placeholder="ou saisir"
+                      style={{
+                        flex: "1 1 120px",
+                        minWidth: 0,
+                        height: 28,
+                        background: "transparent",
+                        border: `1px solid ${C.borderInput}`,
+                        borderRadius: 7,
+                        color: C.text,
+                        fontSize: 12,
+                        fontFamily: MONO,
+                        padding: "0 8px",
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                )}
+                <span style={{ fontSize: 11, color: filled ? C.successText : C.faint, flexShrink: 0 }}>
+                  {filled ? "✓ prêt" : `#${index + 1}`}
+                </span>
+              </CodeRow>
+            );
+          });
+        })}
+      </div>
+
+      {delivered ? (
+        <div
+          style={{
+            marginTop: 14,
+            borderRadius: 10,
+            border: `1px solid ${C.successBorder}`,
+            background: C.successSoft,
+            padding: "11px 14px",
+            fontSize: 12.5,
+            color: C.successText,
+          }}
+        >
+          Commande livrée. Le client peut consulter ses codes.
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={!deliverReady || busy}
+            onClick={onDeliver}
+            style={{
+              marginTop: 14,
+              width: "100%",
+              height: 42,
+              borderRadius: 10,
+              border: "none",
+              background: C.accent,
+              color: "#fff",
+              fontSize: 13.5,
+              fontWeight: 600,
+              cursor: !deliverReady || busy ? "not-allowed" : "pointer",
+              opacity: !deliverReady || busy ? 0.55 : 1,
+            }}
+          >
+            {busy ? "Livraison en cours…" : "Livrer la commande et envoyer l'email"}
+          </button>
+          <div style={{ fontSize: 11.5, color: C.faint, textAlign: "center", marginTop: 8 }}>
+            {canDeliver
+              ? "Saisissez tous les codes pour activer la livraison"
+              : "Confirmez le paiement puis saisissez les codes pour livrer"}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CodeRow({
+  label,
+  border,
+  children,
+}: {
+  label: string;
+  border: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 11,
+        padding: "10px 12px",
+        borderRadius: 10,
+        background: C.surfaceInput,
+        border: `1px solid ${border}`,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          color: C.muted,
+          width: 96,
+          flexShrink: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        title={label}
+      >
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/* ============================ right column cards ============================ */
+
+function CustomerCard({
+  name,
+  email,
+  total,
+  itemCount,
+}: {
+  name: string;
+  email: string;
+  total: string;
+  itemCount: number;
+}) {
+  return (
+    <div style={{ ...cardStyle, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 14 }}>
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            background: "linear-gradient(145deg,#2c3445,#171b26)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 13,
+            fontWeight: 600,
+            color: C.accentText,
+            flexShrink: 0,
+          }}
+        >
+          {initialsOf(name)}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, wordBreak: "break-word" }}>{name}</div>
+          <div style={{ fontSize: 11.5, color: C.faint, wordBreak: "break-all" }}>{email}</div>
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: 12.5,
+          color: C.muted,
+          paddingTop: 12,
+          borderTop: `1px solid ${C.borderHairline}`,
+        }}
+      >
+        <span>Cette commande</span>
+        <span style={{ color: C.text }}>
+          {itemCount} article{itemCount > 1 ? "s" : ""} · {total}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TimelineCard({ order }: { order: AdminOrderDTO }) {
+  const events = order.paymentEvents;
+  return (
+    <div style={{ ...cardStyle, padding: 16, flex: 1 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 16 }}>Historique</div>
+      {events.length === 0 ? (
+        <p style={{ fontSize: 12.5, color: C.faint, margin: 0 }}>Aucun événement pour le moment.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {events.map((event, index) => {
+            const dotTone = statusTone(event.toStatus ?? "");
+            const last = index === events.length - 1;
+            return (
+              <div key={event.id} style={{ display: "flex", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <span
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      background: dotTone.color,
+                      flexShrink: 0,
+                      marginTop: 3,
+                    }}
+                  />
+                  {!last ? <span style={{ width: 1.5, flex: 1, background: "rgba(255,255,255,0.08)" }} /> : null}
+                </div>
+                <div style={{ paddingBottom: last ? 0 : 16, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text }}>
+                    {event.note ??
+                      (event.toStatus
+                        ? orderStatusShort(event.toStatus)
+                        : `${event.fromStatus ?? "Début"} → ${event.type}`)}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{formatDate(event.createdAt)}</div>
+                </div>
               </div>
-              <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                <InfoRow label="Provider" value={log.provider || "simulation"} />
-                <InfoRow label="Message ID" value={log.providerMessageId ?? "Non disponible"} />
-                <InfoRow label="Template" value={log.templateKey ?? log.type} />
-              </dl>
-              {log.errorMessage ? (
-                <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                  {log.errorMessage}
-                </p>
-              ) : null}
-              <details className="mt-3 rounded-xl border border-border bg-surface">
-                <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-muted">
-                  Voir le snapshot rendu
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmailsCard({ order }: { order: AdminOrderDTO }) {
+  return (
+    <div style={{ ...cardStyle, padding: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12 }}>Emails envoyés</div>
+      {order.emailLogs.length === 0 ? (
+        <p style={{ fontSize: 12.5, color: C.faint, margin: 0 }}>Aucun email journalisé.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {order.emailLogs.map((log) => {
+            const sent = log.status === "sent";
+            const failed = log.status === "failed";
+            const iconColor = sent ? C.successText : failed ? C.danger : C.faint;
+            return (
+              <details key={log.id} style={{ borderRadius: 10, background: C.surfaceInput, border: `1px solid ${C.borderHairline}` }}>
+                <summary
+                  style={{
+                    listStyle: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="2" style={{ flexShrink: 0 }}>
+                    {sent ? (
+                      <polyline points="20 6 9 17 4 12" />
+                    ) : failed ? (
+                      <>
+                        <circle cx="12" cy="12" r="9" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                      </>
+                    ) : (
+                      <>
+                        <circle cx="12" cy="12" r="9" />
+                        <polyline points="12 7 12 12 15 14" />
+                      </>
+                    )}
+                  </svg>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        color: C.text,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {log.subject}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.faint }}>{formatDate(log.createdAt)}</div>
+                  </div>
                 </summary>
-                <div className="space-y-3 border-t border-border p-4">
-                  <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted">
-                    {log.text || log.body}
-                  </pre>
-                  {log.html ? (
-                    <div className="rounded-lg border border-border bg-base p-3 text-xs text-muted">
-                      <p className="mb-2 font-semibold text-white">HTML</p>
-                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap">
-                        {log.html}
-                      </pre>
+                <div style={{ borderTop: `1px solid ${C.borderHairline}`, padding: 12 }}>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 8, wordBreak: "break-all" }}>
+                    {log.recipient} · {log.provider || "simulation"} · {log.templateKey ?? log.type}
+                  </div>
+                  {log.errorMessage ? (
+                    <div
+                      style={{
+                        borderRadius: 8,
+                        border: `1px solid ${C.dangerBorder}`,
+                        background: "rgba(224,92,92,0.1)",
+                        color: "#F0B4B4",
+                        padding: "8px 10px",
+                        fontSize: 11.5,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {log.errorMessage}
                     </div>
                   ) : null}
+                  <pre
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      fontSize: 11.5,
+                      lineHeight: 1.55,
+                      color: C.muted,
+                      fontFamily: "inherit",
+                      margin: 0,
+                      maxHeight: 220,
+                      overflow: "auto",
+                    }}
+                  >
+                    {log.text || log.body}
+                  </pre>
                 </div>
               </details>
-            </article>
-          ))
-        )}
-      </div>
-    </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
