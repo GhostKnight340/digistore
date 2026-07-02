@@ -118,6 +118,16 @@ export async function getParentProducts(): Promise<ParentProductDTO[]> {
   return products.map(toParent);
 }
 
+/**
+ * Collapses the stock modes of a parent's variants into a single label so the
+ * products table can show a stock policy at a glance without loading detail.
+ */
+function summarizeStockPolicy(modes: string[]): string {
+  if (modes.length === 0) return "none";
+  const unique = Array.from(new Set(modes.map((mode) => mode || "automatic")));
+  return unique.length === 1 ? unique[0] : "mixed";
+}
+
 export async function getProductList(): Promise<ProductListItemDTO[]> {
   await ensureDatabaseReady();
   const rows = await timeAdmin(
@@ -132,7 +142,10 @@ export async function getProductList(): Promise<ProductListItemDTO[]> {
           name: true,
           category: true,
           active: true,
+          region: true,
+          updatedAt: true,
           _count: { select: { variants: true } },
+          variants: { select: { stockMode: true } },
         },
       }),
     (result) => result.length,
@@ -143,6 +156,9 @@ export async function getProductList(): Promise<ProductListItemDTO[]> {
     category: row.category,
     active: row.active,
     variantCount: row._count.variants,
+    region: row.region,
+    updatedAt: row.updatedAt.toISOString(),
+    stockPolicy: summarizeStockPolicy(row.variants.map((variant) => variant.stockMode)),
   }));
 }
 

@@ -160,6 +160,11 @@ export interface ProductListItemDTO {
   category: string;
   active: boolean;
   variantCount: number;
+  region: string;
+  updatedAt: string;
+  // Derived parent-level summary of variant stock modes:
+  // "automatic" | "force_in_stock" | "force_out_of_stock" | "mixed" | "none"
+  stockPolicy: string;
 }
 
 export interface AdminCategoryDTO {

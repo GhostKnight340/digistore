@@ -17,6 +17,7 @@ import {
   duplicateVariantAction,
 } from "@/app/actions/admin";
 import { uploadImageFile } from "@/lib/clientUpload";
+import { formatDate } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 
@@ -29,13 +30,29 @@ const STOCK_MODE_OPTIONS = [
   { value: "force_in_stock", label: "Forcer en stock" },
   { value: "force_out_of_stock", label: "Forcer en rupture" },
 ] as const;
-type EditorTab = "details" | "content" | "variants" | "media";
+type EditorTab = "details" | "variants" | "content" | "media";
+const EDITOR_TABS: EditorTab[] = ["details", "variants", "content", "media"];
 const TAB_LABELS: Record<EditorTab, string> = {
   details: "Détails",
-  content: "Contenu",
   variants: "Variantes",
+  content: "Contenu",
   media: "Média",
 };
+
+const STOCK_POLICY_LABELS: Record<string, string> = {
+  automatic: "Automatique",
+  force_in_stock: "Forcé en stock",
+  force_out_of_stock: "Forcé en rupture",
+  mixed: "Mixte",
+  none: "—",
+};
+
+type SortKey = "updated" | "name" | "variants";
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "updated", label: "Mis à jour récemment" },
+  { value: "name", label: "Nom (A → Z)" },
+  { value: "variants", label: "Nombre de variantes" },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,6 +98,13 @@ export default function ProductsPanel() {
   const [isAddingVariant, setIsAddingVariant] = useState(false);
   const [newVariantDraft, setNewVariantDraft] = useState<VariantDTO | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // List view: search, filters and sorting
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "hidden">("all");
+  const [sortBy, setSortBy] = useState<SortKey>("updated");
 
   // Cache: slug → ParentProductDTO so navigating between products is instant
   const detailCache = useRef<Record<string, ParentProductDTO>>({});
@@ -147,10 +171,63 @@ export default function ProductsPanel() {
     setMsg(null);
   }
 
+  function backToList() {
+    setSelectedSlug(null);
+    setDraft(null);
+    setVariantDrafts({});
+    setEditingVariant(null);
+    setIsAddingVariant(false);
+    setNewVariantDraft(null);
+    setIsNew(false);
+    setMsg(null);
+  }
+
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],
   );
+
+  const categoryName = useCallback(
+    (id: string) => categoryMap.get(id)?.name ?? id,
+    [categoryMap],
+  );
+
+  const regionOptions = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((item) => {
+      const region = item.region?.trim();
+      if (region) set.add(region);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
+  const visibleItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = items.filter((item) => {
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (regionFilter !== "all" && (item.region?.trim() || "") !== regionFilter) return false;
+      if (statusFilter === "active" && !item.active) return false;
+      if (statusFilter === "hidden" && item.active) return false;
+      if (query) {
+        const haystack = `${item.name} ${item.slug} ${categoryName(item.category)} ${item.region ?? ""}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+
+    const sorted = [...filtered];
+    if (sortBy === "name") {
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "variants") {
+      sorted.sort((a, b) => b.variantCount - a.variantCount || a.name.localeCompare(b.name));
+    } else {
+      sorted.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+    }
+    return sorted;
+  }, [items, search, categoryFilter, regionFilter, statusFilter, sortBy, categoryName]);
+
+  const hasActiveFilters =
+    categoryFilter !== "all" || regionFilter !== "all" || statusFilter !== "all" || search.trim() !== "";
 
   function updateDraft<K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) {
     setDraft((d) => (d ? { ...d, [k]: v } : d));
@@ -498,127 +575,51 @@ export default function ProductsPanel() {
     setSaving(false);
   }
 
-  return (
-    <div className="grid h-full w-full min-w-0 max-w-full gap-6 overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)]">
-      {/* ── Left: parent list ── */}
-      <aside className="h-fit">
-        <div className="card overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div>
-              <h2 className="text-sm font-bold text-white">Produits</h2>
-              <p className="text-xs text-muted">{items.length} produit{items.length !== 1 ? "s" : ""} parent{items.length !== 1 ? "s" : ""}</p>
-            </div>
-            <button type="button" onClick={openNew} className="btn-primary py-1 text-xs">
-              + Nouveau
-            </button>
-          </div>
-
-          {listLoading ? (
-            <p className="px-4 py-6 text-sm text-muted">Chargement…</p>
-          ) : listError ? (
-            <p className="px-4 py-6 text-sm text-red-400 break-all">{listError}</p>
-          ) : categories.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-muted">
-              <p className="font-medium text-white">Aucune catégorie pour le moment.</p>
-              <p className="mt-1 text-xs">Créez une catégorie avant d'ajouter un produit.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {categories.map((category) => {
-                const catId = category.id;
-                const group = items.filter((p) => p.category === catId);
-                return (
-                  <div key={catId}>
-                    <div className="flex items-center justify-between gap-3 px-4 py-2">
-                      <span className="truncate text-[10px] font-bold uppercase tracking-widest text-faint">
-                        {category.name}
-                      </span>
-                      <span className="shrink-0 text-[10px] text-faint">
-                        {group.length} produit{group.length === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    {group.length === 0 ? (
-                      <div className="px-4 pb-3 text-xs text-muted">
-                        Aucun produit dans cette catégorie.
-                      </div>
-                    ) : group.map((p) => (
-                      <button
-                        key={p.slug}
-                        type="button"
-                        onClick={() => openParent(p)}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface ${
-                          selectedSlug === p.slug ? "bg-accent/10" : ""
-                        }`}
-                      >
-                        <div
-                          className="h-8 w-8 flex-shrink-0 rounded-lg"
-                          style={{ background: category.accentColor }}
-                        />
-                        <div className="min-w-0">
-                          <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
-                            {p.name}
-                          </p>
-                          <p className="text-xs text-muted">
-                            {p.variantCount} variante{p.variantCount !== 1 ? "s" : ""}
-                            {" · "}
-                            {p.active ? "Actif" : <span className="text-yellow-500">Masqué</span>}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-              {/* Products with unknown/custom categories */}
-              {items.filter((p) => !categoryMap.has(p.category)).map((p) => (
-                <button
-                  key={p.slug}
-                  type="button"
-                  onClick={() => openParent(p)}
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface ${
-                    selectedSlug === p.slug ? "bg-accent/10" : ""
-                  }`}
-                >
-                  <div
-                    className="h-8 w-8 flex-shrink-0 rounded-lg"
-                    style={{ background: "#1e2029" }}
-                  />
-                  <div className="min-w-0">
-                    <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
-                      {p.name}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {p.variantCount} variante{p.variantCount !== 1 ? "s" : ""}
-                      {" · "}
-                      {p.active ? "Actif" : <span className="text-yellow-500">Masqué</span>}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* ── Right: editor ── */}
-      {detailLoading ? (
-        <div className="card flex items-center justify-center p-16 text-center">
-          <p className="text-sm text-muted">Chargement…</p>
-        </div>
-      ) : !draft ? (
-        <div className="card flex items-center justify-center p-16 text-center">
-          <div>
-            <p className="text-3xl">🛍️</p>
-            <p className="mt-2 text-sm text-muted">Sélectionnez un produit à modifier ou cliquez sur + Nouveau.</p>
+  // ── Editor view: opening or editing a single parent product ──
+  if (draft || detailLoading) {
+    if (!draft) {
+      return (
+        <div className="min-w-0 max-w-full">
+          <button
+            type="button"
+            onClick={backToList}
+            className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-white"
+          >
+            <span aria-hidden>←</span> Produits
+          </button>
+          <div className="card flex items-center justify-center p-16 text-center">
+            <p className="text-sm text-muted">Chargement…</p>
           </div>
         </div>
-      ) : (
+      );
+    }
+
+    return (
+      <div className="min-w-0 max-w-full">
+        <button
+          type="button"
+          onClick={backToList}
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-white"
+        >
+          <span aria-hidden>←</span> Produits
+        </button>
+
         <section className="min-w-0 max-w-full space-y-4 overflow-hidden">
           {/* Header */}
           <div className="card flex min-w-0 max-w-full flex-col items-start gap-3 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
               <h2 className="font-bold text-white">{draft.name || "Nouveau produit"}</h2>
-              <p className="truncate text-xs text-muted">{isNew ? "Non enregistré" : draft.slug}</p>
+              <p className="truncate text-xs text-muted">
+                {isNew ? "Non enregistré" : draft.slug}
+                {!isNew && (
+                  <>
+                    {" · "}
+                    {categoryName(draft.category)}
+                    {" · "}
+                    {draft.variants.length} variante{draft.variants.length !== 1 ? "s" : ""}
+                  </>
+                )}
+              </p>
             </div>
             <div className="flex max-w-full flex-wrap items-center justify-start gap-2 xl:justify-end">
               {msg && (
@@ -656,7 +657,7 @@ export default function ProductsPanel() {
           {/* Tabs */}
           <div className="card min-w-0 max-w-full overflow-hidden">
             <div className="flex border-b border-border overflow-x-auto">
-              {(["details", "content", "variants", "media"] as EditorTab[]).map((tab) => (
+              {EDITOR_TABS.map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -726,7 +727,189 @@ export default function ProductsPanel() {
             />
           )}
         </section>
-      )}
+      </div>
+    );
+  }
+
+  // ── List view: browse, search, filter and sort parent products ──
+  return (
+    <div className="min-w-0 max-w-full space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Produits</h2>
+          <p className="mt-1 text-sm text-muted">
+            {listLoading
+              ? "Chargement…"
+              : `${items.length} produit${items.length !== 1 ? "s" : ""} parent${items.length !== 1 ? "s" : ""}`}
+            {!listLoading && hasActiveFilters && items.length > 0
+              ? ` · ${visibleItems.length} affiché${visibleItems.length !== 1 ? "s" : ""}`
+              : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openNew}
+          disabled={categories.length === 0}
+          className="btn-primary text-sm disabled:opacity-50"
+        >
+          + Nouveau produit
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="card flex flex-wrap items-center gap-2 px-4 py-3">
+        <div className="min-w-[200px] flex-1">
+          <label className="sr-only" htmlFor="product-search">Rechercher un produit</label>
+          <input
+            id="product-search"
+            className="input h-10 py-0 text-sm"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Rechercher par nom, slug ou catégorie…"
+          />
+        </div>
+        <select
+          className="input h-10 w-auto py-0 text-sm"
+          value={categoryFilter}
+          onChange={(event) => setCategoryFilter(event.target.value)}
+          aria-label="Filtrer par catégorie"
+        >
+          <option value="all">Toutes les catégories</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>{category.name}</option>
+          ))}
+        </select>
+        <select
+          className="input h-10 w-auto py-0 text-sm"
+          value={regionFilter}
+          onChange={(event) => setRegionFilter(event.target.value)}
+          aria-label="Filtrer par région"
+        >
+          <option value="all">Toutes les régions</option>
+          {regionOptions.map((region) => (
+            <option key={region} value={region}>{region}</option>
+          ))}
+        </select>
+        <select
+          className="input h-10 w-auto py-0 text-sm"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value as "all" | "active" | "hidden")}
+          aria-label="Filtrer par statut"
+        >
+          <option value="all">Tous les statuts</option>
+          <option value="active">Actifs</option>
+          <option value="hidden">Masqués</option>
+        </select>
+        <select
+          className="input h-10 w-auto py-0 text-sm"
+          value={sortBy}
+          onChange={(event) => setSortBy(event.target.value as SortKey)}
+          aria-label="Trier"
+        >
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setCategoryFilter("all");
+              setRegionFilter("all");
+              setStatusFilter("all");
+            }}
+            className="btn-ghost h-10 px-3 text-xs"
+          >
+            Réinitialiser
+          </button>
+        )}
+      </div>
+
+      {/* Table / states */}
+      <div className="card min-w-0 max-w-full overflow-hidden">
+        {listLoading ? (
+          <p className="px-5 py-10 text-sm text-muted">Chargement…</p>
+        ) : listError ? (
+          <p className="px-5 py-10 text-sm text-red-400 break-all">{listError}</p>
+        ) : categories.length === 0 ? (
+          <div className="px-5 py-14 text-center">
+            <p className="text-sm font-medium text-white">Aucune catégorie pour le moment.</p>
+            <p className="mt-1 text-xs text-muted">
+              Créez une catégorie depuis l'onglet « Catégories » avant d'ajouter un produit.
+            </p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="px-5 py-14 text-center">
+            <p className="text-sm font-medium text-white">Créez votre premier produit</p>
+            <p className="mt-1 text-xs text-muted">
+              Les produits parents que vous ajoutez apparaîtront ici.
+            </p>
+            <button type="button" onClick={openNew} className="btn-primary mt-4 text-sm">
+              + Nouveau produit
+            </button>
+          </div>
+        ) : visibleItems.length === 0 ? (
+          <div className="px-5 py-14 text-center">
+            <p className="text-sm font-medium text-white">Aucun produit ne correspond à vos filtres.</p>
+            <p className="mt-1 text-xs text-muted">Ajustez la recherche ou réinitialisez les filtres.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left text-sm">
+              <thead className="text-xs uppercase text-muted">
+                <tr className="border-b border-border">
+                  <th className="px-5 py-3 font-medium">Produit</th>
+                  <th className="px-5 py-3 font-medium">Catégorie</th>
+                  <th className="px-5 py-3 font-medium">Région</th>
+                  <th className="px-5 py-3 font-medium text-right">Variantes</th>
+                  <th className="px-5 py-3 font-medium">Stock</th>
+                  <th className="px-5 py-3 font-medium">Statut</th>
+                  <th className="px-5 py-3 font-medium">Mis à jour</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleItems.map((p) => {
+                  const category = categoryMap.get(p.category);
+                  return (
+                    <tr
+                      key={p.slug}
+                      onClick={() => openParent(p)}
+                      className="cursor-pointer border-b border-border/60 transition-colors hover:bg-surface"
+                    >
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="h-8 w-8 flex-shrink-0 rounded-lg"
+                            style={{ background: category?.accentColor ?? "#1e2029" }}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-white">{p.name}</p>
+                            <p className="truncate font-mono text-[11px] text-muted">{p.slug}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-muted">{category?.name ?? p.category}</td>
+                      <td className="px-5 py-3 text-muted">{p.region?.trim() || "—"}</td>
+                      <td className="px-5 py-3 text-right text-white">{p.variantCount}</td>
+                      <td className="px-5 py-3 text-muted">{STOCK_POLICY_LABELS[p.stockPolicy] ?? p.stockPolicy}</td>
+                      <td className="px-5 py-3">
+                        {p.active ? (
+                          <span className="chip border-green-500/30 text-green-400">Actif</span>
+                        ) : (
+                          <span className="chip border-yellow-500/30 text-yellow-500">Masqué</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-muted">{formatDate(p.updatedAt)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1319,11 +1502,14 @@ function VariantsTab({
   return (
     <div className="space-y-3">
       {parentOptions.length > 0 && (
-        <div className="rounded-xl border border-border bg-base px-4 py-3">
-          <div className="flex flex-wrap items-end gap-3">
+        <details className="rounded-xl border border-border bg-base px-4 py-3">
+          <summary className="cursor-pointer text-xs font-medium text-muted hover:text-white">
+            Avancé · Convertir un produit autonome en variante
+          </summary>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
             <div className="min-w-[220px] flex-1">
               <label className="mb-1.5 block text-xs font-medium text-white">
-                Convertir un produit autonome en variante
+                Produit à convertir
               </label>
               <select
                 className="input h-10 py-0 text-sm"
@@ -1362,7 +1548,7 @@ function VariantsTab({
           <p className="mt-2 text-xs text-muted">
             Utilisez cette option pour regrouper des produits autonomes en variantes de ce produit parent.
           </p>
-        </div>
+        </details>
       )}
 
       {/* Add variant button */}
