@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#050506}
+  *{box-sizing:border-box}
+</style>
+</helmet>
+
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" rx="48" fill="#09090B"/><rect x="40" y="96" width="176" height="64" rx="14" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="3"/><text x="128" y="140" font-family="monospace" font-size="40" font-weight="700" fill="#F4F4F5" text-anchor="middle">ghost</text><rect x="40" y="180" width="80" height="10" rx="5" fill="#3E7BFA"/></svg></template>
+
+<div style="min-height:100vh;background:#09090B;background-image:radial-gradient(1100px 620px at 82% -8%, rgba(62,123,250,0.07), transparent 60%);font-family:'Geist',-apple-system,system-ui,sans-serif;color:#F4F4F5;padding:0 0 130px;overflow-x:hidden">
+
+  <!-- ============================== COVER ============================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:72px 48px 8px">
+    <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.3em;color:#5E5E68;text-transform:uppercase">ghost.ma — Système d'emails transactionnels</div>
+    <h1 style="font-size:46px;font-weight:600;letter-spacing:-0.038em;margin:16px 0 16px;max-width:840px;line-height:1.06">Quatre modèles maîtres, une seule identité.</h1>
+    <p style="font-size:16.5px;color:#9A9AA3;margin:0;max-width:660px;line-height:1.62">Un système d'emails premium en thème sombre pour la marketplace de produits numériques. Largeur 600&nbsp;px, type Geist, accent <span style="color:#5E92FF">#3E7BFA</span> sur fond <span style="color:#5E92FF">#09090B</span>. Chaque valeur est un <span style="font-family:'Geist Mono',monospace;color:#5E92FF">{​{placeholder}}</span> prêt à être injecté par Claude Code — seuls l'icône, le titre, le message, le CTA et la couleur de statut changent d'un email à l'autre.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:26px">
+      <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3;border:1px solid rgba(255,255,255,0.09);border-radius:8px;padding:7px 12px;background:#0E0E12">600px · responsive</span>
+      <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3;border:1px solid rgba(255,255,255,0.09);border-radius:8px;padding:7px 12px;background:#0E0E12">Desktop + Mobile</span>
+      <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3;border:1px solid rgba(255,255,255,0.09);border-radius:8px;padding:7px 12px;background:#0E0E12">Gmail · Outlook · Apple Mail</span>
+      <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3;border:1px solid rgba(255,255,255,0.09);border-radius:8px;padding:7px 12px;background:#0E0E12">Dark #09090B</span>
+      <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3;border:1px solid rgba(255,255,255,0.09);border-radius:8px;padding:7px 12px;background:#0E0E12">Geist / Geist Mono</span>
+    </div>
+  </div>
+
+  <!-- ============================== 01 — MASTER TEMPLATES ============================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:80px 48px 0">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <span style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.2em;color:#3E7BFA">01 — MODÈLES MAÎTRES</span>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></span>
+      <span style="font-size:13px;color:#5E5E68">4 modèles · desktop &amp; mobile</span>
+    </div>
+    <p style="font-size:14.5px;color:#9A9AA3;margin:0;max-width:620px;line-height:1.6">Chaque modèle est montré en version desktop (600&nbsp;px) et en version mobile repensée pour les clients email — pas un simple rétrécissement.</p>
+  </div>
+
+  <!-- ===================== TEMPLATE 1 — INFORMATION GÉNÉRALE ===================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:52px 48px 0">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#5E92FF;margin-bottom:7px">MODÈLE 01</div>
+        <div style="font-size:23px;font-weight:600;letter-spacing:-0.025em">Information générale</div>
+        <div style="font-size:13.5px;color:#9A9AA3;margin-top:6px;max-width:440px;line-height:1.55">Bienvenue · Vérification d'email · Réinitialisation du mot de passe · Instructions de paiement</div>
+      </div>
+      <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68;border:1px solid rgba(255,255,255,0.09);border-radius:999px;padding:6px 13px;flex-shrink:0">Accent · Info</span>
+    </div>
+
+    <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+      <!-- ---------- DESKTOP ---------- -->
+      <div style="width:600px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">DESKTOP · 600px</div>
+        <div style="border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <!-- header -->
+          <div style="padding:24px 40px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:19px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68">SÉCURITÉ DU COMPTE</span>
+          </div>
+          <!-- body -->
+          <div style="padding:42px 40px 38px">
+            <div style="width:60px;height:60px;border-radius:16px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.28);display:flex;align-items:center;justify-content:center;margin-bottom:26px">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.8"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5l-8-3Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+            </div>
+            <h2 style="font-size:27px;font-weight:600;letter-spacing:-0.032em;margin:0 0 12px;line-height:1.18">{​{email_title}}</h2>
+            <p style="font-size:15.5px;color:#9A9AA3;margin:0 0 22px;line-height:1.64">{​{email_subtitle}}</p>
+            <p style="font-size:15px;color:#C9C9CE;margin:0 0 28px;line-height:1.72">{​{message}}</p>
+            <!-- info box -->
+            <div style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;background:#131316;overflow:hidden;margin-bottom:28px">
+              <div style="padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:11px;letter-spacing:0.13em;color:#5E5E68;font-family:'Geist Mono',monospace">DÉTAILS DE LA DEMANDE</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="font-size:13.5px;color:#9A9AA3">Appareil</span><span style="font-size:13.5px;color:#F4F4F5">{​{device}}</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="font-size:13.5px;color:#9A9AA3">Localisation</span><span style="font-size:13.5px;color:#F4F4F5">{​{location}}</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px"><span style="font-size:13.5px;color:#9A9AA3">Adresse IP</span><span style="font-size:13.5px;color:#F4F4F5;font-family:'Geist Mono',monospace">{​{ip_address}}</span></div>
+            </div>
+            <!-- primary CTA -->
+            <a href="#" style="display:block;text-align:center;height:50px;line-height:50px;border-radius:12px;background:#3E7BFA;color:#fff;font-size:15px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28)">{​{button_label}}</a>
+            <p style="font-size:12.5px;color:#5E5E68;text-align:center;margin:14px 0 0;line-height:1.6">Ou copiez ce lien&nbsp;: <span style="color:#5E92FF;font-family:'Geist Mono',monospace;word-break:break-all">{​{button_url}}</span></p>
+            <!-- info banner -->
+            <div style="display:flex;gap:12px;margin-top:28px;padding:15px 18px;border-radius:13px;background:rgba(62,123,250,0.07);border:1px solid rgba(62,123,250,0.2)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"></path></svg>
+              <span style="font-size:13px;line-height:1.6;color:#A6BFE8">Ce lien expire le <span style="color:#fff;font-weight:500">{​{expiry_date}}</span>. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</span>
+            </div>
+          </div>
+          <!-- footer -->
+          <div style="padding:30px 40px 34px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <div style="font-size:16px;font-weight:600;letter-spacing:-0.03em;margin-bottom:12px;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></div>
+            <p style="font-size:12.5px;color:#5E5E68;margin:0 auto 18px;max-width:290px;line-height:1.6">Produits numériques &amp; cartes prépayées, livrés instantanément au Maroc.</p>
+            <div style="display:flex;justify-content:center;gap:10px;margin-bottom:22px">
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="#9A9AA3"><path d="M17.5 3h3l-6.6 7.5L21.5 21h-5.9l-4.3-5.6L6.3 21H3.3l7-8L2.8 3h6l3.9 5.1L17.5 3Z"></path></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="3.5"></circle><circle cx="17.5" cy="6.5" r="1" fill="#9A9AA3" stroke="none"></circle></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></span>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,0.06);margin:0 0 18px"></div>
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">Besoin d'aide&nbsp;? <span style="color:#9A9AA3">{​{support_email}}</span> · WhatsApp <span style="color:#9A9AA3">{​{support_whatsapp}}</span></p>
+            <p style="font-size:11.5px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma · <span style="color:#5E5E68">Conditions</span> · <span style="color:#5E5E68">Confidentialité</span> · <span style="color:#5E5E68">Se désabonner</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- MOBILE ---------- -->
+      <div style="width:375px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">MOBILE · 375px</div>
+        <div style="border-radius:22px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <!-- condensed header -->
+          <div style="padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:center">
+            <span style="font-size:18px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+          </div>
+          <div style="padding:30px 20px 26px">
+            <div style="width:56px;height:56px;border-radius:15px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 22px">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.8"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5l-8-3Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+            </div>
+            <h2 style="font-size:23px;font-weight:600;letter-spacing:-0.03em;margin:0 0 10px;line-height:1.2;text-align:center">{​{email_title}}</h2>
+            <p style="font-size:14.5px;color:#9A9AA3;margin:0 0 24px;line-height:1.6;text-align:center">{​{email_subtitle}}</p>
+            <!-- full-bleed info rows -->
+            <div style="border-top:1px solid rgba(255,255,255,0.07);border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:26px">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 2px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="font-size:13.5px;color:#9A9AA3">Appareil</span><span style="font-size:13.5px;color:#F4F4F5">{​{device}}</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 2px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="font-size:13.5px;color:#9A9AA3">Localisation</span><span style="font-size:13.5px;color:#F4F4F5">{​{location}}</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 2px"><span style="font-size:13.5px;color:#9A9AA3">Adresse IP</span><span style="font-size:13px;color:#F4F4F5;font-family:'Geist Mono',monospace">{​{ip_address}}</span></div>
+            </div>
+            <a href="#" style="display:block;text-align:center;height:54px;line-height:54px;border-radius:13px;background:#3E7BFA;color:#fff;font-size:15.5px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28)">{​{button_label}}</a>
+            <div style="display:flex;gap:11px;margin-top:22px;padding:14px 16px;border-radius:13px;background:rgba(62,123,250,0.07);border:1px solid rgba(62,123,250,0.2)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"></path></svg>
+              <span style="font-size:12.5px;line-height:1.6;color:#A6BFE8">Ce lien expire le <span style="color:#fff;font-weight:500">{​{expiry_date}}</span>.</span>
+            </div>
+          </div>
+          <div style="padding:24px 20px 28px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">{​{support_email}}</p>
+            <p style="font-size:11px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ===================== TEMPLATE 2 — SUIVI DE COMMANDE ===================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:72px 48px 0">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#5E92FF;margin-bottom:7px">MODÈLE 02</div>
+        <div style="font-size:23px;font-weight:600;letter-spacing:-0.025em">Suivi de commande</div>
+        <div style="font-size:13.5px;color:#9A9AA3;margin-top:6px;max-width:460px;line-height:1.55">Commande reçue · Preuve de paiement reçue · Paiement confirmé · Mise à jour de remboursement</div>
+      </div>
+      <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68;border:1px solid rgba(255,255,255,0.09);border-radius:999px;padding:6px 13px;flex-shrink:0">Badge · Timeline · Résumé</span>
+    </div>
+
+    <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+      <!-- ---------- DESKTOP ---------- -->
+      <div style="width:600px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">DESKTOP · 600px</div>
+        <div style="border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <div style="padding:24px 40px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:19px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#{​{order_number}}</span>
+          </div>
+          <div style="padding:42px 40px 38px">
+            <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.26);font-size:12px;font-weight:500;color:#5E92FF;margin-bottom:20px"><span style="width:6px;height:6px;border-radius:50%;background:#3E7BFA;box-shadow:0 0 8px #3E7BFA"></span>{​{status_badge}}</span>
+            <h2 style="font-size:27px;font-weight:600;letter-spacing:-0.032em;margin:0 0 12px;line-height:1.18">{​{email_title}}</h2>
+            <p style="font-size:15.5px;color:#9A9AA3;margin:0 0 30px;line-height:1.64">{​{email_subtitle}}</p>
+            <!-- timeline -->
+            <div style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;background:#131316;padding:22px 20px;margin-bottom:26px">
+              <div style="display:flex;gap:14px">
+                <div style="display:flex;flex-direction:column;align-items:center"><div style="width:22px;height:22px;border-radius:50%;background:#3E7BFA;display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div style="width:2px;flex:1;background:#3E7BFA;margin:3px 0;min-height:14px"></div></div>
+                <div style="padding-bottom:14px"><div style="font-size:14px;font-weight:500;color:#F4F4F5">Commande créée</div><div style="font-size:12px;color:#5E5E68;margin-top:2px;font-family:'Geist Mono',monospace">{​{step_1_time}}</div></div>
+              </div>
+              <div style="display:flex;gap:14px">
+                <div style="display:flex;flex-direction:column;align-items:center"><div style="width:22px;height:22px;border-radius:50%;background:#3E7BFA;display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div style="width:2px;flex:1;background:linear-gradient(#3E7BFA,rgba(255,255,255,0.1));margin:3px 0;min-height:14px"></div></div>
+                <div style="padding-bottom:14px"><div style="font-size:14px;font-weight:500;color:#F4F4F5">Paiement reçu</div><div style="font-size:12px;color:#5E5E68;margin-top:2px;font-family:'Geist Mono',monospace">{​{step_2_time}}</div></div>
+              </div>
+              <div style="display:flex;gap:14px">
+                <div style="display:flex;flex-direction:column;align-items:center"><div style="width:22px;height:22px;border-radius:50%;border:2px solid #3E7BFA;background:rgba(62,123,250,0.15);display:flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;border-radius:50%;background:#5E92FF"></span></div><div style="width:2px;flex:1;background:rgba(255,255,255,0.1);margin:3px 0;min-height:14px"></div></div>
+                <div style="padding-bottom:14px"><div style="font-size:14px;font-weight:500;color:#F4F4F5">Vérification en cours</div><div style="font-size:12px;color:#5E92FF;margin-top:2px">{​{current_step_note}}</div></div>
+              </div>
+              <div style="display:flex;gap:14px">
+                <div style="display:flex;flex-direction:column;align-items:center"><div style="width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,0.13);background:#0C0C0F"></div></div>
+                <div><div style="font-size:14px;font-weight:500;color:#5E5E68">Livraison du code</div><div style="font-size:12px;color:#4A4A52;margin-top:2px">En attente</div></div>
+              </div>
+            </div>
+            <!-- order summary -->
+            <div style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;background:#131316;overflow:hidden;margin-bottom:26px">
+              <div style="display:flex;align-items:center;gap:14px;padding:18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div style="width:52px;height:52px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background-color:#1A1A1F;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,0.03) 0 6px,transparent 6px 12px);border:1px solid rgba(255,255,255,0.07)"><span style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.1em;color:#5E5E68">{​{product_icon}}</span></div>
+                <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:500;color:#F4F4F5">{​{order_items}}</div><div style="font-size:12.5px;color:#5E5E68;margin-top:3px">{​{variant_name}} · Qté {​{quantity}}</div></div>
+                <div style="font-size:14.5px;font-weight:600;color:#F4F4F5">{​{subtotal}}</div>
+              </div>
+              <div style="padding:16px 18px">
+                <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:9px"><span style="color:#9A9AA3">Sous-total</span><span style="color:#F4F4F5">{​{subtotal}}</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:14px"><span style="color:#9A9AA3">Livraison</span><span style="color:#5E92FF">Gratuit</span></div>
+                <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:14px"></div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:14px;color:#9A9AA3">Total</span><span style="font-size:22px;font-weight:600;letter-spacing:-0.02em;color:#F4F4F5">{​{total}}</span></div>
+              </div>
+            </div>
+            <!-- payment card -->
+            <div style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;background:#131316;overflow:hidden;margin-bottom:28px">
+              <div style="padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:11px;letter-spacing:0.13em;color:#5E5E68;font-family:'Geist Mono',monospace">PAIEMENT</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="font-size:13.5px;color:#9A9AA3">Méthode</span><span style="font-size:13.5px;color:#F4F4F5">{​{payment_method}}</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px"><span style="font-size:13.5px;color:#9A9AA3">Référence</span><span style="font-size:13.5px;color:#5E92FF;font-family:'Geist Mono',monospace">{​{payment_reference}}</span></div>
+            </div>
+            <a href="#" style="display:block;text-align:center;height:50px;line-height:50px;border-radius:12px;background:#3E7BFA;color:#fff;font-size:15px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28)">{​{button_label}}</a>
+          </div>
+          <div style="padding:30px 40px 34px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <div style="font-size:16px;font-weight:600;letter-spacing:-0.03em;margin-bottom:12px;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></div>
+            <p style="font-size:12.5px;color:#5E5E68;margin:0 auto 18px;max-width:290px;line-height:1.6">Suivez votre commande à tout moment depuis votre compte ghost.ma.</p>
+            <div style="display:flex;justify-content:center;gap:10px;margin-bottom:22px">
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="#9A9AA3"><path d="M17.5 3h3l-6.6 7.5L21.5 21h-5.9l-4.3-5.6L6.3 21H3.3l7-8L2.8 3h6l3.9 5.1L17.5 3Z"></path></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="3.5"></circle><circle cx="17.5" cy="6.5" r="1" fill="#9A9AA3" stroke="none"></circle></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></span>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,0.06);margin:0 0 18px"></div>
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">Besoin d'aide&nbsp;? <span style="color:#9A9AA3">{​{support_email}}</span> · WhatsApp <span style="color:#9A9AA3">{​{support_whatsapp}}</span></p>
+            <p style="font-size:11.5px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma · <span style="color:#5E5E68">Conditions</span> · <span style="color:#5E5E68">Confidentialité</span> · <span style="color:#5E5E68">Se désabonner</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- MOBILE ---------- -->
+      <div style="width:375px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">MOBILE · 375px</div>
+        <div style="border-radius:22px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <div style="padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:18px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68">#{​{order_number}}</span>
+          </div>
+          <div style="padding:28px 20px 26px">
+            <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.26);font-size:12px;font-weight:500;color:#5E92FF;margin-bottom:16px"><span style="width:6px;height:6px;border-radius:50%;background:#3E7BFA"></span>{​{status_badge}}</span>
+            <h2 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 10px;line-height:1.2">{​{email_title}}</h2>
+            <p style="font-size:14.5px;color:#9A9AA3;margin:0 0 24px;line-height:1.6">{​{email_subtitle}}</p>
+            <!-- compact horizontal timeline -->
+            <div style="display:flex;align-items:center;margin-bottom:26px">
+              <div style="flex:1;text-align:center"><div style="width:20px;height:20px;border-radius:50%;background:#3E7BFA;margin:0 auto 6px;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div><span style="font-size:10px;color:#9A9AA3">Créée</span></div>
+              <div style="flex:1;height:2px;background:#3E7BFA;margin-bottom:18px"></div>
+              <div style="flex:1;text-align:center"><div style="width:20px;height:20px;border-radius:50%;background:#3E7BFA;margin:0 auto 6px;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div><span style="font-size:10px;color:#9A9AA3">Payée</span></div>
+              <div style="flex:1;height:2px;background:linear-gradient(90deg,#3E7BFA,rgba(255,255,255,0.1));margin-bottom:18px"></div>
+              <div style="flex:1;text-align:center"><div style="width:20px;height:20px;border-radius:50%;border:2px solid #3E7BFA;background:rgba(62,123,250,0.15);margin:0 auto 6px"></div><span style="font-size:10px;color:#5E92FF">Vérif.</span></div>
+              <div style="flex:1;height:2px;background:rgba(255,255,255,0.1);margin-bottom:18px"></div>
+              <div style="flex:1;text-align:center"><div style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,0.13);margin:0 auto 6px"></div><span style="font-size:10px;color:#5E5E68">Livré</span></div>
+            </div>
+            <!-- full-bleed product row -->
+            <div style="display:flex;align-items:center;gap:13px;padding:14px 0;border-top:1px solid rgba(255,255,255,0.07);border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:18px">
+              <div style="width:46px;height:46px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background-color:#1A1A1F;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,0.03) 0 6px,transparent 6px 12px);border:1px solid rgba(255,255,255,0.07)"><span style="font-family:'Geist Mono',monospace;font-size:8px;color:#5E5E68">{​{product_icon}}</span></div>
+              <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500;color:#F4F4F5">{​{order_items}}</div><div style="font-size:12px;color:#5E5E68;margin-top:2px">Qté {​{quantity}}</div></div>
+              <div style="font-size:14px;font-weight:600;color:#F4F4F5">{​{subtotal}}</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px"><span style="font-size:13.5px;color:#9A9AA3">Total</span><span style="font-size:20px;font-weight:600;color:#F4F4F5">{​{total}}</span></div>
+            <a href="#" style="display:block;text-align:center;height:54px;line-height:54px;border-radius:13px;background:#3E7BFA;color:#fff;font-size:15.5px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28)">{​{button_label}}</a>
+          </div>
+          <div style="padding:24px 20px 28px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">{​{support_email}}</p>
+            <p style="font-size:11px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ===================== TEMPLATE 3 — ACTION REQUISE ===================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:72px 48px 0">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#E0888D;margin-bottom:7px">MODÈLE 03</div>
+        <div style="font-size:23px;font-weight:600;letter-spacing:-0.025em">Action requise</div>
+        <div style="font-size:13.5px;color:#9A9AA3;margin-top:6px;max-width:460px;line-height:1.55">Paiement rejeté · Nouvelle preuve de paiement demandée</div>
+      </div>
+      <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68;border:1px solid rgba(255,255,255,0.09);border-radius:999px;padding:6px 13px;flex-shrink:0">Bannière · Raison · Double CTA</span>
+    </div>
+
+    <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+      <!-- ---------- DESKTOP ---------- -->
+      <div style="width:600px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">DESKTOP · 600px</div>
+        <div style="border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <div style="padding:24px 40px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:19px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#E0888D">ACTION REQUISE</span>
+          </div>
+          <!-- LARGE WARNING BANNER -->
+          <div style="padding:22px 40px;background:rgba(199,93,99,0.1);border-bottom:1px solid rgba(199,93,99,0.24);display:flex;align-items:center;gap:14px">
+            <div style="width:40px;height:40px;border-radius:11px;background:rgba(199,93,99,0.16);border:1px solid rgba(199,93,99,0.34);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E0888D" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg></div>
+            <div><div style="font-size:14.5px;font-weight:600;color:#E0888D">Votre commande est en pause</div><div style="font-size:12.5px;color:#C99A9C;margin-top:2px">Une action de votre part est nécessaire pour continuer.</div></div>
+          </div>
+          <div style="padding:38px 40px 38px">
+            <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(199,93,99,0.12);border:1px solid rgba(199,93,99,0.28);font-size:12px;font-weight:500;color:#E0888D;margin-bottom:20px"><span style="width:6px;height:6px;border-radius:50%;background:#C75D63"></span>{​{status_badge}}</span>
+            <h2 style="font-size:27px;font-weight:600;letter-spacing:-0.032em;margin:0 0 12px;line-height:1.18">{​{email_title}}</h2>
+            <p style="font-size:15.5px;color:#9A9AA3;margin:0 0 24px;line-height:1.64">{​{email_subtitle}}</p>
+            <!-- reason card -->
+            <div style="border:1px solid rgba(199,93,99,0.24);border-radius:14px;background:rgba(199,93,99,0.06);overflow:hidden;margin-bottom:24px">
+              <div style="padding:13px 18px;border-bottom:1px solid rgba(199,93,99,0.18);font-size:11px;letter-spacing:0.13em;color:#E0888D;font-family:'Geist Mono',monospace">MOTIF DU REFUS</div>
+              <div style="padding:16px 18px"><p style="font-size:14px;line-height:1.65;color:#E8B6B9;margin:0">{​{reason}}</p></div>
+            </div>
+            <!-- what to do -->
+            <div style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;background:#131316;padding:20px;margin-bottom:24px">
+              <div style="font-size:11px;letter-spacing:0.13em;color:#5E5E68;font-family:'Geist Mono',monospace;margin-bottom:16px">CE QUE VOUS DEVEZ FAIRE</div>
+              <div style="display:flex;gap:13px;margin-bottom:14px"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#5E92FF;width:18px;flex-shrink:0">01</span><span style="font-size:13.5px;color:#C9C9CE;line-height:1.55">{​{step_1}}</span></div>
+              <div style="display:flex;gap:13px;margin-bottom:14px"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#5E92FF;width:18px;flex-shrink:0">02</span><span style="font-size:13.5px;color:#C9C9CE;line-height:1.55">{​{step_2}}</span></div>
+              <div style="display:flex;gap:13px"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#5E92FF;width:18px;flex-shrink:0">03</span><span style="font-size:13.5px;color:#C9C9CE;line-height:1.55">{​{step_3}}</span></div>
+            </div>
+            <!-- mini order -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border:1px solid rgba(255,255,255,0.07);border-radius:13px;background:#131316;margin-bottom:26px">
+              <div><div style="font-size:11px;color:#5E5E68;margin-bottom:3px">Commande</div><div style="font-size:13.5px;color:#F4F4F5;font-family:'Geist Mono',monospace">#{​{order_number}}</div></div>
+              <div style="text-align:right"><div style="font-size:11px;color:#5E5E68;margin-bottom:3px">Montant</div><div style="font-size:13.5px;color:#F4F4F5;font-weight:600">{​{total}}</div></div>
+            </div>
+            <a href="#" style="display:block;text-align:center;height:50px;line-height:50px;border-radius:12px;background:#3E7BFA;color:#fff;font-size:15px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28);margin-bottom:12px">{​{button_label}}</a>
+            <a href="#" style="display:block;text-align:center;height:48px;line-height:46px;border-radius:12px;background:transparent;border:1px solid rgba(255,255,255,0.13);color:#F4F4F5;font-size:14.5px;font-weight:500;text-decoration:none">Contacter le support</a>
+            <div style="display:flex;gap:12px;margin-top:24px;padding:14px 16px;border-radius:13px;background:rgba(201,154,78,0.07);border:1px solid rgba(201,154,78,0.2)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DDB36B" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              <span style="font-size:12.5px;line-height:1.6;color:#D8C29A">Merci de répondre avant le <span style="color:#fff;font-weight:500">{​{deadline}}</span> pour éviter l'annulation de la commande.</span>
+            </div>
+          </div>
+          <div style="padding:30px 40px 34px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <div style="font-size:16px;font-weight:600;letter-spacing:-0.03em;margin-bottom:12px;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></div>
+            <p style="font-size:12.5px;color:#5E5E68;margin:0 auto 18px;max-width:290px;line-height:1.6">Notre équipe support est disponible en français et en arabe.</p>
+            <div style="display:flex;justify-content:center;gap:10px;margin-bottom:22px">
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="#9A9AA3"><path d="M17.5 3h3l-6.6 7.5L21.5 21h-5.9l-4.3-5.6L6.3 21H3.3l7-8L2.8 3h6l3.9 5.1L17.5 3Z"></path></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="3.5"></circle><circle cx="17.5" cy="6.5" r="1" fill="#9A9AA3" stroke="none"></circle></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></span>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,0.06);margin:0 0 18px"></div>
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">Besoin d'aide&nbsp;? <span style="color:#9A9AA3">{​{support_email}}</span> · WhatsApp <span style="color:#9A9AA3">{​{support_whatsapp}}</span></p>
+            <p style="font-size:11.5px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma · <span style="color:#5E5E68">Conditions</span> · <span style="color:#5E5E68">Confidentialité</span> · <span style="color:#5E5E68">Se désabonner</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- MOBILE ---------- -->
+      <div style="width:375px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">MOBILE · 375px</div>
+        <div style="border-radius:22px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <div style="padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:center">
+            <span style="font-size:18px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+          </div>
+          <!-- full-bleed warning banner -->
+          <div style="padding:18px 20px;background:rgba(199,93,99,0.1);border-bottom:1px solid rgba(199,93,99,0.24);text-align:center">
+            <div style="width:44px;height:44px;border-radius:12px;background:rgba(199,93,99,0.16);border:1px solid rgba(199,93,99,0.34);display:flex;align-items:center;justify-content:center;margin:0 auto 10px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E0888D" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg></div>
+            <div style="font-size:14.5px;font-weight:600;color:#E0888D">Votre commande est en pause</div>
+          </div>
+          <div style="padding:26px 20px 26px">
+            <h2 style="font-size:21px;font-weight:600;letter-spacing:-0.03em;margin:0 0 10px;line-height:1.2;text-align:center">{​{email_title}}</h2>
+            <p style="font-size:14px;color:#9A9AA3;margin:0 0 22px;line-height:1.6;text-align:center">{​{email_subtitle}}</p>
+            <div style="border:1px solid rgba(199,93,99,0.24);border-radius:13px;background:rgba(199,93,99,0.06);padding:15px 16px;margin-bottom:22px">
+              <div style="font-size:10.5px;letter-spacing:0.13em;color:#E0888D;font-family:'Geist Mono',monospace;margin-bottom:8px">MOTIF DU REFUS</div>
+              <p style="font-size:13.5px;line-height:1.6;color:#E8B6B9;margin:0">{​{reason}}</p>
+            </div>
+            <a href="#" style="display:block;text-align:center;height:54px;line-height:54px;border-radius:13px;background:#3E7BFA;color:#fff;font-size:15.5px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28);margin-bottom:12px">{​{button_label}}</a>
+            <a href="#" style="display:block;text-align:center;height:50px;line-height:48px;border-radius:13px;background:transparent;border:1px solid rgba(255,255,255,0.13);color:#F4F4F5;font-size:14.5px;font-weight:500;text-decoration:none">Contacter le support</a>
+          </div>
+          <div style="padding:24px 20px 28px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">{​{support_email}} · {​{support_whatsapp}}</p>
+            <p style="font-size:11px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ===================== TEMPLATE 4 — LIVRAISON ===================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:72px 48px 0">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#6FC2A0;margin-bottom:7px">MODÈLE 04</div>
+        <div style="font-size:23px;font-weight:600;letter-spacing:-0.025em">Livraison</div>
+        <div style="font-size:13.5px;color:#9A9AA3;margin-top:6px;max-width:460px;line-height:1.55">Commande livrée — l'email premium. Codes révélés, accès à la commande, carte support.</div>
+      </div>
+      <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68;border:1px solid rgba(255,255,255,0.09);border-radius:999px;padding:6px 13px;flex-shrink:0">Succès · Code · Support</span>
+    </div>
+
+    <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+      <!-- ---------- DESKTOP ---------- -->
+      <div style="width:600px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">DESKTOP · 600px</div>
+        <div style="border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <div style="padding:24px 40px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:19px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#{​{order_number}}</span>
+          </div>
+          <!-- SUCCESS BANNER -->
+          <div style="padding:30px 40px;background:radial-gradient(120% 130% at 50% -20%,rgba(63,158,120,0.16),transparent 62%);border-bottom:1px solid rgba(63,158,120,0.2);text-align:center">
+            <div style="width:62px;height:62px;border-radius:17px;background:rgba(63,158,120,0.14);border:1px solid rgba(63,158,120,0.34);display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+            <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.28);font-size:12px;font-weight:500;color:#6FC2A0"><span style="width:6px;height:6px;border-radius:50%;background:#3F9E78;box-shadow:0 0 8px #3F9E78"></span>{​{status_badge}}</span>
+          </div>
+          <div style="padding:34px 40px 38px">
+            <h2 style="font-size:27px;font-weight:600;letter-spacing:-0.032em;margin:0 0 12px;line-height:1.18;text-align:center">{​{email_title}}</h2>
+            <p style="font-size:15.5px;color:#9A9AA3;margin:0 0 30px;line-height:1.64;text-align:center">{​{email_subtitle}}</p>
+            <!-- code delivery card -->
+            <div style="border:1px solid rgba(62,123,250,0.25);border-radius:16px;background:radial-gradient(120% 90% at 50% -10%,rgba(62,123,250,0.1),transparent 60%),#131316;overflow:hidden;margin-bottom:18px">
+              <div style="display:flex;align-items:center;gap:14px;padding:18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div style="width:50px;height:50px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background-color:#1A1A1F;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,0.03) 0 6px,transparent 6px 12px);border:1px solid rgba(255,255,255,0.07)"><span style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.1em;color:#5E5E68">{​{product_icon}}</span></div>
+                <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:500;color:#F4F4F5">{​{order_items}}</div><div style="font-size:12.5px;color:#5E5E68;margin-top:3px">{​{variant_name}}</div></div>
+              </div>
+              <div style="padding:20px 18px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-size:11px;letter-spacing:0.09em;color:#5E5E68;font-family:'Geist Mono',monospace">VOTRE CODE</span><span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#6FC2A0"><span style="width:6px;height:6px;border-radius:50%;background:#3F9E78;box-shadow:0 0 8px #3F9E78"></span>Prêt</span></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px dashed rgba(62,123,250,0.4);border-radius:12px;background:rgba(62,123,250,0.05)">
+                  <span style="flex:1;font-family:'Geist Mono',monospace;font-size:18px;letter-spacing:0.1em;color:#F4F4F5;word-break:break-all">{​{delivery_code}}</span>
+                  <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:9px;background:#3E7BFA;color:#fff;font-size:12.5px;font-weight:600"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>Copier</span>
+                </div>
+              </div>
+            </div>
+            <p style="font-size:12px;color:#5E5E68;text-align:center;margin:0 0 26px">Livré le <span style="color:#9A9AA3;font-family:'Geist Mono',monospace">{​{delivery_date}}</span></p>
+            <!-- redeem instructions -->
+            <div style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;background:#131316;padding:20px;margin-bottom:26px">
+              <div style="font-size:11px;letter-spacing:0.13em;color:#5E5E68;font-family:'Geist Mono',monospace;margin-bottom:16px">COMMENT UTILISER VOTRE CODE</div>
+              <div style="display:flex;gap:13px;margin-bottom:13px"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#5E92FF;width:18px;flex-shrink:0">01</span><span style="font-size:13.5px;color:#C9C9CE;line-height:1.55">{​{redeem_step_1}}</span></div>
+              <div style="display:flex;gap:13px;margin-bottom:13px"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#5E92FF;width:18px;flex-shrink:0">02</span><span style="font-size:13.5px;color:#C9C9CE;line-height:1.55">{​{redeem_step_2}}</span></div>
+              <div style="display:flex;gap:13px"><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#5E92FF;width:18px;flex-shrink:0">03</span><span style="font-size:13.5px;color:#C9C9CE;line-height:1.55">{​{redeem_step_3}}</span></div>
+            </div>
+            <a href="#" style="display:block;text-align:center;height:50px;line-height:50px;border-radius:12px;background:#3E7BFA;color:#fff;font-size:15px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28);margin-bottom:22px">{​{button_label}}</a>
+            <!-- support card -->
+            <div style="display:flex;align-items:center;gap:14px;padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.07);background:#131316">
+              <div style="width:42px;height:42px;border-radius:11px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.28);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="1.9"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></div>
+              <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500;color:#F4F4F5">Un problème avec votre code&nbsp;?</div><div style="font-size:12.5px;color:#9A9AA3;margin-top:2px">Réponse en moins d'une heure sur WhatsApp.</div></div>
+              <span style="flex-shrink:0;font-size:13px;font-weight:500;color:#5E92FF">Aide →</span>
+            </div>
+          </div>
+          <div style="padding:30px 40px 34px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <div style="font-size:16px;font-weight:600;letter-spacing:-0.03em;margin-bottom:12px;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></div>
+            <p style="font-size:12.5px;color:#5E5E68;margin:0 auto 18px;max-width:290px;line-height:1.6">Merci pour votre achat. Vos codes sont aussi archivés dans votre compte.</p>
+            <div style="display:flex;justify-content:center;gap:10px;margin-bottom:22px">
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="#9A9AA3"><path d="M17.5 3h3l-6.6 7.5L21.5 21h-5.9l-4.3-5.6L6.3 21H3.3l7-8L2.8 3h6l3.9 5.1L17.5 3Z"></path></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="3.5"></circle><circle cx="17.5" cy="6.5" r="1" fill="#9A9AA3" stroke="none"></circle></svg></span>
+              <span style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></span>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,0.06);margin:0 0 18px"></div>
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">Besoin d'aide&nbsp;? <span style="color:#9A9AA3">{​{support_email}}</span> · WhatsApp <span style="color:#9A9AA3">{​{support_whatsapp}}</span></p>
+            <p style="font-size:11.5px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma · <span style="color:#5E5E68">Conditions</span> · <span style="color:#5E5E68">Confidentialité</span> · <span style="color:#5E5E68">Se désabonner</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- MOBILE ---------- -->
+      <div style="width:375px;max-width:100%">
+        <div style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.16em;color:#5E5E68;margin-bottom:12px">MOBILE · 375px</div>
+        <div style="border-radius:22px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0C0C0F;box-shadow:0 34px 80px rgba(0,0,0,0.6)">
+          <div style="padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:center">
+            <span style="font-size:18px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span>
+          </div>
+          <div style="padding:30px 20px;background:radial-gradient(120% 120% at 50% -10%,rgba(63,158,120,0.16),transparent 60%);border-bottom:1px solid rgba(63,158,120,0.2);text-align:center">
+            <div style="width:58px;height:58px;border-radius:16px;background:rgba(63,158,120,0.14);border:1px solid rgba(63,158,120,0.34);display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+            <h2 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0;line-height:1.2">{​{email_title}}</h2>
+          </div>
+          <div style="padding:26px 20px">
+            <p style="font-size:14px;color:#9A9AA3;margin:0 0 22px;line-height:1.6;text-align:center">{​{email_subtitle}}</p>
+            <div style="font-size:10.5px;letter-spacing:0.09em;color:#5E5E68;font-family:'Geist Mono',monospace;margin-bottom:10px">VOTRE CODE</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border:1px dashed rgba(62,123,250,0.4);border-radius:12px;background:rgba(62,123,250,0.05);margin-bottom:8px">
+              <span style="flex:1;font-family:'Geist Mono',monospace;font-size:16px;letter-spacing:0.08em;color:#F4F4F5;word-break:break-all">{​{delivery_code}}</span>
+              <span style="flex-shrink:0;display:inline-flex;align-items:center;height:34px;padding:0 13px;border-radius:9px;background:#3E7BFA;color:#fff;font-size:12px;font-weight:600">Copier</span>
+            </div>
+            <p style="font-size:11.5px;color:#5E5E68;text-align:center;margin:0 0 24px">Livré le <span style="font-family:'Geist Mono',monospace">{​{delivery_date}}</span></p>
+            <a href="#" style="display:block;text-align:center;height:54px;line-height:54px;border-radius:13px;background:#3E7BFA;color:#fff;font-size:15.5px;font-weight:600;text-decoration:none;box-shadow:0 8px 24px rgba(62,123,250,0.28);margin-bottom:18px">{​{button_label}}</a>
+            <div style="display:flex;align-items:center;gap:12px;padding:15px;border-radius:13px;border:1px solid rgba(255,255,255,0.07);background:#131316">
+              <div style="width:38px;height:38px;border-radius:10px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.28);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="1.9"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></div>
+              <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:#F4F4F5">Un problème&nbsp;?</div><div style="font-size:11.5px;color:#9A9AA3;margin-top:1px">Support WhatsApp</div></div>
+              <span style="flex-shrink:0;font-size:12.5px;font-weight:500;color:#5E92FF">Aide →</span>
+            </div>
+          </div>
+          <div style="padding:24px 20px 28px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;background:#08080A">
+            <p style="font-size:11.5px;color:#5E5E68;margin:0 0 6px;line-height:1.7">{​{support_email}}</p>
+            <p style="font-size:11px;color:#4A4A52;margin:0;line-height:1.7">© {​{current_year}} ghost.ma</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ============================== 02 — STATUTS ============================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:96px 48px 0">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <span style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.2em;color:#3E7BFA">02 — SYSTÈME DE STATUTS</span>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></span>
+      <span style="font-size:13px;color:#5E5E68">4 couleurs · bannière + badge</span>
+    </div>
+    <p style="font-size:14.5px;color:#9A9AA3;margin:0 0 30px;max-width:620px;line-height:1.6">Palette désaturée façon Linear. Chaque statut a une bannière pleine et un badge pastille — seule la couleur change, jamais la forme.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:18px">
+      <!-- INFO -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between"><span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68">INFORMATION</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E92FF">#3E7BFA</span></div>
+        <div style="padding:20px">
+          <div style="display:flex;gap:12px;padding:15px 16px;border-radius:13px;background:rgba(62,123,250,0.1);border:1px solid rgba(62,123,250,0.24);margin-bottom:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"></path></svg><span style="font-size:13px;line-height:1.55;color:#A6BFE8">Message d'information neutre pour le client.</span></div>
+          <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.26);font-size:12px;font-weight:500;color:#5E92FF"><span style="width:6px;height:6px;border-radius:50%;background:#3E7BFA"></span>En cours</span>
+        </div>
+      </div>
+      <!-- SUCCESS -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between"><span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68">SUCCÈS</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#6FC2A0">#3F9E78</span></div>
+        <div style="padding:20px">
+          <div style="display:flex;gap:12px;padding:15px 16px;border-radius:13px;background:rgba(63,158,120,0.1);border:1px solid rgba(63,158,120,0.24);margin-bottom:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="2.2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><polyline points="16 9.5 11 14.5 8.5 12"></polyline></svg><span style="font-size:13px;line-height:1.55;color:#9AD3BB">Action réussie, paiement confirmé ou livraison effectuée.</span></div>
+          <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.26);font-size:12px;font-weight:500;color:#6FC2A0"><span style="width:6px;height:6px;border-radius:50%;background:#3F9E78"></span>Livré</span>
+        </div>
+      </div>
+      <!-- WARNING -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between"><span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68">AVERTISSEMENT</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#DDB36B">#C99A4E</span></div>
+        <div style="padding:20px">
+          <div style="display:flex;gap:12px;padding:15px 16px;border-radius:13px;background:rgba(201,154,78,0.1);border:1px solid rgba(201,154,78,0.24);margin-bottom:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DDB36B" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg><span style="font-size:13px;line-height:1.55;color:#D8C29A">Délai à respecter ou attention requise sans blocage.</span></div>
+          <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(201,154,78,0.12);border:1px solid rgba(201,154,78,0.26);font-size:12px;font-weight:500;color:#DDB36B"><span style="width:6px;height:6px;border-radius:50%;background:#C99A4E"></span>En attente</span>
+        </div>
+      </div>
+      <!-- ERROR -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between"><span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68">ERREUR</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#E0888D">#C75D63</span></div>
+        <div style="padding:20px">
+          <div style="display:flex;gap:12px;padding:15px 16px;border-radius:13px;background:rgba(199,93,99,0.1);border:1px solid rgba(199,93,99,0.24);margin-bottom:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E0888D" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6M9 9l6 6"></path></svg><span style="font-size:13px;line-height:1.55;color:#E8B6B9">Paiement rejeté ou commande bloquée nécessitant une action.</span></div>
+          <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(199,93,99,0.12);border:1px solid rgba(199,93,99,0.26);font-size:12px;font-weight:500;color:#E0888D"><span style="width:6px;height:6px;border-radius:50%;background:#C75D63"></span>Rejeté</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== 03 — BIBLIOTHÈQUE DE COMPOSANTS ============================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:96px 48px 0">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <span style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.2em;color:#3E7BFA">03 — BIBLIOTHÈQUE DE COMPOSANTS</span>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></span>
+      <span style="font-size:13px;color:#5E5E68">Blocs interchangeables</span>
+    </div>
+    <p style="font-size:14.5px;color:#9A9AA3;margin:0 0 30px;max-width:620px;line-height:1.6">Tous les modèles sont composés à partir de ces blocs. Chacun est autonome et piloté par tokens — Claude Code les assemble sans retoucher la mise en page.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(390px,1fr));gap:20px">
+
+      <!-- header/logo -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">HEADER · LOGO</div>
+        <div style="padding:20px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:18px;font-weight:600;letter-spacing:-0.03em;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68">#{​{order_number}}</span></div>
+      </div>
+      <!-- title/subtitle -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">TITRE · SOUS-TITRE</div>
+        <div style="padding:20px"><div style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin-bottom:8px">{​{email_title}}</div><div style="font-size:14px;color:#9A9AA3;line-height:1.6">{​{email_subtitle}}</div></div>
+      </div>
+      <!-- hero icon -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">ICÔNE HÉRO (60px)</div>
+        <div style="padding:22px;display:flex;gap:13px">
+          <div style="width:60px;height:60px;border-radius:16px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.28);display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.8"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5l-8-3Z"></path><path d="m9 12 2 2 4-4"></path></svg></div>
+          <div style="width:60px;height:60px;border-radius:16px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.28);display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+          <div style="width:60px;height:60px;border-radius:16px;background:rgba(201,154,78,0.12);border:1px solid rgba(201,154,78,0.28);display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#DDB36B" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg></div>
+          <div style="width:60px;height:60px;border-radius:16px;background:rgba(199,93,99,0.12);border:1px solid rgba(199,93,99,0.28);display:flex;align-items:center;justify-content:center"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#E0888D" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6M9 9l6 6"></path></svg></div>
+        </div>
+      </div>
+      <!-- status badge -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">BADGE DE STATUT</div>
+        <div style="padding:22px 20px;display:flex;gap:10px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.26);font-size:12px;font-weight:500;color:#5E92FF"><span style="width:6px;height:6px;border-radius:50%;background:#3E7BFA"></span>{​{status_badge}}</span><span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 13px;border-radius:999px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.26);font-size:12px;font-weight:500;color:#6FC2A0"><span style="width:6px;height:6px;border-radius:50%;background:#3F9E78"></span>Livré</span></div>
+      </div>
+      <!-- info / payment card -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">CARTE D'INFORMATION · PAIEMENT</div>
+        <div style="padding:20px"><div style="border:1px solid rgba(255,255,255,0.07);border-radius:12px;background:#131316;overflow:hidden"><div style="display:flex;justify-content:space-between;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05)"><span style="font-size:13px;color:#9A9AA3">Méthode</span><span style="font-size:13px;color:#F4F4F5">{​{payment_method}}</span></div><div style="display:flex;justify-content:space-between;padding:12px 16px"><span style="font-size:13px;color:#9A9AA3">Référence</span><span style="font-size:13px;color:#5E92FF;font-family:'Geist Mono',monospace">{​{payment_reference}}</span></div></div></div>
+      </div>
+      <!-- product list -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">LISTE DE PRODUITS</div>
+        <div style="padding:20px"><div style="display:flex;align-items:center;gap:14px;padding:14px;border:1px solid rgba(255,255,255,0.07);border-radius:12px;background:#131316"><div style="width:50px;height:50px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background-color:#1A1A1F;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,0.03) 0 6px,transparent 6px 12px);border:1px solid rgba(255,255,255,0.07)"><span style="font-family:'Geist Mono',monospace;font-size:9px;color:#5E5E68">{​{product_icon}}</span></div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">{​{order_items}}</div><div style="font-size:12.5px;color:#5E5E68;margin-top:3px">Qté {​{quantity}}</div></div><div style="font-size:14px;font-weight:600">{​{subtotal}}</div></div></div>
+      </div>
+      <!-- order summary -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">RÉSUMÉ DE COMMANDE</div>
+        <div style="padding:20px"><div style="border:1px solid rgba(255,255,255,0.07);border-radius:12px;background:#131316;padding:16px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:9px"><span style="color:#9A9AA3">Sous-total</span><span style="color:#F4F4F5">{​{subtotal}}</span></div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:13px"><span style="color:#9A9AA3">Livraison</span><span style="color:#5E92FF">Gratuit</span></div><div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:13px"></div><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;color:#9A9AA3">Total</span><span style="font-size:20px;font-weight:600;letter-spacing:-0.02em">{​{total}}</span></div></div></div>
+      </div>
+      <!-- timeline -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">TIMELINE</div>
+        <div style="padding:20px"><div style="display:flex;gap:13px"><div style="display:flex;flex-direction:column;align-items:center"><div style="width:20px;height:20px;border-radius:50%;background:#3E7BFA;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div style="width:2px;flex:1;background:rgba(255,255,255,0.1);min-height:22px;margin:3px 0"></div></div><div><div style="font-size:13.5px;font-weight:500">{​{step_label}}</div><div style="font-size:11.5px;color:#5E5E68;margin-top:2px;font-family:'Geist Mono',monospace">{​{step_time}}</div></div></div><div style="display:flex;gap:13px"><div style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,0.13);background:#0C0C0F;flex-shrink:0"></div><div style="font-size:13.5px;font-weight:500;color:#5E5E68">{​{step_label}}</div></div></div>
+      </div>
+      <!-- code delivery -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">CARTE DE LIVRAISON DE CODE</div>
+        <div style="padding:20px"><div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px dashed rgba(62,123,250,0.4);border-radius:12px;background:rgba(62,123,250,0.05)"><span style="flex:1;font-family:'Geist Mono',monospace;font-size:16px;letter-spacing:0.08em;color:#F4F4F5;word-break:break-all">{​{delivery_code}}</span><span style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:9px;background:#3E7BFA;color:#fff;font-size:12px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>Copier</span></div></div>
+      </div>
+      <!-- alert boxes -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">BOÎTES INFO · SUCCÈS · ALERTE · ERREUR</div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:11px">
+          <div style="display:flex;gap:11px;padding:13px 15px;border-radius:12px;background:rgba(62,123,250,0.08);border:1px solid rgba(62,123,250,0.22)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"></path></svg><span style="font-size:12.5px;color:#A6BFE8;line-height:1.55">{​{message}}</span></div>
+          <div style="display:flex;gap:11px;padding:13px 15px;border-radius:12px;background:rgba(63,158,120,0.08);border:1px solid rgba(63,158,120,0.22)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="2.2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><polyline points="16 9.5 11 14.5 8.5 12"></polyline></svg><span style="font-size:12.5px;color:#9AD3BB;line-height:1.55">{​{message}}</span></div>
+          <div style="display:flex;gap:11px;padding:13px 15px;border-radius:12px;background:rgba(201,154,78,0.08);border:1px solid rgba(201,154,78,0.22)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DDB36B" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg><span style="font-size:12.5px;color:#D8C29A;line-height:1.55">{​{message}}</span></div>
+          <div style="display:flex;gap:11px;padding:13px 15px;border-radius:12px;background:rgba(199,93,99,0.08);border:1px solid rgba(199,93,99,0.22)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E0888D" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6M9 9l6 6"></path></svg><span style="font-size:12.5px;color:#E8B6B9;line-height:1.55">{​{reason}}</span></div>
+        </div>
+      </div>
+      <!-- buttons -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">BOUTON PRIMAIRE · SECONDAIRE</div>
+        <div style="padding:20px"><div style="text-align:center;height:48px;line-height:48px;border-radius:12px;background:#3E7BFA;color:#fff;font-size:14.5px;font-weight:600;box-shadow:0 8px 22px rgba(62,123,250,0.26);margin-bottom:12px">{​{button_label}}</div><div style="text-align:center;height:48px;line-height:46px;border-radius:12px;border:1px solid rgba(255,255,255,0.13);color:#F4F4F5;font-size:14.5px;font-weight:500">Contacter le support</div></div>
+      </div>
+      <!-- support card -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">CARTE SUPPORT</div>
+        <div style="padding:20px"><div style="display:flex;align-items:center;gap:13px;padding:16px;border-radius:13px;border:1px solid rgba(255,255,255,0.07);background:#131316"><div style="width:40px;height:40px;border-radius:11px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.28);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="1.9"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></div><div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:500">Besoin d'aide&nbsp;?</div><div style="font-size:12px;color:#9A9AA3;margin-top:2px">{​{support_whatsapp}}</div></div><span style="font-size:12.5px;font-weight:500;color:#5E92FF">Aide →</span></div></div>
+      </div>
+      <!-- footer/social/legal -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:16px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:11px 16px;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.12em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">FOOTER · RÉSEAUX · LÉGAL</div>
+        <div style="padding:22px 20px;text-align:center;background:#08080A">
+          <div style="font-size:14px;font-weight:600;letter-spacing:-0.03em;margin-bottom:12px;color:#F4F4F5">ghost<span style="color:#5E5E68">.ma</span></div>
+          <div style="display:flex;justify-content:center;gap:9px;margin-bottom:16px"><span style="width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="#9A9AA3"><path d="M17.5 3h3l-6.6 7.5L21.5 21h-5.9l-4.3-5.6L6.3 21H3.3l7-8L2.8 3h6l3.9 5.1L17.5 3Z"></path></svg></span><span style="width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="3.5"></circle></svg></span><span style="width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:#131316;display:inline-flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9AA3" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></span></div>
+          <p style="font-size:11px;color:#5E5E68;margin:0 0 5px;line-height:1.6">{​{support_email}} · {​{support_whatsapp}}</p>
+          <p style="font-size:11px;color:#4A4A52;margin:0;line-height:1.6">© {​{current_year}} ghost.ma · Conditions · Confidentialité</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ============================== 04 — DESIGN SYSTEM ============================== -->
+  <div style="max-width:1340px;margin:0 auto;padding:96px 48px 0">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <span style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.2em;color:#3E7BFA">04 — FONDATIONS DESIGN</span>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></span>
+      <span style="font-size:13px;color:#5E5E68">Tokens · type · espacement · ombres</span>
+    </div>
+    <p style="font-size:14.5px;color:#9A9AA3;margin:0 0 30px;max-width:620px;line-height:1.6">Les valeurs exactes à reproduire. Tout le système découle de ces tokens.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px">
+
+      <!-- COLORS -->
+      <div style="grid-column:1/-1;border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 20px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.13em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">COULEURS</div>
+        <div style="padding:24px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">
+          <div><div style="height:58px;border-radius:11px;background:#09090B;border:1px solid rgba(255,255,255,0.1)"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Canvas</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#09090B</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#0C0C0F;border:1px solid rgba(255,255,255,0.1)"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Surface email</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#0C0C0F</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#131316;border:1px solid rgba(255,255,255,0.1)"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Carte interne</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#131316</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#08080A;border:1px solid rgba(255,255,255,0.1)"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Footer</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#08080A</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#3E7BFA"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Accent</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#3E7BFA</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#5E92FF"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Accent clair</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#5E92FF</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#F4F4F5"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Texte</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#F4F4F5</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#9A9AA3"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Atténué</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#9A9AA3</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#5E5E68"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Discret</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#5E5E68</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#3F9E78"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Succès</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#3F9E78</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#C99A4E"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Avertissement</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#C99A4E</div></div>
+          <div><div style="height:58px;border-radius:11px;background:#C75D63"></div><div style="margin-top:9px;font-size:12px;color:#F4F4F5">Erreur</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#5E5E68">#C75D63</div></div>
+        </div>
+      </div>
+
+      <!-- TYPOGRAPHY -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 20px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.13em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">TYPOGRAPHIE · GEIST</div>
+        <div style="padding:24px 20px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px"><span style="font-size:27px;font-weight:600;letter-spacing:-0.032em">Titre email</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;text-align:right">27 / 600<br>-0.032em</span></div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px"><span style="font-size:18px;font-weight:600;letter-spacing:-0.03em">Logo / section</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;text-align:right">18 / 600</span></div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px"><span style="font-size:15.5px;color:#9A9AA3">Sous-titre &amp; corps</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;text-align:right">15–15.5 / 400<br>line 1.64</span></div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.13em;color:#5E5E68">LABELS MONO</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;text-align:right">11 / 0.13em<br>Geist Mono</span></div>
+        </div>
+      </div>
+
+      <!-- SPACING -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 20px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.13em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">ESPACEMENT · 4px base</div>
+        <div style="padding:24px 20px;display:flex;flex-direction:column;gap:13px">
+          <div style="display:flex;align-items:center;gap:14px"><div style="height:14px;width:8px;background:#3E7BFA;border-radius:3px"></div><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3">8 · gap interne icône</span></div>
+          <div style="display:flex;align-items:center;gap:14px"><div style="height:14px;width:14px;background:#3E7BFA;border-radius:3px"></div><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3">14 · padding cartes</span></div>
+          <div style="display:flex;align-items:center;gap:14px"><div style="height:14px;width:18px;background:#3E7BFA;border-radius:3px"></div><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3">18 · padding ligne</span></div>
+          <div style="display:flex;align-items:center;gap:14px"><div style="height:14px;width:26px;background:#3E7BFA;border-radius:3px"></div><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3">26 · entre blocs</span></div>
+          <div style="display:flex;align-items:center;gap:14px"><div style="height:14px;width:40px;background:#3E7BFA;border-radius:3px"></div><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3">40 · padding latéral desktop</span></div>
+          <div style="display:flex;align-items:center;gap:14px"><div style="height:14px;width:20px;background:#5E5E68;border-radius:3px"></div><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#9A9AA3">20 · padding latéral mobile</span></div>
+        </div>
+      </div>
+
+      <!-- CORNER RADIUS -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 20px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.13em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">RAYON DES COINS</div>
+        <div style="padding:24px 20px;display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end">
+          <div style="text-align:center"><div style="width:52px;height:52px;background:#131316;border:1px solid rgba(255,255,255,0.12);border-radius:9px"></div><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;margin-top:8px">9 badge int.</div></div>
+          <div style="text-align:center"><div style="width:52px;height:52px;background:#131316;border:1px solid rgba(255,255,255,0.12);border-radius:12px"></div><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;margin-top:8px">12 bouton</div></div>
+          <div style="text-align:center"><div style="width:52px;height:52px;background:#131316;border:1px solid rgba(255,255,255,0.12);border-radius:14px"></div><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;margin-top:8px">14 carte</div></div>
+          <div style="text-align:center"><div style="width:52px;height:52px;background:#131316;border:1px solid rgba(255,255,255,0.12);border-radius:20px"></div><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;margin-top:8px">20 email</div></div>
+          <div style="text-align:center"><div style="width:52px;height:52px;background:#131316;border:1px solid rgba(255,255,255,0.12);border-radius:999px"></div><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#5E5E68;margin-top:8px">999 badge</div></div>
+        </div>
+      </div>
+
+      <!-- SHADOWS -->
+      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 20px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.13em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">OMBRES</div>
+        <div style="padding:30px 20px;display:flex;gap:24px;align-items:center;justify-content:center">
+          <div style="text-align:center"><div style="width:80px;height:54px;background:#131316;border-radius:12px;box-shadow:0 8px 24px rgba(62,123,250,0.28)"></div><div style="font-family:'Geist Mono',monospace;font-size:10px;color:#5E5E68;margin-top:10px;max-width:96px">CTA<br>0 8 24 accent .28</div></div>
+          <div style="text-align:center"><div style="width:80px;height:54px;background:#0C0C0F;border:1px solid rgba(255,255,255,0.08);border-radius:12px;box-shadow:0 34px 80px rgba(0,0,0,0.6)"></div><div style="font-family:'Geist Mono',monospace;font-size:10px;color:#5E5E68;margin-top:10px;max-width:96px">Email<br>0 34 80 noir .6</div></div>
+        </div>
+      </div>
+
+      <!-- ICONS -->
+      <div style="grid-column:1/-1;border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#0C0C0F;overflow:hidden">
+        <div style="padding:13px 20px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.13em;color:#5E5E68;border-bottom:1px solid rgba(255,255,255,0.06)">JEU D'ICÔNES · trait 1.8–2.2 · conteneur 60px</div>
+        <div style="padding:28px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:24px;text-align:center">
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.8"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5l-8-3Z"></path><path d="m9 12 2 2 4-4"></path></svg></div><span style="font-size:12px;color:#9A9AA3">Compte</span></div>
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2.5"></rect><path d="M3 10h18"></path></svg></div><span style="font-size:12px;color:#9A9AA3">Paiement</span></div>
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.9"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"></path><path d="m3 8 9 5 9-5M12 13v8"></path></svg></div><span style="font-size:12px;color:#9A9AA3">Livraison</span></div>
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg></div><span style="font-size:12px;color:#9A9AA3">Succès</span></div>
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(201,154,78,0.12);border:1px solid rgba(201,154,78,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#DDB36B" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg></div><span style="font-size:12px;color:#9A9AA3">Alerte</span></div>
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(199,93,99,0.12);border:1px solid rgba(199,93,99,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#E0888D" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6M9 9l6 6"></path></svg></div><span style="font-size:12px;color:#9A9AA3">Erreur</span></div>
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"></path></svg></div><span style="font-size:12px;color:#9A9AA3">Info</span></div>
+          <div><div style="width:56px;height:56px;border-radius:15px;background:rgba(63,158,120,0.12);border:1px solid rgba(63,158,120,0.28);display:flex;align-items:center;justify-content:center;margin:0 auto 11px"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#6FC2A0" stroke-width="1.9"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg></div><span style="font-size:12px;color:#9A9AA3">Support</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- HANDOFF -->
+    <div style="margin-top:40px;border:1px solid rgba(62,123,250,0.2);border-radius:18px;background:rgba(62,123,250,0.05);padding:26px 30px;display:flex;gap:16px;align-items:flex-start">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.9" style="flex-shrink:0;margin-top:2px"><path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16"></path></svg>
+      <div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:7px">Handoff vers Claude Code</div>
+        <p style="font-size:13.5px;color:#9A9AA3;margin:0 0 8px;line-height:1.65;max-width:820px">Chaque bloc est piloté par token et autonome — changez l'icône héro, la couleur du badge/bannière et n'importe quel <span style="font-family:'Geist Mono',monospace;color:#5E92FF">{​{placeholder}}</span> sans toucher à la mise en page. À reconstruire en MJML / React Email&nbsp;: un seul wrapper 600&nbsp;px, padding latéral 40&nbsp;px (20&nbsp;px en mobile), corps <span style="font-family:'Geist Mono',monospace;color:#9A9AA3">#0C0C0F</span> sur canvas <span style="font-family:'Geist Mono',monospace;color:#9A9AA3">#09090B</span>, Geist avec repli system-ui.</p>
+        <p style="font-size:13px;color:#5E5E68;margin:0;line-height:1.6;max-width:820px">Le guide d'implémentation Markdown complet (hiérarchie des composants, mapping email→modèle, variables dynamiques, comportement responsive) est livré séparément dans le dossier <span style="font-family:'Geist Mono',monospace;color:#9A9AA3">handoff/</span>.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

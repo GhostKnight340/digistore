@@ -1,0 +1,345 @@
+// Prisma schema for the ghost.ma digital store.
+//
+// Supabase/PostgreSQL is the production source of truth. Status fields remain
+// strings so the TypeScript unions in src/lib/types.ts define the allowed set.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Product {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  category         String
+  description      String   @default("")
+  shortDescription String?
+  longDescription  String?
+  instructions     String?
+  brand            String?
+  priceMad         Int
+  region           String
+  deliveryType     String
+  imageUrl         String?
+  featured         Boolean  @default(false)
+  active           Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  categoryRecord Category? @relation(fields: [category], references: [id])
+  digitalCodes   DigitalCode[]
+  orderItems     OrderItem[]
+  deliveredCodes DeliveredCode[]
+  media          ProductMedia[]
+  variants       ProductVariant[]
+
+  @@index([active, sortOrder])
+  @@index([category, active])
+}
+
+model Category {
+  id            String   @id
+  slug          String   @unique
+  name          String
+  description   String   @default("")
+  tagline       String   @default("")
+  gradient      String   @default("from-[#1b2838] to-[#2a475e]")
+  icon          String   @default("")
+  iconUrl       String?
+  coverImageUrl String?
+  accentColor   String   @default("#3e7bfa")
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  products Product[]
+}
+
+model ProductMedia {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  alt       String   @default("")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model ProductVariant {
+  id               String   @id @default(cuid())
+  productId        String
+  name             String
+  priceMad         Int
+  faceValue        Float?
+  faceCurrency     String   @default("MAD")
+  stockControl     String   @default("manual")
+  stockMode        String   @default("automatic")
+  supplierCost     Float?
+  supplierCurrency String   @default("MAD")
+  active           Boolean  @default(true)
+  featured         Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  digitalCodes DigitalCode[]
+  orderItems   OrderItem[]
+
+  @@index([productId])
+  @@index([productId, active])
+}
+
+model DigitalCode {
+  id              String    @id @default(cuid())
+  productId       String
+  variantId       String?
+  code            String
+  // status: "unused" | "reserved" | "used" | "disabled"
+  status          String    @default("unused")
+  assignedOrderId String?
+  reservedAt      DateTime?
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product        Product         @relation(fields: [productId], references: [id])
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  deliveredCodes DeliveredCode[]
+
+  @@unique([productId, code])
+  @@index([productId, status])
+  @@index([variantId, status])
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  customerId    String?
+  customerName  String
+  customerEmail String
+  // status: "pending_payment" | "payment_submitted" | "payment_confirmed"
+  //       | "payment_issue" | "rejected" | "delivered" | "refunded" | "cancelled"
+  status        String   @default("pending_payment")
+  paymentMethod String
+  totalMad      Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items          OrderItem[]
+  deliveredCodes DeliveredCode[]
+  emailLogs      EmailLog[]
+  paymentProof   PaymentProof?
+  paymentEvents  PaymentEvent[]
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([customerEmail])
+  @@index([createdAt])
+  @@index([paymentMethod])
+  @@index([paymentMethod, createdAt])
+}
+
+model Customer {
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String    @unique
+  phone                String?
+  image                String?
+  googleId             String?   @unique
+  authProvider         String?
+  passwordHash         String?
+  emailVerified        Boolean   @default(false)
+  emailVerifiedAt      DateTime?
+  lastLoginAt          DateTime?
+  lastPasswordChangeAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  firstName            String?
+  lastName             String?
+
+  orders Order[]
+  emailLogs EmailLog[]
+  authTokens AuthToken[]
+
+  @@index([updatedAt])
+  @@index([emailVerified])
+}
+
+model AuthToken {
+  id         String    @id @default(cuid())
+  customerId String
+  // type: "email_verification" | "password_reset"
+  type       String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, type])
+  @@index([expiresAt])
+}
+
+model OrderItem {
+  id           String @id @default(cuid())
+  orderId      String
+  productId    String
+  variantId    String?
+  quantity     Int
+  unitPriceMad Int
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id])
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  deliveredCodes DeliveredCode[]
+
+  @@index([variantId])
+}
+
+model DeliveredCode {
+  id            String   @id @default(cuid())
+  orderId       String
+  orderItemId   String
+  productId     String
+  digitalCodeId String?
+  manualCode    String?
+  deliveredAt   DateTime @default(now())
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id])
+  digitalCode DigitalCode? @relation(fields: [digitalCodeId], references: [id])
+
+  @@index([orderId])
+  @@unique([digitalCodeId])
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  orderId   String?
+  customerId String?
+  // type: "order_received" | "payment_submitted" | "payment_confirmed"
+  //      | "payment_rejected" | "payment_issue" | "code_delivered"
+  type      String
+  templateKey String?
+  recipient String
+  subject   String
+  body      String
+  html      String   @default("")
+  text      String   @default("")
+  provider  String   @default("simulation")
+  providerMessageId String?
+  status    String   @default("simulated")
+  errorMessage String?
+  manuallyEdited Boolean @default(false)
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([customerId])
+  @@index([status])
+  @@index([templateKey])
+}
+
+// Customer-uploaded payment proof (PNG / JPG / JPEG / PDF).
+// Stored as base64 in PostgreSQL until object storage is configured.
+model PaymentProof {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  fileName   String
+  mimeType   String
+  data       String   // base64-encoded file content
+  uploadedAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([uploadedAt])
+}
+
+// Audit trail for payment lifecycle events.
+model PaymentEvent {
+  id         String   @id @default(cuid())
+  orderId    String
+  type       String   // "status_change" | "proof_uploaded" | "admin_note"
+  fromStatus String?
+  toStatus   String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+// Bank account for bank-transfer payment method.
+model Bank {
+  id            String   @id @default(cuid())
+  name          String
+  accountHolder String
+  accountNumber String   @default("")
+  rib           String   @default("")
+  iban          String   @default("")
+  swift         String   @default("")
+  instructions  String   @default("")
+  enabled       Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// USDT wallet configuration (TRC20 / BEP20).
+model CryptoWallet {
+  id           String   @id @default(cuid())
+  coin         String   @default("USDT")
+  network      String   // "TRC20" | "BEP20"
+  address      String
+  label        String   @default("")
+  instructions String   @default("")
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Per-method configuration (enabled, proof required, method-specific fields).
+model PaymentMethodConfig {
+  id            String   @id @default(cuid())
+  method        String   @unique // "bank" | "usdt" | "paypal" | "card"
+  enabled       Boolean  @default(true)
+  proofRequired Boolean  @default(true)
+  paypalEmail   String   @default("")
+  cardMessage   String   @default("Paiement par carte bientôt disponible.")
+  instructions  String   @default("")
+  updatedAt     DateTime @default(now()) @updatedAt
+}
+
+// Global support contact info.
+model SupportConfig {
+  id             String   @id @default(cuid())
+  whatsappNumber String   @default("+212 600 000 000")
+  supportEmail   String   @default("support@ghost.ma")
+  instructions   String   @default("")
+  updatedAt      DateTime @default(now()) @updatedAt
+}
+
+model StoreSetting {
+  id        String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
