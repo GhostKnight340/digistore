@@ -293,16 +293,7 @@ function brandedEmailHtml(
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 620px;">
             <tr>
               <td style="padding: 0 0 18px;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                  <tr>
-                    <td style="width: 36px; height: 36px; vertical-align: middle;">
-                      <img src="${escapeHtml(logoUrl)}" width="36" height="36" alt="ghost.ma" style="display: block; width: 36px; height: 36px; border: 0; border-radius: 10px;" />
-                    </td>
-                    <td style="padding-left: 12px; color: #ffffff; font-family: Arial, sans-serif; font-size: 20px; font-weight: 800;">
-                      ghost.ma
-                    </td>
-                  </tr>
-                </table>
+                <img src="${escapeHtml(logoUrl)}" width="158" height="36" alt="ghost.ma" style="display: block; width: 158px; height: 36px; border: 0;" />
               </td>
             </tr>
             <tr>
