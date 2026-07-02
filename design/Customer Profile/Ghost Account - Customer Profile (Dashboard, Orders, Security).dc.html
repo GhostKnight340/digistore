@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:#08090B;color:#F3F4F7;font-family:'Geist',-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5}
+  input{font-family:inherit}
+  ::placeholder{color:#5A606D}
+  ::selection{background:rgba(62,123,250,0.22);color:#fff}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .acct-grid{display:grid;grid-template-columns:264px 1fr;gap:26px;align-items:start}
+  .acct-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .acct-navlinks{display:flex}
+  .acct-search{display:flex}
+  .acct-mobtabs{display:none}
+  .acct-foot{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:32px}
+  .frame.is-mobile .acct-grid{grid-template-columns:1fr;gap:18px}
+  .frame.is-mobile .acct-3{grid-template-columns:1fr}
+  .frame.is-mobile .acct-navlinks{display:none}
+  .frame.is-mobile .acct-search{display:none}
+  .frame.is-mobile .sidebar-nav{display:none}
+  .frame.is-mobile .acct-mobtabs{display:flex}
+  .frame.is-mobile .acct-foot{grid-template-columns:1fr 1fr;gap:24px}
+  .frame.is-mobile .acct-pad{padding:22px 18px !important}
+  .frame.is-mobile .acct-h1{font-size:26px !important}
+  @media(max-width:860px){
+    .acct-grid{grid-template-columns:1fr}
+    .acct-3{grid-template-columns:1fr}
+    .acct-navlinks,.acct-search,.sidebar-nav{display:none}
+    .acct-mobtabs{display:flex}
+    .acct-foot{grid-template-columns:1fr 1fr}
+  }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#08090B;padding:26px 20px 60px;overflow-x:hidden">
+
+  <!-- CONTROL STRIP -->
+  <div style="max-width:1200px;margin:0 auto 22px;display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+    <div style="display:inline-flex;align-items:center;gap:2px;padding:4px;background:#121319;border:1px solid rgba(255,255,255,0.08);border-radius:999px">
+      <button onClick="{{ setDesktop }}" style="{{ deskTab }}">Desktop</button>
+      <button onClick="{{ setMobile }}" style="{{ mobTab }}">Mobile</button>
+    </div>
+    <div style="display:inline-flex;align-items:center;gap:2px;padding:4px;background:#121319;border:1px solid rgba(255,255,255,0.08);border-radius:999px">
+      <button onClick="{{ setPopulated }}" style="{{ popTab }}">Commandes remplies</button>
+      <button onClick="{{ setEmpty }}" style="{{ emptyTab }}">Vide</button>
+    </div>
+    <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#4a4f5a;margin-left:4px">écran actif · {{ viewLabel }}</span>
+  </div>
+
+  <!-- ============ BROWSER PAGE ============ -->
+  <div class="frame {{ frameClass }}" style="width:100%;max-width:{{ frameMax }};margin:0 auto;background:#0A0B0D;border:1px solid rgba(255,255,255,0.08);border-radius:22px;overflow:hidden;box-shadow:0 50px 130px -40px rgba(0,0,0,0.85);background-image:radial-gradient(900px 460px at 82% -10%, rgba(62,123,250,0.07), transparent 60%)">
+
+    <!-- NAVBAR -->
+    <header style="position:sticky;top:0;z-index:40;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(10,11,13,0.78);border-bottom:1px solid rgba(255,255,255,0.07)">
+      <div style="padding:0 24px;height:64px;display:flex;align-items:center;gap:22px">
+        <div style="display:flex;align-items:center;gap:10px;cursor:pointer;flex-shrink:0">
+          <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(145deg,#3E7BFA,#2B5FD9);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(62,123,250,0.35)"><div style="width:11px;height:11px;border:2px solid #fff;border-radius:3px"></div></div>
+          <span style="font-size:18px;font-weight:600;letter-spacing:-0.02em">ghost<span style="color:#5E92FF">.ma</span></span>
+        </div>
+        <div class="acct-search" style="flex:1;max-width:400px;align-items:center;gap:10px;height:38px;padding:0 13px;background:#121319;border:1px solid rgba(255,255,255,0.07);border-radius:10px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#646A77" stroke-width="2" style="flex-shrink:0"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.6" y2="16.6"></line></svg>
+          <input placeholder="Rechercher un produit numérique…" style="flex:1;background:transparent;border:none;outline:none;color:#F3F4F7;font-size:13.5px">
+          <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#646A77;border:1px solid rgba(255,255,255,0.09);border-radius:5px;padding:2px 6px">Ctrl K</span>
+        </div>
+        <nav class="acct-navlinks" style="align-items:center;gap:22px;flex-shrink:0;margin-left:auto">
+          <span style="font-size:14px;color:#9A9FAB;cursor:pointer">Catalogue</span>
+          <span style="font-size:14px;color:#9A9FAB;cursor:pointer">Suivi commande</span>
+          <span style="font-size:14px;color:#9A9FAB;cursor:pointer">Support</span>
+        </nav>
+        <div style="display:flex;align-items:center;gap:14px;flex-shrink:0;margin-left:auto">
+          <div style="position:relative;cursor:pointer">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#9A9FAB" stroke-width="1.8"><circle cx="9" cy="21" r="1"></circle><circle cx="18" cy="21" r="1"></circle><path d="M2 3h2.5l2.2 12.4a1.5 1.5 0 0 0 1.5 1.2h8.8a1.5 1.5 0 0 0 1.5-1.2L21 7H6"></path></svg>
+            <span style="position:absolute;top:-6px;right:-7px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#3E7BFA;color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #0A0B0D">1</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;height:38px;padding:0 12px 0 4px;background:#121319;border:1px solid rgba(255,255,255,0.09);border-radius:999px;cursor:pointer">
+            <span style="width:28px;height:28px;border-radius:50%;background:linear-gradient(145deg,#3E7BFA,#2B5FD9);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#fff">Z</span>
+            <span style="font-size:13px;font-weight:500;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Zakariya F.</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#646A77" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- BODY -->
+    <div style="padding:34px 30px 44px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:26px">
+        <div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.18em;color:#5E92FF;text-transform:uppercase;margin-bottom:9px">Espace client</div>
+          <h1 class="acct-h1" style="font-size:33px;font-weight:600;letter-spacing:-0.03em;margin:0">{{ pageTitle }}</h1>
+          <p style="font-size:14.5px;color:#9A9FAB;margin:7px 0 0">{{ pageSub }}</p>
+        </div>
+      </div>
+
+      <!-- mobile tab bar -->
+      <div class="acct-mobtabs" style="gap:6px;margin-bottom:20px;padding:4px;background:#121319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow-x:auto">
+        <button onClick="{{ goDash }}" style="{{ mtabDash }}">Tableau de bord</button>
+        <button onClick="{{ goOrders }}" style="{{ mtabOrders }}">Commandes</button>
+        <button onClick="{{ goSecurity }}" style="{{ mtabSecurity }}">Sécurité</button>
+      </div>
+
+      <div class="acct-grid">
+
+        <!-- ============ SIDEBAR ============ -->
+        <aside class="sidebar-nav" style="position:sticky;top:88px;display:flex;flex-direction:column;gap:18px">
+          <!-- identity card -->
+          <div style="background:linear-gradient(160deg,#151b28,#0f1218);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:20px;position:relative;overflow:hidden">
+            <div style="position:absolute;top:-40px;right:-40px;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,rgba(62,123,250,0.22),transparent 65%);filter:blur(14px);pointer-events:none"></div>
+            <div style="position:relative;display:flex;align-items:center;gap:12px">
+              <span style="width:46px;height:46px;flex-shrink:0;border-radius:14px;background:linear-gradient(145deg,#3E7BFA,#2B5FD9);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600;color:#fff;box-shadow:0 6px 18px rgba(62,123,250,0.4)">Z</span>
+              <div style="min-width:0">
+                <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Zakariya Finnaoui</div>
+                <div style="font-size:12.5px;color:#8891a3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ziko.you13@gmail.com</div>
+              </div>
+            </div>
+            <div style="position:relative;display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:5px 11px;border-radius:999px;background:rgba(47,191,113,0.12);border:1px solid rgba(47,191,113,0.28)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2fbf71" stroke-width="2.6"><path d="M20 6L9 17l-5-5"/></svg>
+              <span style="font-size:12px;font-weight:600;color:#43cf86">Compte vérifié</span>
+            </div>
+          </div>
+
+          <!-- nav -->
+          <nav style="display:flex;flex-direction:column;gap:4px">
+            <button onClick="{{ goDash }}" style="{{ navDash }}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+              <span>Tableau de bord</span>
+            </button>
+            <button onClick="{{ goOrders }}" style="{{ navOrders }}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              <span>Commandes</span>
+              <sc-if value="{{ hasOrders }}" hint-placeholder-val="{{ true }}"><span style="margin-left:auto;font-family:'Geist Mono',monospace;font-size:11px;font-weight:500;color:#8891a3;background:rgba(255,255,255,0.06);border-radius:6px;padding:1px 7px">{{ ordersCount }}</span></sc-if>
+            </button>
+            <button onClick="{{ goSecurity }}" style="{{ navSecurity }}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+              <span>Sécurité</span>
+            </button>
+          </nav>
+
+          <div style="height:1px;background:rgba(255,255,255,0.06);margin:2px 0"></div>
+
+          <button style="display:flex;align-items:center;gap:11px;height:44px;padding:0 14px;border-radius:11px;border:1px solid rgba(240,97,109,0.22);background:rgba(240,97,109,0.06);color:#f0616d;font-size:14px;font-weight:500;font-family:inherit;cursor:pointer;transition:background .16s ease" style-hover="background:rgba(240,97,109,0.12)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+            Déconnexion
+          </button>
+        </aside>
+
+        <!-- ============ MAIN CONTENT ============ -->
+        <main style="display:flex;flex-direction:column;gap:20px">
+
+          <!-- =========== DASHBOARD =========== -->
+          <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:20px;animation:fadeUp .35s ease both">
+
+            <!-- info cards -->
+            <div class="acct-3">
+              <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0E0F14);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#646A77" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.14em;color:#646A77">NOM</span></div>
+                <div style="font-size:16px;font-weight:600;letter-spacing:-0.01em">Zakariya Finnaoui</div>
+                <div style="font-size:12.5px;color:#8891a3;margin-top:2px">GhostKnight</div>
+              </div>
+              <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0E0F14);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#646A77" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.14em;color:#646A77">E-MAIL</span></div>
+                <div style="font-size:16px;font-weight:600;letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ziko.you13@gmail.com</div>
+                <div style="font-size:12.5px;color:#8891a3;margin-top:2px">Adresse principale</div>
+              </div>
+              <div class="acct-pad" style="background:linear-gradient(180deg,#101a14,#0E140F);border:1px solid rgba(47,191,113,0.22);border-radius:16px;padding:20px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2fbf71" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.14em;color:#5aa87a">STATUT</span></div>
+                <div style="font-size:16px;font-weight:600;letter-spacing:-0.01em;color:#43cf86">Vérifié</div>
+                <div style="font-size:12.5px;color:#5aa87a;margin-top:2px">E-mail confirmé</div>
+              </div>
+            </div>
+
+            <!-- personal info -->
+            <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:26px">
+              <div style="display:flex;align-items:center;gap:11px;margin-bottom:4px">
+                <span style="width:32px;height:32px;border-radius:9px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.24);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>
+                <h2 style="font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0">Informations personnelles</h2>
+              </div>
+              <p style="font-size:13.5px;color:#8891a3;margin:0 0 22px;padding-left:43px">Ajoutez un numéro pour sécuriser vos commandes.</p>
+              <div style="max-width:420px">
+                <label style="display:block;font-size:13px;font-weight:500;color:#C4C9D4;margin-bottom:8px">Numéro de téléphone</label>
+                <div style="display:flex;align-items:center;height:48px;background:#0C0D11;border:1px solid rgba(255,255,255,0.10);border-radius:12px;padding:0 14px;transition:border-color .18s ease,box-shadow .18s ease" style-focus-within="border-color:#3E7BFA;box-shadow:0 0 0 3px rgba(62,123,250,0.16)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#646A77" stroke-width="2" style="flex-shrink:0"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8.1 9.6a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg>
+                  <input value="{{ phone }}" onInput="{{ onPhone }}" placeholder="+212 6 00 00 00 00" style="flex:1;height:100%;background:transparent;border:none;outline:none;color:#F3F4F7;font-size:14.5px;padding:0 11px">
+                </div>
+                <button onClick="{{ savePhone }}" style="{{ saveStyle }}" style-hover="{{ saveHover }}">
+                  <sc-if value="{{ saving }}" hint-placeholder-val="{{ false }}"><span style="width:15px;height:15px;border:2.2px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite"></span></sc-if>
+                  <span>{{ saveLabel }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- recent orders -->
+            <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:26px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px">
+                <div>
+                  <h2 style="font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0 0 4px">Commandes récentes</h2>
+                  <p style="font-size:13.5px;color:#8891a3;margin:0">Vos derniers achats liés à ce compte.</p>
+                </div>
+                <button onClick="{{ goOrders }}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 15px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:#171922;color:#F3F4F7;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:border-color .16s ease" style-hover="border-color:rgba(255,255,255,0.24)">Tout voir<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+              </div>
+
+              <sc-if value="{{ hasOrders }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ recentOrders }}" as="o" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:13px;background:#0C0D11;border:1px solid rgba(255,255,255,0.06);transition:border-color .16s ease" style-hover="border-color:rgba(255,255,255,0.14)">
+                    <span style="width:44px;height:44px;flex-shrink:0;border-radius:11px;background:#15171F;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,0.04) 0 6px,transparent 6px 12px);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.08em;color:#5A6070">{{ o.plat }}</span>
+                    <div style="min-width:0;flex:1">
+                      <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ o.product }}</div>
+                      <div style="font-size:12px;color:#8891a3;margin-top:2px;font-family:'Geist Mono',monospace">{{ o.ref }} · {{ o.date }}</div>
+                    </div>
+                    <span style="{{ o.badgeStyle }}">{{ o.status }}</span>
+                    <div style="font-size:14px;font-weight:600;font-family:'Geist Mono',monospace;white-space:nowrap">{{ o.amount }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ noOrders }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:34px 20px">
+                <span style="width:60px;height:60px;border-radius:16px;background:#0C0D11;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:18px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.8"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+                <div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucune commande pour le moment</div>
+                <div style="font-size:13.5px;color:#8891a3;max-width:300px;line-height:1.55;margin-bottom:20px">Vos achats apparaîtront ici. Parcourez le catalogue pour recevoir votre premier code.</div>
+                <button style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;background:linear-gradient(180deg,#4d86ff,#3E7BFA);box-shadow:0 8px 22px -6px rgba(62,123,250,0.55);transition:transform .15s ease" style-hover="transform:translateY(-1px)">Parcourir le catalogue<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+              </div>
+              </sc-if>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- =========== ORDERS =========== -->
+          <sc-if value="{{ isOrders }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:20px;animation:fadeUp .35s ease both">
+            <sc-if value="{{ hasOrders }}" hint-placeholder-val="{{ true }}">
+            <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:22px 26px">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:20px">
+                <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:9px;height:42px;padding:0 13px;background:#0C0D11;border:1px solid rgba(255,255,255,0.09);border-radius:11px">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#646A77" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.6" y2="16.6"></line></svg>
+                  <input placeholder="Rechercher une commande…" style="flex:1;background:transparent;border:none;outline:none;color:#F3F4F7;font-size:13.5px">
+                </div>
+                <div style="display:flex;gap:6px;padding:4px;background:#0C0D11;border:1px solid rgba(255,255,255,0.08);border-radius:11px">
+                  <button style="height:34px;padding:0 14px;border:none;border-radius:8px;background:#3E7BFA;color:#fff;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer">Toutes</button>
+                  <button style="height:34px;padding:0 14px;border:none;border-radius:8px;background:transparent;color:#9A9FAB;font-size:12.5px;font-weight:500;font-family:inherit;cursor:pointer">Livrées</button>
+                  <button style="height:34px;padding:0 14px;border:none;border-radius:8px;background:transparent;color:#9A9FAB;font-size:12.5px;font-weight:500;font-family:inherit;cursor:pointer">En cours</button>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ allOrders }}" as="o" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:13px;background:#0C0D11;border:1px solid rgba(255,255,255,0.06);transition:border-color .16s ease" style-hover="border-color:rgba(255,255,255,0.14)">
+                    <span style="width:46px;height:46px;flex-shrink:0;border-radius:11px;background:#15171F;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,0.04) 0 6px,transparent 6px 12px);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.08em;color:#5A6070">{{ o.plat }}</span>
+                    <div style="min-width:0;flex:1">
+                      <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ o.product }}</div>
+                      <div style="font-size:12px;color:#8891a3;margin-top:2px;font-family:'Geist Mono',monospace">{{ o.ref }} · {{ o.date }}</div>
+                    </div>
+                    <span style="{{ o.badgeStyle }}">{{ o.status }}</span>
+                    <div style="font-size:14px;font-weight:600;font-family:'Geist Mono',monospace;white-space:nowrap;min-width:74px;text-align:right">{{ o.amount }}</div>
+                    <button style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:9px;border:1px solid rgba(62,123,250,0.3);background:rgba(62,123,250,0.10);color:#5E92FF;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .16s ease" style-hover="background:rgba(62,123,250,0.18)">Voir le code</button>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+            <sc-if value="{{ noOrders }}" hint-placeholder-val="{{ false }}">
+            <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:26px">
+              <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:46px 20px">
+                <span style="width:66px;height:66px;border-radius:18px;background:#0C0D11;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:20px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="1.7"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+                <div style="font-size:16px;font-weight:600;margin-bottom:7px">Aucune commande pour le moment</div>
+                <div style="font-size:13.5px;color:#8891a3;max-width:320px;line-height:1.55;margin-bottom:22px">Dès que vous achetez un code, il apparaît ici avec son statut de livraison et son reçu.</div>
+                <button style="display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 22px;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;background:linear-gradient(180deg,#4d86ff,#3E7BFA);box-shadow:0 8px 22px -6px rgba(62,123,250,0.55);transition:transform .15s ease" style-hover="transform:translateY(-1px)">Parcourir le catalogue<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+              </div>
+            </div>
+            </sc-if>
+          </div>
+          </sc-if>
+
+          <!-- =========== SECURITY =========== -->
+          <sc-if value="{{ isSecurity }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:20px;animation:fadeUp .35s ease both">
+            <!-- password -->
+            <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:26px">
+              <div style="display:flex;align-items:center;gap:11px;margin-bottom:4px">
+                <span style="width:32px;height:32px;border-radius:9px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.24);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+                <h2 style="font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0">Mot de passe</h2>
+              </div>
+              <p style="font-size:13.5px;color:#8891a3;margin:0 0 22px;padding-left:43px">Choisissez un mot de passe fort et unique.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:560px">
+                <div style="grid-column:1/-1">
+                  <label style="display:block;font-size:13px;font-weight:500;color:#C4C9D4;margin-bottom:8px">Mot de passe actuel</label>
+                  <input type="password" placeholder="••••••••" style="width:100%;height:46px;background:#0C0D11;border:1px solid rgba(255,255,255,0.10);border-radius:11px;padding:0 14px;color:#F3F4F7;font-size:14px;outline:none" style-focus="border-color:#3E7BFA;box-shadow:0 0 0 3px rgba(62,123,250,0.16)">
+                </div>
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:500;color:#C4C9D4;margin-bottom:8px">Nouveau mot de passe</label>
+                  <input type="password" placeholder="Min. 8 caractères" style="width:100%;height:46px;background:#0C0D11;border:1px solid rgba(255,255,255,0.10);border-radius:11px;padding:0 14px;color:#F3F4F7;font-size:14px;outline:none" style-focus="border-color:#3E7BFA;box-shadow:0 0 0 3px rgba(62,123,250,0.16)">
+                </div>
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:500;color:#C4C9D4;margin-bottom:8px">Confirmer</label>
+                  <input type="password" placeholder="Retapez le mot de passe" style="width:100%;height:46px;background:#0C0D11;border:1px solid rgba(255,255,255,0.10);border-radius:11px;padding:0 14px;color:#F3F4F7;font-size:14px;outline:none" style-focus="border-color:#3E7BFA;box-shadow:0 0 0 3px rgba(62,123,250,0.16)">
+                </div>
+              </div>
+              <button style="margin-top:20px;height:44px;padding:0 20px;border:none;border-radius:11px;color:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;background:linear-gradient(180deg,#4d86ff,#3E7BFA);box-shadow:0 8px 22px -6px rgba(62,123,250,0.55);transition:transform .15s ease" style-hover="transform:translateY(-1px)">Mettre à jour le mot de passe</button>
+            </div>
+
+            <!-- 2FA -->
+            <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px 26px">
+              <div style="display:flex;align-items:center;gap:16px">
+                <span style="width:42px;height:42px;flex-shrink:0;border-radius:12px;background:rgba(62,123,250,0.12);border:1px solid rgba(62,123,250,0.24);display:flex;align-items:center;justify-content:center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5E92FF" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/></svg></span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">Authentification à deux facteurs</div>
+                  <div style="font-size:13px;color:#8891a3;margin-top:2px">Ajoutez une couche de protection à la connexion.</div>
+                </div>
+                <span onClick="{{ toggle2fa }}" style="{{ twofaTrack }}"><span style="{{ twofaKnob }}"></span></span>
+              </div>
+            </div>
+
+            <!-- sessions -->
+            <div class="acct-pad" style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:26px">
+              <h2 style="font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0 0 4px">Sessions actives</h2>
+              <p style="font-size:13.5px;color:#8891a3;margin:0 0 20px">Appareils actuellement connectés à votre compte.</p>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:13px;background:#0C0D11;border:1px solid rgba(255,255,255,0.06)">
+                  <span style="width:40px;height:40px;flex-shrink:0;border-radius:11px;background:#15171F;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9A9FAB" stroke-width="1.8"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></span>
+                  <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">Chrome · Windows</div><div style="font-size:12px;color:#8891a3;margin-top:2px">Casablanca, Maroc · Maintenant</div></div>
+                  <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#43cf86;background:rgba(47,191,113,0.12);border:1px solid rgba(47,191,113,0.28);border-radius:999px;padding:4px 11px"><span style="width:6px;height:6px;border-radius:50%;background:#2fbf71"></span>Cet appareil</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:13px;background:#0C0D11;border:1px solid rgba(255,255,255,0.06)">
+                  <span style="width:40px;height:40px;flex-shrink:0;border-radius:11px;background:#15171F;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9A9FAB" stroke-width="1.8"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span>
+                  <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">Safari · iPhone</div><div style="font-size:12px;color:#8891a3;margin-top:2px">Rabat, Maroc · Il y a 3 jours</div></div>
+                  <button style="height:32px;padding:0 13px;border-radius:9px;border:1px solid rgba(240,97,109,0.24);background:rgba(240,97,109,0.06);color:#f0616d;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .16s ease" style-hover="background:rgba(240,97,109,0.12)">Déconnecter</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+        </main>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer style="border-top:1px solid rgba(255,255,255,0.07);padding:36px 30px 30px;background:rgba(12,13,17,0.5)">
+      <div class="acct-foot">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(145deg,#3E7BFA,#2B5FD9);display:flex;align-items:center;justify-content:center"><div style="width:9px;height:9px;border:1.8px solid #fff;border-radius:3px"></div></div>
+            <span style="font-size:15px;font-weight:600">ghost<span style="color:#5E92FF">.ma</span></span>
+          </div>
+          <p style="font-size:13px;color:#8891a3;margin:0;max-width:220px;line-height:1.6">Le moyen le plus simple d'acheter vos produits numériques au Maroc.</p>
+        </div>
+        <div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#646A77;margin-bottom:14px">PRODUITS</div>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:13.5px;color:#9A9FAB"><span style="cursor:pointer">Gaming</span><span style="cursor:pointer">Cartes cadeaux</span><span style="cursor:pointer">Abonnements</span></div>
+        </div>
+        <div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#646A77;margin-bottom:14px">AIDE</div>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:13.5px;color:#9A9FAB"><span style="cursor:pointer">Centre d'aide</span><span style="cursor:pointer">Suivi commande</span><span style="cursor:pointer">Contact</span></div>
+        </div>
+        <div>
+          <div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#646A77;margin-bottom:14px">LÉGAL</div>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:13.5px;color:#9A9FAB"><span style="cursor:pointer">Conditions</span><span style="cursor:pointer">Confidentialité</span><span style="cursor:pointer">Remboursement</span></div>
+        </div>
+      </div>
+      <div style="margin-top:30px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;font-size:12.5px;color:#646A77">
+        <span>© 2026 ghost.ma · Tous droits réservés</span>
+        <span style="display:flex;align-items:center;gap:7px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#646A77" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Paiements sécurisés</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- ============ SPEC / HANDOFF ============ -->
+  <div style="max-width:1200px;margin:56px auto 0;padding:0 4px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <span style="font-family:'Geist Mono',monospace;font-size:11px;font-weight:500;color:#08090B;background:#3E7BFA;border-radius:6px;padding:3px 9px">SPEC</span>
+      <h2 style="font-size:26px;font-weight:600;letter-spacing:-0.02em;margin:0">Système de design & handoff</h2>
+    </div>
+    <p style="font-size:14px;color:#8891a3;margin:0 0 26px;max-width:640px">Référence pour l'implémentation de l'espace client ghost.ma. Aligné sur les composants existants (Karta Store, Ghost Auth).</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+
+      <!-- colors -->
+      <div style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px">Couleurs</div>
+        <div style="display:flex;flex-direction:column;gap:11px;font-family:'Geist Mono',monospace;font-size:12px">
+          <div style="display:flex;align-items:center;gap:11px"><span style="width:26px;height:26px;border-radius:7px;background:#0A0B0D;border:1px solid rgba(255,255,255,0.12)"></span><span style="color:#C4C9D4;flex:1">Fond</span><span style="color:#8891a3">#0A0B0D</span></div>
+          <div style="display:flex;align-items:center;gap:11px"><span style="width:26px;height:26px;border-radius:7px;background:#121319;border:1px solid rgba(255,255,255,0.08)"></span><span style="color:#C4C9D4;flex:1">Surface</span><span style="color:#8891a3">#121319</span></div>
+          <div style="display:flex;align-items:center;gap:11px"><span style="width:26px;height:26px;border-radius:7px;background:#0C0D11;border:1px solid rgba(255,255,255,0.08)"></span><span style="color:#C4C9D4;flex:1">Input / puits</span><span style="color:#8891a3">#0C0D11</span></div>
+          <div style="display:flex;align-items:center;gap:11px"><span style="width:26px;height:26px;border-radius:7px;background:#3E7BFA"></span><span style="color:#C4C9D4;flex:1">Accent</span><span style="color:#8891a3">#3E7BFA</span></div>
+          <div style="display:flex;align-items:center;gap:11px"><span style="width:26px;height:26px;border-radius:7px;background:#5E92FF"></span><span style="color:#C4C9D4;flex:1">Accent clair</span><span style="color:#8891a3">#5E92FF</span></div>
+          <div style="display:flex;align-items:center;gap:11px"><span style="width:26px;height:26px;border-radius:7px;background:#2fbf71"></span><span style="color:#C4C9D4;flex:1">Succès</span><span style="color:#8891a3">#2fbf71</span></div>
+          <div style="display:flex;align-items:center;gap:11px"><span style="width:26px;height:26px;border-radius:7px;background:#f0616d"></span><span style="color:#C4C9D4;flex:1">Danger</span><span style="color:#8891a3">#f0616d</span></div>
+        </div>
+        <div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-family:'Geist Mono',monospace;font-size:12px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#F3F4F7">Texte primaire</span><span style="color:#8891a3">#F3F4F7</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#9A9FAB">Texte secondaire</span><span style="color:#8891a3">#9A9FAB</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#646A77">Texte discret</span><span style="color:#8891a3">#646A77</span></div>
+        </div>
+      </div>
+
+      <!-- typography -->
+      <div style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px">Typographie</div>
+        <div style="font-size:13px;color:#8891a3;font-family:'Geist Mono',monospace;margin-bottom:16px">Geist · Geist Mono (labels, refs, montants)</div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div><div style="font-size:33px;font-weight:600;letter-spacing:-0.03em;line-height:1.1">Titre page</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#646A77;margin-top:3px">33px · 600 · -0.03em</div></div>
+          <div><div style="font-size:17px;font-weight:600;letter-spacing:-0.01em">Titre de carte</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#646A77;margin-top:3px">17px · 600 · -0.01em</div></div>
+          <div><div style="font-size:14.5px">Corps de texte principal</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#646A77;margin-top:3px">14.5px · 400 · 1.5</div></div>
+          <div><div style="font-size:13px;color:#9A9FAB">Texte secondaire / descriptions</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#646A77;margin-top:3px">13px · 400 · #9A9FAB</div></div>
+          <div><div style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#646A77">LABEL · MONO · MAJUSCULE</div><div style="font-family:'Geist Mono',monospace;font-size:11px;color:#646A77;margin-top:3px">11px · 0.14em · uppercase</div></div>
+        </div>
+      </div>
+
+      <!-- spacing + radius -->
+      <div style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px">Espacement & rayons</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-family:'Geist Mono',monospace;font-size:12px;color:#C4C9D4">
+          <div style="display:flex;justify-content:space-between"><span>Padding carte</span><span style="color:#8891a3">26px</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Gap grille contenu</span><span style="color:#8891a3">26px</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Gap entre sections</span><span style="color:#8891a3">20px</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Gap lignes / cartes</span><span style="color:#8891a3">10–16px</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Sidebar</span><span style="color:#8891a3">264px</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Largeur max page</span><span style="color:#8891a3">1200px</span></div>
+        </div>
+        <div style="height:1px;background:rgba(255,255,255,0.06);margin:16px 0"></div>
+        <div style="display:flex;align-items:flex-end;gap:12px">
+          <div style="text-align:center"><span style="display:block;width:44px;height:44px;background:#0C0D11;border:1px solid rgba(255,255,255,0.1);border-radius:11px;margin-bottom:6px"></span><span style="font-family:'Geist Mono',monospace;font-size:10px;color:#8891a3">11px<br>input</span></div>
+          <div style="text-align:center"><span style="display:block;width:44px;height:44px;background:#0C0D11;border:1px solid rgba(255,255,255,0.1);border-radius:13px;margin-bottom:6px"></span><span style="font-family:'Geist Mono',monospace;font-size:10px;color:#8891a3">13px<br>ligne</span></div>
+          <div style="text-align:center"><span style="display:block;width:44px;height:44px;background:#0C0D11;border:1px solid rgba(255,255,255,0.1);border-radius:16px;margin-bottom:6px"></span><span style="font-family:'Geist Mono',monospace;font-size:10px;color:#8891a3">16px<br>carte</span></div>
+          <div style="text-align:center"><span style="display:block;width:44px;height:44px;background:#0C0D11;border:1px solid rgba(255,255,255,0.1);border-radius:18px;margin-bottom:6px"></span><span style="font-family:'Geist Mono',monospace;font-size:10px;color:#8891a3">18px<br>panneau</span></div>
+        </div>
+      </div>
+
+      <!-- buttons -->
+      <div style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px">Boutons</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div><button style="height:44px;padding:0 20px;border:none;border-radius:11px;color:#fff;font-size:14px;font-weight:600;font-family:inherit;background:linear-gradient(180deg,#4d86ff,#3E7BFA);box-shadow:0 8px 22px -6px rgba(62,123,250,0.55)">Primaire</button><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#646A77;margin-top:6px">gradient bleu · 44px · radius 11 · ombre accent</div></div>
+          <div><button style="height:44px;padding:0 20px;border:1px solid rgba(255,255,255,0.12);border-radius:11px;background:#171922;color:#F3F4F7;font-size:14px;font-weight:500;font-family:inherit">Secondaire</button><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#646A77;margin-top:6px">surface-2 · bordure 0.12</div></div>
+          <div><button style="height:34px;padding:0 13px;border:1px solid rgba(62,123,250,0.3);border-radius:9px;background:rgba(62,123,250,0.10);color:#5E92FF;font-size:12.5px;font-weight:600;font-family:inherit">Action bleue</button><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#646A77;margin-top:6px">tint accent · pour lignes</div></div>
+          <div><button style="height:34px;padding:0 13px;border:1px solid rgba(240,97,109,0.24);border-radius:9px;background:rgba(240,97,109,0.06);color:#f0616d;font-size:12.5px;font-weight:600;font-family:inherit">Danger</button><div style="font-family:'Geist Mono',monospace;font-size:10.5px;color:#646A77;margin-top:6px">tint rouge · déconnexion, sessions</div></div>
+        </div>
+      </div>
+
+      <!-- components -->
+      <div style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px">Composants</div>
+        <div style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:#C4C9D4">
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">Navbar</b> — logo, recherche (Ctrl K), liens, panier avec badge, chip compte</span></div>
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">Carte identité</b> — avatar, nom, e-mail, badge vérifié</span></div>
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">Nav latérale</b> — items actifs/inactifs, compteur commandes, déconnexion</span></div>
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">Cartes info</b> — Nom, E-mail, Statut (label mono + valeur)</span></div>
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">Ligne de commande</b> — vignette plateforme, produit, réf, statut, montant</span></div>
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">États vides</b> — icône, message, CTA catalogue</span></div>
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">Formulaires</b> — input 46–48px, focus ring accent</span></div>
+          <div style="display:flex;gap:9px"><span style="color:#5E92FF">›</span><span><b style="font-weight:600">Toggle & pills de statut</b> — 2FA, Livré / En cours / Remboursé</span></div>
+        </div>
+      </div>
+
+      <!-- responsive + handoff -->
+      <div style="background:linear-gradient(180deg,#121319,#0F1015);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px">Responsive & notes Claude Code</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:12.5px;color:#C4C9D4;line-height:1.55">
+          <div><b style="font-weight:600;color:#5E92FF">Breakpoint 860px.</b> La grille <code style="font-family:'Geist Mono',monospace;color:#9A9FAB">264px 1fr</code> passe à une colonne unique.</div>
+          <div><b style="font-weight:600;color:#5E92FF">Nav latérale → onglets.</b> La sidebar est masquée ; une barre d'onglets horizontale scrollable la remplace.</div>
+          <div><b style="font-weight:600;color:#5E92FF">Navbar mobile.</b> Recherche et liens masqués ; logo + panier + chip conservés.</div>
+          <div><b style="font-weight:600;color:#5E92FF">Cartes info & footer.</b> 3→1 colonne (cartes) ; 4→2 colonnes (footer).</div>
+          <div style="height:1px;background:rgba(255,255,255,0.06);margin:4px 0"></div>
+          <div>• Routes suggérées : <code style="font-family:'Geist Mono',monospace;color:#9A9FAB">/compte</code>, <code style="font-family:'Geist Mono',monospace;color:#9A9FAB">/compte/commandes</code>, <code style="font-family:'Geist Mono',monospace;color:#9A9FAB">/compte/securite</code>.</div>
+          <div>• Statuts commande : <code style="font-family:'Geist Mono',monospace;color:#43cf86">Livré</code>, <code style="font-family:'Geist Mono',monospace;color:#f5a524">En cours</code>, <code style="font-family:'Geist Mono',monospace;color:#8891a3">Remboursé</code>.</div>
+          <div>• Conserver la fonctionnalité existante : édition téléphone, tout voir, tri des commandes.</div>
+          <div>• Icônes : stroke lucide 1.7–2, jamais de remplissage lourd.</div>
+          <div>• Transitions : 0.15–0.18s ease sur bordure/transform ; ring focus <code style="font-family:'Geist Mono',monospace;color:#9A9FAB">0 0 0 3px rgba(62,123,250,.16)</code>.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1240,&quot;height&quot;:1400},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;orders&quot;,&quot;security&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;'dashboard'|'orders'|'security'&quot;,&quot;section&quot;:&quot;Écran&quot;},&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;desktop&quot;,&quot;mobile&quot;],&quot;default&quot;:&quot;desktop&quot;,&quot;tsType&quot;:&quot;'desktop'|'mobile'&quot;,&quot;section&quot;:&quot;Aperçu&quot;},&quot;ordersState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;populated&quot;,&quot;empty&quot;],&quot;default&quot;:&quot;populated&quot;,&quot;tsType&quot;:&quot;'populated'|'empty'&quot;,&quot;section&quot;:&quot;Écran&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state = {
+      view: props.view || 'dashboard',
+      device: props.device || 'desktop',
+      orders: props.ordersState || 'populated',
+      phone: '',
+      saving: false,
+      saved: false,
+      twofa: false
+    };
+  }
+
+  savePhone = () => {
+    if(this.state.saving) return;
+    this.setState({ saving:true, saved:false });
+    clearTimeout(this._t);
+    this._t = setTimeout(()=> this.setState({ saving:false, saved:true }), 1300);
+  };
+
+  badge(status){
+    const map = {
+      'Livré':      'color:#43cf86;background:rgba(47,191,113,0.12);border:1px solid rgba(47,191,113,0.26)',
+      'En cours':   'color:#f5a524;background:rgba(245,165,36,0.12);border:1px solid rgba(245,165,36,0.26)',
+      'Remboursé':  'color:#8891a3;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.10)'
+    };
+    return `flex-shrink:0;display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;border-radius:999px;padding:4px 11px;white-space:nowrap;${map[status]||map['Remboursé']}`;
+  }
+
+  renderVals(){
+    const s = this.state;
+    const dash = s.view==='dashboard', orders = s.view==='orders', security = s.view==='security';
+    const hasOrders = s.orders==='populated';
+
+    const data = [
+      {plat:'STEAM', product:'Steam Wallet 200 MAD', ref:'#GH-4821', date:'28 juin 2026', amount:'200 MAD', status:'Livré'},
+      {plat:'PSN',   product:'PlayStation Store 150 MAD', ref:'#GH-4790', date:'19 juin 2026', amount:'150 MAD', status:'Livré'},
+      {plat:'XBOX',  product:'Xbox Game Pass · 3 mois', ref:'#GH-4753', date:'11 juin 2026', amount:'320 MAD', status:'En cours'},
+      {plat:'STEAM', product:'Steam Wallet 100 MAD', ref:'#GH-4699', date:'2 juin 2026', amount:'100 MAD', status:'Livré'},
+      {plat:'NTND',  product:'Nintendo eShop 250 MAD', ref:'#GH-4601', date:'21 mai 2026', amount:'250 MAD', status:'Remboursé'}
+    ].map(o => ({...o, badgeStyle: this.badge(o.status)}));
+
+    // nav item styles
+    const nav = (active) => `display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:11px;border:1px solid ${active?'rgba(62,123,250,0.28)':'transparent'};background:${active?'rgba(62,123,250,0.12)':'transparent'};color:${active?'#5E92FF':'#9A9FAB'};font-size:14px;font-weight:${active?600:500};font-family:inherit;cursor:pointer;text-align:left;width:100%;transition:background .16s ease,color .16s ease`;
+    const mtab = (active) => `flex:1;white-space:nowrap;height:36px;padding:0 15px;border:none;border-radius:9px;background:${active?'#3E7BFA':'transparent'};color:${active?'#fff':'#9A9FAB'};font-size:13px;font-weight:${active?600:500};font-family:inherit;cursor:pointer;transition:all .16s ease`;
+    const seg = (active) => `height:30px;padding:0 15px;border:none;border-radius:999px;font-size:12.5px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .16s ease;${active?'background:rgba(62,123,250,0.16);color:#5E92FF':'background:transparent;color:#8891a3'}`;
+
+    const saveLabel = s.saving ? 'Enregistrement…' : (s.saved ? 'Enregistré ✓' : 'Enregistrer');
+    const saveStyle = `margin-top:16px;display:inline-flex;align-items:center;gap:9px;height:46px;padding:0 22px;border:none;border-radius:12px;color:#fff;font-size:14.5px;font-weight:600;font-family:inherit;background:linear-gradient(180deg,#4d86ff,#3E7BFA);box-shadow:0 8px 22px -6px rgba(62,123,250,0.55);transition:transform .15s ease,box-shadow .2s ease;${s.saving?'opacity:.75;cursor:progress':'cursor:pointer'}`;
+
+    return {
+      // preview
+      frameClass: s.device==='mobile' ? 'is-mobile' : '',
+      frameMax: s.device==='mobile' ? '440px' : '1180px',
+      setDesktop: ()=> this.setState({device:'desktop'}),
+      setMobile: ()=> this.setState({device:'mobile'}),
+      deskTab: seg(s.device==='desktop'), mobTab: seg(s.device==='mobile'),
+      setPopulated: ()=> this.setState({orders:'populated'}),
+      setEmpty: ()=> this.setState({orders:'empty'}),
+      popTab: seg(hasOrders), emptyTab: seg(!hasOrders),
+
+      // views
+      isDash: dash, isOrders: orders, isSecurity: security,
+      goDash: ()=> this.setState({view:'dashboard'}),
+      goOrders: ()=> this.setState({view:'orders'}),
+      goSecurity: ()=> this.setState({view:'security'}),
+      viewLabel: dash?'Tableau de bord':orders?'Commandes':'Sécurité',
+      pageTitle: dash?'Mon compte':orders?'Mes commandes':'Sécurité',
+      pageSub: dash?'Gérez votre profil, vos commandes et votre sécurité.':orders?'Historique complet de vos achats numériques.':'Protégez votre compte et vos codes.',
+
+      navDash: nav(dash), navOrders: nav(orders), navSecurity: nav(security),
+      mtabDash: mtab(dash), mtabOrders: mtab(orders), mtabSecurity: mtab(security),
+
+      // orders
+      hasOrders, noOrders: !hasOrders,
+      ordersCount: String(data.length),
+      recentOrders: data.slice(0,3),
+      allOrders: data,
+
+      // phone
+      phone: s.phone,
+      onPhone: (e)=> this.setState({phone:e.target.value, saved:false}),
+      savePhone: this.savePhone,
+      saving: s.saving,
+      saveLabel, saveStyle,
+      saveHover: s.saving ? '' : 'transform:translateY(-1px);box-shadow:0 12px 30px -6px rgba(62,123,250,0.7)',
+
+      // 2fa
+      toggle2fa: ()=> this.setState(st=>({twofa:!st.twofa})),
+      twofaTrack: `position:relative;flex-shrink:0;width:46px;height:26px;border-radius:999px;cursor:pointer;transition:background .2s ease;background:${s.twofa?'#3E7BFA':'rgba(255,255,255,0.12)'}`,
+      twofaKnob: `position:absolute;top:3px;left:${s.twofa?'23px':'3px'};width:20px;height:20px;border-radius:50%;background:#fff;transition:left .2s ease;box-shadow:0 2px 5px rgba(0,0,0,0.35)`
+    };
+  }
+}
+</script>
+</body>
+</html>
