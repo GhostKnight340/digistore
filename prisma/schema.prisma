@@ -8,8 +8,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Product {
@@ -164,6 +165,8 @@ model Customer {
   lastPasswordChangeAt DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+  firstName            String?
+  lastName             String?
 
   orders Order[]
   emailLogs EmailLog[]
