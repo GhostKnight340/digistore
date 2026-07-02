@@ -158,7 +158,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="h-fit lg:sticky lg:top-6">
           <nav className="card p-3 text-sm">
             {navSections.map((section, sectionIndex) => (
@@ -195,7 +195,9 @@ export default function AdminDashboard() {
           </Suspense>
         ) : activeTab === "products" ? (
           <Suspense fallback={panelFallback}>
-            <ProductsPanel />
+            <div className="min-w-0 max-w-full overflow-hidden">
+              <ProductsPanel />
+            </div>
           </Suspense>
         ) : activeTab === "categories" ? (
           <Suspense fallback={panelFallback}>

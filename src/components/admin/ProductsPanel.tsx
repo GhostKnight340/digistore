@@ -499,7 +499,7 @@ export default function ProductsPanel() {
   }
 
   return (
-    <div className="grid h-full gap-6 lg:grid-cols-[260px_1fr]">
+    <div className="grid h-full w-full min-w-0 max-w-full gap-6 overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)]">
       {/* ── Left: parent list ── */}
       <aside className="h-fit">
         <div className="card overflow-hidden">
@@ -613,14 +613,14 @@ export default function ProductsPanel() {
           </div>
         </div>
       ) : (
-        <section className="space-y-4">
+        <section className="min-w-0 max-w-full space-y-4 overflow-hidden">
           {/* Header */}
-          <div className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-            <div>
+          <div className="card flex min-w-0 max-w-full flex-col items-start gap-3 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
               <h2 className="font-bold text-white">{draft.name || "Nouveau produit"}</h2>
-              <p className="text-xs text-muted">{isNew ? "Non enregistré" : draft.slug}</p>
+              <p className="truncate text-xs text-muted">{isNew ? "Non enregistré" : draft.slug}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center justify-start gap-2 xl:justify-end">
               {msg && (
                 <span className={`text-xs ${msg.ok ? "text-green-400" : "text-red-400"}`}>
                   {msg.text}
@@ -654,7 +654,7 @@ export default function ProductsPanel() {
           </div>
 
           {/* Tabs */}
-          <div className="card overflow-hidden">
+          <div className="card min-w-0 max-w-full overflow-hidden">
             <div className="flex border-b border-border overflow-x-auto">
               {(["details", "content", "variants", "media"] as EditorTab[]).map((tab) => (
                 <button
@@ -677,7 +677,7 @@ export default function ProductsPanel() {
               ))}
             </div>
 
-            <div className="p-5">
+            <div className="min-w-0 p-5">
               {activeTab === "details" && (
                 <DetailsTab
                   draft={draft}
@@ -713,7 +713,7 @@ export default function ProductsPanel() {
                   onConvertStandalone={convertStandaloneProduct}
                 />
               )}
-              {activeTab === "media" && <MediaTab draft={draft} update={updateDraft} />}
+              {activeTab === "media" && <MediaTab draft={draft} update={updateDraft} onSave={save} saving={saving} />}
             </div>
           </div>
           {deleteDialogOpen && selectedSlug && (
@@ -1584,9 +1584,13 @@ function VariantsTab({
 function MediaTab({
   draft,
   update,
+  onSave,
+  saving,
 }: {
   draft: ParentProductDTO;
   update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
+  onSave: () => void;
+  saving: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -1608,8 +1612,8 @@ function MediaTab({
   }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="min-w-0 space-y-6">
+      <div className="min-w-0">
         <p className="mb-2 text-sm font-medium text-white">Image du produit</p>
         <p className="mb-3 text-xs text-muted">
           Utilisée sur la carte produit et la page détail. Laissez vide pour afficher le visuel de secours.
@@ -1654,10 +1658,10 @@ function MediaTab({
         )}
 
         {/* Manual URL fallback */}
-        <div className="mt-3">
+        <div className="mt-3 min-w-0">
           <p className="mb-1.5 text-xs text-muted">Ou collez directement l’URL d’une image</p>
           <input
-            className="input text-xs"
+            className="input block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs"
             value={draft.thumbnail ?? ""}
             onChange={(e) => update("thumbnail", e.target.value || null)}
             placeholder="https://example.com/image.png"
@@ -1665,23 +1669,35 @@ function MediaTab({
         </div>
 
         {draft.thumbnail && (
-          <div className="mt-3 flex items-center gap-3">
+          <div className="mt-3 flex min-w-0 items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={draft.thumbnail}
               alt=""
-              className="h-14 w-20 rounded-lg object-cover border border-border"
+              className="h-14 w-20 shrink-0 rounded-lg border border-border object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
-            <div className="min-w-0">
-              <p className="truncate font-mono text-[10px] text-muted">{draft.thumbnail}</p>
-              <button
-                type="button"
-                onClick={() => update("thumbnail", null)}
-                className="mt-1 text-xs text-red-400 hover:text-red-300"
-              >
-                Retirer l’image
-              </button>
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <p className="block max-w-full overflow-x-auto whitespace-nowrap font-mono text-[10px] leading-relaxed text-muted">
+                {draft.thumbnail}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => update("thumbnail", null)}
+                  className="text-xs text-red-400 hover:text-red-300"
+                >
+                  Retirer l’image
+                </button>
+                <button
+                  type="button"
+                  onClick={onSave}
+                  className="btn-primary px-3 py-1.5 text-xs"
+                  disabled={saving}
+                >
+                  {saving ? "Enregistrement…" : "Enregistrer"}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1712,4 +1728,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   );
 }
-
