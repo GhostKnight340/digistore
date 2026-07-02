@@ -328,6 +328,7 @@ export async function getAccountOrders(customerId: string) {
     take: 25,
     select: {
       id: true,
+      orderNumber: true,
       status: true,
       totalMad: true,
       createdAt: true,
@@ -343,23 +344,11 @@ export async function getAccountOrders(customerId: string) {
     },
   });
 
-  return Promise.all(
-    orders.map(async (order) => {
-      const earlierOrders = await prisma.order.count({
-        where: {
-          OR: [
-            { createdAt: { lt: order.createdAt } },
-            { createdAt: order.createdAt, id: { lt: order.id } },
-          ],
-        },
-      });
-      return {
-        ...order,
-        publicOrderNumber: formatPublicOrderNumber(earlierOrders + 1),
-        publicOrderPathSegment: formatPublicOrderPathSegment(earlierOrders + 1),
-      };
-    }),
-  );
+  return orders.map((order) => ({
+    ...order,
+    publicOrderNumber: formatPublicOrderNumber(order.orderNumber),
+    publicOrderPathSegment: formatPublicOrderPathSegment(order.orderNumber),
+  }));
 }
 
 export { normalizeEmail };

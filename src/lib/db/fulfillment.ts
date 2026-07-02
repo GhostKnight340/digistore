@@ -36,7 +36,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
       });
     }), () => 3);
 
-    const reference = await publicOrderReference(order);
+    const reference = publicOrderReference(order);
 
     try {
       await sendTransactionalEmail({
@@ -79,6 +79,7 @@ export async function deliverOrder(
         where: { id: orderId },
         select: {
           id: true,
+          orderNumber: true,
           status: true,
           customerId: true,
           customerName: true,
@@ -191,7 +192,7 @@ export async function deliverOrder(
       });
     }), () => assignments.length);
 
-    const reference = await publicOrderReference(order);
+    const reference = publicOrderReference(order);
 
     try {
       await sendTransactionalEmail({

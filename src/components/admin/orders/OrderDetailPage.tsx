@@ -89,14 +89,6 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "cancelled",
 ];
 
-function orderNumber(id: string) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index += 1) {
-    hash = (hash * 31 + id.charCodeAt(index)) % 1000000;
-  }
-  return `#${String(hash).padStart(6, "0")}`;
-}
-
 function formatBytes(value: number | null) {
   if (value == null) return "Non disponible";
   if (value < 1024) return `${value} B`;
@@ -202,8 +194,8 @@ export default function OrderDetailPage({
     eventNote(order, "rejected") ??
     null;
   const tone = statusTone(order.status);
-  const displayNumber = order.publicOrderNumber || orderNumber(order.id);
-  const paymentReference = order.publicOrderNumber || displayNumber;
+  const displayNumber = order.publicOrderNumber;
+  const paymentReference = order.publicOrderNumber;
 
   const refreshOrder = useCallback(async () => {
     const fresh = await getAdminOrderDetailAction(order.id);

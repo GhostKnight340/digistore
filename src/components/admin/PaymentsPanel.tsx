@@ -69,14 +69,6 @@ const FILTERS: { id: QueueFilter; label: string; status: string }[] = [
   { id: "rejected", label: "Rejetés", status: "rejected" },
 ];
 
-function orderNumber(id: string) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index += 1) {
-    hash = (hash * 31 + id.charCodeAt(index)) % 1000000;
-  }
-  return `#${String(hash).padStart(6, "0")}`;
-}
-
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -314,10 +306,9 @@ export default function PaymentsPanel() {
     return null;
   }, [selected, config]);
 
-  // Prefer the real public order number (loaded with the detail); fall back to a
-  // stable hash of the id — same fallback the order-detail page uses.
-  const detailRef = detail && detail !== "loading" ? detail.publicOrderNumber : "";
-  const displayRef = selected ? detailRef || orderNumber(selected.id) : "";
+  // The stored public order number rides along on every summary — same value the
+  // queue cards, order detail, emails and customer pages show.
+  const displayRef = selected ? selected.publicOrderNumber : "";
 
   // Gate decisions by status, mirroring the order-detail page so we never offer a
   // transition the server would reject (e.g. approving an already-rejected order).
@@ -465,7 +456,7 @@ export default function PaymentsPanel() {
                             color: active ? C.textBright : C.text,
                           }}
                         >
-                          {orderNumber(order.id)}
+                          {order.publicOrderNumber}
                         </span>
                         {wait ? (
                           <span style={{ fontSize: 11, fontFamily: MONO, color: filter === "submitted" ? C.warning : C.faint }}>

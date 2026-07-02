@@ -15,7 +15,7 @@ import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOr
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
-type PublicOrderIdentity = { id: string; createdAt: Date | string };
+type PublicOrderIdentity = { orderNumber: number };
 
 const REVENUE_ORDER_STATUSES = ["payment_confirmed", "delivered", "fulfilled"];
 
@@ -135,6 +135,7 @@ function loadOrder(id: string) {
     where: { id },
     select: {
       id: true,
+      orderNumber: true,
       status: true,
       customerName: true,
       customerEmail: true,
@@ -182,44 +183,38 @@ function loadOrder(id: string) {
   });
 }
 
-export async function publicOrderSequence(order: PublicOrderIdentity): Promise<number> {
-  const earlierOrders = await prisma.order.count({
-    where: {
-      OR: [
-        { createdAt: { lt: order.createdAt } },
-        { createdAt: order.createdAt, id: { lt: order.id } },
-      ],
-    },
-  });
-  return earlierOrders + 1;
-}
-
-export async function publicOrderReference(order: PublicOrderIdentity) {
-  const sequence = await publicOrderSequence(order);
+/**
+ * Build the public reference from the order's stored `orderNumber`. Pure and
+ * synchronous — no per-row query — so any list/card/detail can format it cheaply.
+ */
+export function publicOrderReference(order: PublicOrderIdentity) {
   return {
-    number: formatPublicOrderNumber(sequence),
-    pathSegment: formatPublicOrderPathSegment(sequence),
+    number: formatPublicOrderNumber(order.orderNumber),
+    pathSegment: formatPublicOrderPathSegment(order.orderNumber),
   };
 }
 
 export async function resolveOrderReference(reference: string): Promise<string | null> {
   const trimmed = decodeURIComponent(reference.trim());
+
+  // Public references ("#000001" / "000001") resolve directly via the unique
+  // stored orderNumber — no positional scan.
+  const sequence = parsePublicOrderNumber(trimmed);
+  if (sequence !== null) {
+    const order = await prisma.order.findUnique({
+      where: { orderNumber: sequence },
+      select: { id: true },
+    });
+    if (order) return order.id;
+  }
+
+  // Fallback: internal id (legacy links, developer tools). cuids never parse as
+  // a numeric public reference, so this branch is unambiguous.
   const legacyOrder = await prisma.order.findUnique({
     where: { id: trimmed },
     select: { id: true },
   });
-  if (legacyOrder) return legacyOrder.id;
-
-  const sequence = parsePublicOrderNumber(trimmed);
-  if (sequence === null) return null;
-
-  const [order] = await prisma.order.findMany({
-    skip: sequence - 1,
-    take: 1,
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true },
-  });
-  return order?.id ?? null;
+  return legacyOrder?.id ?? null;
 }
 
 function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] } = {}) {
@@ -229,6 +224,7 @@ function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] }
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      orderNumber: true,
       status: true,
       customerName: true,
       customerEmail: true,
@@ -260,6 +256,7 @@ function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] }
 function buildAdminSummaryDTO(order: AdminOrderSummaryRecord): AdminOrderSummaryDTO {
   return {
     id: order.id,
+    publicOrderNumber: formatPublicOrderNumber(order.orderNumber),
     status: order.status as OrderStatus,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
@@ -288,7 +285,7 @@ export async function getCustomerOrder(
   const data = await loadOrder(internalId);
   if (!data) return null;
 
-  const reference = await publicOrderReference(data);
+  const reference = publicOrderReference(data);
   return buildCustomerDTO(data, reference);
 }
 
@@ -309,7 +306,7 @@ export async function getOrderSummaries(
   });
   return Promise.all(
     orders.map(async (order) => {
-      const reference = await publicOrderReference(order);
+      const reference = publicOrderReference(order);
       return buildCustomerDTO(order, reference);
     }),
   );
@@ -352,7 +349,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
   ]);
 
   if (!order) return null;
-  const reference = await publicOrderReference(order);
+  const reference = publicOrderReference(order);
   return {
     ...buildCustomerDTO(order, reference, { includeUndeliveredCodes: true }),
     emailLogs: emailLogs.map(buildEmailLogDTO),
@@ -563,7 +560,7 @@ export async function getAdminOverviewMetrics(): Promise<AdminOverviewMetricsDTO
         : "Commande";
       return {
         id: order.id,
-        ref: `#${order.id.slice(-6).toUpperCase()}`,
+        ref: order.publicOrderNumber,
         label: `${itemLabel} · ${paymentMethodLabel(order.paymentMethod)}`,
         waitMin: Math.max(0, Math.round((now.getTime() - new Date(order.createdAt).getTime()) / 60000)),
       };
@@ -839,7 +836,7 @@ export async function createOrder(
       return created;
     });
 
-    const reference = await publicOrderReference(order);
+    const reference = publicOrderReference(order);
 
     try {
       await sendTransactionalEmail({
@@ -880,27 +877,25 @@ export async function findOrderByEmailAndId(
   const publicOrderNumber = parsePublicOrderNumber(id);
 
   if (publicOrderNumber !== null) {
-    const [order] = await prisma.order.findMany({
-      skip: publicOrderNumber - 1,
-      take: 1,
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, status: true, customerEmail: true },
+    const order = await prisma.order.findUnique({
+      where: { orderNumber: publicOrderNumber },
+      select: { id: true, status: true, orderNumber: true, customerEmail: true },
     });
 
     if (order?.customerEmail.toLowerCase() === normalizedEmail) {
       return {
         id: order.id,
         status: order.status,
-        publicOrderPathSegment: formatPublicOrderPathSegment(publicOrderNumber),
+        publicOrderPathSegment: formatPublicOrderPathSegment(order.orderNumber),
       };
     }
   }
 
   const order = await prisma.order.findFirst({
     where: { id: id.trim(), customerEmail: { equals: normalizedEmail, mode: "insensitive" } },
-    select: { id: true, status: true, createdAt: true },
+    select: { id: true, status: true, orderNumber: true },
   });
   if (!order) return null;
-  const reference = await publicOrderReference(order);
+  const reference = publicOrderReference(order);
   return { ...order, publicOrderPathSegment: reference.pathSegment };
 }

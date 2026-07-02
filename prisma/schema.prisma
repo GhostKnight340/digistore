@@ -125,6 +125,7 @@ model DigitalCode {
 
 model Order {
   id            String   @id @default(cuid())
+  orderNumber   Int      @unique @default(autoincrement())
   customerId    String?
   customerName  String
   customerEmail String

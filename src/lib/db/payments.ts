@@ -91,7 +91,7 @@ export async function submitPayment(
 
     });
 
-    const reference = await publicOrderReference(order);
+    const reference = publicOrderReference(order);
 
     try {
       await sendTransactionalEmail({
@@ -220,7 +220,7 @@ export async function renderPaymentStatusEmailPreview(
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Commande introuvable.");
-  const reference = await publicOrderReference(order);
+  const reference = publicOrderReference(order);
   const variables = {
     customer_name: order.customerName,
     order_number: reference.number,
@@ -259,7 +259,7 @@ export async function applyPaymentStatusWithEmail(
       });
     });
 
-    const reference = await publicOrderReference(order);
+    const reference = publicOrderReference(order);
 
     try {
       await sendTransactionalEmail({
