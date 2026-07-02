@@ -17,6 +17,12 @@ export type PaymentDisplaySetting = {
   accentColor?: string;
 };
 
+export type FooterPaymentBadgeSetting = {
+  id: string;
+  label: string;
+  enabled: boolean;
+};
+
 export type StoreSettings = {
   inventoryMode: "automatic" | "manual";
   maintenance: {
@@ -80,6 +86,7 @@ export type StoreSettings = {
       facebook: string;
       x: string;
     };
+    paymentBadges: FooterPaymentBadgeSetting[];
   };
   theme: {
     accentColor: string;
@@ -272,10 +279,15 @@ export const defaultStoreSettings: StoreSettings = {
     supportText:
       "Le moyen le plus simple d'acheter vos produits numériques au Maroc.",
     socialLinks: {
-      instagram: "",
+      instagram: "https://www.instagram.com/ghost.ma/",
       facebook: "",
       x: "",
     },
+    paymentBadges: [
+      { id: "visa", label: "Visa", enabled: true },
+      { id: "mastercard", label: "Mastercard", enabled: true },
+      { id: "paypal", label: "PayPal", enabled: true },
+    ],
   },
   theme: {
     accentColor: "#3e7bfa",
@@ -364,6 +376,16 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
           ? value.footer.socialLinks
           : {}),
       },
+      paymentBadges:
+        isObject(value.footer) && Array.isArray(value.footer.paymentBadges)
+          ? value.footer.paymentBadges
+              .map((badge) => ({
+                id: isObject(badge) && typeof badge.id === "string" ? badge.id : "",
+                label: isObject(badge) && typeof badge.label === "string" ? badge.label : "",
+                enabled: isObject(badge) && typeof badge.enabled === "boolean" ? badge.enabled : true,
+              }))
+              .filter((badge) => badge.id.trim() && badge.label.trim())
+          : defaultStoreSettings.footer.paymentBadges,
     },
     theme: {
       ...defaultStoreSettings.theme,

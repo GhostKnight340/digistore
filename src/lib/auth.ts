@@ -22,6 +22,7 @@ export type AuthCustomer = {
   phone: string | null;
   image: string | null;
   googleId: string | null;
+  role: string;
   emailVerified: boolean;
   emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
@@ -253,6 +254,7 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
       phone: true,
       image: true,
       googleId: true,
+      role: true,
       emailVerified: true,
       emailVerifiedAt: true,
       lastLoginAt: true,
@@ -269,6 +271,7 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     phone: customer.phone,
     image: customer.image,
     googleId: customer.googleId,
+    role: customer.role,
     emailVerified: customer.emailVerified,
     emailVerifiedAt: customer.emailVerifiedAt,
     lastLoginAt: customer.lastLoginAt,
@@ -280,6 +283,22 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
 export async function requireCustomer() {
   const customer = await getCurrentCustomer();
   if (!customer) redirect("/login");
+  return customer;
+}
+
+export function isAdminCustomer(customer: Pick<AuthCustomer, "role"> | null | undefined) {
+  return customer?.role === "ADMIN";
+}
+
+export async function getCurrentAdminCustomer() {
+  const customer = await getCurrentCustomer();
+  return isAdminCustomer(customer) ? customer : null;
+}
+
+export async function requireAdminCustomer() {
+  const customer = await getCurrentCustomer();
+  if (!customer) redirect("/login?next=/admin");
+  if (!isAdminCustomer(customer)) redirect("/403");
   return customer;
 }
 

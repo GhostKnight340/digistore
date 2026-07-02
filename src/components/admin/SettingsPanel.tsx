@@ -399,26 +399,30 @@ export default function SettingsPanel() {
               })
             }
           />
-          <TextField
-            label="Facebook URL"
-            value={draft.footer.socialLinks.facebook}
-            onChange={(value) =>
-              update("footer", {
-                ...draft.footer,
-                socialLinks: { ...draft.footer.socialLinks, facebook: value },
-              })
-            }
-          />
-          <TextField
-            label="X URL"
-            value={draft.footer.socialLinks.x}
-            onChange={(value) =>
-              update("footer", {
-                ...draft.footer,
-                socialLinks: { ...draft.footer.socialLinks, x: value },
-              })
-            }
-          />
+        </div>
+        <div className="mt-5 border-t border-border pt-5">
+          <p className="text-sm font-semibold text-white">Badges de paiement du pied de page</p>
+          <p className="mt-1 text-xs text-muted">
+            Ces badges sont affichés dans le pied de page du site et des e-mails.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {draft.footer.paymentBadges.map((badge) => (
+              <ToggleSwitch
+                key={badge.id}
+                className="rounded-xl border border-border bg-base px-3 py-3"
+                label={badge.label}
+                checked={badge.enabled}
+                onChange={(checked) =>
+                  update("footer", {
+                    ...draft.footer,
+                    paymentBadges: draft.footer.paymentBadges.map((item) =>
+                      item.id === badge.id ? { ...item, enabled: checked } : item,
+                    ),
+                  })
+                }
+              />
+            ))}
+          </div>
         </div>
       </Panel>
 

@@ -12,6 +12,7 @@ import {
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import { getPaymentConfig, getAdminPaymentConfig } from "@/lib/db/paymentSettings";
 import { getCustomerOrder } from "@/lib/db/orders";
+import { requireAdminCustomer } from "@/lib/auth";
 import type {
   ActionResult,
   AdminPaymentProofDTO,
@@ -82,14 +83,17 @@ function normalizeProofMimeType(file: File): string | null {
 // ─── Admin payment review actions ─────────────────────────────────────────────
 
 export async function approvePaymentAction(orderId: string): Promise<ActionResult> {
+  await requireAdminCustomer();
   return approvePayment(orderId);
 }
 
 export async function rejectPaymentAction(orderId: string): Promise<ActionResult> {
+  await requireAdminCustomer();
   return rejectPayment(orderId);
 }
 
 export async function markPaymentIssueAction(orderId: string): Promise<ActionResult> {
+  await requireAdminCustomer();
   return markPaymentIssue(orderId);
 }
 
@@ -97,6 +101,7 @@ export async function getPaymentEmailPreviewAction(
   orderId: string,
   intent: "reject" | "request_proof" | "refund_update",
 ): Promise<{ subject: string; text: string; html: string }> {
+  await requireAdminCustomer();
   const key: EmailTemplateKey =
     intent === "reject"
       ? "payment_rejected"
@@ -112,6 +117,7 @@ export async function sendPaymentReviewEmailAction(
   email: { subject: string; text: string; html?: string },
   reason?: string,
 ): Promise<ActionResult> {
+  await requireAdminCustomer();
   if (intent === "reject") {
     return applyPaymentStatusWithEmail(
       orderId,
@@ -146,12 +152,14 @@ export async function sendPaymentReviewEmailAction(
 export async function getPaymentProofAction(
   orderId: string,
 ): Promise<AdminPaymentProofDTO | null> {
+  await requireAdminCustomer();
   return getPaymentProof(orderId);
 }
 
 // ─── Payment settings actions ──────────────────────────────────────────────────
 
 export async function getAdminPaymentConfigAction() {
+  await requireAdminCustomer();
   return getAdminPaymentConfig();
 }
 

@@ -1,5 +1,6 @@
 import type { StoreSettings } from "./storeSettings";
 import { absoluteAppUrl } from "./orderNumber";
+import { emailIconUrl, getEnabledFooterPaymentBadges, getFooterSocialLinks, whatsappUrl } from "./footerConfig";
 
 export type EmailTemplateKey =
   | "welcome"
@@ -85,15 +86,79 @@ function codeListHtml(codesValue: string) {
     </table>`;
 }
 
+function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentYear: string) {
+  const socialLinks = getFooterSocialLinks(settings);
+  const paymentBadges = getEnabledFooterPaymentBadges(settings);
+  const supportWhatsappUrl = whatsappUrl(settings.footer.whatsappNumber);
+
+  const socialHtml = socialLinks.length
+    ? `<tr>
+        <td align="center" style="padding: 16px 0 0;">
+          ${socialLinks
+            .map(
+              (link) =>
+                `<a href="${escapeHtml(link.href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(
+                  link.ariaLabel,
+                )}" style="display: inline-block; width: 34px; height: 34px; margin: 0 4px; border: 1px solid #2f3954; border-radius: 999px; background: #151a25; text-decoration: none;">
+                  <img src="${escapeHtml(emailIconUrl(link.iconPath))}" width="16" height="16" alt="${escapeHtml(
+                    link.label,
+                  )}" style="display: block; width: 16px; height: 16px; margin: 9px auto; border: 0;" />
+                </a>`,
+            )
+            .join("")}
+        </td>
+      </tr>`
+    : "";
+
+  const paymentHtml = paymentBadges.length
+    ? `<tr>
+        <td align="center" style="padding: 16px 0 0;">
+          ${paymentBadges
+            .map(
+              (badge) =>
+                `<span style="display: inline-block; margin: 0 4px 8px; border: 1px solid #2f3954; border-radius: 8px; padding: 6px 9px; color: #aab4c8; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700; letter-spacing: .02em;">${escapeHtml(
+                  badge.label,
+                )}</span>`,
+            )
+            .join("")}
+        </td>
+      </tr>`
+    : "";
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr>
+        <td style="padding: 22px 8px 0; color: #7f899c; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.7; text-align: center;">
+          Besoin d’aide ? Contactez-nous à
+          <a href="mailto:${escapeHtml(supportEmail)}" style="color: #9fb4ff;">${escapeHtml(supportEmail)}</a>
+          ${
+            supportWhatsappUrl
+              ? `ou <a href="${escapeHtml(
+                  supportWhatsappUrl,
+                )}" target="_blank" rel="noopener noreferrer" style="color: #9fb4ff;">WhatsApp</a>`
+              : ""
+          }.
+        </td>
+      </tr>
+      ${socialHtml}
+      ${paymentHtml}
+      <tr>
+        <td align="center" style="padding: 8px 8px 0; color: #69758b; font-family: Arial, sans-serif; font-size: 12px;">
+          © ${escapeHtml(currentYear)} ghost.ma
+        </td>
+      </tr>
+    </table>`;
+}
+
 function brandedEmailHtml(
   key: EmailTemplateKey,
   subject: string,
   text: string,
   variables: Variables,
+  settings: StoreSettings,
 ) {
   const customerName = variableString(variables, "customer_name") || "client";
   const supportEmail = variableString(variables, "support_email") || "support@ghost.ma";
-  const supportWhatsapp = variableString(variables, "support_whatsapp");
   const currentYear = variableString(variables, "current_year") || String(new Date().getFullYear());
   const verificationUrl = variableString(variables, "verification_url");
   const resetUrl = variableString(variables, "reset_password_url");
@@ -274,11 +339,8 @@ function brandedEmailHtml(
               </td>
             </tr>
             <tr>
-              <td style="padding: 22px 8px 0; color: #7f899c; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.7; text-align: center;">
-                Besoin d’aide ? Contactez-nous à
-                <a href="mailto:${escapeHtml(supportEmail)}" style="color: #9fb4ff;">${escapeHtml(supportEmail)}</a>
-                ${supportWhatsapp ? `ou WhatsApp ${escapeHtml(supportWhatsapp)}` : ""}.<br />
-                © ${escapeHtml(currentYear)} ghost.ma
+              <td>
+                ${emailFooterHtml(settings, supportEmail, currentYear)}
               </td>
             </tr>
           </table>
@@ -340,6 +402,6 @@ export function renderEmailTemplate(
   return {
     subject,
     text,
-    html: brandedEmailHtml(key, subject, text, baseVariables),
+    html: brandedEmailHtml(key, subject, text, baseVariables, settings),
   };
 }

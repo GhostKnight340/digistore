@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { getEnabledFooterPaymentBadges, getFooterSocialLinks } from "@/lib/footerConfig";
 
 export default function Footer() {
   const { settings } = useStoreSettings();
@@ -10,9 +11,8 @@ export default function Footer() {
 
   if (!settings.homepage.showFooter) return null;
 
-  const socialLinks = Object.entries(settings.footer.socialLinks).filter(
-    ([, href]) => href.trim().length > 0,
-  );
+  const socialLinks = getFooterSocialLinks(settings);
+  const paymentBadges = getEnabledFooterPaymentBadges(settings);
 
   return (
     <footer className="mt-20 border-t border-border bg-base/60">
@@ -34,15 +34,37 @@ export default function Footer() {
             <p>WhatsApp : {settings.footer.whatsappNumber}</p>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            {["VISA", "MASTERCARD", "PAYPAL"].map((label) => (
+            {paymentBadges.map((badge) => (
               <span
-                key={label}
+                key={badge.id}
                 className="rounded-md border border-border px-2 py-1 font-mono text-[11px] text-faint"
               >
-                {label}
+                {badge.label}
               </span>
             ))}
           </div>
+          {socialLinks.length > 0 && (
+            <div className="mt-5 flex items-center gap-2">
+              {socialLinks.map((link) => (
+                <a
+                  key={link.id}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.ariaLabel}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-border bg-surface text-muted transition hover:border-accent/50 hover:text-white"
+                >
+                  <span
+                    className="h-4 w-4 bg-current"
+                    style={{
+                      WebkitMask: `url(${link.iconPath}) center / contain no-repeat`,
+                      mask: `url(${link.iconPath}) center / contain no-repeat`,
+                    }}
+                  />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         <FooterGroup
@@ -68,10 +90,6 @@ export default function Footer() {
             { href: "/privacy", label: "Confidentialité" },
             { href: "/refunds", label: "Remboursements" },
             { href: "/legal", label: "Mentions légales" },
-            ...socialLinks.map(([name, href]) => ({
-              href,
-              label: name.charAt(0).toUpperCase() + name.slice(1),
-            })),
           ]}
         />
       </div>

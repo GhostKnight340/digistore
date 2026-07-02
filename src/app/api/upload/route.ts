@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomBytes } from "crypto";
+import { getCurrentAdminCustomer } from "@/lib/auth";
 
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/jpg"];
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await getCurrentAdminCustomer();
+    if (!admin) {
+      return NextResponse.json({ error: "Acces admin requis." }, { status: 403 });
+    }
+
     const form = await req.formData();
     const file = form.get("file");
 

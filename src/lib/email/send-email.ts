@@ -77,9 +77,11 @@ export async function renderTransactionalEmail(
   const settings = await getStoreSettings();
   const rendered = renderEmailTemplate(settings, templateKey, variables);
   const text = overrides.text ?? rendered.text;
-  const html = AUTH_TEMPLATE_KEYS.has(templateKey)
-    ? rendered.html
-    : overrides.html ?? rendered.html;
+  const overrideHtml = overrides.html?.trim();
+  const html =
+    overrideHtml && isBrandedHtml(overrideHtml) && !AUTH_TEMPLATE_KEYS.has(templateKey)
+      ? overrideHtml
+      : rendered.html;
   if (AUTH_TEMPLATE_KEYS.has(templateKey) && !isBrandedHtml(html)) {
     throw new Error(`Auth email template ${templateKey} did not render branded HTML.`);
   }

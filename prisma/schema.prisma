@@ -154,6 +154,7 @@ model Customer {
   id                   String    @id @default(cuid())
   name                 String
   email                String    @unique
+  role                 String    @default("CUSTOMER")
   phone                String?
   image                String?
   googleId             String?   @unique
@@ -174,6 +175,7 @@ model Customer {
 
   @@index([updatedAt])
   @@index([emailVerified])
+  @@index([role])
 }
 
 model AuthToken {

@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/catalog";
 import type { Product } from "@/lib/types";
 import type { StoreSettings } from "@/lib/storeSettings";
+import { requireAdminCustomer } from "@/lib/auth";
 
 export async function getCatalogDataAction() {
   return getCatalogData();
@@ -26,6 +27,7 @@ export async function getStoreSettingsAction(): Promise<StoreSettings> {
 export async function saveStoreSettingsAction(
   settings: StoreSettings,
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireAdminCustomer();
   try {
     await saveStoreSettings(settings);
     revalidatePath("/", "layout");
@@ -51,6 +53,7 @@ export async function updateProductCatalogItemAction(
     featured: boolean;
   },
 ): Promise<{ ok: boolean; error?: string }> {
+  await requireAdminCustomer();
   try {
     await updateProductCatalogItem(slug, data);
     return { ok: true };

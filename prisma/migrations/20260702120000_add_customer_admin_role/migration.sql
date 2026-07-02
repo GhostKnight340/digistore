@@ -1,0 +1,4 @@
+ALTER TABLE "Customer"
+ADD COLUMN IF NOT EXISTS "role" TEXT NOT NULL DEFAULT 'CUSTOMER';
+
+CREATE INDEX IF NOT EXISTS "Customer_role_idx" ON "Customer"("role");
