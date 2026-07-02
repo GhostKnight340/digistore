@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
@@ -28,6 +29,8 @@ import type {
   AdminPaymentProofDTO,
   AssignmentEntry,
   ItemAssignment,
+  PaymentEventDTO,
+  EmailLogDTO,
 } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
 
@@ -52,6 +55,9 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "refunded",
   "cancelled",
 ];
+
+// Design tokens (admin surface is slightly darker than the storefront).
+const PANEL = "rounded-[14px] border border-white/[0.07] bg-[#0f1015]";
 
 function orderNumber(id: string) {
   let hash = 0;
@@ -81,6 +87,27 @@ function eventNote(order: AdminOrderDTO, toStatus: string) {
   return order.paymentEvents.find((event) => event.toStatus === toStatus)?.note ?? null;
 }
 
+function initials(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
+}
+
+function waitingLabel(fromIso: string, now: number) {
+  const minutes = Math.max(0, Math.round((now - new Date(fromIso).getTime()) / 60000));
+  if (minutes < 60) return `en attente ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `en attente ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `en attente ${days} j`;
+}
+
 export default function OrderDetailPage({
   initialOrder,
 }: {
@@ -97,6 +124,7 @@ export default function OrderDetailPage({
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [nextStatus, setNextStatus] = useState<OrderStatus>(initialOrder.status);
   const [statusNote, setStatusNote] = useState("");
+  const [now, setNow] = useState<number | null>(null);
   const [reviewEmail, setReviewEmail] = useState<{
     intent: "reject" | "request_proof" | "refund_update";
     title: string;
@@ -132,6 +160,10 @@ export default function OrderDetailPage({
     const fresh = await getAdminOrderDetailAction(order.id);
     if (fresh) setOrder(fresh);
   }, [order.id]);
+
+  useEffect(() => {
+    setNow(Date.now());
+  }, [order]);
 
   useEffect(() => {
     setProof("loading");
@@ -193,6 +225,17 @@ export default function OrderDetailPage({
       .filter(Boolean);
     return codes.length === item.quantity;
   });
+
+  const totalUnits = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const readyUnits = order.items.reduce(
+    (sum, item) =>
+      sum +
+      (entries[item.id] ?? [])
+        .slice(0, item.quantity)
+        .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim()).length,
+    0,
+  );
+  const deliverReady = canDeliver && (manualMode ? manualCountsValid : allFilled);
 
   function setEntry(itemId: string, index: number, entry: AssignmentEntry) {
     setEntries((previous) => {
@@ -285,194 +328,127 @@ export default function OrderDetailPage({
     setStatusNote("");
   }
 
+  const waitFrom = submittedAt ?? order.createdAt;
+  const showWaiting = now !== null && !delivered && order.status !== "rejected" && order.status !== "cancelled";
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Détail de commande admin</p>
-          <h1 className="mt-1 text-3xl font-bold text-white">
-            Commande {orderNumber(order.id)}
-          </h1>
-          <p className="mt-1 font-mono text-xs text-muted">{order.id}</p>
+    <div className="space-y-4">
+      {/* ── Order header strip ── */}
+      <div className={`${PANEL} flex flex-wrap items-center gap-4 px-4 py-3.5 sm:px-6`}>
+        <Link
+          href="/admin"
+          aria-label="Retour à l'administration"
+          className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-[9px] border border-white/10 bg-[#121319] text-muted transition hover:text-white"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </Link>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="font-mono text-xl font-semibold tracking-[-0.01em] text-white">
+              {orderNumber(order.id)}
+            </h1>
+            <span className={`rounded-md border px-2 py-0.5 text-[11.5px] font-semibold ${orderStatusBadgeClass(order.status)}`}>
+              {orderStatusShort(order.status)}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[12.5px] text-faint">
+            Passée le {formatDate(order.createdAt)}
+            {showWaiting ? ` · ${waitingLabel(waitFrom, now!)}` : ""}
+          </p>
         </div>
-        <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
-          {orderStatusShort(order.status)}
-        </span>
+        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+          {canReject ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => openReviewEmail("reject", "Refuser le paiement")}
+              className="flex h-[38px] items-center gap-1.5 rounded-[9px] border border-[#e05c5c]/30 bg-[#e05c5c]/[0.08] px-4 text-[13px] font-semibold text-[#e05c5c] transition hover:bg-[#e05c5c]/[0.16] disabled:opacity-50"
+            >
+              Refuser le paiement
+            </button>
+          ) : null}
+          {canIssue ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => openReviewEmail("request_proof", "Demander un nouveau justificatif")}
+              className="h-[38px] rounded-[9px] border border-white/[0.12] bg-[#121319] px-4 text-[13px] font-medium text-white transition hover:border-white/25 disabled:opacity-50"
+            >
+              Demander un justificatif
+            </button>
+          ) : null}
+          {canApprove ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => runAction("Paiement confirmé.", () => approvePaymentAction(order.id))}
+              className="flex h-[38px] items-center gap-1.5 rounded-[9px] bg-[#2ea067] px-[18px] text-[13px] font-semibold text-white shadow-[0_6px_18px_rgba(46,160,103,0.3)] transition hover:bg-[#2eae70] disabled:opacity-50"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Confirmer le paiement
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {message ? (
-        <div className="rounded-2xl border border-green-500/40 bg-green-500/10 px-5 py-4 text-sm text-green-200">
+        <div className="rounded-[14px] border border-[#2ea067]/40 bg-[#2ea067]/10 px-4 py-3 text-sm text-[#5bc98c]">
           {message}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+        <div className="rounded-[14px] border border-[#e05c5c]/40 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#f0a5a5]">
           {error}
         </div>
       ) : null}
 
-      <section className="grid gap-4 lg:grid-cols-4">
-        <SummaryCard label="Client" value={order.customerName} detail={order.customerEmail} />
-        <SummaryCard label="Date" value={formatDate(order.createdAt)} />
-        <SummaryCard label="Total" value={formatMAD(order.totalMad)} />
-        <SummaryCard
-          label="Livraison"
-          value={delivered ? "Livrée" : canDeliver ? "Prête à livrer" : "En attente"}
-          detail={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
-        />
-      </section>
+      {/* ── Split layout: work area + context rail ── */}
+      <div className="grid items-start gap-[18px] xl:grid-cols-[minmax(0,1fr)_372px]">
+        {/* Left: fulfillment work area */}
+        <div className="flex min-w-0 flex-col gap-[18px]">
+          <ItemsPanel order={order} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <section className="card overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
-              <h2 className="font-bold text-white">Articles commandés</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase text-muted">
-                  <tr className="border-b border-border">
-                    <th className="px-5 py-3 font-medium">Produit</th>
-                    <th className="px-5 py-3 font-medium">Qté</th>
-                    <th className="px-5 py-3 font-medium">Prix unitaire</th>
-                    <th className="px-5 py-3 font-medium">Total</th>
-                    <th className="px-5 py-3 font-medium">Code attribué</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.items.map((item) => {
-                    const codes = order.deliveredCodes.filter(
-                      (code) => code.orderItemId === item.id || code.productId === item.productId,
-                    );
-                    return (
-                      <tr key={item.id} className="border-b border-border/60">
-                        <td className="px-5 py-3 text-white">{item.name}</td>
-                        <td className="px-5 py-3 text-muted">{item.quantity}</td>
-                        <td className="px-5 py-3 text-muted">{formatMAD(item.unitPriceMad)}</td>
-                        <td className="px-5 py-3 text-white">
-                          {formatMAD(item.unitPriceMad * item.quantity)}
-                        </td>
-                        <td className="px-5 py-3">
-                          {codes.length === 0 ? (
-                            <span className="text-xs text-faint">Non attribué</span>
-                          ) : (
-                            <div className="space-y-1">
-                              {codes.map((code, index) => (
-                                <div
-                                  key={`${code.code}-${index}`}
-                                  className="rounded-lg border border-white/10 bg-black/30 px-2 py-1 font-mono text-xs text-white"
-                                >
-                                  {code.code}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <div className="grid gap-[18px] md:grid-cols-2">
+            <PaymentPanel order={order} submittedAt={submittedAt} confirmedAt={confirmedAt} issueReason={issueReason} />
+            <PaymentProofPanel proof={proof} />
+          </div>
 
-          <PaymentProofSection proof={proof} />
-
-          {canDeliver || delivered ? (
-            <DeliverySection
-              order={order}
-              delivered={delivered}
-              available={available}
-              entries={entries}
-              chosenIds={chosenIds}
-              busy={busy}
-              allFilled={manualMode ? manualCountsValid : allFilled}
-              manualMode={manualMode}
-              onSetEntry={setEntry}
-              onDeliver={handleDeliver}
-              onSaveDraft={() => {
-                setError("");
-                setMessage("Draft codes saved on this page. Deliver when ready.");
-              }}
-            />
-          ) : null}
-
-          <TimelineSection order={order} />
-          <EmailLogsSection order={order} />
+          <CodeDeliveryPanel
+            order={order}
+            delivered={delivered}
+            canDeliver={canDeliver}
+            manualMode={manualMode}
+            available={available}
+            entries={entries}
+            chosenIds={chosenIds}
+            busy={busy}
+            totalUnits={totalUnits}
+            readyUnits={readyUnits}
+            deliverReady={deliverReady}
+            onSetEntry={setEntry}
+            onDeliver={handleDeliver}
+          />
         </div>
 
-        <aside className="space-y-6">
-          <section className="card p-5">
-            <h2 className="font-bold text-white">Paiement</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <InfoRow label="Mode" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
-              <InfoRow label="Statut" value={orderStatusShort(order.status)} />
-              <InfoRow label="Soumis" value={submittedAt ? formatDate(submittedAt) : "Non soumis"} />
-              <InfoRow label="Confirmé" value={confirmedAt ? formatDate(confirmedAt) : "Non confirmé"} />
-              {issueReason ? <InfoRow label="Motif" value={issueReason} /> : null}
-            </dl>
-          </section>
-
-          <section className="card p-5">
-            <h2 className="font-bold text-white">Actions</h2>
-            <div className="mt-4 space-y-2">
-              {canApprove ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    runAction("Paiement confirmé.", () => approvePaymentAction(order.id))
-                  }
-                  className="btn-primary w-full justify-center disabled:opacity-50"
-                >
-                  Confirmer le paiement
-                </button>
-              ) : null}
-              {canIssue ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => openReviewEmail("request_proof", "Demander un nouveau justificatif")}
-                  className="w-full rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                >
-                  Signaler un problème de paiement
-                </button>
-              ) : null}
-              {canReject ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => openReviewEmail("reject", "Refuser le paiement")}
-                  className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
-                >
-                  Refuser la commande
-                </button>
-              ) : null}
-              {canDeliver ? (
-                <a href="#assign-codes" className="btn-ghost block w-full text-center">
-                  Attribuer et livrer les codes
-                </a>
-              ) : null}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setNextStatus(order.status === "delivered" ? "payment_confirmed" : order.status);
-                  setStatusModalOpen(true);
-                }}
-                className="btn-ghost w-full justify-center disabled:opacity-50"
-              >
-                Changer le statut
-              </button>
-              <OrderDetailDeleteTools
-                orderId={order.id}
-                onError={(errorMessage) => setError(errorMessage)}
-              />
-            </div>
-            <p className="mt-3 text-xs text-muted">
-              L'annulation et les notes internes ne sont pas configurées dans le flux actuel.
-            </p>
-          </section>
+        {/* Right: context rail */}
+        <aside className="flex flex-col gap-[18px]">
+          <CustomerPanel order={order} />
+          <OrderSummaryPanel order={order} />
+          <TimelinePanel events={order.paymentEvents} />
+          <EmailsPanel logs={order.emailLogs} />
+          <QuickActionsPanel
+            busy={busy}
+            order={order}
+            onChangeStatus={() => {
+              setNextStatus(order.status === "delivered" ? "payment_confirmed" : order.status);
+              setStatusModalOpen(true);
+            }}
+            onError={(errorMessage) => setError(errorMessage)}
+          />
         </aside>
       </div>
 
@@ -655,370 +631,510 @@ export default function OrderDetailPage({
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
+// ─── Panel primitives ──────────────────────────────────────────────────────────
+
+function PanelTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="card p-5">
-      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-2 break-words text-lg font-bold text-white">{value}</p>
-      {detail ? <p className="mt-1 break-words text-xs text-muted">{detail}</p> : null}
+    <div className="mb-3 flex items-center gap-2.5">
+      <span className="text-[13px] font-semibold text-white">{children}</span>
+      {right ? <span className="ml-auto">{right}</span> : null}
     </div>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function KeyValue({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div>
-      <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="mt-1 break-words text-white">{value}</dd>
+    <div className="flex items-center justify-between gap-3 text-[13px]">
+      <span className="text-muted">{label}</span>
+      <span className={`text-right text-white ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }
 
-function PaymentProofSection({
-  proof,
-}: {
-  proof: AdminPaymentProofDTO | null | "loading";
-}) {
-  const href = proof && proof !== "loading" ? proofHref(proof) : "";
-  const isImage = proof && proof !== "loading" && proof.mimeType.startsWith("image/");
-  const isPdf = proof && proof !== "loading" && proof.mimeType === "application/pdf";
+// ─── Items ──────────────────────────────────────────────────────────────────────
 
+function ItemsPanel({ order }: { order: AdminOrderDTO }) {
   return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Justificatif de paiement</h2>
+    <section className={`${PANEL} overflow-hidden`}>
+      <div className="border-b border-white/[0.06] px-4 py-3 text-[13px] font-semibold text-white">
+        Articles commandés
       </div>
-      <div className="px-5 py-5">
-        {proof === "loading" ? (
-          <p className="text-sm text-muted">Chargement du justificatif...</p>
-        ) : proof === null ? (
-          <p className="text-sm text-muted">Aucun justificatif téléchargé.</p>
-        ) : (
-          <div className="space-y-4">
-            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <InfoRow label="Nom du fichier" value={proof.fileName} />
-              <InfoRow label="Importé le" value={formatDate(proof.uploadedAt)} />
-              <InfoRow label="Type de fichier" value={proof.mimeType} />
-              <InfoRow label="Taille" value={formatBytes(proof.sizeBytes)} />
-            </dl>
-
-            {isImage ? (
-              <div className="rounded-xl border border-border bg-surface p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={href}
-                  alt="Justificatif de paiement"
-                  className="max-h-[620px] w-full rounded-lg object-contain"
-                />
-              </div>
-            ) : null}
-
-            {isPdf ? (
-              <a
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-primary inline-flex"
-              >
-                Ouvrir le PDF
-              </a>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              <a href={href} target="_blank" rel="noreferrer" className="btn-ghost">
-                Ouvrir le justificatif
-              </a>
-              <a href={href} download={proof.fileName} className="btn-ghost">
-                Télécharger le justificatif
-              </a>
-            </div>
+      {order.items.map((item) => (
+        <div
+          key={item.id}
+          className="flex items-center gap-3.5 border-b border-white/[0.05] px-4 py-3.5"
+        >
+          <div className="h-10 w-10 flex-shrink-0 rounded-[9px] bg-gradient-to-br from-[#1d2638] to-[#0d1017]" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13.5px] font-medium text-white">{item.name}</p>
+            <p className="truncate font-mono text-[11.5px] text-faint">
+              {item.productId} × {item.quantity}
+            </p>
           </div>
-        )}
+          <span className="font-mono text-[13.5px] text-white">
+            {formatMAD(item.unitPriceMad * item.quantity)}
+          </span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between border-t border-white/[0.06] bg-[#0c0d11] px-4 py-3">
+        <span className="text-[13px] font-semibold text-white">Total</span>
+        <span className="font-mono text-base font-semibold text-white">{formatMAD(order.totalMad)}</span>
       </div>
     </section>
   );
 }
 
-function DeliverySection({
+// ─── Payment + Proof ────────────────────────────────────────────────────────────
+
+function PaymentPanel({
+  order,
+  submittedAt,
+  confirmedAt,
+  issueReason,
+}: {
+  order: AdminOrderDTO;
+  submittedAt: string | null;
+  confirmedAt: string | null;
+  issueReason: string | null;
+}) {
+  return (
+    <section className={`${PANEL} p-4`}>
+      <PanelTitle>Paiement</PanelTitle>
+      <div className="space-y-2.5">
+        <KeyValue label="Mode" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
+        <KeyValue label="Référence" value={order.publicOrderNumber} mono />
+        <KeyValue label="Montant" value={formatMAD(order.totalMad)} mono />
+        <KeyValue label="Soumis" value={submittedAt ? formatDate(submittedAt) : "Non soumis"} />
+        <KeyValue label="Confirmé" value={confirmedAt ? formatDate(confirmedAt) : "Non confirmé"} />
+        {issueReason ? (
+          <div className="border-t border-white/[0.06] pt-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#e8a838]">Motif</p>
+            <p className="mt-1 text-[12.5px] text-[#d9c48a]">{issueReason}</p>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function PaymentProofPanel({ proof }: { proof: AdminPaymentProofDTO | null | "loading" }) {
+  const ready = proof && proof !== "loading";
+  const href = ready ? proofHref(proof) : "";
+  const isImage = ready && proof.mimeType.startsWith("image/");
+  const isPdf = ready && proof.mimeType === "application/pdf";
+
+  return (
+    <section className={`${PANEL} flex flex-col p-4`}>
+      <PanelTitle
+        right={
+          ready ? (
+            <a href={href} target="_blank" rel="noreferrer" className="text-[11px] text-accent-strong hover:underline">
+              Voir en grand
+            </a>
+          ) : null
+        }
+      >
+        Justificatif de paiement
+      </PanelTitle>
+
+      {proof === "loading" ? (
+        <div className="flex min-h-[96px] flex-1 items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#121319] text-[12px] text-faint">
+          Chargement…
+        </div>
+      ) : proof === null ? (
+        <div className="flex min-h-[96px] flex-1 flex-col items-center justify-center gap-1.5 rounded-[10px] border border-white/[0.08] text-faint"
+          style={{ background: "repeating-linear-gradient(135deg,#15161d,#15161d 8px,#121319 8px,#121319 16px)" }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="9" cy="9" r="2" />
+            <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+          </svg>
+          <span className="text-[10.5px]">Aucun justificatif téléchargé</span>
+        </div>
+      ) : isImage ? (
+        <a href={href} target="_blank" rel="noreferrer" className="block flex-1 overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#121319]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={href} alt="Justificatif de paiement" className="max-h-[220px] w-full object-contain" />
+        </a>
+      ) : (
+        <div className="flex min-h-[96px] flex-1 flex-col items-center justify-center gap-2 rounded-[10px] border border-white/[0.08] bg-[#121319] p-3 text-center">
+          <span className="font-mono text-[11px] text-muted">{proof.fileName}</span>
+          <span className="text-[11px] text-faint">
+            {proof.mimeType} · {formatBytes(proof.sizeBytes)}
+          </span>
+          <a
+            href={href}
+            target={isPdf ? "_blank" : undefined}
+            rel="noreferrer"
+            download={isPdf ? undefined : proof.fileName}
+            className="mt-1 rounded-[9px] border border-white/[0.12] bg-[#0f1015] px-3 py-1.5 text-[12px] font-medium text-white hover:border-white/25"
+          >
+            {isPdf ? "Ouvrir le PDF" : "Télécharger"}
+          </a>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Code delivery ──────────────────────────────────────────────────────────────
+
+type CodeRow = {
+  item: AdminOrderDTO["items"][number];
+  index: number;
+};
+
+function CodeDeliveryPanel({
   order,
   delivered,
+  canDeliver,
+  manualMode,
   available,
   entries,
   chosenIds,
   busy,
-  allFilled,
-  manualMode,
+  totalUnits,
+  readyUnits,
+  deliverReady,
   onSetEntry,
   onDeliver,
-  onSaveDraft,
 }: {
   order: AdminOrderDTO;
   delivered: boolean;
+  canDeliver: boolean;
+  manualMode: boolean;
   available: Record<string, AdminCodeDTO[]>;
   entries: Record<string, AssignmentEntry[]>;
   chosenIds: Set<string>;
   busy: boolean;
-  allFilled: boolean;
-  manualMode: boolean;
+  totalUnits: number;
+  readyUnits: number;
+  deliverReady: boolean;
   onSetEntry: (itemId: string, index: number, entry: AssignmentEntry) => void;
   onDeliver: () => Promise<void>;
-  onSaveDraft: () => void;
 }) {
-  function updateManualCodes(itemId: string, quantity: number, value: string) {
-    const lines = value
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, quantity);
-    for (let index = 0; index < quantity; index += 1) {
-      onSetEntry(itemId, index, lines[index] ? { manualCode: lines[index] } : {});
-    }
-  }
+  const rows: CodeRow[] = order.items.flatMap((item) =>
+    Array.from({ length: item.quantity }, (_, index) => ({ item, index })),
+  );
+
+  const deliveredByItem = (itemId: string, productId: string) =>
+    order.deliveredCodes.filter((code) => code.orderItemId === itemId || code.productId === productId);
+
+  const helper = delivered
+    ? ""
+    : !canDeliver
+    ? "Confirmez le paiement pour activer la livraison."
+    : !deliverReady
+    ? "Saisissez tous les codes pour activer la livraison."
+    : "";
 
   return (
-    <section id="assign-codes" className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">
-          {manualMode ? "Saisir et livrer les codes" : "Attribuer et livrer les codes"}
-        </h2>
-        {manualMode ? (
-          <p className="mt-1 text-xs text-muted">
-            La saisie manuelle est active. Le stock ne sera ni réservé ni consommé.
-          </p>
-        ) : null}
-      </div>
-      <div className="space-y-4 px-5 py-5">
-        {order.items.map((item) => {
-          const stock = available[item.productId] ?? [];
-          const list = entries[item.id] ?? [];
-          const deliveredCodes = order.deliveredCodes.filter(
-            (code) => code.orderItemId === item.id || code.productId === item.productId,
-          );
+    <section id="assign-codes" className={`${PANEL} p-4`}>
+      <PanelTitle
+        right={
+          <span className="text-[11.5px] text-faint">
+            {delivered ? `${totalUnits} code${totalUnits > 1 ? "s" : ""} livré${totalUnits > 1 ? "s" : ""}` : `${readyUnits} sur ${totalUnits} code${totalUnits > 1 ? "s" : ""} prêt${readyUnits > 1 ? "s" : ""}`}
+          </span>
+        }
+      >
+        <span className="inline-flex items-center gap-2">
+          Livraison des codes
+          <span className="rounded-md bg-accent/[0.13] px-2 py-0.5 text-[11px] font-semibold text-accent-strong">
+            {manualMode ? "Saisie manuelle" : "Depuis le stock"}
+          </span>
+        </span>
+      </PanelTitle>
 
-          return (
-            <div key={item.id} className="rounded-xl border border-border bg-surface p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-white">{item.name}</p>
-                <span className="text-xs text-muted">
-                  {item.quantity} unité{item.quantity === 1 ? "" : "s"} · {stock.length} disponible{stock.length === 1 ? "" : "s"}
-                </span>
-              </div>
-
-              {delivered ? (
-                <div className="mt-3 space-y-2">
-                  {deliveredCodes.map((code, index) => (
-                    <div
-                      key={`${code.code}-${index}`}
-                      className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-sm text-white"
-                    >
-                      {code.code}
-                    </div>
-                  ))}
-                </div>
-              ) : manualMode ? (
-                <div className="mt-4">
-                  <label className="mb-2 block text-xs font-medium text-muted">
-                    Collez un code par ligne
-                  </label>
-                  <textarea
-                    value={(entries[item.id] ?? [])
-                      .slice(0, item.quantity)
-                      .map((entry) => entry.manualCode ?? "")
-                      .join("\n")}
-                    onChange={(event) =>
-                      updateManualCodes(item.id, item.quantity, event.target.value)
-                    }
-                    rows={Math.max(3, item.quantity + 1)}
-                    placeholder={Array.from({ length: item.quantity }, (_, index) =>
-                      index === 0 ? "AAAA-BBBB-CCCC" : "DDDD-EEEE-FFFF",
-                    ).join("\n")}
-                    className="input min-h-28 py-3 font-mono text-sm"
-                  />
-                  <p className="mt-2 text-xs text-muted">
-                    Requis : {item.quantity} code{item.quantity === 1 ? "" : "s"}. Saisi(s) :{" "}
-                    {(entries[item.id] ?? [])
-                      .slice(0, item.quantity)
-                      .filter((entry) => entry.manualCode?.trim()).length}
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {Array.from({ length: item.quantity }).map((_, index) => {
-                    const entry = list[index] ?? {};
-                    return (
-                      <div key={index} className="grid gap-2 md:grid-cols-2">
-                        <select
-                          value={entry.digitalCodeId ?? ""}
-                          onChange={(event) =>
-                            onSetEntry(
-                              item.id,
-                              index,
-                              event.target.value ? { digitalCodeId: event.target.value } : {},
-                            )
-                          }
-                          className="input h-10 py-0 text-sm"
-                        >
-                          <option value="">Choisir un code en stock...</option>
-                          {stock.map((code) => (
-                            <option
-                              key={code.id}
-                              value={code.id}
-                              disabled={
-                                chosenIds.has(code.id) && entry.digitalCodeId !== code.id
-                              }
-                            >
-                              {code.code}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          value={entry.manualCode ?? ""}
-                          onChange={(event) =>
-                            onSetEntry(item.id, index, { manualCode: event.target.value })
-                          }
-                          placeholder="Ou saisir un code manuellement"
-                          className="input h-10 py-0 font-mono text-sm"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {!delivered ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {manualMode ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onSaveDraft}
-                className="btn-ghost w-full disabled:opacity-50"
+      {delivered ? (
+        <div className="flex flex-col gap-2.5">
+          {order.items.map((item) =>
+            deliveredByItem(item.id, item.productId).map((code, index) => (
+              <div
+                key={`${item.id}-${code.code}-${index}`}
+                className="flex items-center gap-3 rounded-[10px] border border-[#2ea067]/[0.22] bg-[#121319] px-3 py-2.5"
               >
-                Enregistrer le brouillon
-              </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={!allFilled || busy}
-              onClick={onDeliver}
-              className={`${manualMode ? "" : "sm:col-span-2"} btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50`}
-            >
-              {busy ? "Livraison en cours..." : "Livrer les codes"}
-            </button>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
-            Livré. Le client peut consulter le code attribué.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function TimelineSection({ order }: { order: AdminOrderDTO }) {
-  return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Historique</h2>
-      </div>
-      <div className="px-5 py-5">
-        {order.paymentEvents.length === 0 ? (
-          <p className="text-sm text-muted">Aucun événement pour le moment.</p>
-        ) : (
-          <ol className="space-y-4">
-            {order.paymentEvents.map((event) => (
-              <li key={event.id} className="flex gap-3">
-                <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-accent" />
-                <div>
-                  <p className="text-sm text-white">
-                    {event.note ??
-                      `${event.fromStatus ?? "Début"} → ${event.toStatus ?? event.type}`}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">{formatDate(event.createdAt)}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function EmailLogsSection({ order }: { order: AdminOrderDTO }) {
-  return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-bold text-white">Emails transactionnels</h2>
-      </div>
-      <div className="divide-y divide-border">
-        {order.emailLogs.length === 0 ? (
-          <p className="px-5 py-5 text-sm text-muted">Aucun email journalisé.</p>
-        ) : (
-          order.emailLogs.map((log) => (
-            <article key={log.id} className="px-5 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-white">{log.subject}</p>
-                  <p className="mt-1 text-xs text-muted">
-                    {log.recipient} · {formatDate(log.createdAt)}
-                  </p>
-                </div>
-                <span
-                  className={`chip ${
-                    log.status === "sent"
-                      ? "border-green-500/30 text-green-400"
-                      : log.status === "failed"
-                        ? "border-red-500/30 text-red-400"
-                        : "border-amber-500/30 text-amber-300"
-                  }`}
-                >
-                  {log.status}
-                </span>
+                <span className="w-24 flex-shrink-0 truncate text-[12px] text-muted">{item.name}</span>
+                <span className="flex-1 truncate font-mono text-[12.5px] text-[#5bc98c]">{code.code}</span>
+                <span className="flex-shrink-0 text-[11px] text-[#5bc98c]">✓ livré</span>
               </div>
-              <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                <InfoRow label="Provider" value={log.provider || "simulation"} />
-                <InfoRow label="Message ID" value={log.providerMessageId ?? "Non disponible"} />
-                <InfoRow label="Template" value={log.templateKey ?? log.type} />
-              </dl>
-              {log.errorMessage ? (
-                <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                  {log.errorMessage}
-                </p>
-              ) : null}
-              <details className="mt-3 rounded-xl border border-border bg-surface">
-                <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-muted">
-                  Voir le snapshot rendu
+            )),
+          )}
+          <div className="mt-1 rounded-[10px] border border-[#2ea067]/30 bg-[#2ea067]/10 px-3 py-2.5 text-[12.5px] text-[#5bc98c]">
+            Commande livrée. Le client peut consulter ses codes.
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col gap-2.5">
+            {rows.map(({ item, index }) => {
+              const entry = entries[item.id]?.[index] ?? {};
+              const filled = Boolean(entry.digitalCodeId || entry.manualCode?.trim());
+              const stock = available[item.productId] ?? [];
+              const border = filled
+                ? "border-[#2ea067]/[0.22]"
+                : canDeliver
+                ? "border-accent/30"
+                : "border-white/[0.08]";
+              return (
+                <div
+                  key={`${item.id}-${index}`}
+                  className={`flex flex-wrap items-center gap-2.5 rounded-[10px] border bg-[#121319] px-3 py-2.5 ${border}`}
+                >
+                  <span className="w-24 flex-shrink-0 truncate text-[12px] text-muted" title={item.name}>
+                    {item.name}
+                  </span>
+
+                  {manualMode ? (
+                    <input
+                      value={entry.manualCode ?? ""}
+                      disabled={!canDeliver}
+                      onChange={(event) => onSetEntry(item.id, index, { manualCode: event.target.value })}
+                      placeholder="Saisir le code…"
+                      className="min-w-[120px] flex-1 bg-transparent font-mono text-[12.5px] text-white outline-none placeholder:text-faint disabled:opacity-50"
+                    />
+                  ) : (
+                    <>
+                      <select
+                        value={entry.digitalCodeId ?? ""}
+                        disabled={!canDeliver}
+                        onChange={(event) =>
+                          onSetEntry(
+                            item.id,
+                            index,
+                            event.target.value ? { digitalCodeId: event.target.value } : {},
+                          )
+                        }
+                        className="min-w-[140px] flex-1 rounded-[8px] border border-white/10 bg-[#0f1015] px-2 py-1 text-[12.5px] text-white outline-none focus:border-accent disabled:opacity-50"
+                      >
+                        <option value="">Choisir un code…</option>
+                        {stock.map((code) => (
+                          <option
+                            key={code.id}
+                            value={code.id}
+                            disabled={chosenIds.has(code.id) && entry.digitalCodeId !== code.id}
+                          >
+                            {code.code}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={entry.manualCode ?? ""}
+                        disabled={!canDeliver}
+                        onChange={(event) => onSetEntry(item.id, index, { manualCode: event.target.value })}
+                        placeholder="ou manuel"
+                        className="w-32 rounded-[8px] border border-white/10 bg-[#0f1015] px-2 py-1 font-mono text-[12px] text-white outline-none focus:border-accent disabled:opacity-50"
+                      />
+                    </>
+                  )}
+
+                  <span className={`flex-shrink-0 text-[11px] ${filled ? "text-[#5bc98c]" : "text-faint"}`}>
+                    {filled ? "✓ saisi" : `#${index + 1}`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            disabled={!deliverReady || busy}
+            onClick={onDeliver}
+            className="mt-3.5 h-[42px] w-full rounded-[10px] bg-accent text-[13.5px] font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-[0.55]"
+          >
+            {busy ? "Livraison en cours…" : "Livrer la commande et envoyer l'email"}
+          </button>
+          {helper ? (
+            <p className="mt-2 text-center text-[11.5px] text-faint">{helper}</p>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+// ─── Right rail ─────────────────────────────────────────────────────────────────
+
+function CustomerPanel({ order }: { order: AdminOrderDTO }) {
+  return (
+    <section className={`${PANEL} p-4`}>
+      <div className="flex items-center gap-3">
+        <div className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-[#2c3445] to-[#171b26] text-[13px] font-semibold text-accent-strong">
+          {initials(order.customerName)}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[13.5px] font-semibold text-white">{order.customerName}</p>
+          <p className="truncate text-[11.5px] text-faint">{order.customerEmail}</p>
+        </div>
+      </div>
+      <div className="mt-3.5 flex items-center justify-between border-t border-white/[0.06] pt-3 text-[12.5px]">
+        <span className="text-muted">Contact</span>
+        <a href={`mailto:${order.customerEmail}`} className="text-accent-strong hover:underline">
+          Envoyer un e-mail
+        </a>
+      </div>
+    </section>
+  );
+}
+
+function OrderSummaryPanel({ order }: { order: AdminOrderDTO }) {
+  const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  return (
+    <section className={`${PANEL} p-4`}>
+      <PanelTitle>Résumé de la commande</PanelTitle>
+      <div className="space-y-2.5">
+        <KeyValue label="Référence" value={order.publicOrderNumber} mono />
+        <KeyValue label="Passée le" value={formatDate(order.createdAt)} />
+        <KeyValue label="Articles" value={`${itemCount} article${itemCount > 1 ? "s" : ""}`} />
+        <KeyValue label="Paiement" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] pt-2.5">
+          <span className="text-[13px] font-semibold text-white">Total</span>
+          <span className="font-mono text-[15px] font-semibold text-white">{formatMAD(order.totalMad)}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function timelineDotColor(event: PaymentEventDTO) {
+  switch (event.toStatus) {
+    case "delivered":
+    case "payment_confirmed":
+      return "#5bc98c";
+    case "payment_submitted":
+    case "payment_issue":
+    case "pending_payment":
+      return "#e8a838";
+    case "rejected":
+    case "cancelled":
+      return "#e05c5c";
+    default:
+      return "#3e7bfa";
+  }
+}
+
+function TimelinePanel({ events }: { events: PaymentEventDTO[] }) {
+  return (
+    <section className={`${PANEL} p-4`}>
+      <PanelTitle>Historique</PanelTitle>
+      {events.length === 0 ? (
+        <p className="text-[12.5px] text-faint">Aucun événement pour le moment.</p>
+      ) : (
+        <div className="flex flex-col">
+          {events.map((event, index) => {
+            const last = index === events.length - 1;
+            return (
+              <div key={event.id} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span
+                    className="mt-1 h-[9px] w-[9px] flex-shrink-0 rounded-full"
+                    style={{ background: timelineDotColor(event) }}
+                  />
+                  {!last ? <span className="w-[1.5px] flex-1 bg-white/[0.08]" /> : null}
+                </div>
+                <div className={last ? "" : "pb-4"}>
+                  <p className="text-[12.5px] font-medium text-white">
+                    {event.note ?? `${event.fromStatus ?? "Début"} → ${event.toStatus ?? event.type}`}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-faint">{formatDate(event.createdAt)}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EmailsPanel({ logs }: { logs: EmailLogDTO[] }) {
+  return (
+    <section className={`${PANEL} p-4`}>
+      <PanelTitle>Emails envoyés</PanelTitle>
+      {logs.length === 0 ? (
+        <p className="text-[12.5px] text-faint">Aucun email journalisé.</p>
+      ) : (
+        <div className="space-y-2.5">
+          {logs.map((log) => {
+            const sent = log.status === "sent";
+            const failed = log.status === "failed";
+            return (
+              <details key={log.id} className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-2.5 text-[12.5px]">
+                  {failed ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e05c5c" strokeWidth="2" aria-hidden>
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M15 9l-6 6M9 9l6 6" />
+                    </svg>
+                  ) : sent ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5bc98c" strokeWidth="2" aria-hidden>
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#646a77" strokeWidth="2" aria-hidden>
+                      <circle cx="12" cy="12" r="9" />
+                      <polyline points="12 7 12 12 15 14" />
+                    </svg>
+                  )}
+                  <span className={`min-w-0 flex-1 truncate ${sent ? "text-muted" : failed ? "text-[#f0a5a5]" : "text-faint"}`}>
+                    {log.subject}
+                  </span>
+                  <span className="flex-shrink-0 text-[11px] text-faint">{formatDate(log.createdAt)}</span>
                 </summary>
-                <div className="space-y-3 border-t border-border p-4">
-                  <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted">
+                <div className="mt-2 space-y-2 rounded-[10px] border border-white/[0.06] bg-[#121319] p-3">
+                  <p className="text-[11px] text-faint">
+                    {log.recipient} · {log.templateKey ?? log.type} · {log.provider || "simulation"}
+                  </p>
+                  {log.errorMessage ? (
+                    <p className="rounded border border-[#e05c5c]/30 bg-[#e05c5c]/10 px-2 py-1 text-[11px] text-[#f0a5a5]">
+                      {log.errorMessage}
+                    </p>
+                  ) : null}
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed text-muted">
                     {log.text || log.body}
                   </pre>
-                  {log.html ? (
-                    <div className="rounded-lg border border-border bg-base p-3 text-xs text-muted">
-                      <p className="mb-2 font-semibold text-white">HTML</p>
-                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap">
-                        {log.html}
-                      </pre>
-                    </div>
-                  ) : null}
                 </div>
               </details>
-            </article>
-          ))
-        )}
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function QuickActionsPanel({
+  busy,
+  order,
+  onChangeStatus,
+  onError,
+}: {
+  busy: boolean;
+  order: AdminOrderDTO;
+  onChangeStatus: () => void;
+  onError: (message: string) => void;
+}) {
+  return (
+    <section className={`${PANEL} p-4`}>
+      <PanelTitle>Actions rapides</PanelTitle>
+      <div className="space-y-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onChangeStatus}
+          className="h-[38px] w-full rounded-[9px] border border-white/10 bg-[#121319] text-[12.5px] font-medium text-white transition hover:border-white/25 disabled:opacity-50"
+        >
+          Changer le statut
+        </button>
+        <button
+          type="button"
+          disabled
+          title="Les notes internes ne sont pas encore configurées."
+          className="h-[38px] w-full cursor-not-allowed rounded-[9px] border border-white/10 bg-transparent text-[12.5px] font-medium text-faint"
+        >
+          + Note interne (bientôt)
+        </button>
+        <OrderDetailDeleteTools orderId={order.id} onError={onError} />
       </div>
     </section>
   );
