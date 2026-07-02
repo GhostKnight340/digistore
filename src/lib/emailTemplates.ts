@@ -293,7 +293,9 @@ function brandedEmailHtml(
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 620px;">
             <tr>
               <td style="padding: 0 0 18px;">
-                <img src="${escapeHtml(logoUrl)}" width="158" height="36" alt="ghost.ma" style="display: block; width: 158px; height: 36px; border: 0;" />
+                <a href="${escapeHtml(absoluteAppUrl("/"))}" style="display: inline-block; text-decoration: none; border: 0;">
+                  <img src="${escapeHtml(logoUrl)}" width="181" height="36" alt="ghost.ma" style="display: block; width: 181px; height: 36px; border: 0;" />
+                </a>
               </td>
             </tr>
             <tr>
