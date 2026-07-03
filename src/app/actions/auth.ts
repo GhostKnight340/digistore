@@ -261,24 +261,35 @@ export async function resendVerificationAction(): Promise<AuthActionResult> {
   }
 }
 
-export async function updateCustomerPhoneAction(phoneInput: string): Promise<AuthActionResult> {
+export async function updateCustomerProfileAction(input: {
+  name: string;
+  phone: string;
+}): Promise<AuthActionResult> {
   await ensureDatabaseReady();
   const customer = await getCurrentCustomer();
   if (!customer) return { ok: false, error: "Veuillez vous connecter." };
 
-  const phone = normalizePhone(phoneInput);
+  const name = input.name.trim().replace(/\s+/g, " ");
+  if (!name) {
+    return { ok: false, error: "Veuillez saisir votre nom." };
+  }
+  if (name.length > 120) {
+    return { ok: false, error: "Le nom est trop long (120 caractères maximum)." };
+  }
+
+  const phone = normalizePhone(input.phone);
   if (!isValidOptionalPhone(phone)) {
-    return { ok: false, error: "Veuillez saisir un numÃ©ro de tÃ©lÃ©phone valide." };
+    return { ok: false, error: "Veuillez saisir un numéro de téléphone valide." };
   }
 
   await prisma.customer.update({
     where: { id: customer.id },
-    data: { phone: phone || null },
+    data: { name, phone: phone || null },
   });
   revalidatePath("/account");
   revalidatePath("/checkout");
   revalidatePath("/admin");
-  return { ok: true, message: "NumÃ©ro de tÃ©lÃ©phone enregistrÃ©." };
+  return { ok: true, message: "Profil mis à jour." };
 }
 
 export async function changePasswordAction(input: {
