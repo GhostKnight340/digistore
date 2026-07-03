@@ -6,7 +6,7 @@ import {
   getAdminCustomers,
   getAdminOrderDetail,
   getAdminOrdersPage,
-  getAdminNavCounts,
+  getAdminOrderCounts,
   getAdminOverview,
   getAdminOverviewMetrics,
   getAdminStats,
@@ -75,6 +75,7 @@ import type {
   CustomerDTO,
   AdminOrderDTO,
   AdminOrderSummaryDTO,
+  AdminOrderCountsDTO,
   AdminStatsDTO,
   EmailLogDTO,
   FeaturedVariantOptionDTO,
@@ -153,12 +154,9 @@ export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderSumma
   return getAdminOrdersPage({ take: 100 });
 }
 
-export async function getAdminNavCountsAction(): Promise<{
-  activeOrders: number;
-  paymentReview: number;
-}> {
+export async function getAdminOrderCountsAction(): Promise<AdminOrderCountsDTO> {
   await assertAdminAccess();
-  return getAdminNavCounts();
+  return getAdminOrderCounts();
 }
 
 export async function getAdminOverviewAction(): Promise<AdminOverviewDTO> {

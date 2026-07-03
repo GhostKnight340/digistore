@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { getAdminNavCountsAction } from "@/app/actions/admin";
+import { getAdminOrderCountsAction } from "@/app/actions/admin";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import AdminShell, { type AdminIdentity, type NavCounts } from "@/components/admin/AdminShell";
 
 /**
@@ -22,17 +23,19 @@ export default function AdminShellRoute({
   const router = useRouter();
   const [navCounts, setNavCounts] = useState<NavCounts | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    getAdminNavCountsAction()
-      .then((counts) => {
-        if (!cancelled) setNavCounts(counts);
-      })
-      .catch((error) => console.error("Failed to load admin nav counts", error));
-    return () => {
-      cancelled = true;
-    };
+  const loadCounts = useCallback(async () => {
+    try {
+      setNavCounts(await getAdminOrderCountsAction());
+    } catch (error) {
+      console.error("Failed to load admin order counts", error);
+    }
   }, []);
+
+  useEffect(() => {
+    loadCounts();
+  }, [loadCounts]);
+  // Keep badges live on the standalone order-detail route too.
+  useAutoRefresh(loadCounts, 10000);
 
   return (
     <AdminShell

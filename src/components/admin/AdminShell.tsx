@@ -25,7 +25,12 @@ const C = {
   borderStrong: "rgba(255,255,255,0.1)",
 };
 
-export type NavCounts = { activeOrders: number; paymentReview: number };
+import type { AdminOrderCountsDTO } from "@/lib/dto";
+
+export type NavCounts = AdminOrderCountsDTO;
+
+/** Which count field each badge shows. Keep in sync with AdminOrderCountsDTO. */
+type BadgeKey = "needsAttention" | "paymentReview" | "awaitingFulfillment" | "refunded";
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
 
@@ -33,7 +38,7 @@ type NavItem = {
   id: string;
   label: string;
   icon: ReactNode;
-  badge?: "activeOrders" | "paymentReview";
+  badge?: BadgeKey;
   badgeTone?: "accent" | "warning";
 };
 
@@ -104,7 +109,7 @@ const NAV: NavGroup[] = [
       {
         id: "orders",
         label: "Toutes les commandes",
-        badge: "activeOrders",
+        badge: "needsAttention",
         badgeTone: "accent",
         icon: icon(
           <>
@@ -129,11 +134,15 @@ const NAV: NavGroup[] = [
       {
         id: "fulfillment",
         label: "Traitement",
+        badge: "awaitingFulfillment",
+        badgeTone: "accent",
         icon: icon(<polyline points="20 6 9 17 4 12" />),
       },
       {
         id: "refunds",
         label: "Remboursements",
+        badge: "refunded",
+        badgeTone: "warning",
         icon: icon(
           <>
             <polyline points="1 4 1 10 7 10" />

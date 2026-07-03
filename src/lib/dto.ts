@@ -96,6 +96,26 @@ export interface AdminStatsDTO {
   customerCount: number;
 }
 
+/**
+ * Single source of truth for admin order-queue counts. Every sidebar badge and
+ * the Commandes-page status tabs derive from this, so they stay consistent.
+ * Each field maps to a specific order status (or an aggregate of statuses that
+ * matches a page/tab filter exactly).
+ */
+export interface AdminOrderCountsDTO {
+  total: number; // all orders
+  pendingPayment: number; // pending_payment
+  paymentReview: number; // payment_submitted — awaiting proof verification
+  paymentIssue: number; // payment_issue
+  awaitingFulfillment: number; // payment_confirmed — paid, needs code assignment/delivery
+  delivered: number; // delivered
+  rejected: number; // rejected
+  refunded: number; // refunded
+  cancelled: number; // cancelled
+  /** pending_payment + payment_submitted + payment_issue + payment_confirmed. */
+  needsAttention: number;
+}
+
 export interface AdminCodeDTO {
   id: string;
   code: string;
