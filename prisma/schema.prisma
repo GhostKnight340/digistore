@@ -146,6 +146,7 @@ model Order {
 
   @@index([status])
   @@index([customerEmail])
+  @@index([customerId])
   @@index([createdAt])
   @@index([paymentMethod])
   @@index([paymentMethod, createdAt])

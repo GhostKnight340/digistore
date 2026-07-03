@@ -2,9 +2,10 @@
 -- Replaces the previous position-based scheme (COUNT of earlier orders per row),
 -- so every list/detail/email can render the same reference without a query.
 --
--- Written idempotently: this deployment also provisions the column at runtime
--- (src/lib/db/prisma.ts) because it has no `migrate deploy` step, so applying
--- this migration after the runtime bootstrap must be a no-op rather than an error.
+-- Written idempotently so it is safe to apply against the pre-existing production
+-- database during Migrate adoption (the column may already have been provisioned
+-- by the old runtime bootstrap): every object uses IF NOT EXISTS and the backfill
+-- only touches rows still missing a number.
 
 ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "orderNumber" INTEGER;
 
@@ -25,15 +26,17 @@ SET "orderNumber" = ordered.seq + COALESCE((SELECT MAX("orderNumber") FROM "Orde
 FROM ordered
 WHERE o."id" = ordered."id";
 
--- Advance the sequence monotonically past the highest assigned value.
-DO $$ BEGIN PERFORM setval(
-  '"Order_orderNumber_seq"',
-  GREATEST(
-    (SELECT COALESCE(MAX("orderNumber"), 0) FROM "Order"),
-    (SELECT last_value FROM "Order_orderNumber_seq")
-  ),
-  true
-); END $$;
+-- Advance the sequence past the highest assigned number, but only when rows exist
+-- so a fresh database still issues #000001 first (setval on an empty table would
+-- otherwise make the first order #000002).
+DO $$
+DECLARE max_number integer;
+BEGIN
+  SELECT MAX("orderNumber") INTO max_number FROM "Order";
+  IF max_number IS NOT NULL THEN
+    PERFORM setval('"Order_orderNumber_seq"', max_number, true);
+  END IF;
+END $$;
 
 ALTER TABLE "Order" ALTER COLUMN "orderNumber" SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS "Order_orderNumber_key" ON "Order"("orderNumber");
