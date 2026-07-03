@@ -52,7 +52,13 @@ function authSecret() {
 }
 
 async function baseUrl() {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
+  // Keep this list in sync with appBaseUrl() in orderNumber.ts so the reset
+  // link matches the logo/footer links rendered in the same email.
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.APP_URL ||
+    process.env.SITE_URL;
   if (configured) return configured.replace(/\/$/, "");
   let host = "localhost:3000";
   try {
