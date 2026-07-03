@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref (e.g. new pushes to a PR).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate schema & build
+    runs-on: ubuntu-latest
+    env:
+      # Placeholders so `prisma generate` and `next build` can run without a real
+      # database. The client only connects when a query executes; pages are
+      # request-time dynamic, so the build performs no queries. Migrations are
+      # NOT run here — schema is applied by `migrate deploy` at deploy time.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      NEXT_PUBLIC_APP_URL: https://ghost.ma
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Prisma schema
+        run: pnpm prisma validate
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Build (type-checks and lints)
+        run: pnpm build
