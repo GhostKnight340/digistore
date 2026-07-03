@@ -60,8 +60,10 @@ import {
   reorderCategories,
   saveCategory,
 } from "@/lib/db/categories";
-import { sendTransactionalEmail } from "@/lib/email/send-email";
-import type { EmailTemplateKey } from "@/lib/emailTemplates";
+import { renderTransactionalEmail, sendTransactionalEmail } from "@/lib/email/send-email";
+import type { EmailTemplateKey, RenderedEmailTemplate } from "@/lib/emailTemplates";
+import { emailTemplateSampleVariables } from "@/lib/emailSampleData";
+import { mergeStoreSettings } from "@/lib/storeSettings";
 import type {
   ActionResult,
   AdminCategoryDTO,
@@ -104,9 +106,32 @@ export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage({ take: 10 });
 }
 
+export async function previewEmailTemplateAction(
+  templateKey: EmailTemplateKey,
+  draftSettings: unknown,
+): Promise<ActionResult & { preview?: RenderedEmailTemplate }> {
+  await assertAdminAccess();
+  try {
+    const settings = mergeStoreSettings(draftSettings);
+    const preview = await renderTransactionalEmail(
+      templateKey,
+      emailTemplateSampleVariables(),
+      {},
+      settings,
+    );
+    return { ok: true, preview };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Aperçu impossible.",
+    };
+  }
+}
+
 export async function sendTestEmailAction(
   to: string,
   templateKey: EmailTemplateKey,
+  draftSettings?: unknown,
 ): Promise<ActionResult> {
   await assertAdminAccess();
   const recipient = to.trim();
@@ -117,17 +142,10 @@ export async function sendTestEmailAction(
     to: recipient,
     templateKey,
     type: "test_email",
-    variables: {
-      customer_name: "Client test",
-      order_number: "#TEST",
-      order_url: "https://ghost.ma/order/test",
-      payment_url: "https://ghost.ma/payment/test",
-      delivery_url: "https://ghost.ma/delivery/test",
-      total: "100 MAD",
-      reason: "Test admin",
-    },
+    variables: emailTemplateSampleVariables(),
     metadata: { source: "admin_test_email" },
     manuallyEdited: false,
+    settingsOverride: draftSettings ? mergeStoreSettings(draftSettings) : undefined,
   });
   return result.ok
     ? { ok: true }

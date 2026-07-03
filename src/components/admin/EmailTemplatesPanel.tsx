@@ -1,14 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { sendTestEmailAction } from "@/app/actions/admin";
-import type { EmailTemplateKey } from "@/lib/emailTemplates";
+import { previewEmailTemplateAction, sendTestEmailAction } from "@/app/actions/admin";
+import type { EmailTemplateKey, RenderedEmailTemplate } from "@/lib/emailTemplates";
+import { EMAIL_TEMPLATE_VARIABLE_KEYS } from "@/lib/emailSampleData";
 
 const labels: Record<string, string> = {
   welcome: "Welcome",
+  email_verification: "Email verification",
   email_confirmation: "Email confirmation",
   password_reset: "Password reset",
+  password_changed: "Password changed",
   order_received: "Order received",
   awaiting_payment: "Awaiting payment",
   proof_received: "Proof received",
@@ -19,22 +22,7 @@ const labels: Record<string, string> = {
   refund_update: "Refund update",
 };
 
-const sample: Record<string, string> = {
-  customer_name: "Amine",
-  order_number: "#000128",
-  order_url: "https://ghost.ma/order/example",
-  payment_url: "https://ghost.ma/payment/example",
-  delivery_url: "https://ghost.ma/delivery/example",
-  total: "250 MAD",
-  reason: "Justificatif illisible",
-  support_email: "support@ghost.ma",
-  support_whatsapp: "+212 600 000 000",
-  codes: "AAAA-BBBB-CCCC",
-};
-
-function renderTemplate(value: string) {
-  return value.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) => sample[key] ?? `{{${key}}}`);
-}
+const PREVIEW_DEBOUNCE_MS = 350;
 
 export default function EmailTemplatesPanel() {
   const { settings, saveSettings } = useStoreSettings();
@@ -45,14 +33,42 @@ export default function EmailTemplatesPanel() {
   const [testRecipient, setTestRecipient] = useState(
     process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "",
   );
+  const [preview, setPreview] = useState<RenderedEmailTemplate | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
+  const [previewError, setPreviewError] = useState("");
+
   const template = draft[active];
-  const preview = useMemo(
-    () => ({
-      subject: renderTemplate(template.subject),
-      body: renderTemplate(template.body),
-    }),
-    [template],
+
+  // The exact settings the preview and the test email are rendered with:
+  // saved store settings (footer, badges, social links, branding) plus the
+  // unsaved template drafts being edited here.
+  const previewSettings = useMemo(
+    () => ({ ...settings, emailTemplates: draft }),
+    [settings, draft],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    setPreviewLoading(true);
+    const timer = setTimeout(async () => {
+      const result = await previewEmailTemplateAction(
+        active as EmailTemplateKey,
+        previewSettings,
+      );
+      if (cancelled) return;
+      setPreviewLoading(false);
+      if (result.ok && result.preview) {
+        setPreview(result.preview);
+        setPreviewError("");
+      } else {
+        setPreviewError(result.error ?? "Aperçu indisponible.");
+      }
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [active, previewSettings]);
 
   async function save() {
     const result = await saveSettings({ ...settings, emailTemplates: draft });
@@ -60,8 +76,16 @@ export default function EmailTemplatesPanel() {
   }
 
   async function sendTest() {
-    const result = await sendTestEmailAction(testRecipient, active as EmailTemplateKey);
-    setMessage(result.ok ? "Email test traité. Consultez EmailLog pour le statut." : result.error ?? "Envoi impossible.");
+    const result = await sendTestEmailAction(
+      testRecipient,
+      active as EmailTemplateKey,
+      previewSettings,
+    );
+    setMessage(
+      result.ok
+        ? "Email test envoyé avec le rendu affiché dans l'aperçu. Consultez EmailLog pour le statut."
+        : result.error ?? "Envoi impossible.",
+    );
   }
 
   return (
@@ -85,7 +109,9 @@ export default function EmailTemplatesPanel() {
         <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-base/95 p-4 backdrop-blur">
           <div>
             <h2 className="text-xl font-bold text-white">Templates email</h2>
-            <p className="text-xs text-muted">Variables: {Object.keys(sample).map((key) => `{{${key}}}`).join(" ")}</p>
+            <p className="text-xs text-muted">
+              Variables: {EMAIL_TEMPLATE_VARIABLE_KEYS.map((key) => `{{${key}}}`).join(" ")}
+            </p>
           </div>
           <button type="button" onClick={save} className="btn-primary h-10 px-4 text-xs">
             Enregistrer
@@ -139,11 +165,33 @@ export default function EmailTemplatesPanel() {
         </section>
 
         <section className="card p-5">
-          <p className="text-xs uppercase tracking-wide text-muted">Aperçu</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">{preview.subject}</h3>
-          <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-border bg-surface p-4 text-sm leading-relaxed text-muted">
-            {preview.body}
-          </pre>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted">Aperçu</p>
+              <p className="mt-1 text-xs text-muted">
+                Rendu exact de l&apos;e-mail envoyé au client (données d&apos;exemple).
+              </p>
+            </div>
+            {previewLoading ? <span className="text-xs text-muted">Actualisation...</span> : null}
+          </div>
+          {previewError ? (
+            <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{previewError}</p>
+          ) : null}
+          {preview ? (
+            <>
+              <h3 className="mt-3 text-lg font-semibold text-white">{preview.subject}</h3>
+              <iframe
+                title="Aperçu de l'e-mail"
+                sandbox=""
+                srcDoc={preview.html}
+                className={`mt-4 h-[720px] w-full rounded-xl border border-border bg-[#080a0f] transition-opacity ${
+                  previewLoading ? "opacity-60" : "opacity-100"
+                }`}
+              />
+            </>
+          ) : previewLoading ? (
+            <p className="mt-4 text-sm text-muted">Chargement de l&apos;aperçu...</p>
+          ) : null}
         </section>
       </div>
     </section>
