@@ -46,7 +46,7 @@ function brandedButton(label: string, href: string) {
   if (!href) return "";
   const safeHref = escapeHtml(href);
   return `
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 28px auto 18px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 28px auto 6px;">
       <tr>
         <td style="border-radius: 12px; background: #3e7bfa;">
           <a href="${safeHref}" style="display: inline-block; padding: 14px 22px; color: #ffffff; font-family: Arial, sans-serif; font-size: 15px; font-weight: 700; text-decoration: none;">
@@ -57,33 +57,56 @@ function brandedButton(label: string, href: string) {
     </table>`;
 }
 
-function codeListHtml(codesValue: string) {
-  const codes = codesValue
-    .split(/\r?\n/)
-    .map((code) => code.trim())
+/**
+ * Per-template call-to-action mapping. The BODY of the email always comes from
+ * the editable template body (single source of truth); only the button label
+ * and which variable supplies its URL are mapped here so the button text
+ * matches the template's purpose.
+ */
+const CTA_BY_TEMPLATE: Partial<Record<EmailTemplateKey, { label: string; urlKeys: string[] }>> = {
+  welcome: { label: "Ouvrir mon compte", urlKeys: ["account_url"] },
+  email_verification: { label: "Vérifier mon e-mail", urlKeys: ["verification_url"] },
+  email_confirmation: { label: "Ouvrir mon compte", urlKeys: ["account_url"] },
+  password_reset: { label: "Réinitialiser mon mot de passe", urlKeys: ["reset_password_url"] },
+  password_changed: { label: "Sécuriser mon compte", urlKeys: ["account_url"] },
+  order_received: { label: "Finaliser le paiement", urlKeys: ["payment_url", "order_url"] },
+  awaiting_payment: { label: "Finaliser le paiement", urlKeys: ["payment_url", "order_url"] },
+  proof_received: { label: "Suivre ma commande", urlKeys: ["order_url", "payment_url"] },
+  new_proof_requested: { label: "Ajouter un justificatif", urlKeys: ["payment_url", "order_url"] },
+  payment_rejected: { label: "Voir le paiement", urlKeys: ["payment_url", "order_url"] },
+  payment_confirmed: { label: "Suivre ma commande", urlKeys: ["order_url"] },
+  order_delivered: { label: "Voir ma livraison", urlKeys: ["delivery_url", "order_url"] },
+  refund_update: { label: "Suivre ma commande", urlKeys: ["order_url"] },
+};
+
+function ctaFor(key: EmailTemplateKey, variables: Variables): { label: string; url: string } | null {
+  const cta = CTA_BY_TEMPLATE[key];
+  if (!cta) return null;
+  const url = cta.urlKeys.map((urlKey) => variableString(variables, urlKey)).find(Boolean) ?? "";
+  if (!url) return null;
+  return { label: cta.label, url };
+}
+
+/**
+ * Converts the (already variable-substituted) template body into HTML,
+ * preserving exactly what the editor contains: blank lines become separate
+ * paragraphs and single newlines become <br>. No greeting, intro, or any other
+ * copy is injected — the body is rendered verbatim.
+ */
+function bodyToHtml(body: string) {
+  const blocks = body
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
     .filter(Boolean);
-  if (codes.length === 0) return "";
-
-  const rows = codes
-    .map(
-      (code, index) => `
-        <tr>
-          <td style="padding: ${index === 0 ? "0" : "10px"} 0 0;">
-            <p style="margin: 0 0 6px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;">
-              Votre code${codes.length > 1 ? ` ${index + 1}` : ""}
-            </p>
-            <div style="border: 1px solid #2f3954; border-radius: 12px; background: #0a0d14; padding: 13px 14px; color: #ffffff; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 700; letter-spacing: .05em; word-break: break-all;">
-              ${escapeHtml(code)}
-            </div>
-          </td>
-        </tr>`,
-    )
-    .join("");
-
-  return `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0 0;">
-      ${rows}
-    </table>`;
+  if (blocks.length === 0) return "";
+  return blocks
+    .map((block) => {
+      const lines = block.split(/\n/).map((line) => escapeHtml(line));
+      return `<p style="margin: 0 0 16px; color: #d3dbef; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7;">${lines.join(
+        "<br />",
+      )}</p>`;
+    })
+    .join("\n");
 }
 
 function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentYear: string) {
@@ -150,131 +173,26 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
     </table>`;
 }
 
+/**
+ * Wraps the email in the shared branded shell (background, logo header, footer
+ * with support links / social icons / payment badges). The visible content is
+ * strictly: the subject as the heading, the template body verbatim, and the
+ * per-template CTA button. Nothing else is injected.
+ */
 function brandedEmailHtml(
   key: EmailTemplateKey,
   subject: string,
-  text: string,
+  body: string,
   variables: Variables,
   settings: StoreSettings,
 ) {
-  const customerName = variableString(variables, "customer_name") || "client";
   const supportEmail = variableString(variables, "support_email") || "support@ghost.ma";
   const currentYear = variableString(variables, "current_year") || String(new Date().getFullYear());
-  const verificationUrl = variableString(variables, "verification_url");
-  const resetUrl = variableString(variables, "reset_password_url");
-  const accountUrl = variableString(variables, "account_url");
-  const orderUrl = variableString(variables, "order_url");
-  const paymentUrl = variableString(variables, "payment_url");
-  const deliveryUrl = variableString(variables, "delivery_url");
-  const codes = variableString(variables, "codes");
   const logoUrl = emailLogoUrl();
-
-  const config: Record<
-    string,
-    {
-      title: string;
-      intro: string;
-      ctaLabel?: string;
-      ctaUrl?: string;
-      fallbackLabel?: string;
-      notice?: string;
-    }
-  > = {
-    email_verification: {
-      title: "Vérifiez votre e-mail",
-      intro:
-        "Confirmez votre adresse e-mail pour sécuriser votre compte ghost.ma et accéder à votre espace client.",
-      ctaLabel: "Vérifier mon e-mail",
-      ctaUrl: verificationUrl,
-      fallbackLabel: "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :",
-    },
-    welcome: {
-      title: "Bienvenue sur ghost.ma",
-      intro:
-        "Votre compte est prêt. Vous pouvez suivre vos commandes et retrouver vos produits numériques depuis votre espace client.",
-      ctaLabel: "Ouvrir mon compte",
-      ctaUrl: accountUrl,
-    },
-    password_reset: {
-      title: "Réinitialisez votre mot de passe",
-      intro:
-        "Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte ghost.ma.",
-      ctaLabel: "Réinitialiser mon mot de passe",
-      ctaUrl: resetUrl,
-      fallbackLabel: "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :",
-      notice: "Ce lien expire bientôt. Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.",
-    },
-    password_changed: {
-      title: "Votre mot de passe a été modifié",
-      intro:
-        "Le mot de passe de votre compte ghost.ma vient d’être modifié. Si vous n’êtes pas à l’origine de cette action, contactez immédiatement le support.",
-      ctaLabel: "Sécuriser mon compte",
-      ctaUrl: accountUrl,
-    },
-    email_confirmation: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Ouvrir mon compte",
-      ctaUrl: accountUrl,
-    },
-    order_received: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Finaliser le paiement",
-      ctaUrl: paymentUrl || orderUrl,
-    },
-    awaiting_payment: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Finaliser le paiement",
-      ctaUrl: paymentUrl,
-    },
-    proof_received: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Suivre ma commande",
-      ctaUrl: orderUrl || paymentUrl,
-    },
-    new_proof_requested: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Ajouter un justificatif",
-      ctaUrl: paymentUrl || orderUrl,
-    },
-    payment_rejected: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Voir le paiement",
-      ctaUrl: paymentUrl || orderUrl,
-    },
-    payment_confirmed: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Suivre ma commande",
-      ctaUrl: orderUrl,
-    },
-    order_delivered: {
-      title: subject,
-      intro: `Votre commande ${variableString(
-        variables,
-        "order_number",
-      )} est disponible. Vos codes sont prêts ci-dessous et restent accessibles depuis votre page de livraison.`,
-      ctaLabel: "Voir ma livraison",
-      ctaUrl: deliveryUrl || orderUrl,
-    },
-    refund_update: {
-      title: subject,
-      intro: text,
-      ctaLabel: "Suivre ma commande",
-      ctaUrl: orderUrl,
-    },
-  };
-
-  const selected = config[key] ?? {
-    title: subject,
-    intro: text,
-  };
-  const fallbackUrl = selected.ctaUrl || "";
+  const cta = ctaFor(key, variables);
+  // Hidden inbox preview text. Use the subject so it never duplicates the
+  // visible body's opening line.
+  const preheader = subject;
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -285,7 +203,7 @@ function brandedEmailHtml(
   </head>
   <body style="margin: 0; padding: 0; background: #080a0f; color: #f6f7fb;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
-      ${escapeHtml(selected.intro)}
+      ${escapeHtml(preheader)}
     </div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #080a0f; padding: 32px 16px;">
       <tr>
@@ -300,35 +218,11 @@ function brandedEmailHtml(
             </tr>
             <tr>
               <td style="border: 1px solid #232838; border-radius: 18px; background: #11141d; padding: 34px 30px; box-shadow: 0 24px 70px rgba(0,0,0,0.28);">
-                <p style="margin: 0 0 12px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;">
-                  Compte client
-                </p>
-                <h1 style="margin: 0; color: #ffffff; font-family: Arial, sans-serif; font-size: 28px; line-height: 1.2;">
-                  ${escapeHtml(selected.title)}
+                <h1 style="margin: 0 0 20px; color: #ffffff; font-family: Arial, sans-serif; font-size: 26px; line-height: 1.25;">
+                  ${escapeHtml(subject)}
                 </h1>
-                <p style="margin: 20px 0 0; color: #d9e2ff; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7;">
-                  Bonjour ${escapeHtml(customerName)},
-                </p>
-                <p style="margin: 10px 0 0; color: #c4cce0; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7;">
-                  ${escapeHtml(selected.intro)}
-                </p>
-                ${key === "order_delivered" ? codeListHtml(codes) : ""}
-                ${brandedButton(selected.ctaLabel ?? "Ouvrir ghost.ma", selected.ctaUrl ?? "")}
-                ${
-                  fallbackUrl && selected.fallbackLabel
-                    ? `<p style="margin: 16px 0 0; color: #8f9bb3; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
-                        ${escapeHtml(selected.fallbackLabel)}<br />
-                        <a href="${escapeHtml(fallbackUrl)}" style="color: #7ba7ff; word-break: break-all;">${escapeHtml(fallbackUrl)}</a>
-                      </p>`
-                    : ""
-                }
-                ${
-                  selected.notice
-                    ? `<p style="margin: 20px 0 0; border-radius: 12px; background: rgba(62,123,250,0.10); padding: 14px 16px; color: #cbd6ee; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
-                        ${escapeHtml(selected.notice)}
-                      </p>`
-                    : ""
-                }
+                ${bodyToHtml(body)}
+                ${cta ? brandedButton(cta.label, cta.url) : ""}
               </td>
             </tr>
             <tr>
@@ -364,37 +258,14 @@ export function renderEmailTemplate(
       String(baseVariables[name] ?? ""),
     );
 
-  const subject =
-    key === "password_changed"
-      ? "Votre mot de passe ghost.ma a été modifié"
-      : render(template.subject);
-  const renderedBody = render(template.body);
-  const text =
-    key === "password_changed"
-      ? [
-          `Bonjour ${variableString(baseVariables, "customer_name") || "client"},`,
-          "",
-          "Le mot de passe de votre compte ghost.ma vient d’être modifié.",
-          "",
-          "Si vous n’êtes pas à l’origine de cette action, contactez immédiatement le support.",
-        ].join("\n")
-      : key === "order_delivered"
-      ? [
-          `Bonjour ${variableString(baseVariables, "customer_name") || "client"},`,
-          "",
-          `Votre commande ${variableString(baseVariables, "order_number")} est disponible.`,
-          "",
-          "Vos codes :",
-          variableString(baseVariables, "codes"),
-          "",
-          `Livraison : ${variableString(baseVariables, "delivery_url")}`,
-          "",
-          "Merci pour votre achat.",
-        ].join("\n")
-      : renderedBody;
+  // Single source of truth: subject and body come straight from the editable
+  // template. The plaintext version IS the rendered body — no separate copy.
+  const subject = render(template.subject);
+  const body = render(template.body);
+
   return {
     subject,
-    text,
-    html: brandedEmailHtml(key, subject, text, baseVariables, settings),
+    text: body,
+    html: brandedEmailHtml(key, subject, body, baseVariables, settings),
   };
 }
