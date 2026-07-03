@@ -44,8 +44,17 @@ export function getFooterSocialLinks(settings: StoreSettings): FooterSocialLink[
   ].filter((link): link is FooterSocialLink => Boolean(link));
 }
 
+/** All payment badges (enabled or not), ordered by sortOrder — for admin editing. */
+export function getFooterPaymentBadges(settings: StoreSettings) {
+  return [...settings.footer.paymentBadges].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Enabled payment badges, ordered by sortOrder. Single source of truth consumed
+ * by the public website footer AND the email footer (preview + real emails).
+ */
 export function getEnabledFooterPaymentBadges(settings: StoreSettings) {
-  return settings.footer.paymentBadges.filter((badge) => badge.enabled);
+  return getFooterPaymentBadges(settings).filter((badge) => badge.enabled);
 }
 
 export function emailIconUrl(iconPath: string) {

@@ -9,6 +9,7 @@ import {
   addCodesBulkAction,
   disableCodeAction,
 } from "@/app/actions/admin";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import type {
   AdminCodeDTO,
   InventoryProductDTO,
@@ -117,6 +118,9 @@ export default function InventoryPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Live updates: reflect stock/code changes made elsewhere without a refresh.
+  useAutoRefresh(load);
 
   const visibleProducts = useMemo(() => {
     const term = query.trim().toLowerCase();

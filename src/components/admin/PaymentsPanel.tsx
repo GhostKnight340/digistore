@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
 import { orderStatusShort, orderStatusBadgeClass, isDelivered } from "@/lib/orderStatus";
 import { getAdminPaymentOrdersAction } from "@/app/actions/admin";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import type { AdminOrderSummaryDTO } from "@/lib/dto";
 
 type TabFilter = "submitted" | "confirmed" | "issue" | "rejected" | "delivered" | "all";
@@ -48,6 +49,10 @@ export default function PaymentsPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Live updates: refresh the payment queue after confirm/reject happens
+  // elsewhere or on another device, without a manual reload.
+  useAutoRefresh(load);
 
   const countFor = (t: TabFilter) => {
     if (t === "all") return orders.length;

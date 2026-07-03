@@ -21,6 +21,9 @@ export type FooterPaymentBadgeSetting = {
   id: string;
   label: string;
   enabled: boolean;
+  sortOrder: number;
+  /** Optional icon/type identifier for future icon rendering. */
+  icon?: string;
 };
 
 export type StoreSettings = {
@@ -284,9 +287,9 @@ export const defaultStoreSettings: StoreSettings = {
       x: "",
     },
     paymentBadges: [
-      { id: "visa", label: "Visa", enabled: true },
-      { id: "mastercard", label: "Mastercard", enabled: true },
-      { id: "paypal", label: "PayPal", enabled: true },
+      { id: "visa", label: "Visa", enabled: true, sortOrder: 0 },
+      { id: "mastercard", label: "Mastercard", enabled: true, sortOrder: 1 },
+      { id: "paypal", label: "PayPal", enabled: true, sortOrder: 2 },
     ],
   },
   theme: {
@@ -379,10 +382,17 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
       paymentBadges:
         isObject(value.footer) && Array.isArray(value.footer.paymentBadges)
           ? value.footer.paymentBadges
-              .map((badge) => ({
+              .map((badge, index) => ({
                 id: isObject(badge) && typeof badge.id === "string" ? badge.id : "",
                 label: isObject(badge) && typeof badge.label === "string" ? badge.label : "",
                 enabled: isObject(badge) && typeof badge.enabled === "boolean" ? badge.enabled : true,
+                sortOrder:
+                  isObject(badge) && typeof badge.sortOrder === "number"
+                    ? badge.sortOrder
+                    : index,
+                ...(isObject(badge) && typeof badge.icon === "string" && badge.icon
+                  ? { icon: badge.icon }
+                  : {}),
               }))
               .filter((badge) => badge.id.trim() && badge.label.trim())
           : defaultStoreSettings.footer.paymentBadges,

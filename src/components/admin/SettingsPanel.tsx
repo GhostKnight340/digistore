@@ -62,6 +62,57 @@ export default function SettingsPanel() {
     setDraft((current) => ({ ...current, [section]: value }));
   }
 
+  const sortedPaymentBadges = [...draft.footer.paymentBadges].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  );
+
+  function setPaymentBadges(badges: StoreSettings["footer"]["paymentBadges"]) {
+    setDraft((current) => ({
+      ...current,
+      footer: { ...current.footer, paymentBadges: badges },
+    }));
+  }
+
+  function addPaymentBadge() {
+    const maxOrder = draft.footer.paymentBadges.reduce(
+      (max, badge) => Math.max(max, badge.sortOrder),
+      -1,
+    );
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? `badge-${crypto.randomUUID()}`
+        : `badge-${maxOrder + 1}-${draft.footer.paymentBadges.length}`;
+    setPaymentBadges([
+      ...draft.footer.paymentBadges,
+      { id, label: "Nouveau badge", enabled: true, sortOrder: maxOrder + 1 },
+    ]);
+  }
+
+  function updatePaymentBadge(
+    id: string,
+    patch: Partial<StoreSettings["footer"]["paymentBadges"][number]>,
+  ) {
+    setPaymentBadges(
+      draft.footer.paymentBadges.map((badge) =>
+        badge.id === id ? { ...badge, ...patch } : badge,
+      ),
+    );
+  }
+
+  function removePaymentBadge(id: string) {
+    setPaymentBadges(draft.footer.paymentBadges.filter((badge) => badge.id !== id));
+  }
+
+  function movePaymentBadge(id: string, direction: -1 | 1) {
+    const ordered = [...draft.footer.paymentBadges].sort((a, b) => a.sortOrder - b.sortOrder);
+    const index = ordered.findIndex((badge) => badge.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= ordered.length) return;
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    // Reassign sortOrder to the new positions so it persists.
+    setPaymentBadges(ordered.map((badge, position) => ({ ...badge, sortOrder: position })));
+  }
+
   function save() {
     if (!draft.branding.siteName.trim() || !draft.branding.logoText.trim()) {
       setMessage("Le nom du site et le logo texte sont obligatoires.");
@@ -401,27 +452,70 @@ export default function SettingsPanel() {
           />
         </div>
         <div className="mt-5 border-t border-border pt-5">
-          <p className="text-sm font-semibold text-white">Badges de paiement du pied de page</p>
-          <p className="mt-1 text-xs text-muted">
-            Ces badges sont affichés dans le pied de page du site et des e-mails.
-          </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {draft.footer.paymentBadges.map((badge) => (
-              <ToggleSwitch
-                key={badge.id}
-                className="rounded-xl border border-border bg-base px-3 py-3"
-                label={badge.label}
-                checked={badge.enabled}
-                onChange={(checked) =>
-                  update("footer", {
-                    ...draft.footer,
-                    paymentBadges: draft.footer.paymentBadges.map((item) =>
-                      item.id === badge.id ? { ...item, enabled: checked } : item,
-                    ),
-                  })
-                }
-              />
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-white">Badges de paiement du pied de page</p>
+              <p className="mt-1 text-xs text-muted">
+                Affichés dans le pied de page du site et des e-mails. Ajoutez, renommez,
+                activez/désactivez, réordonnez ou supprimez librement.
+              </p>
+            </div>
+            <button type="button" onClick={addPaymentBadge} className="btn-ghost h-9 px-3 text-xs">
+              + Ajouter un badge
+            </button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {sortedPaymentBadges.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-xs text-muted">
+                Aucun badge. Ajoutez-en un pour l’afficher dans le pied de page.
+              </p>
+            ) : (
+              sortedPaymentBadges.map((badge, index) => (
+                <div
+                  key={badge.id}
+                  className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-base px-3 py-2.5"
+                >
+                  <div className="flex flex-col">
+                    <button
+                      type="button"
+                      aria-label="Monter"
+                      disabled={index === 0}
+                      onClick={() => movePaymentBadge(badge.id, -1)}
+                      className="text-muted transition hover:text-white disabled:opacity-30"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Descendre"
+                      disabled={index === sortedPaymentBadges.length - 1}
+                      onClick={() => movePaymentBadge(badge.id, 1)}
+                      className="text-muted transition hover:text-white disabled:opacity-30"
+                    >
+                      ▼
+                    </button>
+                  </div>
+                  <input
+                    value={badge.label}
+                    onChange={(event) => updatePaymentBadge(badge.id, { label: event.target.value })}
+                    placeholder="Nom du badge"
+                    className="input h-9 flex-1 py-0 text-sm"
+                  />
+                  <ToggleSwitch
+                    label={badge.enabled ? "Activé" : "Désactivé"}
+                    checked={badge.enabled}
+                    onChange={(checked) => updatePaymentBadge(badge.id, { enabled: checked })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePaymentBadge(badge.id)}
+                    className="rounded-lg border border-red-500/30 px-2.5 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/10"
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </Panel>

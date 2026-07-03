@@ -10,6 +10,7 @@ import {
   isDelivered,
 } from "@/lib/orderStatus";
 import { getAdminFulfillmentOrdersAction } from "@/app/actions/admin";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import type { AdminOrderSummaryDTO } from "@/lib/dto";
 
 const OrderListDeleteTools = dynamic(() => import("@/components/admin/DevOrderListTools"));
@@ -66,6 +67,9 @@ export default function FulfillmentPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Live updates: reflect codes assigned / orders delivered without a refresh.
+  useAutoRefresh(load);
 
   const visibleOrders = useMemo(() => {
     if (filter === "pending") return orders.filter((order) => order.status === "pending_payment");
