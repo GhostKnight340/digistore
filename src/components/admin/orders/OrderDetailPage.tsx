@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isDelivered, orderStatusLabel, orderStatusShort } from "@/lib/orderStatus";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import {
   changeOrderStatusAction,
   getAdminOrderDetailAction,
@@ -206,9 +207,25 @@ export default function OrderDetailPage({
   const paymentReference = order.publicOrderNumber || displayNumber;
 
   const refreshOrder = useCallback(async () => {
-    const fresh = await getAdminOrderDetailAction(order.id);
-    if (fresh) setOrder(fresh);
+    // Refetch the order (status, payment, timeline, emails, items, sidebar) and
+    // the payment proof together, so every section reflects the latest DB state.
+    const [fresh] = await Promise.all([
+      getAdminOrderDetailAction(order.id),
+      getPaymentProofAction(order.id)
+        .then((result) => setProof(result))
+        .catch(() => {}),
+    ]);
+    if (fresh) {
+      // Only replace the order object when something actually changed, so idle
+      // polling doesn't reset in-progress code selection or thrash renders.
+      setOrder((prev) => (JSON.stringify(prev) === JSON.stringify(fresh) ? prev : fresh));
+    }
   }, [order.id]);
+
+  // Live updates: poll so external changes (customer uploads a proof, another
+  // admin confirms/rejects, an email is sent) appear without a manual refresh.
+  // Paused while an action is in flight to avoid racing its own refresh.
+  useAutoRefresh(refreshOrder, 12000, !busy);
 
   useEffect(() => {
     setProof("loading");
