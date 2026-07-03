@@ -177,7 +177,12 @@ export async function requestPasswordResetAction(emailInput: string): Promise<Au
   const customer = isEmail(email)
     ? await prisma.customer.findUnique({ where: { email } })
     : null;
-  if (customer?.passwordHash) {
+  // A customer is eligible for a reset link if they have a real registered
+  // account: either a password already set, or a linked Google account (which
+  // may not have a password yet). This matches how "registered" accounts are
+  // identified elsewhere (getCurrentCustomer, order lookup). Google-linked
+  // customers use the reset flow to set their first password.
+  if (customer && (customer.passwordHash || customer.googleId)) {
     await sendPasswordResetEmail(customer);
   }
   return {
