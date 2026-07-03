@@ -88,13 +88,18 @@ function ctaFor(key: EmailTemplateKey, variables: Variables): { label: string; u
 }
 
 /**
- * Converts the (already variable-substituted) template body into HTML,
- * preserving exactly what the editor contains: blank lines become separate
- * paragraphs and single newlines become <br>. No greeting, intro, or any other
- * copy is injected — the body is rendered verbatim.
+ * The literal placeholder that, in the HTML body, is swapped for the styled
+ * code-cards block. It stays as editable text in the admin editor and renders
+ * as plain text in the plaintext part — only the HTML replaces it.
  */
-function bodyToHtml(body: string) {
-  const blocks = body
+const CODES_PLACEHOLDER = "{{codes}}";
+
+/**
+ * Turns a text segment into paragraph HTML: blank lines become separate
+ * paragraphs, single newlines become <br>. Nothing is injected.
+ */
+function paragraphsHtml(segment: string) {
+  const blocks = segment
     .split(/\n{2,}/)
     .map((block) => block.trim())
     .filter(Boolean);
@@ -107,6 +112,67 @@ function bodyToHtml(body: string) {
       )}</p>`;
     })
     .join("\n");
+}
+
+/**
+ * Renders the delivered codes as premium code cards, or a clean pending state
+ * when there are none. This is the rich rendering of the {{codes}} placeholder.
+ */
+function codeCardsHtml(codesValue: string) {
+  const codes = codesValue
+    .split(/\r?\n/)
+    .map((code) => code.trim())
+    .filter(Boolean);
+
+  if (codes.length === 0) {
+    return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0;">
+      <tr>
+        <td style="border: 1px dashed #2f3954; border-radius: 12px; background: #0a0d14; padding: 18px 16px; color: #8f9bb3; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6; text-align: center;">
+          Vos codes seront affichés ici dès leur attribution.
+        </td>
+      </tr>
+    </table>`;
+  }
+
+  const rows = codes
+    .map(
+      (code, index) => `
+        <tr>
+          <td style="padding: ${index === 0 ? "0" : "10px"} 0 0;">
+            <p style="margin: 0 0 6px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;">
+              Votre code${codes.length > 1 ? ` ${index + 1}` : ""}
+            </p>
+            <div style="border: 1px solid #2f3954; border-radius: 12px; background: #0a0d14; padding: 13px 14px; color: #ffffff; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 700; letter-spacing: .05em; word-break: break-all;">
+              ${escapeHtml(code)}
+            </div>
+          </td>
+        </tr>`,
+    )
+    .join("");
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0;">
+      ${rows}
+    </table>`;
+}
+
+/**
+ * Converts the template body into HTML. Every variable has already been
+ * substituted as text EXCEPT the literal {{codes}} placeholder, which is
+ * replaced here by the styled code-cards block. No greeting, intro, or any
+ * other copy is injected — text segments are rendered verbatim.
+ */
+function bodyToHtml(body: string, codesValue: string) {
+  const segments = body.split(CODES_PLACEHOLDER);
+  const parts: string[] = [];
+  segments.forEach((segment, index) => {
+    const rendered = paragraphsHtml(segment);
+    if (rendered) parts.push(rendered);
+    // A {{codes}} placeholder sat between this segment and the next one.
+    if (index < segments.length - 1) parts.push(codeCardsHtml(codesValue));
+  });
+  return parts.join("\n");
 }
 
 function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentYear: string) {
@@ -183,6 +249,7 @@ function brandedEmailHtml(
   key: EmailTemplateKey,
   subject: string,
   body: string,
+  codesValue: string,
   variables: Variables,
   settings: StoreSettings,
 ) {
@@ -221,7 +288,7 @@ function brandedEmailHtml(
                 <h1 style="margin: 0 0 20px; color: #ffffff; font-family: Arial, sans-serif; font-size: 26px; line-height: 1.25;">
                   ${escapeHtml(subject)}
                 </h1>
-                ${bodyToHtml(body)}
+                ${bodyToHtml(body, codesValue)}
                 ${cta ? brandedButton(cta.label, cta.url) : ""}
               </td>
             </tr>
@@ -257,15 +324,25 @@ export function renderEmailTemplate(
     value.replace(/\{\{([a-z_]+)\}\}/g, (_, name: string) =>
       String(baseVariables[name] ?? ""),
     );
+  // Same as render, but leaves the literal {{codes}} placeholder in place so the
+  // HTML body can swap it for the styled code cards. Every other variable is
+  // still substituted as text.
+  const renderKeepingCodes = (value: string) =>
+    value.replace(/\{\{([a-z_]+)\}\}/g, (match, name: string) =>
+      name === "codes" ? match : String(baseVariables[name] ?? ""),
+    );
 
   // Single source of truth: subject and body come straight from the editable
-  // template. The plaintext version IS the rendered body — no separate copy.
+  // template. The plaintext version IS the rendered body (with {{codes}}
+  // substituted as text); the HTML renders {{codes}} as premium code cards.
   const subject = render(template.subject);
   const body = render(template.body);
+  const htmlBody = renderKeepingCodes(template.body);
+  const codesValue = variableString(baseVariables, "codes");
 
   return {
     subject,
     text: body,
-    html: brandedEmailHtml(key, subject, body, baseVariables, settings),
+    html: brandedEmailHtml(key, subject, htmlBody, codesValue, baseVariables, settings),
   };
 }
