@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import { StoreSettingsProvider } from "@/context/StoreSettingsContext";
@@ -7,7 +7,8 @@ import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
-import { getCurrentCustomer } from "@/lib/auth";
+import { getCurrentCustomer, isAdminCustomer } from "@/lib/auth";
+import { MAINTENANCE_BYPASS_COOKIE, shouldShowMaintenance } from "@/lib/maintenance";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +29,13 @@ export default async function RootLayout({
     getCurrentCustomer().catch(() => null),
   ]);
   const pathname = (await headers()).get("x-current-path") ?? "/";
-  const maintenanceAllowed =
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/payment") ||
-    pathname.startsWith("/order") ||
-    pathname.startsWith("/delivery") ||
-    pathname.startsWith("/find-order");
-  const showMaintenance = Boolean(settings?.maintenance.enabled && !maintenanceAllowed);
+  const bypassCookie = (await cookies()).get(MAINTENANCE_BYPASS_COOKIE)?.value;
+  const showMaintenance = shouldShowMaintenance({
+    enabled: Boolean(settings?.maintenance.enabled),
+    pathname,
+    isAdmin: isAdminCustomer(customer),
+    bypassCookie,
+  });
 
   return (
     <html lang="en">

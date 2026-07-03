@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
 
 /** Literal design tokens from the admin handoff (docs/admin-handoff/05-Design-Tokens.md). */
 const C = {
@@ -207,6 +208,15 @@ const NAV: NavGroup[] = [
         ),
       },
       {
+        id: "maintenance",
+        label: "Mode maintenance",
+        icon: icon(
+          <>
+            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.3l-6 6a2 2 0 1 0 2.8 2.8l6-6a4 4 0 0 0 5.3-5.4l-2.6 2.6-2.1-2.1z" />
+          </>,
+        ),
+      },
+      {
         id: "developer",
         label: "Outils développeur",
         icon: icon(
@@ -298,6 +308,8 @@ export default function AdminShell({
   children: ReactNode;
 }) {
   const [searchFocus, setSearchFocus] = useState(false);
+  const { settings } = useStoreSettings();
+  const maintenanceActive = settings.maintenance.enabled;
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#070809", color: C.text }}>
@@ -545,7 +557,9 @@ export default function AdminShell({
             </svg>
             Éditeur d'accueil
           </Link>
-          <div
+          <button
+            type="button"
+            onClick={() => maintenanceActive && onNavigate("maintenance")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -553,8 +567,9 @@ export default function AdminShell({
               height: "30px",
               padding: "0 11px",
               borderRadius: "8px",
-              background: "rgba(46,160,103,0.12)",
-              border: "1px solid rgba(46,160,103,0.28)",
+              background: maintenanceActive ? "rgba(240,97,109,0.14)" : "rgba(46,160,103,0.12)",
+              border: `1px solid ${maintenanceActive ? "rgba(240,97,109,0.4)" : "rgba(46,160,103,0.28)"}`,
+              cursor: maintenanceActive ? "pointer" : "default",
             }}
           >
             <span
@@ -562,15 +577,50 @@ export default function AdminShell({
                 width: "6px",
                 height: "6px",
                 borderRadius: "50%",
-                background: C.success,
-                boxShadow: `0 0 8px ${C.success}`,
+                background: maintenanceActive ? "#f0616d" : C.success,
+                boxShadow: `0 0 8px ${maintenanceActive ? "#f0616d" : C.success}`,
               }}
             />
-            <span style={{ fontSize: "11.5px", fontWeight: 500, color: C.successText, fontFamily: "var(--font-mono)" }}>
-              LIVE
+            <span
+              style={{
+                fontSize: "11.5px",
+                fontWeight: 500,
+                color: maintenanceActive ? "#f0616d" : C.successText,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              {maintenanceActive ? "MAINTENANCE" : "LIVE"}
             </span>
-          </div>
+          </button>
         </header>
+
+        {maintenanceActive ? (
+          <button
+            type="button"
+            onClick={() => onNavigate("maintenance")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              width: "100%",
+              padding: "9px 16px",
+              background: "rgba(240,97,109,0.12)",
+              borderBottom: "1px solid rgba(240,97,109,0.3)",
+              color: "#f0616d",
+              fontSize: "12.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Mode maintenance ACTIF — la vitrine publique est bloquée pour les visiteurs. Cliquez pour gérer.
+          </button>
+        ) : null}
 
         {/* Content slot */}
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>{children}</div>
