@@ -67,6 +67,13 @@ export default function CheckoutClient({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Logged-in customers check out against their authenticated account: name and
+  // email are fixed by the server session (createOrder overrides them and links
+  // customerId), so they are shown read-only and cannot be edited/spoofed here.
+  const loggedIn = Boolean(initialCustomer);
+  const accountPhone = initialCustomer?.phone?.trim() ?? "";
+  const needsPhone = loggedIn && !accountPhone;
+
   useEffect(() => {
     if (initialConfig) return;
     getPaymentConfigAction()
@@ -154,13 +161,17 @@ export default function CheckoutClient({
     e.preventDefault();
     setError("");
 
-    if (!email.trim() || !fullName.trim()) {
-      setError("Veuillez saisir votre nom et votre e-mail.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Veuillez saisir une adresse e-mail valide.");
-      return;
+    // Guests provide their name + email; logged-in customers inherit both from
+    // their authenticated session, so we don't validate client-entered values.
+    if (!loggedIn) {
+      if (!email.trim() || !fullName.trim()) {
+        setError("Veuillez saisir votre nom et votre e-mail.");
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setError("Veuillez saisir une adresse e-mail valide.");
+        return;
+      }
     }
     const phoneDigits = phone.replace(/\D/g, "");
     if (phone.trim() && (!/^\+?[0-9][0-9\s().-]*$/.test(phone.trim()) || phoneDigits.length < 9 || phoneDigits.length > 15)) {
@@ -175,8 +186,10 @@ export default function CheckoutClient({
     setSubmitting(true);
     try {
       const order = await createOrderAction({
-        customerName: fullName.trim(),
-        customerEmail: email.trim(),
+        // For logged-in customers these are ignored by the server (session wins),
+        // but we send the account values rather than any editable client state.
+        customerName: loggedIn ? initialCustomer!.name : fullName.trim(),
+        customerEmail: loggedIn ? initialCustomer!.email : email.trim(),
         customerPhone: phone.trim(),
         paymentMethod: method,
         items: cart.map((i) => ({
@@ -221,40 +234,77 @@ export default function CheckoutClient({
         <div className="space-y-8">
           <section className="card p-6">
             <h2 className="text-lg font-bold text-white">Vos informations</h2>
-            <p className="mt-1 text-sm text-muted">
-              Nous vous tiendrons inform? du suivi de votre commande ? cette adresse e-mail.
-            </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Field label="Nom complet">
-                <input
-                  className="input"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Youssef El Amrani"
-                  autoComplete="name"
-                />
-              </Field>
-              <Field label="E-mail">
-                <input
-                  className="input"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="vous@example.com"
-                  autoComplete="email"
-                />
-              </Field>
-              <Field label="Numéro de téléphone">
-                <input
-                  className="input"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+212 6 00 00 00 00"
-                  autoComplete="tel"
-                  inputMode="tel"
-                />
-              </Field>
-            </div>
+            {loggedIn ? (
+              <>
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-medium text-accent-strong">
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Commande liée à votre compte
+                </div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <ReadOnlyField label="Nom complet" value={initialCustomer!.name} />
+                  <ReadOnlyField label="E-mail" value={initialCustomer!.email} />
+                  {accountPhone ? (
+                    <ReadOnlyField label="Numéro de téléphone" value={accountPhone} />
+                  ) : null}
+                </div>
+                {needsPhone ? (
+                  <div className="mt-4 max-w-sm">
+                    <Field label="Numéro de téléphone">
+                      <input
+                        className="input"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+212 6 00 00 00 00"
+                        autoComplete="tel"
+                        inputMode="tel"
+                      />
+                    </Field>
+                    <p className="mt-1.5 text-xs text-muted">
+                      Ajoutez un numéro pour faciliter le suivi de votre commande.
+                    </p>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-sm text-muted">
+                  Nous vous tiendrons informé du suivi de votre commande à cette adresse e-mail.
+                </p>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <Field label="Nom complet">
+                    <input
+                      className="input"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Youssef El Amrani"
+                      autoComplete="name"
+                    />
+                  </Field>
+                  <Field label="E-mail">
+                    <input
+                      className="input"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="vous@example.com"
+                      autoComplete="email"
+                    />
+                  </Field>
+                  <Field label="Numéro de téléphone">
+                    <input
+                      className="input"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+212 6 00 00 00 00"
+                      autoComplete="tel"
+                      inputMode="tel"
+                    />
+                  </Field>
+                </div>
+              </>
+            )}
           </section>
 
           <section className="space-y-4">
@@ -415,6 +465,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="mb-1.5 block text-sm font-medium text-white">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-1.5 block text-sm font-medium text-white">{label}</p>
+      <div className="flex min-h-[42px] items-center rounded-xl border border-border bg-base/60 px-4 py-2.5 text-sm text-muted">
+        {value}
+      </div>
     </div>
   );
 }
