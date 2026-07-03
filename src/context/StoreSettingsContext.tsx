@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   defaultStoreSettings,
   mergeStoreSettings,
@@ -44,6 +45,7 @@ export function StoreSettingsProvider({
   initialSettings?: StoreSettings;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const initial = mergeStoreSettings(initialSettings ?? defaultStoreSettings);
   const [settings, setSettings] = useState<StoreSettings>(initial);
   const [ready, setReady] = useState(false);
@@ -57,12 +59,20 @@ export function StoreSettingsProvider({
     applyTheme(settings);
   }, [settings]);
 
-  const saveSettings = useCallback(async (nextSettings: StoreSettings) => {
-    const merged = mergeStoreSettings(nextSettings);
-    const result = await saveStoreSettingsAction(merged);
-    if (result.ok) setSettings(merged);
-    return result;
-  }, []);
+  const saveSettings = useCallback(
+    async (nextSettings: StoreSettings) => {
+      const merged = mergeStoreSettings(nextSettings);
+      const result = await saveStoreSettingsAction(merged);
+      if (result.ok) {
+        // Update the in-memory context immediately (footer + email preview react
+        // live) and refresh server components so SSR surfaces re-read the DB.
+        setSettings(merged);
+        router.refresh();
+      }
+      return result;
+    },
+    [router],
+  );
 
   const resetSettings = useCallback(async () => {
     const result = await saveStoreSettingsAction(defaultStoreSettings);

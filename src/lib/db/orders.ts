@@ -11,7 +11,7 @@ import {
   parsePublicOrderNumber,
 } from "@/lib/orderNumber";
 import type { OrderStatus } from "@/lib/types";
-import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
+import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO, AdminOrderCountsDTO } from "@/lib/dto";
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
@@ -411,26 +411,44 @@ export async function getAdminStats(): Promise<{
   };
 }
 
-export async function getAdminNavCounts(): Promise<{
-  activeOrders: number;
-  paymentReview: number;
-}> {
+/**
+ * Single source of truth for every admin order-queue count. One grouped query
+ * gives per-status counts; the sidebar badges and the Commandes-page status
+ * tabs both derive from this so they never disagree or go stale.
+ */
+export async function getAdminOrderCounts(): Promise<AdminOrderCountsDTO> {
   await ensureDatabaseReady();
-  const [activeOrders, paymentReview] = await Promise.all([
-    timeAdmin(
-      "admin.navCounts",
-      "order.count.active",
-      () => prisma.order.count({ where: { status: { not: "delivered" } } }),
-      (count) => count,
-    ),
-    timeAdmin(
-      "admin.navCounts",
-      "order.count.paymentReview",
-      () => prisma.order.count({ where: { status: "payment_submitted" } }),
-      (count) => count,
-    ),
-  ]);
-  return { activeOrders, paymentReview };
+  const groups = await timeAdmin(
+    "admin.orderCounts",
+    "order.groupBy.status",
+    () => prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
+    (rows) => rows.length,
+  );
+
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  for (const group of groups) {
+    byStatus[group.status] = group._count._all;
+    total += group._count._all;
+  }
+
+  const pendingPayment = byStatus["pending_payment"] ?? 0;
+  const paymentReview = byStatus["payment_submitted"] ?? 0;
+  const paymentIssue = byStatus["payment_issue"] ?? 0;
+  const awaitingFulfillment = byStatus["payment_confirmed"] ?? 0;
+
+  return {
+    total,
+    pendingPayment,
+    paymentReview,
+    paymentIssue,
+    awaitingFulfillment,
+    delivered: byStatus["delivered"] ?? 0,
+    rejected: byStatus["rejected"] ?? 0,
+    refunded: byStatus["refunded"] ?? 0,
+    cancelled: byStatus["cancelled"] ?? 0,
+    needsAttention: pendingPayment + paymentReview + paymentIssue + awaitingFulfillment,
+  };
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {

@@ -174,16 +174,52 @@ export async function logoutCustomerAction(): Promise<AuthActionResult> {
 export async function requestPasswordResetAction(emailInput: string): Promise<AuthActionResult> {
   await ensureDatabaseReady();
   const email = normalizeEmail(emailInput);
-  const customer = isEmail(email)
+  const validEmail = isEmail(email);
+  // Neutral response returned in every branch to prevent account enumeration.
+  const neutralMessage =
+    "Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.";
+
+  console.log("[auth:password_reset:request]", {
+    validEmail,
+    hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
+    realEmailsEnabled:
+      process.env.NODE_ENV === "production" || process.env.ENABLE_REAL_EMAILS === "true",
+  });
+
+  const customer = validEmail
     ? await prisma.customer.findUnique({ where: { email } })
     : null;
-  if (customer?.passwordHash) {
-    await sendPasswordResetEmail(customer);
+
+  const eligible = Boolean(customer?.passwordHash);
+  console.log("[auth:password_reset:account]", {
+    found: Boolean(customer),
+    eligible,
+  });
+
+  if (customer && eligible) {
+    try {
+      const result = await sendPasswordResetEmail(customer);
+      console.log("[auth:password_reset:email]", {
+        customerId: customer.id,
+        ok: result.ok,
+        status: result.status,
+        logId: result.logId,
+        providerMessageId: result.providerMessageId,
+        error: result.error,
+      });
+    } catch (error) {
+      // Do not surface the failure to the caller (enumeration), but make it
+      // visible server-side so a broken config is diagnosable.
+      console.error("[auth:password_reset:email_error]", {
+        customerId: customer.id,
+        name: error instanceof Error ? error.name : "UnknownError",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
-  return {
-    ok: true,
-    message: "Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.",
-  };
+
+  console.log("[auth:password_reset:done]", { emailDispatched: eligible });
+  return { ok: true, message: neutralMessage };
 }
 
 export async function resetPasswordAction(input: {

@@ -42,10 +42,17 @@ export default async function AccountOrdersPage() {
 
   return (
     <div className="container-page py-10">
-      <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-        <AccountNav name={customer.name} email={customer.email} />
+      <div className="grid gap-8 lg:grid-cols-[264px_1fr]">
+        <AccountNav
+          name={customer.name}
+          email={customer.email}
+          verified={customer.emailVerified}
+          ordersCount={orders.length}
+        />
         <section>
-          <h1 className="text-3xl font-bold text-white">Mes commandes</h1>
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-accent-strong">Espace client</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white">Mes commandes</h1>
+          <p className="mt-1.5 text-sm text-muted">Historique complet de vos achats numériques.</p>
           <div className="card mt-8 overflow-hidden">
             {orders.length === 0 ? (
               <div className="px-6 py-12 text-center">

@@ -9,8 +9,9 @@ import {
   orderStatusBadgeClass,
   isDelivered,
 } from "@/lib/orderStatus";
-import { getAdminFulfillmentOrdersAction } from "@/app/actions/admin";
-import type { AdminOrderSummaryDTO } from "@/lib/dto";
+import { getAdminFulfillmentOrdersAction, getAdminOrderCountsAction } from "@/app/actions/admin";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
+import type { AdminOrderCountsDTO, AdminOrderSummaryDTO } from "@/lib/dto";
 
 const OrderListDeleteTools = dynamic(() => import("@/components/admin/DevOrderListTools"));
 const OrderRowDelete = dynamic(() =>
@@ -44,6 +45,7 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 
 export default function FulfillmentPanel() {
   const [orders, setOrders] = useState<AdminOrderSummaryDTO[]>([]);
+  const [counts, setCounts] = useState<AdminOrderCountsDTO | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState("");
@@ -53,8 +55,14 @@ export default function FulfillmentPanel() {
     setLoadError("");
     setLoaded(false);
     try {
-      const data = await withTimeout(getAdminFulfillmentOrdersAction(), "Orders");
+      const [data, freshCounts] = await Promise.all([
+        withTimeout(getAdminFulfillmentOrdersAction(), "Orders"),
+        // Tab badges come from the DB counts (same source as the sidebar), so
+        // they stay accurate even beyond the loaded page of orders.
+        getAdminOrderCountsAction().catch(() => null),
+      ]);
       setOrders(data);
+      if (freshCounts) setCounts(freshCounts);
     } catch (error) {
       console.error("Failed to load fulfillment orders", error);
       setLoadError("Impossible d'actualiser les commandes. Les dernières données chargées restent affichées.");
@@ -67,6 +75,9 @@ export default function FulfillmentPanel() {
     load();
   }, [load]);
 
+  // Live updates: reflect codes assigned / orders delivered without a refresh.
+  useAutoRefresh(load);
+
   const visibleOrders = useMemo(() => {
     if (filter === "pending") return orders.filter((order) => order.status === "pending_payment");
     if (filter === "awaiting") return orders.filter((order) => order.status === "payment_submitted" || order.status === "payment_issue");
@@ -77,6 +88,16 @@ export default function FulfillmentPanel() {
   }, [orders, filter]);
 
   const countFor = (id: Filter) => {
+    // Prefer the shared DB counts (consistent with the sidebar); fall back to the
+    // loaded set only until the first counts response arrives.
+    if (counts) {
+      if (id === "pending") return counts.pendingPayment;
+      if (id === "awaiting") return counts.paymentReview + counts.paymentIssue;
+      if (id === "ready") return counts.awaitingFulfillment;
+      if (id === "delivered") return counts.delivered;
+      if (id === "refunded") return counts.refunded;
+      return counts.total;
+    }
     if (id === "pending") return orders.filter((order) => order.status === "pending_payment").length;
     if (id === "awaiting") return orders.filter((order) => order.status === "payment_submitted" || order.status === "payment_issue").length;
     if (id === "ready") return orders.filter((order) => order.status === "payment_confirmed").length;

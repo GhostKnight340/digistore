@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
 
 /** Literal design tokens from the admin handoff (docs/admin-handoff/05-Design-Tokens.md). */
 const C = {
@@ -24,7 +25,12 @@ const C = {
   borderStrong: "rgba(255,255,255,0.1)",
 };
 
-export type NavCounts = { activeOrders: number; paymentReview: number };
+import type { AdminOrderCountsDTO } from "@/lib/dto";
+
+export type NavCounts = AdminOrderCountsDTO;
+
+/** Which count field each badge shows. Keep in sync with AdminOrderCountsDTO. */
+type BadgeKey = "needsAttention" | "paymentReview" | "awaitingFulfillment" | "refunded";
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
 
@@ -32,7 +38,7 @@ type NavItem = {
   id: string;
   label: string;
   icon: ReactNode;
-  badge?: "activeOrders" | "paymentReview";
+  badge?: BadgeKey;
   badgeTone?: "accent" | "warning";
 };
 
@@ -103,7 +109,7 @@ const NAV: NavGroup[] = [
       {
         id: "orders",
         label: "Toutes les commandes",
-        badge: "activeOrders",
+        badge: "needsAttention",
         badgeTone: "accent",
         icon: icon(
           <>
@@ -128,11 +134,15 @@ const NAV: NavGroup[] = [
       {
         id: "fulfillment",
         label: "Traitement",
+        badge: "awaitingFulfillment",
+        badgeTone: "accent",
         icon: icon(<polyline points="20 6 9 17 4 12" />),
       },
       {
         id: "refunds",
         label: "Remboursements",
+        badge: "refunded",
+        badgeTone: "warning",
         icon: icon(
           <>
             <polyline points="1 4 1 10 7 10" />
@@ -203,6 +213,27 @@ const NAV: NavGroup[] = [
           <>
             <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5" />
             <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" />
+          </>,
+        ),
+      },
+      {
+        id: "footer-links",
+        label: "Liens footer",
+        icon: icon(
+          <>
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="3" y1="15" x2="21" y2="15" />
+            <line x1="9" y1="19" x2="9" y2="15" />
+            <line x1="15" y1="19" x2="15" y2="15" />
+          </>,
+        ),
+      },
+      {
+        id: "maintenance",
+        label: "Mode maintenance",
+        icon: icon(
+          <>
+            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.3l-6 6a2 2 0 1 0 2.8 2.8l6-6a4 4 0 0 0 5.3-5.4l-2.6 2.6-2.1-2.1z" />
           </>,
         ),
       },
@@ -298,6 +329,8 @@ export default function AdminShell({
   children: ReactNode;
 }) {
   const [searchFocus, setSearchFocus] = useState(false);
+  const { settings } = useStoreSettings();
+  const maintenanceActive = settings.maintenance.enabled;
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#070809", color: C.text }}>
@@ -545,7 +578,9 @@ export default function AdminShell({
             </svg>
             Éditeur d'accueil
           </Link>
-          <div
+          <button
+            type="button"
+            onClick={() => maintenanceActive && onNavigate("maintenance")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -553,8 +588,9 @@ export default function AdminShell({
               height: "30px",
               padding: "0 11px",
               borderRadius: "8px",
-              background: "rgba(46,160,103,0.12)",
-              border: "1px solid rgba(46,160,103,0.28)",
+              background: maintenanceActive ? "rgba(240,97,109,0.14)" : "rgba(46,160,103,0.12)",
+              border: `1px solid ${maintenanceActive ? "rgba(240,97,109,0.4)" : "rgba(46,160,103,0.28)"}`,
+              cursor: maintenanceActive ? "pointer" : "default",
             }}
           >
             <span
@@ -562,15 +598,50 @@ export default function AdminShell({
                 width: "6px",
                 height: "6px",
                 borderRadius: "50%",
-                background: C.success,
-                boxShadow: `0 0 8px ${C.success}`,
+                background: maintenanceActive ? "#f0616d" : C.success,
+                boxShadow: `0 0 8px ${maintenanceActive ? "#f0616d" : C.success}`,
               }}
             />
-            <span style={{ fontSize: "11.5px", fontWeight: 500, color: C.successText, fontFamily: "var(--font-mono)" }}>
-              LIVE
+            <span
+              style={{
+                fontSize: "11.5px",
+                fontWeight: 500,
+                color: maintenanceActive ? "#f0616d" : C.successText,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              {maintenanceActive ? "MAINTENANCE" : "LIVE"}
             </span>
-          </div>
+          </button>
         </header>
+
+        {maintenanceActive ? (
+          <button
+            type="button"
+            onClick={() => onNavigate("maintenance")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              width: "100%",
+              padding: "9px 16px",
+              background: "rgba(240,97,109,0.12)",
+              borderBottom: "1px solid rgba(240,97,109,0.3)",
+              color: "#f0616d",
+              fontSize: "12.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Mode maintenance ACTIF — la vitrine publique est bloquée pour les visiteurs. Cliquez pour gérer.
+          </button>
+        ) : null}
 
         {/* Content slot */}
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>{children}</div>

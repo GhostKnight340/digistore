@@ -40,6 +40,12 @@ export function appBaseUrl(): string {
     process.env.SITE_URL;
   if (configured) return configured.replace(/\/$/, "");
 
+  // In the browser (e.g. the admin email preview) fall back to the current
+  // origin so absolute asset URLs resolve without requiring a build-time env.
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       "NEXT_PUBLIC_APP_URL, NEXT_PUBLIC_SITE_URL, APP_URL, or SITE_URL must be configured.",

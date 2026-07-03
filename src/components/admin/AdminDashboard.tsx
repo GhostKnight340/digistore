@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getAdminNavCountsAction } from "@/app/actions/admin";
+import { getAdminOrderCountsAction } from "@/app/actions/admin";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import AdminShell, { type AdminIdentity, type NavCounts } from "@/components/admin/AdminShell";
 import AdminOverview from "@/components/admin/AdminOverview";
 
@@ -17,6 +18,7 @@ const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"
 const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplatesPanel"));
 const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
+const FooterProductsPanel = lazy(() => import("@/components/admin/FooterProductsPanel"));
 const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
 
 const panelFallback = (
@@ -57,6 +59,8 @@ function renderPanel(activeTab: string) {
       return <EmailTemplatesPanel />;
     case "legal-pages":
       return <LegalPagesPanel />;
+    case "footer-links":
+      return <FooterProductsPanel />;
     case "maintenance":
       return <MaintenancePanel />;
     case "orders":
@@ -99,17 +103,20 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabParam]);
 
+  const loadCounts = useCallback(async () => {
+    try {
+      setNavCounts(await getAdminOrderCountsAction());
+    } catch (error) {
+      console.error("Failed to load admin order counts", error);
+    }
+  }, []);
+
+  // Refresh badges when switching tabs (an action likely just happened) and
+  // poll so counts stay live after any order mutation without a manual refresh.
   useEffect(() => {
-    let cancelled = false;
-    getAdminNavCountsAction()
-      .then((counts) => {
-        if (!cancelled) setNavCounts(counts);
-      })
-      .catch((error) => console.error("Failed to load admin nav counts", error));
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab]);
+    loadCounts();
+  }, [loadCounts, activeTab]);
+  useAutoRefresh(loadCounts, 10000);
 
   function handleNavigate(id: string) {
     setActiveTab(id);

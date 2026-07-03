@@ -24,6 +24,10 @@ type SendEmailInput = {
   metadata?: EmailMetadata;
   manuallyEdited?: boolean;
   type?: string;
+  // Replaces the stored template (subject/body) for this send only. Used by the
+  // admin "send test" so the email renders an unsaved editor draft through the
+  // same renderer that produces the preview and real customer emails.
+  templateOverride?: { subject: string; body: string };
 };
 
 type EmailSendResult = {
@@ -43,7 +47,11 @@ const AUTH_TEMPLATE_KEYS = new Set<EmailTemplateKey>([
 
 function fromAddress() {
   const name = process.env.EMAIL_FROM_NAME || "ghost.ma";
-  const address = process.env.EMAIL_FROM_ADDRESS || "no-reply@ghost.ma";
+  const address =
+    process.env.EMAIL_FROM_ADDRESS ||
+    process.env.FROM_EMAIL ||
+    process.env.RESEND_FROM_EMAIL ||
+    "no-reply@ghost.ma";
   return `${name} <${address}>`;
 }
 
@@ -73,8 +81,18 @@ export async function renderTransactionalEmail(
   templateKey: EmailTemplateKey,
   variables: EmailMetadata = {},
   overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "html" | "text">> = {},
+  templateOverride?: { subject: string; body: string },
 ): Promise<RenderedEmailTemplate> {
-  const settings = await getStoreSettings();
+  const storeSettings = await getStoreSettings();
+  const settings = templateOverride
+    ? {
+        ...storeSettings,
+        emailTemplates: {
+          ...storeSettings.emailTemplates,
+          [templateKey]: templateOverride,
+        },
+      }
+    : storeSettings;
   const rendered = renderEmailTemplate(settings, templateKey, variables);
   const text = overrides.text ?? rendered.text;
   const overrideHtml = overrides.html?.trim();
@@ -96,11 +114,16 @@ export async function sendTransactionalEmail(
   input: SendEmailInput,
 ): Promise<EmailSendResult> {
   await ensureDatabaseReady();
-  const rendered = await renderTransactionalEmail(input.templateKey, input.variables, {
-    subject: input.subject,
-    html: input.html,
-    text: input.text,
-  });
+  const rendered = await renderTransactionalEmail(
+    input.templateKey,
+    input.variables,
+    {
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    },
+    input.templateOverride,
+  );
   const settings = await getStoreSettings();
   const replyTo = process.env.SUPPORT_EMAIL || settings.footer.contactEmail;
 
@@ -127,8 +150,14 @@ export async function sendTransactionalEmail(
   }
 
   const apiKey = process.env.RESEND_API_KEY;
+  const from = fromAddress();
   if (!apiKey) {
     const error = "RESEND_API_KEY is not configured.";
+    console.error("[email:send:no_api_key]", {
+      logId: log.id,
+      templateKey: input.templateKey,
+      from,
+    });
     await prisma.emailLog.update({
       where: { id: log.id },
       data: { status: "failed", errorMessage: error },
@@ -138,13 +167,18 @@ export async function sendTransactionalEmail(
 
   try {
     const resend = new Resend(apiKey);
-    const from = fromAddress();
     const to = input.to;
     const subject = rendered.subject;
     const html = rendered.html;
     const text = rendered.text;
 
-    console.log(html);
+    // Log the send attempt only — never the rendered HTML/token, which would
+    // leak the reset link into server logs.
+    console.log("[email:send:attempt]", {
+      logId: log.id,
+      templateKey: input.templateKey,
+      from,
+    });
 
     const { data, error: resendError } = await resend.emails.send({
       from,
@@ -158,6 +192,13 @@ export async function sendTransactionalEmail(
     if (resendError || !data?.id) {
       const error =
         resendError?.message || resendError?.name || "Resend did not return a message id.";
+      console.error("[email:send:resend_error]", {
+        logId: log.id,
+        templateKey: input.templateKey,
+        from,
+        resendName: resendError?.name,
+        resendMessage: resendError?.message,
+      });
       await prisma.emailLog.update({
         where: { id: log.id },
         data: { status: "failed", errorMessage: error },
@@ -165,6 +206,11 @@ export async function sendTransactionalEmail(
       return { ok: false, status: "failed", logId: log.id, error };
     }
 
+    console.log("[email:send:resend_ok]", {
+      logId: log.id,
+      templateKey: input.templateKey,
+      providerMessageId: data.id,
+    });
     await prisma.emailLog.update({
       where: { id: log.id },
       data: {
@@ -181,6 +227,12 @@ export async function sendTransactionalEmail(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Resend send failed.";
+    console.error("[email:send:exception]", {
+      logId: log.id,
+      templateKey: input.templateKey,
+      from,
+      message,
+    });
     await prisma.emailLog.update({
       where: { id: log.id },
       data: { status: "failed", errorMessage: message },

@@ -3,16 +3,21 @@
 import Link from "next/link";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { getEnabledFooterPaymentBadges, getFooterSocialLinks } from "@/lib/footerConfig";
+import {
+  getEnabledFooterPaymentBadges,
+  getFooterProductLinks,
+  getFooterSocialLinks,
+} from "@/lib/footerConfig";
 
 export default function Footer() {
   const { settings } = useStoreSettings();
-  const { categories } = useProductCatalog();
+  const { parentProducts } = useProductCatalog();
 
   if (!settings.homepage.showFooter) return null;
 
   const socialLinks = getFooterSocialLinks(settings);
   const paymentBadges = getEnabledFooterPaymentBadges(settings);
+  const productLinks = getFooterProductLinks(settings, parentProducts);
 
   return (
     <footer className="mt-20 border-t border-border bg-base/60">
@@ -69,10 +74,11 @@ export default function Footer() {
 
         <FooterGroup
           title="Produits"
-          links={categories.slice(0, 4).map((category) => ({
-            href: `/products?category=${category.id}`,
-            label: category.name,
+          links={productLinks.map((product) => ({
+            href: product.href,
+            label: product.name,
           }))}
+          emptyLabel="Bientôt disponible"
         />
         <FooterGroup
           title="Aide"
@@ -112,25 +118,31 @@ export default function Footer() {
 function FooterGroup({
   title,
   links,
+  emptyLabel,
 }: {
   title: string;
   links: Array<{ href: string; label: string }>;
+  emptyLabel?: string;
 }) {
   return (
     <div>
       <h4 className="text-sm font-semibold text-white">{title}</h4>
-      <ul className="mt-3 space-y-2.5">
-        {links.map((link) => (
-          <li key={`${link.href}-${link.label}`}>
-            <Link
-              href={link.href}
-              className="text-[13.5px] text-muted transition hover:text-white"
-            >
-              {link.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {links.length === 0 && emptyLabel ? (
+        <p className="mt-3 text-[13.5px] text-faint">{emptyLabel}</p>
+      ) : (
+        <ul className="mt-3 space-y-2.5">
+          {links.map((link) => (
+            <li key={`${link.href}-${link.label}`}>
+              <Link
+                href={link.href}
+                className="text-[13.5px] text-muted transition hover:text-white"
+              >
+                {link.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
