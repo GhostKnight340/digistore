@@ -9,6 +9,7 @@ import {
   type RenderedEmailTemplate,
   renderEmailTemplate,
 } from "@/lib/emailTemplates";
+import type { StoreSettings } from "@/lib/storeSettings";
 
 type EmailMetadata = Record<string, string | number | boolean | null | undefined>;
 
@@ -24,6 +25,8 @@ type SendEmailInput = {
   metadata?: EmailMetadata;
   manuallyEdited?: boolean;
   type?: string;
+  /** Render with these settings instead of the saved store settings (admin preview/test). */
+  settingsOverride?: StoreSettings;
 };
 
 type EmailSendResult = {
@@ -73,8 +76,9 @@ export async function renderTransactionalEmail(
   templateKey: EmailTemplateKey,
   variables: EmailMetadata = {},
   overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "html" | "text">> = {},
+  settingsOverride?: StoreSettings,
 ): Promise<RenderedEmailTemplate> {
-  const settings = await getStoreSettings();
+  const settings = settingsOverride ?? (await getStoreSettings());
   const rendered = renderEmailTemplate(settings, templateKey, variables);
   const text = overrides.text ?? rendered.text;
   const overrideHtml = overrides.html?.trim();
@@ -96,11 +100,16 @@ export async function sendTransactionalEmail(
   input: SendEmailInput,
 ): Promise<EmailSendResult> {
   await ensureDatabaseReady();
-  const rendered = await renderTransactionalEmail(input.templateKey, input.variables, {
-    subject: input.subject,
-    html: input.html,
-    text: input.text,
-  });
+  const rendered = await renderTransactionalEmail(
+    input.templateKey,
+    input.variables,
+    {
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    },
+    input.settingsOverride,
+  );
   const settings = await getStoreSettings();
   const replyTo = process.env.SUPPORT_EMAIL || settings.footer.contactEmail;
 
@@ -143,8 +152,6 @@ export async function sendTransactionalEmail(
     const subject = rendered.subject;
     const html = rendered.html;
     const text = rendered.text;
-
-    console.log(html);
 
     const { data, error: resendError } = await resend.emails.send({
       from,
