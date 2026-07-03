@@ -3,7 +3,7 @@
 Required for Vercel:
 
 - `DATABASE_URL`: PostgreSQL connection string (pooled is fine for the app). Must start with `postgresql://` or `postgres://`.
-- `DIRECT_URL`: direct (non-pooled) PostgreSQL connection string. Prisma Migrate uses this for `migrate deploy`. On Neon/Supabase this is the direct connection, not the pooled one.
+- `DIRECT_URL` *(recommended)*: direct (non-pooled) PostgreSQL connection string used by `prisma migrate deploy`. On Neon/Supabase this is the direct connection, not the pooler. If it is not set, the migration runner falls back to `POSTGRES_URL_NON_POOLING`, then `DATABASE_URL_UNPOOLED`, then `DATABASE_URL` — but migrations are most reliable over a direct, non-pooled connection, so set `DIRECT_URL` explicitly for production.
 
 Operational notes:
 

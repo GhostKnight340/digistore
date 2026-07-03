@@ -34,6 +34,45 @@ const APPLY_NOT_BASELINE = new Set([
 
 const MIGRATIONS_DIR = "prisma/migrations";
 
+function looksLikePostgresUrl(value) {
+  return typeof value === "string" && /^postgres(ql)?:\/\//.test(value.trim());
+}
+
+/**
+ * Prisma Migrate uses `directUrl = env("DIRECT_URL")`. Production may not have
+ * DIRECT_URL set (the app historically ran on DATABASE_URL only), which fails with
+ * P1013. Resolve a usable direct (ideally non-pooled) connection, preferring an
+ * explicit DIRECT_URL, then the common Vercel/Neon non-pooling names, then the
+ * pooled DATABASE_URL as a last resort. Set it on the env so the child
+ * `prisma` processes inherit it.
+ */
+function ensureDirectUrl() {
+  if (looksLikePostgresUrl(process.env.DIRECT_URL)) return;
+
+  const fallback = [
+    process.env.POSTGRES_URL_NON_POOLING,
+    process.env.DATABASE_URL_UNPOOLED,
+    process.env.DATABASE_URL,
+  ].find(looksLikePostgresUrl);
+
+  if (!fallback) {
+    throw new Error(
+      "No valid Postgres connection string found for migrations. Set DIRECT_URL " +
+        "(preferred: the direct, non-pooled connection) or DATABASE_URL.",
+    );
+  }
+  process.env.DIRECT_URL = fallback;
+  if (fallback === process.env.DATABASE_URL) {
+    console.warn(
+      "[migrate] DIRECT_URL not set — falling back to DATABASE_URL. For reliability " +
+        "on pooled connections (e.g. Neon/Supabase pooler), set DIRECT_URL to the " +
+        "direct, non-pooled connection string.",
+    );
+  } else {
+    console.log("[migrate] Using a non-pooled connection for migrations.");
+  }
+}
+
 function runPrisma(args) {
   execFileSync("npx", ["prisma", ...args], { stdio: "inherit" });
 }
@@ -65,6 +104,7 @@ async function needsBaseline(prisma) {
 }
 
 async function main() {
+  ensureDirectUrl();
   const prisma = new PrismaClient();
   try {
     if (await needsBaseline(prisma)) {
