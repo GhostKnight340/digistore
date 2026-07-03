@@ -12,24 +12,39 @@ concurrency:
 
 jobs:
   build:
-    name: Validate schema & build
+    name: Validate migrations & build
     runs-on: ubuntu-latest
+
+    # Throwaway Postgres for verifying migrations. This is a disposable container
+    # that lives only for the job — production (Neon) is never touched here.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
-      # Placeholders so `prisma generate` and `next build` can run without a real
-      # database. The client only connects when a query executes; pages are
-      # request-time dynamic, so the build performs no queries. Migrations are
-      # NOT run here — schema is applied by `migrate deploy` at deploy time.
+      # Point Prisma at the throwaway service container, NOT production.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
       NEXT_PUBLIC_APP_URL: https://ghost.ma
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Reads the pinned version from package.json "packageManager".
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -40,11 +55,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate Prisma schema
-        run: pnpm prisma validate
-
       - name: Generate Prisma client
         run: pnpm prisma generate
+
+      # Apply the committed migrations to the throwaway Postgres. This proves the
+      # migration chain applies cleanly from an empty database. It runs ONLY
+      # against the disposable CI container — never against Neon/production.
+      - name: Apply migrations to throwaway Postgres
+        run: pnpm prisma migrate deploy
+
+      # Guard: confirm migration history matches the files and nothing is pending.
+      - name: Verify migration status
+        run: pnpm prisma migrate status
 
       - name: Build (type-checks and lints)
         run: pnpm build

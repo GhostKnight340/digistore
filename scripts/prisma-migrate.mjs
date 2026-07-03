@@ -74,7 +74,7 @@ function ensureDirectUrl() {
 }
 
 function runPrisma(args) {
-  execFileSync("npx", ["prisma", ...args], { stdio: "inherit" });
+  execFileSync("pnpm", ["exec", "prisma", ...args], { stdio: "inherit" });
 }
 
 function migrationNames() {

@@ -7,7 +7,7 @@ runtime.
 
 ## How it runs in production (Vercel)
 
-`vercel.json` sets the build command to `npm run vercel-build`:
+`vercel.json` sets the build command to `pnpm run vercel-build`:
 
 ```
 prisma generate && node scripts/prisma-migrate.mjs && next build
@@ -15,11 +15,13 @@ prisma generate && node scripts/prisma-migrate.mjs && next build
 
 So migrations are applied **during the build, before the app serves traffic**.
 `scripts/prisma-migrate.mjs` wraps `prisma migrate deploy` with a one-time,
-self-detecting baseline (see below). Requires `DIRECT_URL` (direct, non-pooled) to
-be set in the Vercel project — Prisma Migrate uses it.
+self-detecting baseline (see below). It runs migrations over a direct connection:
+it uses `DIRECT_URL` if set, otherwise falls back to `POSTGRES_URL_NON_POOLING` /
+`DATABASE_URL_UNPOOLED` / `DATABASE_URL`. Set `DIRECT_URL` to the direct, non-pooled
+connection in the Vercel project for reliable migrations on pooled databases.
 
 > If a Build Command is set in the Vercel dashboard, clear it (or set it to
-> `npm run vercel-build`) so `vercel.json` is honored.
+> `pnpm run vercel-build`) so `vercel.json` is honored.
 
 ## Adopting Migrate on the existing production database (one-time, automatic)
 
@@ -53,25 +55,25 @@ order for existing rows before its `NOT NULL` + unique index are applied.
 
 - Change `prisma/schema.prisma`, then create a migration:
   ```
-  npm run prisma:migrate        # prisma migrate dev — creates + applies a migration locally
+  pnpm prisma:migrate        # prisma migrate dev — creates + applies a migration locally
   ```
   Commit the generated folder under `prisma/migrations/`.
 - Apply committed migrations without creating new ones (e.g. a teammate's):
   ```
-  npm run prisma:deploy         # prisma migrate deploy
+  pnpm prisma:deploy         # prisma migrate deploy
   ```
 - Inspect state:
   ```
-  npm run prisma:status         # prisma migrate status
+  pnpm prisma:status         # prisma migrate status
   ```
-- `npm run build` is plain `next build` (no DB access) so local/CI builds don't
-  require a database. Use `npm run db:deploy` to run the production migration
+- `pnpm build` is plain `next build` (no DB access) so local/CI builds don't
+  require a database. Use `pnpm db:deploy` to run the production migration
   runner locally against a `DATABASE_URL`/`DIRECT_URL` you control.
 
 ## Adding a new migration later
 
 1. Edit `schema.prisma`.
-2. `npm run prisma:migrate` to generate `prisma/migrations/<timestamp>_<name>/`.
+2. `pnpm prisma:migrate` to generate `prisma/migrations/<timestamp>_<name>/`.
 3. Commit it. On deploy, `migrate deploy` applies it automatically.
 
 New migrations do **not** need to be idempotent or added to `APPLY_NOT_BASELINE` —
