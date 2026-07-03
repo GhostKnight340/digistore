@@ -24,6 +24,10 @@ type SendEmailInput = {
   metadata?: EmailMetadata;
   manuallyEdited?: boolean;
   type?: string;
+  // Replaces the stored template (subject/body) for this send only. Used by the
+  // admin "send test" so the email renders an unsaved editor draft through the
+  // same renderer that produces the preview and real customer emails.
+  templateOverride?: { subject: string; body: string };
 };
 
 type EmailSendResult = {
@@ -77,8 +81,18 @@ export async function renderTransactionalEmail(
   templateKey: EmailTemplateKey,
   variables: EmailMetadata = {},
   overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "html" | "text">> = {},
+  templateOverride?: { subject: string; body: string },
 ): Promise<RenderedEmailTemplate> {
-  const settings = await getStoreSettings();
+  const storeSettings = await getStoreSettings();
+  const settings = templateOverride
+    ? {
+        ...storeSettings,
+        emailTemplates: {
+          ...storeSettings.emailTemplates,
+          [templateKey]: templateOverride,
+        },
+      }
+    : storeSettings;
   const rendered = renderEmailTemplate(settings, templateKey, variables);
   const text = overrides.text ?? rendered.text;
   const overrideHtml = overrides.html?.trim();
@@ -100,11 +114,16 @@ export async function sendTransactionalEmail(
   input: SendEmailInput,
 ): Promise<EmailSendResult> {
   await ensureDatabaseReady();
-  const rendered = await renderTransactionalEmail(input.templateKey, input.variables, {
-    subject: input.subject,
-    html: input.html,
-    text: input.text,
-  });
+  const rendered = await renderTransactionalEmail(
+    input.templateKey,
+    input.variables,
+    {
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    },
+    input.templateOverride,
+  );
   const settings = await getStoreSettings();
   const replyTo = process.env.SUPPORT_EMAIL || settings.footer.contactEmail;
 

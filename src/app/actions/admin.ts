@@ -62,6 +62,10 @@ import {
 } from "@/lib/db/categories";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
+import {
+  emailPreviewSampleVariables,
+  type EmailTemplateDraft,
+} from "@/lib/emailPreview";
 import type {
   ActionResult,
   AdminCategoryDTO,
@@ -107,25 +111,21 @@ export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
 export async function sendTestEmailAction(
   to: string,
   templateKey: EmailTemplateKey,
+  templateOverride?: EmailTemplateDraft,
 ): Promise<ActionResult> {
   await assertAdminAccess();
   const recipient = to.trim();
   if (!recipient || !recipient.includes("@")) {
     return { ok: false, error: "Adresse email invalide." };
   }
+  // Render through the same renderer + sample data the admin preview uses, so
+  // the test email is byte-for-byte the HTML shown in the preview.
   const result = await sendTransactionalEmail({
     to: recipient,
     templateKey,
     type: "test_email",
-    variables: {
-      customer_name: "Client test",
-      order_number: "#TEST",
-      order_url: "https://ghost.ma/order/test",
-      payment_url: "https://ghost.ma/payment/test",
-      delivery_url: "https://ghost.ma/delivery/test",
-      total: "100 MAD",
-      reason: "Test admin",
-    },
+    variables: emailPreviewSampleVariables,
+    templateOverride,
     metadata: { source: "admin_test_email" },
     manuallyEdited: false,
   });
