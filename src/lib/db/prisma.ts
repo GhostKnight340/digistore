@@ -17,8 +17,59 @@ if (process.env.NODE_ENV !== "production") {
 let ensurePromise: Promise<void> | null = null;
 
 export function ensureDatabaseReady(): Promise<void> {
-  ensurePromise ??= seedCatalogProducts();
+  ensurePromise ??= bootstrapDatabase();
   return ensurePromise;
+}
+
+async function bootstrapDatabase(): Promise<void> {
+  await ensureOrderNumberColumn();
+  await seedCatalogProducts();
+}
+
+/**
+ * Ensure the stored public order number exists. This deployment applies schema
+ * changes at runtime (there is no `migrate deploy` step), so the column, its
+ * backing sequence, the chronological backfill of existing rows, and the unique
+ * index are all provisioned idempotently here. Every statement is safe to run on
+ * each cold start; they no-op once the column is in place. The Prisma migration
+ * under prisma/migrations covers environments that do run migrations.
+ */
+async function ensureOrderNumberColumn(): Promise<void> {
+  const statements = [
+    `ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "orderNumber" INTEGER`,
+    `CREATE SEQUENCE IF NOT EXISTS "Order_orderNumber_seq" AS INTEGER`,
+    `ALTER TABLE "Order" ALTER COLUMN "orderNumber" SET DEFAULT nextval('"Order_orderNumber_seq"')`,
+    `ALTER SEQUENCE "Order_orderNumber_seq" OWNED BY "Order"."orderNumber"`,
+    // Backfill only rows still missing a number, in creation order, offset past
+    // any existing max so we never collide with numbers already assigned.
+    `WITH ordered AS (
+       SELECT "id", ROW_NUMBER() OVER (ORDER BY "createdAt" ASC, "id" ASC) AS seq
+       FROM "Order" WHERE "orderNumber" IS NULL
+     )
+     UPDATE "Order" o
+     SET "orderNumber" = ordered.seq + COALESCE((SELECT MAX("orderNumber") FROM "Order"), 0)
+     FROM ordered
+     WHERE o."id" = ordered."id"`,
+    // Advance the sequence monotonically past the highest assigned number.
+    `DO $$ BEGIN PERFORM setval(
+       '"Order_orderNumber_seq"',
+       GREATEST(
+         (SELECT COALESCE(MAX("orderNumber"), 0) FROM "Order"),
+         (SELECT last_value FROM "Order_orderNumber_seq")
+       ),
+       true
+     ); END $$`,
+    `ALTER TABLE "Order" ALTER COLUMN "orderNumber" SET NOT NULL`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Order_orderNumber_key" ON "Order"("orderNumber")`,
+  ];
+
+  for (const sql of statements) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+    } catch (error) {
+      console.error("[schema:orderNumber]", error);
+    }
+  }
 }
 
 async function seedCatalogProducts(): Promise<void> {
