@@ -26,6 +26,18 @@ export type FooterPaymentBadgeSetting = {
   icon?: string;
 };
 
+/**
+ * An admin-curated footer "Produits" link pointing at a parent product.
+ * The list is fully manual (never auto-generated). Designed so other footer
+ * sections (Aide, Légal, …) can adopt the same {ref, enabled, sortOrder} shape.
+ */
+export type FooterProductLinkSetting = {
+  /** Parent product slug — resolves to /products/<slug> and to its live name. */
+  productSlug: string;
+  enabled: boolean;
+  sortOrder: number;
+};
+
 export type StoreSettings = {
   inventoryMode: "automatic" | "manual";
   maintenance: {
@@ -90,6 +102,10 @@ export type StoreSettings = {
       x: string;
     };
     paymentBadges: FooterPaymentBadgeSetting[];
+    /** Admin-curated "Produits" column links (parent products). */
+    productLinks: FooterProductLinkSetting[];
+    /** Max products shown in the footer "Produits" column. 0 = no limit. */
+    productLinksMaxItems: number;
   };
   theme: {
     accentColor: string;
@@ -291,6 +307,8 @@ export const defaultStoreSettings: StoreSettings = {
       { id: "mastercard", label: "Mastercard", enabled: true, sortOrder: 1 },
       { id: "paypal", label: "PayPal", enabled: true, sortOrder: 2 },
     ],
+    productLinks: [],
+    productLinksMaxItems: 6,
   },
   theme: {
     accentColor: "#3e7bfa",
@@ -396,6 +414,24 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
               }))
               .filter((badge) => badge.id.trim() && badge.label.trim())
           : defaultStoreSettings.footer.paymentBadges,
+      productLinks:
+        isObject(value.footer) && Array.isArray(value.footer.productLinks)
+          ? value.footer.productLinks
+              .map((link, index) => ({
+                productSlug:
+                  isObject(link) && typeof link.productSlug === "string" ? link.productSlug : "",
+                enabled: isObject(link) && typeof link.enabled === "boolean" ? link.enabled : true,
+                sortOrder:
+                  isObject(link) && typeof link.sortOrder === "number" ? link.sortOrder : index,
+              }))
+              .filter((link) => link.productSlug.trim())
+          : defaultStoreSettings.footer.productLinks,
+      productLinksMaxItems:
+        isObject(value.footer) &&
+        typeof value.footer.productLinksMaxItems === "number" &&
+        value.footer.productLinksMaxItems >= 0
+          ? Math.floor(value.footer.productLinksMaxItems)
+          : defaultStoreSettings.footer.productLinksMaxItems,
     },
     theme: {
       ...defaultStoreSettings.theme,

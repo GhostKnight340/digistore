@@ -1,5 +1,34 @@
 import type { StoreSettings } from "./storeSettings";
+import type { ProductListItemDTO } from "./dto";
 import { absoluteAppUrl } from "./orderNumber";
+
+export type FooterProductLink = { slug: string; name: string; href: string };
+
+/**
+ * Resolves the admin-curated footer "Produits" list against the live parent
+ * products: keeps only enabled entries whose product still exists and is
+ * active, orders them by sortOrder, uses the product's current name, and
+ * applies the optional max-items cap. Single source of truth for the footer.
+ */
+export function getFooterProductLinks(
+  settings: StoreSettings,
+  parentProducts: ProductListItemDTO[],
+): FooterProductLink[] {
+  const bySlug = new Map(parentProducts.map((product) => [product.slug, product]));
+  const resolved = [...(settings.footer.productLinks ?? [])]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .filter((link) => link.enabled)
+    .map((link) => bySlug.get(link.productSlug))
+    .filter((product): product is ProductListItemDTO => Boolean(product && product.active))
+    .map((product) => ({
+      slug: product.slug,
+      name: product.name,
+      href: `/products/${product.slug}`,
+    }));
+
+  const max = settings.footer.productLinksMaxItems ?? 0;
+  return max > 0 ? resolved.slice(0, max) : resolved;
+}
 
 export type FooterSocialLink = {
   id: "instagram" | "whatsapp";

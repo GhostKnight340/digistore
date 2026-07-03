@@ -2,10 +2,13 @@
 
 import { createContext, useContext, useMemo } from "react";
 import type { Category, Product } from "@/lib/types";
+import type { ProductListItemDTO } from "@/lib/dto";
 
 type ProductCatalogContextValue = {
   categories: Category[];
   products: Product[];
+  /** Parent products (one entry per product, not per variant) — used by the footer. */
+  parentProducts: ProductListItemDTO[];
   getProduct: (id: string) => Product | undefined;
 };
 
@@ -16,10 +19,12 @@ const ProductCatalogContext = createContext<ProductCatalogContextValue | null>(
 export function ProductCatalogProvider({
   categories,
   products,
+  parentProducts = [],
   children,
 }: {
   categories: Category[];
   products: Product[];
+  parentProducts?: ProductListItemDTO[];
   children: React.ReactNode;
 }) {
   const value = useMemo(() => {
@@ -27,9 +32,10 @@ export function ProductCatalogProvider({
     return {
       categories,
       products,
+      parentProducts,
       getProduct: (id: string) => byId.get(id),
     };
-  }, [categories, products]);
+  }, [categories, products, parentProducts]);
 
   return (
     <ProductCatalogContext.Provider value={value}>

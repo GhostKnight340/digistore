@@ -7,6 +7,7 @@ import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import { getProductList } from "@/lib/db/products";
 import { getCurrentCustomer, isAdminCustomer } from "@/lib/auth";
 import { MAINTENANCE_BYPASS_COOKIE, shouldShowMaintenance } from "@/lib/maintenance";
 
@@ -23,10 +24,11 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [catalog, settings, customer] = await Promise.all([
+  const [catalog, settings, customer, parentProducts] = await Promise.all([
     getCatalogData().catch(() => ({ categories: [], products: [] })),
     getStoreSettings().catch(() => undefined),
     getCurrentCustomer().catch(() => null),
+    getProductList().catch(() => []),
   ]);
   const pathname = (await headers()).get("x-current-path") ?? "/";
   const bypassCookie = (await cookies()).get(MAINTENANCE_BYPASS_COOKIE)?.value;
@@ -60,6 +62,7 @@ export default async function RootLayout({
           <ProductCatalogProvider
             categories={catalog.categories}
             products={catalog.products}
+            parentProducts={parentProducts}
           >
             <StoreProvider>
               {showMaintenance ? (

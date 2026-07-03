@@ -18,6 +18,7 @@ const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"
 const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplatesPanel"));
 const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
+const FooterProductsPanel = lazy(() => import("@/components/admin/FooterProductsPanel"));
 const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
 
 const panelFallback = (
@@ -58,6 +59,8 @@ function renderPanel(activeTab: string) {
       return <EmailTemplatesPanel />;
     case "legal-pages":
       return <LegalPagesPanel />;
+    case "footer-links":
+      return <FooterProductsPanel />;
     case "maintenance":
       return <MaintenancePanel />;
     case "orders":
