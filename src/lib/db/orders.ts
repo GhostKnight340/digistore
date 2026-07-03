@@ -4,6 +4,8 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
+import { requestUserData, sendMetaEvent, splitFullName } from "@/lib/meta/capi";
+import { META_CURRENCY, purchaseEventId } from "@/lib/meta/events";
 import {
   absoluteAppUrl,
   formatPublicOrderNumber,
@@ -840,6 +842,43 @@ export async function createOrder(
     });
 
     const reference = await publicOrderReference(order);
+
+    // Server half of the Meta Purchase event. The checkout client fires the
+    // pixel half with the same event id, so Meta deduplicates the pair.
+    // Content ids stay in storefront terms (slug / variant id) to match the
+    // ids used by the browser events.
+    try {
+      const metaContents = input.items
+        .filter((item) => bySlug.has(item.productId) && item.quantity >= 1)
+        .map((item) => ({
+          id: item.productId,
+          quantity: item.quantity,
+          item_price: bySlug.get(item.productId)!.unitPriceMad,
+        }));
+      await sendMetaEvent({
+        eventName: "Purchase",
+        eventId: purchaseEventId(order.id),
+        eventSourceUrl: absoluteAppUrl("/checkout"),
+        userData: {
+          ...(await requestUserData()),
+          email: customerEmail,
+          phone: customerPhone,
+          ...splitFullName(customerName),
+          externalId: order.customerId,
+        },
+        customData: {
+          content_ids: metaContents.map((item) => item.id),
+          content_type: "product",
+          contents: metaContents,
+          currency: META_CURRENCY,
+          value: totalMad,
+          num_items: metaContents.reduce((sum, item) => sum + item.quantity, 0),
+          order_id: reference.number,
+        },
+      });
+    } catch (metaError) {
+      console.error("[meta:purchase]", metaError);
+    }
 
     try {
       await sendTransactionalEmail({

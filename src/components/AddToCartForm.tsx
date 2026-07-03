@@ -4,27 +4,47 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
 import { formatMAD } from "@/lib/format";
+import { trackMetaEvent } from "@/lib/meta/client";
+import { META_CURRENCY } from "@/lib/meta/events";
 
 export default function AddToCartForm({
   productId,
   price,
+  productName,
+  productCategory,
 }: {
   productId: string;
   price?: number;
+  productName?: string;
+  productCategory?: string;
 }) {
   const { addToCart } = useStore();
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
 
+  function trackAddToCart() {
+    trackMetaEvent("AddToCart", {
+      content_ids: [productId],
+      content_name: productName,
+      content_category: productCategory,
+      content_type: "product",
+      contents: [{ id: productId, quantity: qty, item_price: price }],
+      currency: META_CURRENCY,
+      value: typeof price === "number" ? price * qty : undefined,
+    });
+  }
+
   function handleAdd() {
     addToCart(productId, qty);
+    trackAddToCart();
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   }
 
   function handleBuyNow() {
     addToCart(productId, qty);
+    trackAddToCart();
     router.push("/cart");
   }
 

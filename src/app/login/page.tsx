@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginCustomerAction, registerCustomerAction } from "@/app/actions/auth";
 import PasswordField from "@/components/ui/PasswordField";
+import { trackMetaPixelOnly } from "@/lib/meta/client";
 
 const googleErrors: Record<string, string> = {
   access_denied: "Connexion Google annulée.",
@@ -56,6 +57,15 @@ export default function LoginPage() {
       if (!result.ok) {
         setError(result.error || "Une erreur est survenue.");
         return;
+      }
+      if (currentMode === "register" && result.metaEventId) {
+        // Pixel half of CompleteRegistration; the server action already sent
+        // the Conversions API half with the same event id.
+        trackMetaPixelOnly(
+          "CompleteRegistration",
+          { status: "registered" },
+          result.metaEventId,
+        );
       }
       if (result.message) setMessage(result.message);
       if (result.redirectTo && currentMode === "login") {

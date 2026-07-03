@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
@@ -10,6 +10,8 @@ import PaymentBrandMark from "@/components/PaymentBrandMark";
 import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
+import { trackMetaEvent, trackMetaPixelOnly } from "@/lib/meta/client";
+import { META_CURRENCY, purchaseEventId } from "@/lib/meta/events";
 import {
   bankDisplayKey,
   methodDisplayKey,
@@ -66,6 +68,24 @@ export default function CheckoutClient({
   const [phone, setPhone] = useState(initialCustomer?.phone ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const initiateCheckoutTracked = useRef(false);
+
+  useEffect(() => {
+    if (initiateCheckoutTracked.current || !ready || cart.length === 0) return;
+    initiateCheckoutTracked.current = true;
+    trackMetaEvent("InitiateCheckout", {
+      content_ids: cart.map((item) => item.productId),
+      content_type: "product",
+      contents: cart.map((item) => ({
+        id: item.productId,
+        quantity: item.quantity,
+        item_price: getProduct(item.productId)?.price,
+      })),
+      currency: META_CURRENCY,
+      value: cartTotal,
+      num_items: cart.reduce((sum, item) => sum + item.quantity, 0),
+    });
+  }, [ready, cart, cartTotal, getProduct]);
 
   useEffect(() => {
     if (initialConfig) return;
@@ -190,6 +210,26 @@ export default function CheckoutClient({
         setError("Une erreur est survenue. Veuillez réessayer.");
         return;
       }
+
+      // Browser half of the Purchase event; the server action already sent
+      // the Conversions API half with the same event id for deduplication.
+      trackMetaPixelOnly(
+        "Purchase",
+        {
+          content_ids: cart.map((item) => item.productId),
+          content_type: "product",
+          contents: cart.map((item) => ({
+            id: item.productId,
+            quantity: item.quantity,
+            item_price: getProduct(item.productId)?.price,
+          })),
+          currency: META_CURRENCY,
+          value: cartTotal,
+          num_items: cart.reduce((sum, item) => sum + item.quantity, 0),
+          order_id: order.publicOrderNumber,
+        },
+        purchaseEventId(order.id),
+      );
 
       clearCart();
       router.push(`/payment/${order.publicOrderPathSegment}`);

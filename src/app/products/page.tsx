@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
+import MetaEvent from "@/components/meta/MetaEvent";
 import { getCatalogPage } from "@/lib/db/catalog";
 
 export const revalidate = 3600;
@@ -23,9 +24,33 @@ export default async function ProductsPage({
     take: 24,
   });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const activeCategory = category
+    ? categories.find((item) => item.id === category)
+    : undefined;
+  const visibleProductIds = filtered.slice(0, 10).map((product) => product.id);
 
   return (
     <div className="container-page pt-10 pb-20 sm:py-10">
+      {query && (
+        <MetaEvent
+          event="Search"
+          data={{
+            search_string: query,
+            content_type: "product",
+            content_ids: visibleProductIds,
+          }}
+        />
+      )}
+      {activeCategory && (
+        <MetaEvent
+          event="ViewCategory"
+          data={{
+            content_category: activeCategory.name,
+            content_type: "product",
+            content_ids: visibleProductIds,
+          }}
+        />
+      )}
       <header className="mb-8">
         <h1 className="text-3xl font-semibold tracking-tight text-white">
           Catalogue

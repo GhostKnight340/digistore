@@ -2,6 +2,8 @@ import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
 import { setCustomerSession } from "@/lib/auth";
+import { requestUserData, sendMetaEvent, splitFullName } from "@/lib/meta/capi";
+import { registrationEventId } from "@/lib/meta/events";
 
 const GOOGLE_STATE_COOKIE = "ghost_google_oauth_state";
 
@@ -129,6 +131,26 @@ export async function GET(request: Request) {
             lastLoginAt: now,
           },
         });
+
+    if (!existing) {
+      // New account created via Google OAuth: server-only CompleteRegistration
+      // (no matching pixel event fires for this flow, so no dedup pair needed).
+      try {
+        await sendMetaEvent({
+          eventName: "CompleteRegistration",
+          eventId: registrationEventId(customer.id),
+          userData: {
+            ...(await requestUserData()),
+            email,
+            ...splitFullName(name),
+            externalId: customer.id,
+          },
+          customData: { status: "registered" },
+        });
+      } catch (metaError) {
+        console.error("[meta:registration:google]", metaError);
+      }
+    }
 
     await setCustomerSession(customer.id, true);
     return NextResponse.redirect(new URL(mode === "register" ? "/account" : "/account/orders", base));

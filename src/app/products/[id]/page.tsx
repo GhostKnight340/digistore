@@ -8,6 +8,8 @@ import {
 import ProductArt from "@/components/ProductArt";
 import ProductCard from "@/components/ProductCard";
 import AddToCartForm from "@/components/AddToCartForm";
+import MetaEvent from "@/components/meta/MetaEvent";
+import { META_CURRENCY } from "@/lib/meta/events";
 
 export async function generateStaticParams() {
   const slugs = await getParentProductSlugs().catch(() => []);
@@ -40,8 +42,25 @@ export default async function ProductDetailPage({
     .filter((item) => item.parentId !== product.id)
     .slice(0, 4);
 
+  const trackedId = selectedVariant?.id ?? product.id;
+  const trackedPrice = selectedVariant?.price ?? product.price;
+
   return (
     <div className="container-page pt-8 pb-20 sm:py-10">
+      <MetaEvent
+        event="ViewContent"
+        data={{
+          content_ids: [trackedId],
+          content_name: selectedVariant
+            ? `${product.name} - ${selectedVariant.title}`
+            : product.name,
+          content_category: product.categoryName ?? product.category,
+          content_type: "product",
+          contents: [{ id: trackedId, quantity: 1, item_price: trackedPrice }],
+          currency: META_CURRENCY,
+          value: trackedPrice,
+        }}
+      />
       <nav className="mb-9 flex flex-wrap items-center gap-2 text-[13.5px] text-faint">
         <Link href="/" className="text-muted transition hover:text-white">
           Accueil
@@ -128,8 +147,14 @@ export default async function ProductDetailPage({
               </div>
             )}
             <AddToCartForm
-              productId={selectedVariant?.id ?? product.id}
-              price={selectedVariant?.price ?? product.price}
+              productId={trackedId}
+              price={trackedPrice}
+              productName={
+                selectedVariant
+                  ? `${product.name} - ${selectedVariant.title}`
+                  : product.name
+              }
+              productCategory={product.categoryName ?? product.category}
             />
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
               Paiement sécurisé

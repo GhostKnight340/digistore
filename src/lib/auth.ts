@@ -35,6 +35,11 @@ export type AuthActionResult = {
   error?: string;
   message?: string;
   redirectTo?: string;
+  /**
+   * Event id already sent to the Meta Conversions API by the server; the
+   * client fires the pixel half with the same id for deduplication.
+   */
+  metaEventId?: string;
 };
 
 function normalizeEmail(email: string) {

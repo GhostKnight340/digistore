@@ -18,6 +18,8 @@ import {
   verifyPassword,
   type AuthActionResult,
 } from "@/lib/auth";
+import { requestUserData, sendMetaEvent, splitFullName } from "@/lib/meta/capi";
+import { registrationEventId } from "@/lib/meta/events";
 
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -83,6 +85,25 @@ export async function registerCustomerAction(input: {
           data: { name, email, passwordHash, emailVerified: false },
         });
 
+    // Server half of the Meta CompleteRegistration event; the login page
+    // fires the pixel half with the returned event id for deduplication.
+    const metaEventId = registrationEventId(customer.id);
+    try {
+      await sendMetaEvent({
+        eventName: "CompleteRegistration",
+        eventId: metaEventId,
+        userData: {
+          ...(await requestUserData()),
+          email,
+          ...splitFullName(name),
+          externalId: customer.id,
+        },
+        customData: { status: "registered" },
+      });
+    } catch (metaError) {
+      console.error("[meta:registration]", metaError);
+    }
+
     let verificationEmailSent = true;
     try {
       const emailResult = await sendVerificationEmail(customer);
@@ -117,6 +138,7 @@ export async function registerCustomerAction(input: {
     revalidatePath("/account");
     return {
       ok: true,
+      metaEventId,
       message: verificationEmailSent
         ? "Compte créé. Vérifiez votre e-mail pour activer votre compte."
         : "Compte créé, mais l’e-mail de vérification n’a pas pu être envoyé. Vous pourrez le renvoyer.",

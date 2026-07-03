@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { headers } from "next/headers";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
@@ -6,6 +7,7 @@ import { StoreSettingsProvider } from "@/context/StoreSettingsContext";
 import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import MetaPixel from "@/components/meta/MetaPixel";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
 
@@ -55,6 +57,21 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-screen font-sans antialiased">
+        <Suspense fallback={null}>
+          <MetaPixel />
+        </Suspense>
+        {process.env.NEXT_PUBLIC_META_PIXEL_ID ? (
+          <noscript>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              height="1"
+              width="1"
+              style={{ display: "none" }}
+              alt=""
+              src={`https://www.facebook.com/tr?id=${process.env.NEXT_PUBLIC_META_PIXEL_ID}&ev=PageView&noscript=1`}
+            />
+          </noscript>
+        ) : null}
         <StoreSettingsProvider initialSettings={settings}>
           <ProductCatalogProvider
             categories={catalog.categories}
