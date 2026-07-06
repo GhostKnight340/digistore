@@ -290,45 +290,35 @@ model PaymentEvent {
   @@index([createdAt])
 }
 
-// Bank account for bank-transfer payment method.
-model Bank {
-  id            String   @id @default(cuid())
-  name          String
-  accountHolder String
-  accountNumber String   @default("")
-  rib           String   @default("")
-  iban          String   @default("")
-  swift         String   @default("")
-  instructions  String   @default("")
-  enabled       Boolean  @default(true)
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
+// Generic, reorderable payment method shown at checkout. One row per
+// customer-facing method (a bank account, a crypto wallet, PayPal, card,
+// cash, or a fully custom method) — replaces the old fixed
+// Bank/CryptoWallet/PaymentMethodConfig tables so admins can add/remove/
+// reorder/archive any number of methods of any type.
+model PaymentMethod {
+  id            String    @id @default(cuid())
+  type          String // "bank" | "paypal" | "crypto" | "card" | "cash" | "custom"
+  name          String // customer-facing name
+  subtitle      String    @default("")
+  customerNote  String    @default("")
+  status        String    @default("active") // "active" | "inactive"
+  visible       Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  logoUrl       String?
+  initials      String    @default("")
+  accentColor   String    @default("#3e7bfa")
+  logoType      String    @default("initials") // "initials" | "image" | "icon"
+  details       Json      @default("{}") // per-type fields (rib, walletAddress, paypalEmail, ...)
+  proofRequired Boolean   @default(true)
+  internalNote  String    @default("")
+  minAmount     Float?
+  maxAmount     Float?
+  regions       String[]  @default([])
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-// USDT wallet configuration (TRC20 / BEP20).
-model CryptoWallet {
-  id           String   @id @default(cuid())
-  coin         String   @default("USDT")
-  network      String   // "TRC20" | "BEP20"
-  address      String
-  label        String   @default("")
-  instructions String   @default("")
-  enabled      Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-// Per-method configuration (enabled, proof required, method-specific fields).
-model PaymentMethodConfig {
-  id            String   @id @default(cuid())
-  method        String   @unique // "bank" | "usdt" | "paypal" | "card"
-  enabled       Boolean  @default(true)
-  proofRequired Boolean  @default(true)
-  paypalEmail   String   @default("")
-  cardMessage   String   @default("Paiement par carte bientôt disponible.")
-  instructions  String   @default("")
-  updatedAt     DateTime @default(now()) @updatedAt
+  @@index([sortOrder])
 }
 
 // Global support contact info.

@@ -9,6 +9,8 @@ import {
 } from "@/lib/email/send-email";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import { publicOrderReference } from "@/lib/db/orders";
+import { getAdminPaymentMethods } from "@/lib/db/paymentMethods";
+import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
@@ -29,12 +31,10 @@ export async function submitPayment(
     return { ok: false, error: "La commande n’est pas en attente de paiement." };
   }
 
-  const methodConfig = await prisma.paymentMethodConfig.findUnique({
-    where: { method: order.paymentMethod },
-    select: { proofRequired: true },
-  });
+  const { methods } = await getAdminPaymentMethods();
+  const method = resolveOrderPaymentMethod(order.paymentMethod, methods);
   const proofRequired =
-    methodConfig?.proofRequired ?? !["paypal", "card", "test"].includes(order.paymentMethod);
+    method?.proofRequired ?? !["paypal", "card", "test"].includes(order.paymentMethod);
   if (proofRequired && !proof) {
     return { ok: false, error: "Un justificatif de paiement est requis pour ce mode de paiement." };
   }

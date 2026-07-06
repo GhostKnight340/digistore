@@ -12,7 +12,7 @@ const CategoriesPanel = lazy(() => import("@/components/admin/CategoriesPanel"))
 const FeaturedProductsPanel = lazy(() => import("@/components/admin/FeaturedProductsPanel"));
 const InventoryPanel = lazy(() => import("@/components/admin/InventoryPanel"));
 const PaymentsPanel = lazy(() => import("@/components/admin/PaymentsPanel"));
-const PaymentSettingsPanel = lazy(() => import("@/components/admin/PaymentSettingsPanel"));
+const PaymentMethodsPanel = lazy(() => import("@/components/admin/PaymentMethodsPanel"));
 const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"));
 const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplatesPanel"));
@@ -52,7 +52,7 @@ function renderPanel(activeTab: string) {
     case "payments":
       return <PaymentsPanel />;
     case "payment-settings":
-      return <PaymentSettingsPanel />;
+      return <PaymentMethodsPanel />;
     case "email-templates":
       return <EmailTemplatesPanel />;
     case "legal-pages":

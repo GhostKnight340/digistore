@@ -1,14 +1,4 @@
-import type { PaymentMethod } from "@/lib/types";
-import type { PaymentDisplaySetting } from "@/lib/storeSettings";
-
-export type PaymentDisplayFallback = {
-  displayName: string;
-  subtitle: string;
-  initials?: string;
-  accentColor?: string;
-  logoUrl?: string;
-  iconUrl?: string;
-};
+import type { PaymentMethodDTO } from "@/lib/dto";
 
 export type ResolvedPaymentDisplay = {
   displayName: string;
@@ -18,18 +8,6 @@ export type ResolvedPaymentDisplay = {
   logoUrl?: string;
   iconUrl?: string;
 };
-
-export function methodDisplayKey(method: PaymentMethod | string) {
-  return `method:${method}`;
-}
-
-export function bankDisplayKey(id: string) {
-  return `bank:${id}`;
-}
-
-export function walletDisplayKey(id: string) {
-  return `wallet:${id}`;
-}
 
 export function fallbackInitials(label: string) {
   const words = label
@@ -44,26 +22,14 @@ export function fallbackInitials(label: string) {
   return initials.toUpperCase() || "PM";
 }
 
-export function resolvePaymentDisplay(
-  setting: PaymentDisplaySetting | undefined,
-  fallback: PaymentDisplayFallback,
-): ResolvedPaymentDisplay {
-  const displayName = setting?.displayName?.trim() || fallback.displayName;
-  const subtitle = setting?.subtitle?.trim() || fallback.subtitle;
-  const initials =
-    setting?.initials?.trim() ||
-    fallback.initials ||
-    fallbackInitials(displayName);
-  const logoUrl = setting?.logoUrl?.trim() || fallback.logoUrl;
-  const iconUrl = setting?.iconUrl?.trim() || fallback.iconUrl;
-
+/** Branding now lives directly on each PaymentMethod row. */
+export function paymentMethodDisplay(method: PaymentMethodDTO): ResolvedPaymentDisplay {
+  const hasImage = method.logoType !== "initials" && Boolean(method.logoUrl);
   return {
-    displayName,
-    subtitle,
-    initials: initials.slice(0, 4).toUpperCase(),
-    accentColor:
-      setting?.accentColor?.trim() || fallback.accentColor || "#3e7bfa",
-    logoUrl: setting?.logoType === "initials" ? undefined : logoUrl,
-    iconUrl: setting?.logoType === "initials" ? undefined : iconUrl,
+    displayName: method.name,
+    subtitle: method.subtitle,
+    initials: (method.initials || fallbackInitials(method.name)).slice(0, 4).toUpperCase(),
+    accentColor: method.accentColor || "#3e7bfa",
+    logoUrl: hasImage ? method.logoUrl ?? undefined : undefined,
   };
 }

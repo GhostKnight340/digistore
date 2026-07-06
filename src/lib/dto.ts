@@ -343,38 +343,81 @@ export interface ActionResult {
   error?: string;
 }
 
-// ─── Payment settings DTOs ────────────────────────────────────────────────────
+// ─── Payment method DTOs ──────────────────────────────────────────────────────
 
-export interface BankDTO {
+export type PaymentMethodType = "bank" | "paypal" | "crypto" | "card" | "cash" | "custom";
+export type PaymentMethodStatus = "active" | "inactive";
+export type PaymentMethodLogoType = "initials" | "image" | "icon";
+
+/** Loosely-typed per-type payment fields, stored as JSON. Every field optional
+ * since a draft method may have any of them blank. */
+export interface PaymentMethodDetails {
+  // bank
+  accountNumber?: string;
+  rib?: string;
+  bankName?: string;
+  accountHolder?: string;
+  iban?: string;
+  swift?: string;
+  // paypal
+  email?: string;
+  meLink?: string;
+  buttonLabel?: string;
+  // crypto
+  walletAddress?: string;
+  network?: string;
+  minAmountNote?: string;
+  // card
+  providerName?: string;
+  statusNote?: string;
+  comingSoon?: boolean;
+  // cash / custom
+  customLabel?: string;
+  fields?: { label: string; value: string }[];
+  // shared free-text instructions, meaning varies slightly by type
+  instructions?: string;
+}
+
+export interface PaymentMethodDTO {
   id: string;
+  type: PaymentMethodType;
   name: string;
-  accountHolder: string;
-  accountNumber: string;
-  rib: string;
-  iban: string;
-  swift: string;
-  instructions: string;
-  enabled: boolean;
+  subtitle: string;
+  customerNote: string;
+  status: PaymentMethodStatus;
+  visible: boolean;
   sortOrder: number;
-}
-
-export interface CryptoWalletDTO {
-  id: string;
-  coin: string;
-  network: string;
-  address: string;
-  label: string;
-  instructions: string;
-  enabled: boolean;
-}
-
-export interface PaymentMethodConfigDTO {
-  method: string;
-  enabled: boolean;
+  logoUrl: string | null;
+  initials: string;
+  accentColor: string;
+  logoType: PaymentMethodLogoType;
+  details: PaymentMethodDetails;
   proofRequired: boolean;
-  paypalEmail: string;
-  cardMessage: string;
-  instructions: string;
+  internalNote: string;
+  minAmount: number | null;
+  maxAmount: number | null;
+  regions: string[];
+  archivedAt: string | null;
+  updatedAt: string;
+}
+
+export interface SaveMethodInput {
+  type: PaymentMethodType;
+  name: string;
+  subtitle: string;
+  customerNote: string;
+  status: PaymentMethodStatus;
+  visible: boolean;
+  logoUrl: string | null;
+  initials: string;
+  accentColor: string;
+  logoType: PaymentMethodLogoType;
+  details: PaymentMethodDetails;
+  proofRequired: boolean;
+  internalNote: string;
+  minAmount: number | null;
+  maxAmount: number | null;
+  regions: string[];
 }
 
 export interface SupportConfigDTO {
@@ -385,8 +428,11 @@ export interface SupportConfigDTO {
 }
 
 export interface PaymentConfigDTO {
-  methods: Record<string, PaymentMethodConfigDTO>;
-  banks: BankDTO[];
-  wallets: CryptoWalletDTO[];
+  methods: PaymentMethodDTO[];
   support: SupportConfigDTO;
+}
+
+export interface PaymentMethodValidation {
+  complete: boolean;
+  fieldErrors: Record<string, string>;
 }

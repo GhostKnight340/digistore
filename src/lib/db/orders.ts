@@ -442,7 +442,10 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 function paymentMethodLabel(method: string) {
-  return PAYMENT_METHOD_LABELS[method] ?? method;
+  // Orders created after the payment-methods migration store the specific
+  // PaymentMethod id (a cuid) rather than a friendly type — only the legacy
+  // literal strings have a nice label available without an extra query.
+  return PAYMENT_METHOD_LABELS[method] ?? "Paiement";
 }
 
 /**

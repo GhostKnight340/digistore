@@ -144,7 +144,7 @@ export default function PaymentsPanel() {
                       <p className="text-xs text-muted">{order.customerEmail}</p>
                     </td>
                     <td className="px-4 py-3 text-muted">
-                      {METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
+                      {METHOD_LABELS[order.paymentMethod] ?? "Paiement"}
                     </td>
                     <td className="px-4 py-3 font-semibold text-white">
                       {formatMAD(order.totalMad)}
