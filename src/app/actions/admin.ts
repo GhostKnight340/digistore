@@ -61,6 +61,7 @@ import {
   saveCategory,
 } from "@/lib/db/categories";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
+import { adminCommandSearch, type CommandSearchResult } from "@/lib/db/adminSearch";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import type {
   ActionResult,
@@ -97,6 +98,11 @@ function revalidateStorefrontCatalog() {
   revalidatePath("/", "page");
   revalidatePath("/products", "page");
   revalidatePath("/products/[id]", "page");
+}
+
+export async function adminCommandSearchAction(query: string): Promise<CommandSearchResult> {
+  await assertAdminAccess();
+  return adminCommandSearch(query);
 }
 
 export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {

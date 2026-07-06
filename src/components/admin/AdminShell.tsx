@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import CommandSearch from "@/components/admin/CommandSearch";
 
 /** Literal design tokens from the admin handoff (docs/admin-handoff/05-Design-Tokens.md). */
 const C = {
@@ -297,8 +298,6 @@ export default function AdminShell({
   admin: AdminIdentity;
   children: ReactNode;
 }) {
-  const [searchFocus, setSearchFocus] = useState(false);
-
   return (
     <div style={{ display: "flex", height: "100vh", background: "#070809", color: C.text }}>
       {/* ===== Sidebar ===== */}
@@ -451,52 +450,7 @@ export default function AdminShell({
             backdropFilter: "blur(12px)",
           }}
         >
-          <div
-            style={{
-              flex: 1,
-              maxWidth: "420px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              height: "38px",
-              padding: "0 13px",
-              background: C.surfaceInput,
-              border: `1px solid ${searchFocus ? "rgba(62,123,250,0.35)" : C.borderInput}`,
-              borderRadius: "10px",
-              boxShadow: searchFocus ? "0 0 0 3px rgba(62,123,250,0.20)" : "none",
-              transition: "border-color 120ms ease, box-shadow 120ms ease",
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2">
-              <circle cx="11" cy="11" r="7" />
-              <line x1="21" y1="21" x2="16.6" y2="16.6" />
-            </svg>
-            <input
-              placeholder="Rechercher ou accéder à…  commandes, produits, clients"
-              onFocus={() => setSearchFocus(true)}
-              onBlur={() => setSearchFocus(false)}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: C.text,
-                fontSize: "13px",
-              }}
-            />
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "11px",
-                color: C.faint,
-                border: `1px solid ${C.borderStrong}`,
-                borderRadius: "5px",
-                padding: "1px 6px",
-              }}
-            >
-              ⌘K
-            </span>
-          </div>
+          <CommandSearch />
           <div style={{ flex: 1 }} />
           <Link
             href="/"
