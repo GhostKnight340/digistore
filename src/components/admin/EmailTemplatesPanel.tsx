@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { sendTestEmailAction } from "@/app/actions/admin";
-import type { EmailTemplateKey } from "@/lib/emailTemplates";
+import { renderEmailTemplate, type EmailTemplateKey } from "@/lib/emailTemplates";
 
 const labels: Record<string, string> = {
   welcome: "Welcome",
@@ -30,11 +30,10 @@ const sample: Record<string, string> = {
   support_email: "support@ghost.ma",
   support_whatsapp: "+212 600 000 000",
   codes: "AAAA-BBBB-CCCC",
+  verification_url: "https://ghost.ma/verify/example",
+  reset_password_url: "https://ghost.ma/reset/example",
+  account_url: "https://ghost.ma/account",
 };
-
-function renderTemplate(value: string) {
-  return value.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) => sample[key] ?? `{{${key}}}`);
-}
 
 export default function EmailTemplatesPanel() {
   const { settings, saveSettings } = useStoreSettings();
@@ -47,11 +46,16 @@ export default function EmailTemplatesPanel() {
   );
   const template = draft[active];
   const preview = useMemo(
-    () => ({
-      subject: renderTemplate(template.subject),
-      body: renderTemplate(template.body),
-    }),
-    [template],
+    () =>
+      renderEmailTemplate(
+        {
+          ...settings,
+          emailTemplates: { ...settings.emailTemplates, [active]: template },
+        },
+        active as EmailTemplateKey,
+        sample,
+      ),
+    [settings, active, template],
   );
 
   async function save() {
@@ -138,12 +142,17 @@ export default function EmailTemplatesPanel() {
           </label>
         </section>
 
-        <section className="card p-5">
-          <p className="text-xs uppercase tracking-wide text-muted">Aperçu</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">{preview.subject}</h3>
-          <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-border bg-surface p-4 text-sm leading-relaxed text-muted">
-            {preview.body}
-          </pre>
+        <section className="card overflow-hidden">
+          <div className="border-b border-border p-5">
+            <p className="text-xs uppercase tracking-wide text-muted">Aperçu — vue client</p>
+            <h3 className="mt-2 text-lg font-semibold text-white">{preview.subject}</h3>
+          </div>
+          <iframe
+            title="Aperçu email"
+            sandbox=""
+            srcDoc={preview.html}
+            className="h-[780px] w-full border-0 bg-[#080a0f]"
+          />
         </section>
       </div>
     </section>
