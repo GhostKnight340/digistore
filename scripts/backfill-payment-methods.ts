@@ -8,6 +8,15 @@
  * legacy tables with raw SQL since they're no longer part of the Prisma schema.
  *
  * Run with: npx tsx scripts/backfill-payment-methods.ts
+ *
+ * Safe to re-run: it aborts immediately if PaymentMethod already has any rows,
+ * and the insert itself is one transaction, so a mid-run failure leaves the
+ * table empty (not partially populated) rather than something a re-run would
+ * mistake for "already done".
+ *
+ * Full production sequencing (backup, staged migrations, verification,
+ * rollback): see docs/payment-methods-migration-runbook.md — do not run this
+ * against production outside that runbook's step 2.
  */
 import { PrismaClient } from "@prisma/client";
 
@@ -178,9 +187,14 @@ async function main() {
     });
   }
 
-  for (const data of rows) {
-    await prisma.paymentMethod.create({ data });
-  }
+  // All-or-nothing: if any row fails to insert, the transaction rolls back and
+  // PaymentMethod is left at 0 rows, so re-running the script is safe (the
+  // count-guard above only skips when a *complete* prior run has committed).
+  await prisma.$transaction(async (tx) => {
+    for (const data of rows) {
+      await tx.paymentMethod.create({ data });
+    }
+  });
 
   console.log(`Backfilled ${rows.length} payment method(s).`);
 }
