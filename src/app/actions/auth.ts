@@ -140,6 +140,18 @@ export async function registerCustomerAction(input: {
   }
 }
 
+/** Guest checkout: check (without leaking other details) whether an email already has a real account. */
+export async function checkEmailHasAccountAction(emailInput: string): Promise<{ exists: boolean }> {
+  await ensureDatabaseReady();
+  const email = normalizeEmail(emailInput);
+  if (!isEmail(email)) return { exists: false };
+  const existing = await prisma.customer.findUnique({
+    where: { email },
+    select: { passwordHash: true, googleId: true },
+  });
+  return { exists: Boolean(existing && (existing.passwordHash || existing.googleId)) };
+}
+
 export async function loginCustomerAction(input: {
   email: string;
   password: string;

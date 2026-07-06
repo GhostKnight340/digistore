@@ -58,8 +58,9 @@ export default function LoginPage() {
         return;
       }
       if (result.message) setMessage(result.message);
-      if (result.redirectTo && currentMode === "login") {
-        router.push(result.redirectTo);
+      if (currentMode === "login") {
+        const next = searchParams.get("next");
+        router.push(next || result.redirectTo || "/account/orders");
         router.refresh();
       } else {
         router.refresh();

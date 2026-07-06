@@ -728,9 +728,14 @@ function normalizeOptionalPhone(value?: string) {
   return digits.length >= 9 && digits.length <= 15 ? phone : undefined;
 }
 
+export type CreateOrderResult =
+  | { id: string; publicOrderNumber: string; publicOrderPathSegment: string }
+  | { error: "account_exists" }
+  | null;
+
 export async function createOrder(
   input: CreateOrderInput,
-): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
+): Promise<CreateOrderResult> {
   await ensureDatabaseReady();
   const slugs = input.items.map((item) => item.productId);
   const [products, variants] = await Promise.all([
@@ -792,6 +797,19 @@ export async function createOrder(
     const customerEmail = sessionCustomer?.email ?? input.customerEmail.trim().toLowerCase();
     const customerPhone = normalizeOptionalPhone(input.customerPhone);
     if (customerPhone === undefined) return null;
+
+    if (!sessionCustomer) {
+      // Guest checkout must never silently attach an order (and overwrite name/phone)
+      // to an email that already belongs to a real, credentialed account.
+      const existingByEmail = await prisma.customer.findUnique({
+        where: { email: customerEmail },
+        select: { passwordHash: true, googleId: true },
+      });
+      if (existingByEmail && (existingByEmail.passwordHash || existingByEmail.googleId)) {
+        return { error: "account_exists" };
+      }
+    }
+
     const order = await prisma.$transaction(async (tx) => {
       const customer = sessionCustomer
         ? await tx.customer.update({

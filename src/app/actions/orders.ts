@@ -5,6 +5,7 @@ import {
   getCustomerOrder,
   getOrderSummaries,
   findOrderByEmailAndId,
+  type CreateOrderResult,
 } from "@/lib/db/orders";
 import { customerOrderRedirectPath } from "@/lib/orderNumber";
 import type { CustomerOrderDTO } from "@/lib/dto";
@@ -16,7 +17,7 @@ export async function createOrderAction(input: {
   customerPhone?: string;
   paymentMethod: string;
   items: { productId: string; quantity: number }[];
-}): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
+}): Promise<CreateOrderResult> {
   return createOrder(input);
 }
 

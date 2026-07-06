@@ -7,9 +7,11 @@ import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import PaymentBrandMark from "@/components/PaymentBrandMark";
+import PasswordField from "@/components/ui/PasswordField";
 import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
+import { checkEmailHasAccountAction, registerCustomerAction } from "@/app/actions/auth";
 import {
   buildPaymentOptions,
   getEnabledMethods,
@@ -18,6 +20,9 @@ import {
 } from "@/lib/paymentOptions";
 import type { PaymentMethod } from "@/lib/types";
 import type { PaymentConfigDTO } from "@/lib/dto";
+
+const ACCOUNT_EXISTS_MESSAGE =
+  "Un compte existe déjà avec cette adresse. Connectez-vous pour lier cette commande à votre compte.";
 
 export default function CheckoutClient({
   initialConfig = null,
@@ -30,6 +35,8 @@ export default function CheckoutClient({
   const { getProduct } = useProductCatalog();
   const { settings } = useStoreSettings();
   const router = useRouter();
+
+  const loggedIn = Boolean(initialCustomer);
 
   const [config, setConfig] = useState<PaymentConfigDTO | null>(initialConfig);
   const [configError, setConfigError] = useState(false);
@@ -44,6 +51,26 @@ export default function CheckoutClient({
   const [phone, setPhone] = useState(initialCustomer?.phone ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const [createAccount, setCreateAccount] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+
+  async function handleEmailBlur() {
+    if (loggedIn) return;
+    const value = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return;
+    setCheckingEmail(true);
+    try {
+      const result = await checkEmailHasAccountAction(value);
+      setEmailExists(result.exists);
+      if (result.exists) setCreateAccount(false);
+    } catch (err) {
+      console.error("[checkout] Failed to check email:", err);
+    } finally {
+      setCheckingEmail(false);
+    }
+  }
 
   useEffect(() => {
     if (initialConfig) return;
@@ -93,17 +120,30 @@ export default function CheckoutClient({
     );
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
 
-    if (!email.trim() || !fullName.trim()) {
-      setError("Veuillez saisir votre nom et votre e-mail.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Veuillez saisir une adresse e-mail valide.");
-      return;
+    const form = e.currentTarget;
+    const wantsAccount = !loggedIn && createAccount;
+    const password = wantsAccount ? String(new FormData(form).get("checkoutPassword") || "") : "";
+    const confirmPassword = wantsAccount
+      ? String(new FormData(form).get("checkoutConfirmPassword") || "")
+      : "";
+
+    if (!loggedIn) {
+      if (!email.trim() || !fullName.trim()) {
+        setError("Veuillez saisir votre nom et votre e-mail.");
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setError("Veuillez saisir une adresse e-mail valide.");
+        return;
+      }
+      if (emailExists) {
+        setError(ACCOUNT_EXISTS_MESSAGE);
+        return;
+      }
     }
     const phoneDigits = phone.replace(/\D/g, "");
     if (phone.trim() && (!/^\+?[0-9][0-9\s().-]*$/.test(phone.trim()) || phoneDigits.length < 9 || phoneDigits.length > 15)) {
@@ -113,6 +153,16 @@ export default function CheckoutClient({
     if (!method) {
       setError("Veuillez choisir un mode de paiement.");
       return;
+    }
+    if (wantsAccount) {
+      if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+        setError("Le mot de passe doit contenir au moins 8 caractères, avec une lettre et un chiffre.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Les mots de passe ne correspondent pas.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -132,6 +182,29 @@ export default function CheckoutClient({
         setSubmitting(false);
         setError("Une erreur est survenue. Veuillez réessayer.");
         return;
+      }
+      if ("error" in order) {
+        setSubmitting(false);
+        setEmailExists(true);
+        setError(ACCOUNT_EXISTS_MESSAGE);
+        return;
+      }
+
+      if (wantsAccount) {
+        // Order already succeeded above; a failure here (e.g. a race with a
+        // just-created account) must not block the customer from reaching payment.
+        const registerResult = await registerCustomerAction({
+          name: fullName.trim(),
+          email: email.trim(),
+          password,
+          confirmPassword,
+          acceptTerms: true,
+        });
+        if (!registerResult.ok) {
+          console.error("[checkout] Account creation failed:", registerResult.error);
+        } else {
+          router.refresh();
+        }
       }
 
       clearCart();
@@ -164,40 +237,139 @@ export default function CheckoutClient({
         <div className="space-y-8">
           <section className="card p-6">
             <h2 className="text-lg font-bold text-white">Vos informations</h2>
-            <p className="mt-1 text-sm text-muted">
-              Nous vous tiendrons inform? du suivi de votre commande ? cette adresse e-mail.
-            </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Field label="Nom complet">
-                <input
-                  className="input"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Youssef El Amrani"
-                  autoComplete="name"
-                />
-              </Field>
-              <Field label="E-mail">
-                <input
-                  className="input"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="vous@example.com"
-                  autoComplete="email"
-                />
-              </Field>
-              <Field label="Numéro de téléphone">
-                <input
-                  className="input"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+212 6 00 00 00 00"
-                  autoComplete="tel"
-                  inputMode="tel"
-                />
-              </Field>
-            </div>
+
+            {loggedIn ? (
+              <>
+                <p className="mt-1 text-sm text-muted">
+                  Nous vous tiendrons informé du suivi de votre commande à cette adresse e-mail.
+                </p>
+                <div className="mt-5 space-y-2 rounded-xl border border-border bg-surface/60 p-4 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted">Nom</span>
+                    <span className="font-medium text-white">{initialCustomer?.name}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted">E-mail</span>
+                    <span className="font-medium text-white">{initialCustomer?.email}</span>
+                  </div>
+                  {initialCustomer?.phone && (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted">Téléphone</span>
+                      <span className="font-medium text-white">{initialCustomer.phone}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 text-xs font-semibold text-accent">
+                  Commande liée à votre compte
+                </p>
+
+                {!initialCustomer?.phone && (
+                  <div className="mt-4 sm:max-w-xs">
+                    <Field label="Numéro de téléphone">
+                      <input
+                        className="input"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+212 6 00 00 00 00"
+                        autoComplete="tel"
+                        inputMode="tel"
+                      />
+                    </Field>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-sm text-muted">
+                  Nous vous tiendrons informé du suivi de votre commande à cette adresse e-mail.
+                </p>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <Field label="Nom complet">
+                    <input
+                      className="input"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Youssef El Amrani"
+                      autoComplete="name"
+                    />
+                  </Field>
+                  <Field label="E-mail">
+                    <input
+                      className="input"
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setEmailExists(false);
+                      }}
+                      onBlur={handleEmailBlur}
+                      placeholder="vous@example.com"
+                      autoComplete="email"
+                    />
+                    {checkingEmail && (
+                      <p className="mt-1 text-xs text-muted">Vérification...</p>
+                    )}
+                  </Field>
+                  <Field label="Numéro de téléphone">
+                    <input
+                      className="input"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+212 6 00 00 00 00"
+                      autoComplete="tel"
+                      inputMode="tel"
+                    />
+                  </Field>
+                </div>
+
+                {emailExists && (
+                  <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                    {ACCOUNT_EXISTS_MESSAGE}{" "}
+                    <Link href="/login?next=/checkout" className="font-semibold underline hover:text-amber-200">
+                      Se connecter
+                    </Link>
+                  </div>
+                )}
+
+                <div className="mt-5 space-y-3 border-t border-border pt-4">
+                  <label className="flex items-start gap-2 text-sm text-muted">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={createAccount}
+                      disabled={emailExists}
+                      onChange={(e) => setCreateAccount(e.target.checked)}
+                    />
+                    <span>Créer un compte avec ces informations</span>
+                  </label>
+
+                  {createAccount && !emailExists && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="Mot de passe">
+                        <PasswordField
+                          name="checkoutPassword"
+                          placeholder="Minimum 8 caractères"
+                          autoComplete="new-password"
+                        />
+                        <p className="mt-1 text-xs text-muted">
+                          Au moins 8 caractères, avec une lettre et un chiffre.
+                        </p>
+                      </Field>
+                      <Field label="Confirmer le mot de passe">
+                        <PasswordField name="checkoutConfirmPassword" autoComplete="new-password" />
+                      </Field>
+                    </div>
+                  )}
+
+                  <Link
+                    href="/login?next=/checkout"
+                    className="inline-block text-sm font-semibold text-accent hover:text-accent-hover"
+                  >
+                    J&apos;ai déjà un compte — me connecter
+                  </Link>
+                </div>
+              </>
+            )}
           </section>
 
           <section className="space-y-4">
