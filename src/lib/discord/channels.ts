@@ -6,9 +6,8 @@
  */
 
 export type DiscordChannelKey =
-  | "newOrders"
+  | "ordersFeed"
   | "fulfillment"
-  | "payments"
   | "accounts"
   | "support"
   | "stockAlerts"
@@ -30,9 +29,8 @@ export const DISCORD_SERVER_STRUCTURE: DiscordCategoryDefinition[] = [
   {
     name: "📦 ORDERS",
     channels: [
-      { key: "newOrders", name: "new-orders", envVar: "DISCORD_CHANNEL_NEW_ORDERS_ID" },
+      { key: "ordersFeed", name: "orders-feed", envVar: "DISCORD_CHANNEL_ORDERS_FEED_ID" },
       { key: "fulfillment", name: "fulfillment", envVar: "DISCORD_CHANNEL_FULFILLMENT_ID" },
-      { key: "payments", name: "payments", envVar: "DISCORD_CHANNEL_PAYMENTS_ID" },
     ],
   },
   {
@@ -61,3 +59,14 @@ export function getDiscordChannelId(key: DiscordChannelKey): string | undefined 
   if (!def) return undefined;
   return process.env[def.envVar] || undefined;
 }
+
+/**
+ * All the business channels are private by default: everyone in the server
+ * is denied view access at the category and channel level, and only the
+ * "Business manager" role (plus the bot and the configured owner) can see
+ * them. Set up once by the setup script; not read at notification time.
+ */
+export const DISCORD_BUSINESS_MANAGER_ROLE = {
+  name: "Business manager",
+  envVar: "DISCORD_ROLE_BUSINESS_MANAGER_ID",
+} as const;

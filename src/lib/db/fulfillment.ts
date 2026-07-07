@@ -251,10 +251,18 @@ export async function deliverOrder(
       console.error("[email:order_delivered]", emailError);
     }
 
+    const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+    void notifyPaymentStatusChange({
+      orderId,
+      publicOrderNumber: reference.number,
+      fromStatus: "payment_confirmed",
+      toStatus: "delivered",
+      adminUrl,
+    });
     void notifyFulfillmentCompleted({
       orderId,
       publicOrderNumber: reference.number,
-      adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
+      adminUrl,
     });
 
     void checkStockThresholds([...consumedByVariant.values()]);

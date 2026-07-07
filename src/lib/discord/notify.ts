@@ -57,7 +57,7 @@ function embed(partial: DiscordEmbed): DiscordMessagePayload {
 }
 
 // ---------------------------------------------------------------------------
-// #new-orders
+// #orders-feed — every order/payment lifecycle event, in one place
 // ---------------------------------------------------------------------------
 
 export type NewOrderNotification = {
@@ -71,7 +71,7 @@ export type NewOrderNotification = {
 };
 
 export function notifyOrderCreated(input: NewOrderNotification): Promise<void> {
-  return safeSend("newOrders", () =>
+  return safeSend("ordersFeed", () =>
     embed({
       title: `New order ${input.publicOrderNumber}`,
       color: COLOR.blue,
@@ -85,24 +85,24 @@ export function notifyOrderCreated(input: NewOrderNotification): Promise<void> {
   );
 }
 
-// ---------------------------------------------------------------------------
-// #payments
-// ---------------------------------------------------------------------------
-
-const PAYMENT_STATUS_COLOR: Record<string, number> = {
+const ORDER_STATUS_COLOR: Record<string, number> = {
   payment_submitted: COLOR.amber,
   payment_confirmed: COLOR.green,
   payment_issue: COLOR.orange,
   rejected: COLOR.red,
   refunded: COLOR.purple,
+  cancelled: COLOR.gray,
+  delivered: COLOR.green,
 };
 
-const PAYMENT_STATUS_LABEL: Record<string, string> = {
+const ORDER_STATUS_LABEL: Record<string, string> = {
   payment_submitted: "Payment submitted",
   payment_confirmed: "Payment confirmed",
   payment_issue: "Payment issue",
   rejected: "Payment rejected",
   refunded: "Refunded",
+  cancelled: "Order cancelled",
+  delivered: "Order delivered",
 };
 
 export type PaymentStatusNotification = {
@@ -117,15 +117,15 @@ export type PaymentStatusNotification = {
 export function notifyPaymentStatusChange(
   input: PaymentStatusNotification,
 ): Promise<void> {
-  const label = PAYMENT_STATUS_LABEL[input.toStatus] ?? input.toStatus;
+  const label = ORDER_STATUS_LABEL[input.toStatus] ?? input.toStatus;
   const transition = input.fromStatus
     ? `${input.fromStatus} → ${input.toStatus}`
     : input.toStatus;
 
-  return safeSend("payments", () =>
+  return safeSend("ordersFeed", () =>
     embed({
       title: `${label} — order ${input.publicOrderNumber}`,
-      color: PAYMENT_STATUS_COLOR[input.toStatus] ?? COLOR.gray,
+      color: ORDER_STATUS_COLOR[input.toStatus] ?? COLOR.gray,
       fields: [
         { name: "Status", value: transition },
         ...(input.note ? [{ name: "Note", value: input.note }] : []),

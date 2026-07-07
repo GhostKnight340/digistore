@@ -26,7 +26,7 @@ export const DISCORD_CHANNEL_TYPE = {
 } as const;
 
 type DiscordRequestInit = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
 };
 
@@ -119,6 +119,99 @@ export function createGuildTextChannel(
     method: "POST",
     body: { name, type: DISCORD_CHANNEL_TYPE.GUILD_TEXT, parent_id: parentId },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Roles + channel permission overwrites — used only by the setup script to
+// restrict the business channels to a "Business manager" role (plus the bot
+// itself, so it can keep posting). Never used at notification time.
+// ---------------------------------------------------------------------------
+
+// Plain numbers (not BigInt) — every bit used here is well under 2^31, so
+// regular JS bitwise ops are exact. Discord's API accepts the decimal string
+// form of the bitfield either way.
+export const DISCORD_PERMISSION = {
+  VIEW_CHANNEL: 1 << 10,
+  SEND_MESSAGES: 1 << 11,
+  READ_MESSAGE_HISTORY: 1 << 16,
+} as const;
+
+export const DISCORD_OVERWRITE_TYPE = {
+  ROLE: 0,
+  MEMBER: 1,
+} as const;
+
+export type DiscordRole = {
+  id: string;
+  name: string;
+  permissions: string;
+  position: number;
+};
+
+export function listGuildRoles(guildId: string): Promise<DiscordRole[]> {
+  return discordRequest<DiscordRole[]>(`/guilds/${guildId}/roles`);
+}
+
+export function createGuildRole(
+  guildId: string,
+  name: string,
+): Promise<DiscordRole> {
+  return discordRequest<DiscordRole>(`/guilds/${guildId}/roles`, {
+    method: "POST",
+    body: { name, permissions: "0", hoist: true, mentionable: true },
+  });
+}
+
+export function reorderGuildRoles(
+  guildId: string,
+  positions: { id: string; position: number }[],
+): Promise<DiscordRole[]> {
+  return discordRequest<DiscordRole[]>(`/guilds/${guildId}/roles`, {
+    method: "PATCH",
+    body: positions,
+  });
+}
+
+export type DiscordGuildMember = {
+  roles: string[];
+};
+
+export function getGuildMember(
+  guildId: string,
+  userId: string,
+): Promise<DiscordGuildMember> {
+  return discordRequest<DiscordGuildMember>(`/guilds/${guildId}/members/${userId}`);
+}
+
+export type DiscordPermissionOverwrite = {
+  id: string;
+  type: (typeof DISCORD_OVERWRITE_TYPE)[keyof typeof DISCORD_OVERWRITE_TYPE];
+  allow: number;
+  deny: number;
+};
+
+export async function setChannelPermissionOverwrite(
+  channelId: string,
+  overwrite: DiscordPermissionOverwrite,
+): Promise<void> {
+  await discordRequest(`/channels/${channelId}/permissions/${overwrite.id}`, {
+    method: "PUT",
+    body: {
+      type: overwrite.type,
+      allow: overwrite.allow.toString(),
+      deny: overwrite.deny.toString(),
+    },
+  });
+}
+
+export type DiscordUser = {
+  id: string;
+  username: string;
+  bot?: boolean;
+};
+
+export function getCurrentBotUser(): Promise<DiscordUser> {
+  return discordRequest<DiscordUser>("/users/@me");
 }
 
 export type DiscordEmbed = {
