@@ -6,9 +6,8 @@
  */
 
 export type DiscordChannelKey =
-  | "newOrders"
+  | "ordersFeed"
   | "fulfillment"
-  | "payments"
   | "accounts"
   | "support"
   | "stockAlerts"
@@ -30,9 +29,8 @@ export const DISCORD_SERVER_STRUCTURE: DiscordCategoryDefinition[] = [
   {
     name: "📦 ORDERS",
     channels: [
-      { key: "newOrders", name: "new-orders", envVar: "DISCORD_CHANNEL_NEW_ORDERS_ID" },
+      { key: "ordersFeed", name: "orders-feed", envVar: "DISCORD_CHANNEL_ORDERS_FEED_ID" },
       { key: "fulfillment", name: "fulfillment", envVar: "DISCORD_CHANNEL_FULFILLMENT_ID" },
-      { key: "payments", name: "payments", envVar: "DISCORD_CHANNEL_PAYMENTS_ID" },
     ],
   },
   {

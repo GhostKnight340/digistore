@@ -13,6 +13,7 @@ const NOTIFIABLE_PAYMENT_STATUSES: OrderStatus[] = [
   "payment_issue",
   "rejected",
   "refunded",
+  "cancelled",
 ];
 
 const ORDER_STATUSES: OrderStatus[] = [
