@@ -10,7 +10,7 @@ import {
   applyPaymentStatusWithEmail,
 } from "@/lib/db/payments";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
-import { getPaymentConfig, getAdminPaymentConfig } from "@/lib/db/paymentSettings";
+import { getPublicPaymentMethods, getAdminPaymentMethods } from "@/lib/db/paymentMethods";
 import { getCustomerOrder } from "@/lib/db/orders";
 import { requireAdminCustomer } from "@/lib/auth";
 import type {
@@ -40,7 +40,7 @@ export async function getPaymentPageDataAction(
 ): Promise<PaymentPageDataDTO | null> {
   const [order, config] = await Promise.all([
     getCustomerOrder(orderId),
-    getPaymentConfig(),
+    getPublicPaymentMethods(),
   ]);
   if (!order) return null;
   return { order, config };
@@ -160,7 +160,7 @@ export async function getPaymentProofAction(
 
 export async function getAdminPaymentConfigAction() {
   await requireAdminCustomer();
-  return getAdminPaymentConfig();
+  return getAdminPaymentMethods();
 }
 
-export { getPaymentConfig as getPaymentConfigAction };
+export { getPublicPaymentMethods as getPaymentConfigAction };

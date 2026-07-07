@@ -16,16 +16,11 @@ import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
 import PaymentBrandMark from "@/components/PaymentBrandMark";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
-import { useStoreSettings } from "@/context/StoreSettingsContext";
-import {
-  bankDisplayKey,
-  methodDisplayKey,
-  resolvePaymentDisplay,
-  walletDisplayKey,
-} from "@/lib/paymentDisplay";
+import { paymentMethodDisplay } from "@/lib/paymentDisplay";
+import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
-import type { BankDTO, CryptoWalletDTO, PaymentMethodConfigDTO } from "@/lib/dto";
+import type { PaymentMethodDTO } from "@/lib/dto";
 
 const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_PROOF_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "application/pdf"]);
@@ -103,7 +98,7 @@ export default function PaymentPage({
   }
 
   const { order, config } = data;
-  const methodConfig = config.methods[order.paymentMethod] ?? null;
+  const method = resolveOrderPaymentMethod(order.paymentMethod, config.methods);
   const whatsapp = config.support.whatsappNumber.replace(/\s/g, "");
   const publicOrderNumber = getPublicOrderLabel(order);
 
@@ -124,7 +119,7 @@ export default function PaymentPage({
 
           <dl className="mx-auto mt-6 grid max-w-xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
             <VaultMeta label="Commande" value={publicOrderNumber} />
-            <VaultMeta label="Méthode" value={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} />
+            <VaultMeta label="Méthode" value={method?.name ?? METHOD_LABELS[order.paymentMethod] ?? "Paiement"} />
             <VaultMeta label="Total" value={formatMAD(order.totalMad)} />
             <VaultMeta label="Date" value={formatDate(order.createdAt)} />
           </dl>
@@ -135,10 +130,7 @@ export default function PaymentPage({
           <PendingPaymentSection
             orderId={order.id}
             totalMad={order.totalMad}
-            paymentMethod={order.paymentMethod}
-            methodConfig={methodConfig ?? null}
-            banks={config.banks}
-            wallets={config.wallets}
+            method={method}
             onSubmitted={refresh}
             setError={setError}
           />
@@ -244,101 +236,36 @@ export default function PaymentPage({
 function PendingPaymentSection({
   orderId,
   totalMad,
-  paymentMethod,
-  methodConfig,
-  banks,
-  wallets,
+  method,
   onSubmitted,
   setError,
 }: {
   orderId: string;
   totalMad: number;
-  paymentMethod: string;
-  methodConfig: PaymentMethodConfigDTO | null;
-  banks: BankDTO[];
-  wallets: CryptoWalletDTO[];
+  method: PaymentMethodDTO | null;
   onSubmitted: () => void;
   setError: (e: string) => void;
 }) {
-  const { settings } = useStoreSettings();
-  const [selectedBank, setSelectedBank] = useState<BankDTO | null>(banks[0] ?? null);
-  const [selectedNetwork, setSelectedNetwork] = useState<string>(
-    wallets.find((w) => w.network === "TRC20") ? "TRC20" : wallets[0]?.network ?? "TRC20",
-  );
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofError, setProofError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const selectedWallet = wallets.find((w) => w.network === selectedNetwork);
-  const bankDisplay = selectedBank
-    ? resolvePaymentDisplay(settings.paymentDisplay[bankDisplayKey(selectedBank.id)], {
-        displayName: selectedBank.name,
-        subtitle: "Virement bancaire",
-        initials: selectedBank.name.slice(0, 2),
-        accentColor: "#3e7bfa",
-      })
-    : null;
-  const walletDisplay = selectedWallet
-    ? resolvePaymentDisplay(
-        settings.paymentDisplay[walletDisplayKey(selectedWallet.id)] ??
-          settings.paymentDisplay[methodDisplayKey("usdt")],
-        {
-          displayName: selectedWallet.label || "Crypto",
-          subtitle: selectedWallet.network,
-          initials: selectedWallet.network.slice(0, 2),
-          accentColor: "#22c55e",
-        },
-      )
-    : resolvePaymentDisplay(settings.paymentDisplay[methodDisplayKey("usdt")], {
-        displayName: "Crypto",
-        subtitle: "Paiement crypto rapide",
-        initials: "US",
-        accentColor: "#22c55e",
-      });
-  const paypalDisplay = resolvePaymentDisplay(settings.paymentDisplay[methodDisplayKey("paypal")], {
-    displayName: "PayPal",
-    subtitle: "PayPal ou envoi manuel",
-    initials: "P",
-    accentColor: "#3e7bfa",
-  });
-  const cardDisplay = resolvePaymentDisplay(settings.paymentDisplay[methodDisplayKey("card")], {
-    displayName: "Carte bancaire",
-    subtitle: "Disponible prochainement",
-    initials: "CB",
-    accentColor: "#8b5cf6",
-  });
-  const proofRequired = methodConfig?.proofRequired ?? true;
-  const configurationError =
-    !methodConfig?.enabled
-      ? "Ce mode de paiement n'est pas disponible pour le moment."
-      : paymentMethod === "bank" && banks.length === 0
-        ? "Les coordonnees bancaires ne sont pas configurees. Contactez l'administrateur."
-        : paymentMethod === "usdt" && wallets.length === 0
-          ? "Les adresses USDT ne sont pas configurees. Contactez l'administrateur."
-          : "";
-  const methodUnavailable = !methodConfig?.enabled || paymentMethod === "usdt" && wallets.length === 0;
+  const display = method ? paymentMethodDisplay(method) : null;
+  const details = method?.details ?? {};
+  const comingSoon = method?.type === "card" && Boolean(details.comingSoon);
+  const proofRequired = method?.proofRequired ?? true;
+  const configurationError = !method
+    ? "Ce mode de paiement n'est pas disponible pour le moment. Contactez l'administrateur."
+    : "";
+  const methodUnavailable = !method || comingSoon;
   const proofMissing = proofRequired && !proofFile;
   const disabledReason =
     (methodUnavailable ? configurationError : "") ||
     proofError ||
     (proofMissing ? "Veuillez selectionner un justificatif de paiement avant de continuer." : "");
   const submitDisabled = submitting || Boolean(disabledReason);
-
-  useEffect(() => {
-    setSelectedBank((current) =>
-      current && banks.some((bank) => bank.id === current.id) ? current : banks[0] ?? null,
-    );
-  }, [banks]);
-
-  useEffect(() => {
-    setSelectedNetwork((current) =>
-      wallets.some((wallet) => wallet.network === current)
-        ? current
-        : wallets.find((wallet) => wallet.network === "TRC20")?.network ?? wallets[0]?.network ?? "TRC20",
-    );
-  }, [wallets]);
 
   function handleProofChange(file: File | null) {
     if (!file) {
@@ -405,177 +332,106 @@ function PendingPaymentSection({
     }
   }
 
+  if (!method || !display) {
+    return (
+      <div className="card p-5 text-sm text-muted">
+        {configurationError || "Ce mode de paiement n'est pas disponible pour le moment."}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Instructions header */}
-      {methodConfig?.instructions && (
+      {method.customerNote && (
         <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm text-muted">
-          {methodConfig.instructions}
+          {method.customerNote}
         </div>
       )}
 
       {/* ── Bank Transfer ── */}
-      {paymentMethod === "bank" && (
+      {method.type === "bank" && (
         <div className="card p-5">
           <div className="flex items-center gap-3">
-            {bankDisplay && (
-              <PaymentBrandMark
-                display={bankDisplay}
-                active
-                className="h-11 w-11 shrink-0"
-              />
-            )}
+            <PaymentBrandMark display={display} active className="h-11 w-11 shrink-0" />
             <div>
-              <h2 className="text-base font-semibold text-white">
-                {bankDisplay?.displayName ?? "Informations de virement"}
-              </h2>
-              <p className="text-xs text-muted">
-                {bankDisplay?.subtitle ?? "Virement bancaire"}
-              </p>
+              <h2 className="text-base font-semibold text-white">{display.displayName}</h2>
+              <p className="text-xs text-muted">{display.subtitle}</p>
             </div>
           </div>
 
-          {banks.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">
-              Les coordonnées bancaires sont en cours de configuration. Veuillez réessayer ultérieurement.
-            </p>
-          ) : (
-            <>
-              {banks.length > 1 && (
-                <div className="mt-4">
-                  <p className="mb-2 text-xs uppercase tracking-wide text-faint">Choisissez une banque</p>
-                  <div className="flex flex-wrap gap-2">
-                    {banks.map((b) => (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => setSelectedBank(b)}
-                        className={`rounded-lg border px-3 py-1.5 text-sm ${
-                          selectedBank?.id === b.id
-                            ? "border-accent bg-accent/15 text-white"
-                            : "border-border text-muted"
-                        }`}
-                      >
-                        {b.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+          <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
+            {details.bankName && <BankField label="Banque" value={details.bankName} />}
+            {details.accountHolder && <BankField label="Titulaire" value={details.accountHolder} />}
+            {details.rib && <BankField label="RIB" value={details.rib} copyable />}
+            {details.iban && <BankField label="IBAN" value={details.iban} copyable />}
+            {details.accountNumber && <BankField label="Compte" value={details.accountNumber} copyable />}
+            {details.swift && <BankField label="SWIFT/BIC" value={details.swift} />}
+            <BankField label="Montant" value={formatMAD(totalMad)} />
+            <BankField label="Motif" value="E-commerce" copyable />
+          </dl>
 
-              {selectedBank && (
-                <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
-                  {selectedBank.name && <BankField label="Banque" value={selectedBank.name} />}
-                  {selectedBank.accountHolder && <BankField label="Titulaire" value={selectedBank.accountHolder} />}
-                  {selectedBank.rib && <BankField label="RIB" value={selectedBank.rib} copyable />}
-                  {selectedBank.iban && <BankField label="IBAN" value={selectedBank.iban} copyable />}
-                  {selectedBank.accountNumber && <BankField label="Compte" value={selectedBank.accountNumber} copyable />}
-                  {selectedBank.swift && <BankField label="SWIFT/BIC" value={selectedBank.swift} />}
-                  <BankField label="Montant" value={formatMAD(totalMad)} />
-                  <BankField label="Motif" value="E-commerce" copyable />
-                </dl>
-              )}
-
-              {selectedBank?.instructions && (
-                <p className="mt-3 text-sm text-muted">{selectedBank.instructions}</p>
-              )}
-            </>
-          )}
+          {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
         </div>
       )}
 
-      {/* ── USDT ── */}
-      {paymentMethod === "usdt" && (
+      {/* ── Crypto ── */}
+      {method.type === "crypto" && (
         <div className="card p-5">
           <div className="flex items-center gap-3">
-            <PaymentBrandMark
-              display={walletDisplay}
-              active
-              className="h-11 w-11 shrink-0"
-            />
+            <PaymentBrandMark display={display} active className="h-11 w-11 shrink-0" />
             <div>
-              <h2 className="text-base font-semibold text-white">
-                {walletDisplay.displayName}
-              </h2>
-              <p className="text-xs text-muted">{walletDisplay.subtitle}</p>
+              <h2 className="text-base font-semibold text-white">{display.displayName}</h2>
+              <p className="text-xs text-muted">{display.subtitle}</p>
             </div>
           </div>
 
-          {wallets.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">
-              Les adresses USDT sont en cours de configuration. Veuillez réessayer ultérieurement.
-            </p>
-          ) : (
-            <>
-              <div className="mt-4">
-                <p className="mb-2 text-xs uppercase tracking-wide text-faint">Réseau</p>
-                <div className="flex gap-2">
-                  {["TRC20", "BEP20"].filter((n) => wallets.some((w) => w.network === n)).map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setSelectedNetwork(n)}
-                      className={`rounded-lg border px-4 py-1.5 text-sm font-medium ${
-                        selectedNetwork === n
-                          ? "border-accent bg-accent/15 text-white"
-                          : "border-border text-muted"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
+          {details.walletAddress ? (
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wide text-faint">
+                  Adresse {details.network ?? ""}
+                </p>
+                <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2">
+                  <code className="min-w-0 flex-1 break-all text-xs text-white">
+                    {details.walletAddress}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => copyAddress(details.walletAddress ?? "")}
+                    className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-white"
+                  >
+                    {copied ? "Copié ✓" : "Copier"}
+                  </button>
                 </div>
               </div>
-
-              {selectedWallet ? (
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <p className="mb-1 text-xs uppercase tracking-wide text-faint">Adresse {selectedWallet.network}</p>
-                    <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2">
-                      <code className="min-w-0 flex-1 break-all text-xs text-white">
-                        {selectedWallet.address}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => copyAddress(selectedWallet.address)}
-                        className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-white"
-                      >
-                        {copied ? "Copié ✓" : "Copier"}
-                      </button>
-                    </div>
-                  </div>
-                  <dl className="grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
-                    <BankField label="Réseau" value={selectedWallet.network} />
-                    <BankField label="Montant" value={`${(totalMad / 10).toFixed(2)} USDT`} />
-                    <BankField label="Motif" value="E-commerce" />
-                  </dl>
-                  {selectedWallet.instructions && (
-                    <p className="text-sm text-muted">{selectedWallet.instructions}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-muted">
-                  Aucun portefeuille disponible pour le réseau {selectedNetwork}.
-                </p>
-              )}
-            </>
+              <dl className="grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
+                {details.network && <BankField label="Réseau" value={details.network} />}
+                <BankField label="Montant" value={`${(totalMad / 10).toFixed(2)} USDT`} />
+                <BankField label="Motif" value="E-commerce" />
+              </dl>
+              {details.minAmountNote && <p className="text-sm text-muted">{details.minAmountNote}</p>}
+              {details.instructions && <p className="text-sm text-muted">{details.instructions}</p>}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted">
+              L&apos;adresse de portefeuille est en cours de configuration. Veuillez réessayer ultérieurement.
+            </p>
           )}
         </div>
       )}
 
       {/* ── PayPal ── */}
-      {paymentMethod === "paypal" && (
+      {method.type === "paypal" && (
         <div className="card p-5 text-center">
-          <PaymentBrandMark
-            display={paypalDisplay}
-            active
-            className="mx-auto h-14 w-14"
-          />
-          <h2 className="mt-4 text-base font-semibold text-white">{paypalDisplay.displayName}</h2>
+          <PaymentBrandMark display={display} active className="mx-auto h-14 w-14" />
+          <h2 className="mt-4 text-base font-semibold text-white">{display.displayName}</h2>
           <p className="mt-2 text-sm text-muted">
-            {methodConfig?.paypalEmail
-              ? `Envoyez ${formatMAD(totalMad)} à : ${methodConfig.paypalEmail}`
-              : "Les instructions PayPal seront bientôt disponibles."}
+            {details.email
+              ? `Envoyez ${formatMAD(totalMad)} à : ${details.email}`
+              : details.meLink
+                ? `Envoyez ${formatMAD(totalMad)} via : ${details.meLink}`
+                : "Les instructions PayPal seront bientôt disponibles."}
           </p>
           <div className="mt-5 inline-block rounded-2xl border border-border bg-[#0070BA]/10 px-8 py-5 text-center">
             <div className="text-2xl font-bold text-[#003087]">Pay</div>
@@ -583,28 +439,46 @@ function PendingPaymentSection({
             <p className="mt-2 text-xs text-muted">{formatMAD(totalMad)}</p>
             <p className="mt-1 text-[10px] text-faint">Interface de paiement à venir</p>
           </div>
+          {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
         </div>
       )}
 
       {/* ── Card ── */}
-      {paymentMethod === "card" && (
+      {method.type === "card" && (
         <div className="card p-8 text-center">
-          <PaymentBrandMark
-            display={cardDisplay}
-            active
-            className="mx-auto mb-3 h-14 w-14"
-          />
+          <PaymentBrandMark display={display} active className="mx-auto mb-3 h-14 w-14" />
           <h2 className="mt-4 text-base font-semibold text-white">
-            {methodConfig?.cardMessage ?? "Paiement par carte bientôt disponible."}
+            {details.statusNote || "Paiement par carte bientôt disponible."}
           </h2>
-          <p className="mt-2 text-sm text-muted">
-            Veuillez choisir une autre méthode de paiement.
-          </p>
+          <p className="mt-2 text-sm text-muted">Veuillez choisir une autre méthode de paiement.</p>
+        </div>
+      )}
+
+      {/* ── Cash / Custom ── */}
+      {(method.type === "cash" || method.type === "custom") && (
+        <div className="card p-5">
+          <div className="flex items-center gap-3">
+            <PaymentBrandMark display={display} active className="h-11 w-11 shrink-0" />
+            <div>
+              <h2 className="text-base font-semibold text-white">
+                {details.customLabel || display.displayName}
+              </h2>
+              <p className="text-xs text-muted">{display.subtitle}</p>
+            </div>
+          </div>
+          {details.fields && details.fields.length > 0 && (
+            <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
+              {details.fields.map((field, i) => (
+                <BankField key={`${field.label}-${i}`} label={field.label} value={field.value} />
+              ))}
+            </dl>
+          )}
+          {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
         </div>
       )}
 
       {/* ── Proof Upload + Submit (not for card) ── */}
-      {paymentMethod !== "card" && (
+      {method.type !== "card" && (
         <div className="card p-5">
           <h2 className="text-sm font-semibold text-white">
             {proofRequired ? "Justificatif de paiement (requis)" : "Justificatif de paiement (optionnel)"}

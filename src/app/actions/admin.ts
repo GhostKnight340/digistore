@@ -29,15 +29,14 @@ import {
   deleteOrder,
 } from "@/lib/db/orderManagement";
 import {
-  updateMethodConfig,
+  createPaymentMethod,
+  updatePaymentMethod,
+  reorderPaymentMethods,
+  archivePaymentMethod,
+  restorePaymentMethod,
+  deletePaymentMethod,
   updateSupportConfig,
-  addBank,
-  updateBank,
-  deleteBank,
-  addWallet,
-  updateWallet,
-  deleteWallet,
-} from "@/lib/db/paymentSettings";
+} from "@/lib/db/paymentMethods";
 import {
   deleteVariant,
   duplicateVariant,
@@ -85,6 +84,7 @@ import type {
   SaveCategoryInput,
   SaveParentProductInput,
   SaveVariantInput,
+  SaveMethodInput,
 } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
 
@@ -434,18 +434,39 @@ export async function duplicateVariantAction(
 
 // â”€â”€â”€ Payment settings admin actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export async function updateMethodConfigAction(
-  method: string,
-  data: Partial<{
-    enabled: boolean;
-    proofRequired: boolean;
-    paypalEmail: string;
-    cardMessage: string;
-    instructions: string;
-  }>,
+export async function createPaymentMethodAction(
+  data: SaveMethodInput,
+): Promise<ActionResult & { id?: string }> {
+  await assertAdminAccess();
+  return createPaymentMethod(data);
+}
+
+export async function updatePaymentMethodAction(
+  id: string,
+  data: Partial<SaveMethodInput>,
 ): Promise<ActionResult> {
   await assertAdminAccess();
-  return updateMethodConfig(method, data);
+  return updatePaymentMethod(id, data);
+}
+
+export async function reorderPaymentMethodsAction(ids: string[]): Promise<ActionResult> {
+  await assertAdminAccess();
+  return reorderPaymentMethods(ids);
+}
+
+export async function archivePaymentMethodAction(id: string): Promise<ActionResult> {
+  await assertAdminAccess();
+  return archivePaymentMethod(id);
+}
+
+export async function restorePaymentMethodAction(id: string): Promise<ActionResult> {
+  await assertAdminAccess();
+  return restorePaymentMethod(id);
+}
+
+export async function deletePaymentMethodAction(id: string): Promise<ActionResult> {
+  await assertAdminAccess();
+  return deletePaymentMethod(id);
 }
 
 export async function updateSupportConfigAction(data: {
@@ -455,70 +476,5 @@ export async function updateSupportConfigAction(data: {
 }): Promise<ActionResult> {
   await assertAdminAccess();
   return updateSupportConfig(data);
-}
-
-export async function addBankAction(data: {
-  name: string;
-  accountHolder: string;
-  accountNumber: string;
-  rib: string;
-  iban: string;
-  swift: string;
-  instructions: string;
-}): Promise<ActionResult & { id?: string }> {
-  await assertAdminAccess();
-  return addBank(data);
-}
-
-export async function updateBankAction(
-  id: string,
-  data: Partial<{
-    name: string;
-    accountHolder: string;
-    accountNumber: string;
-    rib: string;
-    iban: string;
-    swift: string;
-    instructions: string;
-    enabled: boolean;
-    sortOrder: number;
-  }>,
-): Promise<ActionResult> {
-  await assertAdminAccess();
-  return updateBank(id, data);
-}
-
-export async function deleteBankAction(id: string): Promise<ActionResult> {
-  await assertAdminAccess();
-  return deleteBank(id);
-}
-
-export async function addWalletAction(data: {
-  network: string;
-  address: string;
-  label: string;
-  instructions: string;
-}): Promise<ActionResult & { id?: string }> {
-  await assertAdminAccess();
-  return addWallet(data);
-}
-
-export async function updateWalletAction(
-  id: string,
-  data: Partial<{
-    network: string;
-    address: string;
-    label: string;
-    instructions: string;
-    enabled: boolean;
-  }>,
-): Promise<ActionResult> {
-  await assertAdminAccess();
-  return updateWallet(id, data);
-}
-
-export async function deleteWalletAction(id: string): Promise<ActionResult> {
-  await assertAdminAccess();
-  return deleteWallet(id);
 }
 
