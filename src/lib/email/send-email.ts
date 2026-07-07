@@ -9,6 +9,7 @@ import {
   type RenderedEmailTemplate,
   renderEmailTemplate,
 } from "@/lib/emailTemplates";
+import { notifyEmailFailure } from "@/lib/discord/notify";
 
 type EmailMetadata = Record<string, string | number | boolean | null | undefined>;
 
@@ -133,6 +134,12 @@ export async function sendTransactionalEmail(
       where: { id: log.id },
       data: { status: "failed", errorMessage: error },
     });
+    void notifyEmailFailure({
+      templateKey: input.templateKey,
+      recipient: input.to,
+      error,
+      orderId: input.orderId,
+    });
     return { ok: false, status: "failed", logId: log.id, error };
   }
 
@@ -162,6 +169,12 @@ export async function sendTransactionalEmail(
         where: { id: log.id },
         data: { status: "failed", errorMessage: error },
       });
+      void notifyEmailFailure({
+        templateKey: input.templateKey,
+        recipient: input.to,
+        error,
+        orderId: input.orderId,
+      });
       return { ok: false, status: "failed", logId: log.id, error };
     }
 
@@ -184,6 +197,12 @@ export async function sendTransactionalEmail(
     await prisma.emailLog.update({
       where: { id: log.id },
       data: { status: "failed", errorMessage: message },
+    });
+    void notifyEmailFailure({
+      templateKey: input.templateKey,
+      recipient: input.to,
+      error: message,
+      orderId: input.orderId,
     });
     return { ok: false, status: "failed", logId: log.id, error: message };
   }
