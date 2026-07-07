@@ -18,12 +18,33 @@ export default async function AccountPage() {
         <AccountNav name={customer.name} email={customer.email} />
         <section>
           <h1 className="text-3xl font-bold text-white">Mon compte</h1>
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <Metric label="Nom" value={customer.name} />
-            <Metric label="E-mail" value={customer.email} />
-            <Metric label="Statut" value={customer.emailVerified ? "Vérifié" : "À vérifier"} />
+          <AccountProfileForm name={customer.name} email={customer.email} phone={customer.phone} />
+          <div className="card mt-6 p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">Statut du compte</h2>
+                <p className="mt-1 text-sm text-muted">
+                  {customer.emailVerified
+                    ? "Votre adresse e-mail est vérifiée."
+                    : "Vérifiez votre adresse e-mail pour sécuriser votre compte."}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                    customer.emailVerified
+                      ? "border-green-500/30 bg-green-500/10 text-green-400"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                  }`}
+                >
+                  {customer.emailVerified ? "E-mail vérifié" : "E-mail à vérifier"}
+                </span>
+                <Link href="/account/security" className="btn-ghost text-sm">
+                  Sécurité
+                </Link>
+              </div>
+            </div>
           </div>
-          <AccountProfileForm phone={customer.phone} />
           <div className="card mt-6 p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -55,15 +76,6 @@ export default async function AccountPage() {
           </div>
         </section>
       </div>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="card p-5">
-      <p className="text-xs uppercase text-muted">{label}</p>
-      <p className="mt-2 break-words text-lg font-bold text-white">{value}</p>
     </div>
   );
 }
