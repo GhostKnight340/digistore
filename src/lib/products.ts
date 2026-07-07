@@ -54,7 +54,7 @@ export const products: Product[] = [
     id: "steam-50",
     name: "Steam Wallet 50 MAD",
     category: "steam",
-    region: "Maroc / Global",
+    region: "GLOBAL",
     price: 50,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -65,7 +65,7 @@ export const products: Product[] = [
     id: "steam-100",
     name: "Steam Wallet 100 MAD",
     category: "steam",
-    region: "Maroc / Global",
+    region: "GLOBAL",
     price: 100,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -76,7 +76,7 @@ export const products: Product[] = [
     id: "steam-200",
     name: "Steam Wallet 200 MAD",
     category: "steam",
-    region: "Maroc / Global",
+    region: "GLOBAL",
     price: 200,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -86,7 +86,7 @@ export const products: Product[] = [
     id: "psn-100",
     name: "PlayStation Store 100 MAD",
     category: "playstation",
-    region: "Maroc",
+    region: "MA",
     price: 100,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -97,7 +97,7 @@ export const products: Product[] = [
     id: "psn-250",
     name: "PlayStation Store 250 MAD",
     category: "playstation",
-    region: "Maroc",
+    region: "MA",
     price: 250,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -107,7 +107,7 @@ export const products: Product[] = [
     id: "xbox-100",
     name: "Xbox Gift Card 100 MAD",
     category: "xbox",
-    region: "Maroc / Global",
+    region: "GLOBAL",
     price: 100,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -118,7 +118,7 @@ export const products: Product[] = [
     id: "xbox-200",
     name: "Xbox Gift Card 200 MAD",
     category: "xbox",
-    region: "Maroc / Global",
+    region: "GLOBAL",
     price: 200,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -128,7 +128,7 @@ export const products: Product[] = [
     id: "nintendo-150",
     name: "Nintendo eShop 150 MAD",
     category: "nintendo",
-    region: "Maroc / EU",
+    region: "EU",
     price: 150,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -138,7 +138,7 @@ export const products: Product[] = [
     id: "roblox-100",
     name: "Roblox Gift Card 100 MAD",
     category: "roblox",
-    region: "Global",
+    region: "GLOBAL",
     price: 100,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -149,7 +149,7 @@ export const products: Product[] = [
     id: "roblox-200",
     name: "Roblox Gift Card 200 MAD",
     category: "roblox",
-    region: "Global",
+    region: "GLOBAL",
     price: 200,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -159,7 +159,7 @@ export const products: Product[] = [
     id: "valorant-100",
     name: "Valorant Points 100 MAD",
     category: "valorant",
-    region: "MENA",
+    region: "",
     price: 100,
     deliveryType: "Code numérique - livraison rapide",
     description:
@@ -170,7 +170,7 @@ export const products: Product[] = [
     id: "valorant-200",
     name: "Valorant Points 200 MAD",
     category: "valorant",
-    region: "MENA",
+    region: "",
     price: 200,
     deliveryType: "Code numérique - livraison rapide",
     description:

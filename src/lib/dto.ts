@@ -158,6 +158,7 @@ export interface ProductListItemDTO {
   slug: string;
   name: string;
   category: string;
+  region: string;
   active: boolean;
   variantCount: number;
 }

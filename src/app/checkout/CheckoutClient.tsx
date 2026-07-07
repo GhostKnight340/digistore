@@ -11,6 +11,7 @@ import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
 import type { PaymentConfigDTO } from "@/lib/dto";
+import { getRegion } from "@/lib/regions";
 
 export default function CheckoutClient({
   initialConfig = null,
@@ -33,6 +34,14 @@ export default function CheckoutClient({
   const [phone, setPhone] = useState(initialCustomer?.phone ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [regionConfirmed, setRegionConfirmed] = useState(false);
+
+  const restrictedItems = cart
+    .map((item) => ({ item, product: getProduct(item.productId) }))
+    .filter(({ product }) => product && getRegion(product.region).restricted) as {
+    item: (typeof cart)[number];
+    product: NonNullable<ReturnType<typeof getProduct>>;
+  }[];
 
   useEffect(() => {
     if (initialConfig) return;
@@ -57,7 +66,7 @@ export default function CheckoutClient({
       <div className="container-page py-10">
         <div className="card grid place-items-center px-6 py-20 text-center">
           <p className="text-lg font-semibold text-white">
-            Il n&apos;y a rien ? payer pour le moment
+            Il n&apos;y a rien à payer pour le moment
           </p>
           <Link href="/products" className="btn-primary mt-6">
             Parcourir le catalogue
@@ -86,6 +95,10 @@ export default function CheckoutClient({
     }
     if (!methodId) {
       setError("Veuillez choisir un mode de paiement.");
+      return;
+    }
+    if (restrictedItems.length > 0 && !regionConfirmed) {
+      setError("Veuillez confirmer que votre compte correspond à la région requise.");
       return;
     }
 
@@ -139,7 +152,7 @@ export default function CheckoutClient({
           <section className="card p-6">
             <h2 className="text-lg font-bold text-white">Vos informations</h2>
             <p className="mt-1 text-sm text-muted">
-              Nous vous tiendrons inform? du suivi de votre commande ? cette adresse e-mail.
+              Nous vous tiendrons informé du suivi de votre commande à cette adresse e-mail.
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field label="Nom complet">
@@ -251,7 +264,7 @@ export default function CheckoutClient({
                 return (
                   <li key={item.productId} className="flex justify-between gap-4 text-sm">
                     <span className="text-muted">
-                      {product.name} <span className="text-muted/70">?{item.quantity}</span>
+                      {product.name} <span className="text-muted/70">×{item.quantity}</span>
                     </span>
                     <span className="shrink-0 text-white">
                       {formatMAD(product.price * item.quantity)}
@@ -277,6 +290,35 @@ export default function CheckoutClient({
               <span>{formatMAD(cartTotal)}</span>
             </div>
 
+            {restrictedItems.length > 0 && (
+              <div className="mt-4 rounded-xl border border-[#F7B14A]/25 bg-[#F7B14A]/[0.07] p-3.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#F7B14A]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0" aria-hidden>
+                    <path d="M12 9v4M12 17h.01" />
+                    <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                  </svg>
+                  {restrictedItems.length} article{restrictedItems.length > 1 ? "s" : ""} lié{restrictedItems.length > 1 ? "s" : ""} à une région
+                </div>
+                <div className="mt-2 space-y-1 text-[12.5px] leading-relaxed text-[#C9B590]">
+                  {restrictedItems.map(({ item, product }) => (
+                    <p key={item.productId}>
+                      {product.name} s'active uniquement sur un compte{" "}
+                      <span className="text-white">{getRegion(product.region).name}</span>.
+                    </p>
+                  ))}
+                </div>
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-[12.5px] text-muted">
+                  <input
+                    type="checkbox"
+                    checked={regionConfirmed}
+                    onChange={(e) => setRegionConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-border bg-surface accent-accent"
+                  />
+                  Je confirme que mon compte correspond à cette région.
+                </label>
+              </div>
+            )}
+
             {error && (
               <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
                 {error}
@@ -285,10 +327,16 @@ export default function CheckoutClient({
 
             <button
               type="submit"
-              disabled={submitting || configError || !config || paymentOptions.length === 0}
+              disabled={
+                submitting ||
+                configError ||
+                !config ||
+                paymentOptions.length === 0 ||
+                (restrictedItems.length > 0 && !regionConfirmed)
+              }
               className="btn-primary mt-6 w-full disabled:opacity-50"
             >
-              {submitting ? "Commande en cours?" : "Passer la commande"}
+              {submitting ? "Commande en cours..." : "Passer la commande"}
             </button>
             <p className="mt-3 text-center text-xs text-muted">
               Les instructions complètes de paiement seront affichées après la création de la commande.

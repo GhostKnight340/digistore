@@ -1,6 +1,8 @@
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
-import { getCatalogPage } from "@/lib/db/catalog";
+import RegionBadge from "@/components/RegionBadge";
+import { getCatalogPage, getRegionCounts } from "@/lib/db/catalog";
+import { REGION_LIST } from "@/lib/regions";
 
 export const revalidate = 3600;
 
@@ -11,18 +13,23 @@ export const metadata = {
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; q?: string; page?: string }>;
+  searchParams: Promise<{ category?: string; region?: string; q?: string; page?: string }>;
 }) {
-  const { category, q, page: rawPage } = await searchParams;
+  const { category, region, q, page: rawPage } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
   const page = Math.max(1, Number(rawPage ?? 1) || 1);
-  const { categories, products: filtered, total, pageSize } = await getCatalogPage({
-    category,
-    query,
-    page,
-    take: 24,
-  });
+  const [{ categories, products: filtered, total, pageSize }, regionCounts] = await Promise.all([
+    getCatalogPage({
+      category,
+      region,
+      query,
+      page,
+      take: 24,
+    }),
+    getRegionCounts(),
+  ]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalRegionCount = Object.values(regionCounts).reduce((sum, n) => sum + n, 0);
 
   return (
     <div className="container-page pt-10 pb-20 sm:py-10">
@@ -41,9 +48,9 @@ export default async function ProductsPage({
         </p>
       </header>
 
-      <div className="mb-8 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <Link
-          href="/products"
+          href={`/products?${new URLSearchParams(region ? { region } : {})}`}
           className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
             !category
               ? "border-accent bg-accent/15 text-white"
@@ -55,7 +62,7 @@ export default async function ProductsPage({
         {categories.map((item) => (
           <Link
             key={item.id}
-            href={`/products?category=${item.id}`}
+            href={`/products?${new URLSearchParams({ category: item.id, ...(region ? { region } : {}) })}`}
             className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition ${
               category === item.id
                 ? "border-accent bg-accent/15 text-white"
@@ -63,6 +70,35 @@ export default async function ProductsPage({
             }`}
           >
             {item.name}
+          </Link>
+        ))}
+      </div>
+
+      <div className="mb-8 flex flex-wrap items-center gap-2">
+        <span className="mr-1 font-mono text-xs uppercase tracking-wide text-faint">Région</span>
+        <Link
+          href={`/products?${new URLSearchParams(category ? { category } : {})}`}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${
+            !region
+              ? "border-accent bg-accent/15 text-white"
+              : "border-border text-muted hover:text-white"
+          }`}
+        >
+          Tous
+          <span className="font-mono text-[11px] text-faint">{totalRegionCount}</span>
+        </Link>
+        {REGION_LIST.map((item) => (
+          <Link
+            key={item.code}
+            href={`/products?${new URLSearchParams({ region: item.code, ...(category ? { category } : {}) })}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${
+              region === item.code
+                ? "border-accent bg-accent/15 text-white"
+                : "border-border text-muted hover:text-white"
+            }`}
+          >
+            <RegionBadge code={item.code} variant="chip" size="micro" className="!h-auto !border-0 !bg-transparent !p-0" />
+            <span className="font-mono text-[11px] text-faint">{regionCounts[item.code] ?? 0}</span>
           </Link>
         ))}
       </div>
@@ -91,6 +127,7 @@ export default async function ProductsPage({
             <Link
               href={`/products?${new URLSearchParams({
                 ...(category ? { category } : {}),
+                ...(region ? { region } : {}),
                 ...(q ? { q } : {}),
                 page: String(page - 1),
               })}`}
@@ -106,6 +143,7 @@ export default async function ProductsPage({
             <Link
               href={`/products?${new URLSearchParams({
                 ...(category ? { category } : {}),
+                ...(region ? { region } : {}),
                 ...(q ? { q } : {}),
                 page: String(page + 1),
               })}`}

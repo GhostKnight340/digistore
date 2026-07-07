@@ -19,6 +19,8 @@ import {
 import { uploadImageFile } from "@/lib/clientUpload";
 import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
+import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
+import { REGION_LIST } from "@/lib/regions";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -564,11 +566,12 @@ export default function ProductsPanel() {
                           <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
                             {p.name}
                           </p>
-                          <p className="text-xs text-muted">
+                          <div className="flex items-center gap-1.5 text-xs text-muted">
                             {p.variantCount} variante{p.variantCount !== 1 ? "s" : ""}
                             {" · "}
                             {p.active ? "Actif" : <span className="text-yellow-500">Masqué</span>}
-                          </p>
+                            <RegionBadge code={p.region} variant="chip" size="micro" />
+                          </div>
                         </div>
                       </button>
                     ))}
@@ -593,11 +596,12 @@ export default function ProductsPanel() {
                     <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
                       {p.name}
                     </p>
-                    <p className="text-xs text-muted">
+                    <div className="flex items-center gap-1.5 text-xs text-muted">
                       {p.variantCount} variante{p.variantCount !== 1 ? "s" : ""}
                       {" · "}
                       {p.active ? "Actif" : <span className="text-yellow-500">Masqué</span>}
-                    </p>
+                      <RegionBadge code={p.region} variant="chip" size="micro" />
+                    </div>
                   </div>
                 </button>
               ))}
@@ -934,13 +938,8 @@ function DetailsTab({
             placeholder="Valve"
           />
         </Field>
-        <Field label="Région">
-          <input
-            className="input"
-            value={draft.region}
-            onChange={(e) => update("region", e.target.value)}
-            placeholder="Maroc / Global"
-          />
+        <Field label="Région de ce groupe">
+          <RegionCombobox value={draft.region} onChange={(value) => update("region", value)} />
         </Field>
         <Field label="Type de livraison">
           <input
@@ -950,6 +949,19 @@ function DetailsTab({
             placeholder="Produit numérique - livraison rapide"
           />
         </Field>
+      </div>
+
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3.5">
+        <RegionBadge code={draft.region} variant="overlay" />
+        <div className="min-w-0 text-sm">
+          <p className="mb-0.5 text-xs text-faint">Titre &amp; badge générés</p>
+          <p className="truncate font-medium text-white">
+            {draft.name || "Nom du produit"}{" "}
+            <span className={regionTitleSuffix(draft.region).className}>
+              {regionTitleSuffix(draft.region).label}
+            </span>
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-6">
@@ -1099,6 +1111,68 @@ function CategoryCombobox({
             >
               {creating ? "Création..." : `Créer la catégorie « ${query.trim()} »`}
             </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RegionCombobox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const selected = REGION_LIST.find((region) => region.code === value);
+  const [query, setQuery] = useState(selected?.name ?? "");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const next = REGION_LIST.find((region) => region.code === value);
+    setQuery(next?.name ?? "");
+  }, [value]);
+
+  const filtered = REGION_LIST.filter((region) => {
+    const needle = query.trim().toLowerCase();
+    return (
+      !needle ||
+      region.name.toLowerCase().includes(needle) ||
+      region.code.toLowerCase().includes(needle)
+    );
+  });
+
+  return (
+    <div className="relative">
+      <input
+        className="input"
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+        placeholder="Rechercher un pays ou une région"
+      />
+      {open ? (
+        <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-border bg-base p-1 shadow-card">
+          {filtered.map((region) => (
+            <button
+              key={region.code}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(region.code);
+                setQuery(region.name);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm ${
+                region.code === value ? "bg-accent/10" : "hover:bg-surface"
+              }`}
+            >
+              <RegionBadge code={region.code} variant="chip" size="micro" className="!border-0 !bg-transparent !p-0" />
+              <span className="flex-1 text-muted">{region.name}</span>
+              <span className="font-mono text-xs text-faint">{region.code}</span>
+              {region.code === value ? <span className="text-accent-hover">✓</span> : null}
+            </button>
+          ))}
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-faint">Aucune région trouvée.</p>
           ) : null}
         </div>
       ) : null}

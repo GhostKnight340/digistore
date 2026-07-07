@@ -8,6 +8,8 @@ import {
 import ProductArt from "@/components/ProductArt";
 import ProductCard from "@/components/ProductCard";
 import AddToCartForm from "@/components/AddToCartForm";
+import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
+import RegionPanel from "@/components/RegionPanel";
 
 export async function generateStaticParams() {
   const slugs = await getParentProductSlugs().catch(() => []);
@@ -56,12 +58,15 @@ export default async function ProductDetailPage({
 
       <div className="grid min-w-0 gap-10 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
         <div>
-          <ProductArt
-            category={product.category}
-            imageUrl={product.imageUrl}
-            label={product.categoryName}
-            className="aspect-[4/3] w-full rounded-[18px] border border-border shadow-card"
-          />
+          <div className="relative">
+            <ProductArt
+              category={product.category}
+              imageUrl={product.imageUrl}
+              label={product.categoryName}
+              className="aspect-[4/3] w-full rounded-[18px] border border-border shadow-card"
+            />
+            <RegionBadge code={product.region} variant="overlay" className="absolute left-3.5 top-3.5" />
+          </div>
 
           <section className="mt-10">
             <h2 className="text-lg font-semibold tracking-tight text-text">
@@ -95,14 +100,25 @@ export default async function ProductDetailPage({
 
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-text">
             {product.name}
+            {regionTitleSuffix(product.region).label && (
+              <>
+                {" "}
+                <span className={regionTitleSuffix(product.region).className}>
+                  {regionTitleSuffix(product.region).label}
+                </span>
+              </>
+            )}
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-muted">
             {product.description}
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <span className="chip">Région : {product.region}</span>
             <span className="chip">{product.deliveryType}</span>
+          </div>
+
+          <div className="mt-5">
+            <RegionPanel code={product.region} />
           </div>
 
           <div className="mt-7 rounded-2xl border border-border bg-surface p-4 sm:p-6">

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { ensureCategoryForProduct } from "./categories";
 import { timeAdmin } from "./adminTiming";
+import { isRegionCode } from "@/lib/regions";
 import type {
   ActionResult,
   ConvertProductToVariantInput,
@@ -131,6 +132,7 @@ export async function getProductList(): Promise<ProductListItemDTO[]> {
           slug: true,
           name: true,
           category: true,
+          region: true,
           active: true,
           _count: { select: { variants: true } },
         },
@@ -141,6 +143,7 @@ export async function getProductList(): Promise<ProductListItemDTO[]> {
     slug: row.slug,
     name: row.name,
     category: row.category,
+    region: row.region,
     active: row.active,
     variantCount: row._count.variants,
   }));
@@ -518,6 +521,13 @@ export async function convertProductToVariant(
   }
 }
 
+// A listing's region must be one of the fixed region-table codes, or empty
+// (unset — rendered as the "incomplete" state, never guessed).
+function normalizeRegion(value: string): string {
+  const trimmed = value.trim().toUpperCase();
+  return isRegionCode(trimmed) ? trimmed : "";
+}
+
 export async function saveParentProduct(
   data: SaveParentProductInput,
 ): Promise<ActionResult> {
@@ -536,7 +546,7 @@ export async function saveParentProduct(
     name: data.name,
     category: category.id,
     brand: data.brand,
-    region: data.region,
+    region: normalizeRegion(data.region),
     deliveryType: data.deliveryType,
     description: data.description,
     shortDescription: data.shortDescription,
@@ -633,7 +643,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
             priceMad: data.priceMad,
             active: data.active,
             category: category.id,
-            region: data.region,
+            region: normalizeRegion(data.region),
             deliveryType: data.deliveryType,
           },
         }),

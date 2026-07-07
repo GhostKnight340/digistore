@@ -5,6 +5,8 @@ import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
+import RegionBadge from "@/components/RegionBadge";
+import { getRegion } from "@/lib/regions";
 
 export default function CartPage() {
   const { cart, ready, cartTotal, setQuantity, removeFromCart } = useStore();
@@ -13,7 +15,7 @@ export default function CartPage() {
   if (!ready) {
     return (
       <div className="container-page py-20 text-center text-muted">
-        Chargement?
+        Chargement...
       </div>
     );
   }
@@ -72,9 +74,21 @@ export default function CartPage() {
                       Retirer
                     </button>
                   </div>
-                  <span className="text-sm text-muted">
-                    {formatMAD(product.price)} l'unité
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted">
+                      {formatMAD(product.price)} l'unité
+                    </span>
+                    <RegionBadge code={product.region} variant="chip" size="micro" />
+                  </div>
+                  {getRegion(product.region).restricted && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[#D9B27C]">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#F7B14A" strokeWidth={2} className="h-3.5 w-3.5 shrink-0" aria-hidden>
+                        <path d="M12 9v4M12 17h.01" />
+                        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                      </svg>
+                      Compte {getRegion(product.region).name} requis
+                    </div>
+                  )}
 
                   <div className="mt-auto flex items-center justify-between pt-3">
                     <div className="flex items-center rounded-lg border border-border bg-surface">

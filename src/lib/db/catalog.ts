@@ -163,6 +163,7 @@ function toCategory(row: {
 
 function getActiveProductRows(options: {
   category?: string;
+  region?: string;
   query?: string;
   skip?: number;
   take?: number;
@@ -173,6 +174,7 @@ function getActiveProductRows(options: {
     where: {
       active: true,
       category: options.category,
+      region: options.region,
       categoryRecord: { is: { active: true } },
       variants: { some: { active: true } },
       ...(options.query
@@ -206,8 +208,25 @@ export const getCatalogData = cache(async function getCatalogData(): Promise<{
   return getCatalogPage({ take: 100 });
 });
 
+export async function getRegionCounts(): Promise<Record<string, number>> {
+  await ensureDatabaseReady();
+  const rows = await prisma.product.groupBy({
+    by: ["region"],
+    where: {
+      active: true,
+      categoryRecord: { is: { active: true } },
+      variants: { some: { active: true } },
+    },
+    _count: { _all: true },
+  });
+  const counts: Record<string, number> = {};
+  for (const row of rows) counts[row.region] = row._count._all;
+  return counts;
+}
+
 export async function getCatalogPage(options: {
   category?: string;
+  region?: string;
   query?: string;
   page?: number;
   take?: number;
@@ -241,6 +260,7 @@ export async function getCatalogPage(options: {
     }),
     getActiveProductRows({
       category: options.category,
+      region: options.region,
       query: options.query,
     }),
   ]);
