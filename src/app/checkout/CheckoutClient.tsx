@@ -28,6 +28,7 @@ export default function CheckoutClient({
   const methods = config?.methods ?? [];
 
   const [methodId, setMethodId] = useState<string>(() => initialConfig?.methods[0]?.id ?? "");
+  const isLoggedIn = Boolean(initialCustomer);
   const [email, setEmail] = useState(initialCustomer?.email ?? "");
   const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
   const [phone, setPhone] = useState(initialCustomer?.phone ?? "");
@@ -139,26 +140,32 @@ export default function CheckoutClient({
           <section className="card p-6">
             <h2 className="text-lg font-bold text-white">Vos informations</h2>
             <p className="mt-1 text-sm text-muted">
-              Nous vous tiendrons inform? du suivi de votre commande ? cette adresse e-mail.
+              {isLoggedIn
+                ? "Votre nom et e-mail viennent de votre compte (modifiables depuis votre profil). Ajoutez un numéro de téléphone si besoin."
+                : "Nous vous tiendrons inform? du suivi de votre commande ? cette adresse e-mail."}
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field label="Nom complet">
                 <input
-                  className="input"
+                  className="input disabled:cursor-not-allowed disabled:opacity-70"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Youssef El Amrani"
                   autoComplete="name"
+                  disabled={isLoggedIn}
+                  readOnly={isLoggedIn}
                 />
               </Field>
               <Field label="E-mail">
                 <input
-                  className="input"
+                  className="input disabled:cursor-not-allowed disabled:opacity-70"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="vous@example.com"
                   autoComplete="email"
+                  disabled={isLoggedIn}
+                  readOnly={isLoggedIn}
                 />
               </Field>
               <Field label="Numéro de téléphone">
