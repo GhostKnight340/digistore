@@ -59,3 +59,14 @@ export function getDiscordChannelId(key: DiscordChannelKey): string | undefined 
   if (!def) return undefined;
   return process.env[def.envVar] || undefined;
 }
+
+/**
+ * All the business channels are private by default: everyone in the server
+ * is denied view access at the category and channel level, and only the
+ * "Business manager" role (plus the bot and the configured owner) can see
+ * them. Set up once by the setup script; not read at notification time.
+ */
+export const DISCORD_BUSINESS_MANAGER_ROLE = {
+  name: "Business manager",
+  envVar: "DISCORD_ROLE_BUSINESS_MANAGER_ID",
+} as const;
