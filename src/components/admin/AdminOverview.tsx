@@ -79,6 +79,7 @@ function KpiCard({
   value,
   unit,
   borderColor,
+  onOpen,
   children,
 }: {
   label: string;
@@ -86,15 +87,22 @@ function KpiCard({
   value: string;
   unit?: string;
   borderColor?: string;
+  onOpen?: () => void;
   children?: React.ReactNode;
 }) {
+  const Tag = onOpen ? "button" : "div";
   return (
-    <div
+    <Tag
+      type={onOpen ? "button" : undefined}
+      onClick={onOpen}
       style={{
         padding: "16px 18px",
         borderRadius: "14px",
         background: C.surface,
         border: `1px solid ${borderColor ?? C.border}`,
+        textAlign: "left",
+        width: "100%",
+        cursor: onOpen ? "pointer" : "default",
       }}
     >
       <div style={{ fontSize: "12.5px", color: labelColor ?? C.muted, marginBottom: "9px" }}>{label}</div>
@@ -110,16 +118,18 @@ function KpiCard({
         {unit ? <span style={{ fontSize: "14px", color: C.faint }}> {unit}</span> : null}
       </div>
       {children}
-    </div>
+    </Tag>
   );
 }
 
 export default function AdminOverview({
   firstName = "",
   onOpenReviewQueue,
+  onOpenInventory,
 }: {
   firstName?: string;
   onOpenReviewQueue: () => void;
+  onOpenInventory?: () => void;
 }) {
   const [metrics, setMetrics] = useState<AdminOverviewMetricsDTO | null>(null);
   const [outOfStock, setOutOfStock] = useState<{ out: number; low: number } | null>(null);
@@ -170,9 +180,21 @@ export default function AdminOverview({
   const maxBar = metrics ? Math.max(...metrics.revenueSeries.map((d) => d.value), 1) : 1;
 
   return (
-    <div style={{ height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", padding: "26px 28px", color: C.text }}>
+    <div className="admin-overview" style={{ height: "100%", display: "flex", flexDirection: "column", padding: "26px 28px", color: C.text }}>
+      <style>{`
+        @media (max-width: 860px) {
+          .admin-overview { height: auto; min-height: 100%; overflow-y: auto; padding: 16px !important; }
+          .admin-overview-head { flex-wrap: wrap; }
+          .admin-overview-kpis { grid-template-columns: repeat(2, 1fr) !important; }
+          .admin-overview-cols { grid-template-columns: 1fr !important; flex: none !important; }
+          .admin-overview-chart { min-height: 220px; }
+        }
+        @media (max-width: 420px) {
+          .admin-overview-kpis { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
       {/* page head */}
-      <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "22px" }}>
+      <div className="admin-overview-head" style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "22px" }}>
         <div>
           <h3 style={{ fontSize: "22px", fontWeight: 600, letterSpacing: "-0.02em", margin: 0 }}>
             {greeting(now.getHours())}{firstName ? `, ${firstName}` : ""}
@@ -264,6 +286,7 @@ export default function AdminOverview({
         <>
           {/* KPI row */}
           <div
+            className="admin-overview-kpis"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(4,1fr)",
@@ -289,6 +312,7 @@ export default function AdminOverview({
               labelColor={C.warning}
               borderColor="rgba(232,168,56,0.22)"
               value={loading || !metrics ? "—" : String(metrics.awaitingReview)}
+              onOpen={onOpenReviewQueue}
             >
               <div style={{ marginTop: "8px", fontSize: "12px", color: C.muted }}>
                 {loading || !metrics
@@ -303,6 +327,7 @@ export default function AdminOverview({
               labelColor={C.danger}
               borderColor="rgba(224,92,92,0.22)"
               value={outOfStock ? String(outOfStock.out) : "—"}
+              onOpen={onOpenInventory}
             >
               <div style={{ marginTop: "8px", fontSize: "12px", color: C.muted }}>
                 {outOfStock ? `${outOfStock.low} en stock faible` : " "}
@@ -312,6 +337,7 @@ export default function AdminOverview({
 
           {/* two col */}
           <div
+            className="admin-overview-cols"
             style={{
               flex: 1,
               minHeight: 0,
@@ -322,6 +348,7 @@ export default function AdminOverview({
           >
             {/* revenue chart */}
             <div
+              className="admin-overview-chart"
               style={{
                 borderRadius: "14px",
                 background: C.surface,

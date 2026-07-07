@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 /** Literal design tokens from the admin handoff (docs/admin-handoff/05-Design-Tokens.md). */
 const C = {
@@ -298,19 +299,55 @@ export default function AdminShell({
   children: ReactNode;
 }) {
   const [searchFocus, setSearchFocus] = useState(false);
+  const isMobile = useIsMobile();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Close the drawer automatically if the viewport grows back to desktop width.
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false);
+  }, [isMobile]);
+
+  function handleNavigate(id: string) {
+    onNavigate(id);
+    setDrawerOpen(false);
+  }
+
+  const currentLabel =
+    NAV.flatMap((group) => group.items).find((item) => item.id === active)?.label ?? "ghost.ma";
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#070809", color: C.text }}>
+      {/* ===== Mobile drawer backdrop ===== */}
+      {isMobile && drawerOpen ? (
+        <div
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 55 }}
+        />
+      ) : null}
+
       {/* ===== Sidebar ===== */}
       <aside
         style={{
-          width: "248px",
+          width: isMobile ? "min(82vw, 300px)" : "248px",
           flexShrink: 0,
           background: C.sidebar,
           borderRight: `1px solid ${C.border}`,
           display: "flex",
           flexDirection: "column",
-          height: "100%",
+          height: isMobile ? "100vh" : "100%",
+          ...(isMobile
+            ? {
+                position: "fixed" as const,
+                top: 0,
+                left: 0,
+                bottom: 0,
+                zIndex: 60,
+                transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
+                transition: "transform 220ms ease",
+                boxShadow: drawerOpen ? "0 0 40px rgba(0,0,0,0.55)" : "none",
+              }
+            : {}),
         }}
       >
         <div
@@ -342,6 +379,31 @@ export default function AdminShell({
             <span style={{ fontSize: "15px", fontWeight: 600, letterSpacing: "-0.01em" }}>ghost.ma</span>
             <span style={{ fontSize: "11px", color: C.faint, fontFamily: "var(--font-mono)" }}>admin</span>
           </div>
+          {isMobile ? (
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Fermer le menu"
+              style={{
+                marginLeft: "auto",
+                width: "32px",
+                height: "32px",
+                borderRadius: "8px",
+                border: `1px solid ${C.borderStrong}`,
+                background: C.surfaceInput,
+                color: C.muted,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          ) : null}
         </div>
 
         <nav
@@ -379,7 +441,7 @@ export default function AdminShell({
                   item={item}
                   active={active === item.id}
                   count={item.badge ? counts?.[item.badge] : undefined}
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => handleNavigate(item.id)}
                 />
               ))}
             </div>
@@ -444,67 +506,112 @@ export default function AdminShell({
             flexShrink: 0,
             display: "flex",
             alignItems: "center",
-            gap: "16px",
-            padding: "0 22px",
+            gap: isMobile ? "10px" : "16px",
+            padding: isMobile ? "0 14px" : "0 22px",
             borderBottom: `1px solid ${C.border}`,
             background: "rgba(10,11,13,0.6)",
             backdropFilter: "blur(12px)",
           }}
         >
-          <div
-            style={{
-              flex: 1,
-              maxWidth: "420px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              height: "38px",
-              padding: "0 13px",
-              background: C.surfaceInput,
-              border: `1px solid ${searchFocus ? "rgba(62,123,250,0.35)" : C.borderInput}`,
-              borderRadius: "10px",
-              boxShadow: searchFocus ? "0 0 0 3px rgba(62,123,250,0.20)" : "none",
-              transition: "border-color 120ms ease, box-shadow 120ms ease",
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2">
-              <circle cx="11" cy="11" r="7" />
-              <line x1="21" y1="21" x2="16.6" y2="16.6" />
-            </svg>
-            <input
-              placeholder="Rechercher ou accéder à…  commandes, produits, clients"
-              onFocus={() => setSearchFocus(true)}
-              onBlur={() => setSearchFocus(false)}
+          {isMobile ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                aria-label="Ouvrir le menu"
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  flexShrink: 0,
+                  borderRadius: "9px",
+                  border: `1px solid ${C.borderStrong}`,
+                  background: C.surfaceInput,
+                  color: C.text,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: "15px",
+                  fontWeight: 600,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {currentLabel}
+              </span>
+            </>
+          ) : (
+            <div
               style={{
                 flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: C.text,
-                fontSize: "13px",
-              }}
-            />
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "11px",
-                color: C.faint,
-                border: `1px solid ${C.borderStrong}`,
-                borderRadius: "5px",
-                padding: "1px 6px",
+                maxWidth: "420px",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                height: "38px",
+                padding: "0 13px",
+                background: C.surfaceInput,
+                border: `1px solid ${searchFocus ? "rgba(62,123,250,0.35)" : C.borderInput}`,
+                borderRadius: "10px",
+                boxShadow: searchFocus ? "0 0 0 3px rgba(62,123,250,0.20)" : "none",
+                transition: "border-color 120ms ease, box-shadow 120ms ease",
               }}
             >
-              ⌘K
-            </span>
-          </div>
-          <div style={{ flex: 1 }} />
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.6" y2="16.6" />
+              </svg>
+              <input
+                placeholder="Rechercher ou accéder à…  commandes, produits, clients"
+                onFocus={() => setSearchFocus(true)}
+                onBlur={() => setSearchFocus(false)}
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: C.text,
+                  fontSize: "13px",
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  color: C.faint,
+                  border: `1px solid ${C.borderStrong}`,
+                  borderRadius: "5px",
+                  padding: "1px 6px",
+                }}
+              >
+                ⌘K
+              </span>
+            </div>
+          )}
+          {!isMobile ? <div style={{ flex: 1 }} /> : null}
           <Link
             href="/"
+            aria-label="Voir la boutique"
             style={{
-              height: "36px",
-              padding: "0 13px",
+              height: isMobile ? "38px" : "36px",
+              width: isMobile ? "38px" : undefined,
+              padding: isMobile ? 0 : "0 13px",
               display: "flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: "7px",
               borderRadius: "9px",
               border: `1px solid ${C.borderStrong}`,
@@ -513,6 +620,7 @@ export default function AdminShell({
               fontSize: "13px",
               fontWeight: 500,
               textDecoration: "none",
+              flexShrink: 0,
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -520,31 +628,33 @@ export default function AdminShell({
               <polyline points="15 3 21 3 21 9" />
               <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
-            Voir la boutique
+            {isMobile ? null : "Voir la boutique"}
           </Link>
-          <Link
-            href="/admin/editor"
-            style={{
-              height: "36px",
-              padding: "0 15px",
-              display: "flex",
-              alignItems: "center",
-              gap: "7px",
-              borderRadius: "9px",
-              border: "1px solid rgba(62,123,250,0.35)",
-              background: "rgba(62,123,250,0.14)",
-              color: C.accentTextSoft,
-              fontSize: "13px",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-            </svg>
-            Éditeur d'accueil
-          </Link>
+          {!isMobile ? (
+            <Link
+              href="/admin/editor"
+              style={{
+                height: "36px",
+                padding: "0 15px",
+                display: "flex",
+                alignItems: "center",
+                gap: "7px",
+                borderRadius: "9px",
+                border: "1px solid rgba(62,123,250,0.35)",
+                background: "rgba(62,123,250,0.14)",
+                color: C.accentTextSoft,
+                fontSize: "13px",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+              </svg>
+              Éditeur d'accueil
+            </Link>
+          ) : null}
           <div
             style={{
               display: "flex",

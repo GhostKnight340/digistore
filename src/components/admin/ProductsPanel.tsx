@@ -211,6 +211,12 @@ export default function ProductsPanel() {
     setMsg(null);
   }
 
+  function closeEditor() {
+    setSelectedSlug(null);
+    setDraft(null);
+    setMsg(null);
+  }
+
   async function save(): Promise<ParentProductDTO | null> {
     if (!draft) return null;
     if (!draft.slug.trim() || !draft.name.trim()) {
@@ -501,7 +507,7 @@ export default function ProductsPanel() {
   return (
     <div className="grid h-full w-full min-w-0 max-w-full gap-6 overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)]">
       {/* ── Left: parent list ── */}
-      <aside className="h-fit">
+      <aside className={`h-fit ${draft ? "hidden lg:block" : ""}`}>
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
@@ -616,9 +622,19 @@ export default function ProductsPanel() {
         <section className="min-w-0 max-w-full space-y-4 overflow-hidden">
           {/* Header */}
           <div className="card flex min-w-0 max-w-full flex-col items-start gap-3 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="min-w-0">
-              <h2 className="font-bold text-white">{draft.name || "Nouveau produit"}</h2>
-              <p className="truncate text-xs text-muted">{isNew ? "Non enregistré" : draft.slug}</p>
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="btn-ghost h-10 shrink-0 px-3 text-sm lg:hidden"
+                aria-label="Retour à la liste des produits"
+              >
+                ← Produits
+              </button>
+              <div className="min-w-0">
+                <h2 className="font-bold text-white">{draft.name || "Nouveau produit"}</h2>
+                <p className="truncate text-xs text-muted">{isNew ? "Non enregistré" : draft.slug}</p>
+              </div>
             </div>
             <div className="flex max-w-full flex-wrap items-center justify-start gap-2 xl:justify-end">
               {msg && (

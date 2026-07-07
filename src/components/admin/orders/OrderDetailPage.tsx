@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
@@ -398,6 +406,12 @@ export default function OrderDetailPage({
         }
         @media (max-width:640px){ .s4-pay { grid-template-columns:1fr; } .s4-actions { width:100%; } }
         .s4-input::placeholder { color:${C.faint}; }
+        .s4-mobile-bar { display:none; }
+        @media (max-width:720px){
+          .s4-header-actions { display:none; }
+          .s4-mobile-bar { display:flex; }
+          .s4-body { padding-bottom:74px; }
+        }
       `}</style>
 
       {/* ===== Header strip ===== */}
@@ -467,7 +481,7 @@ export default function OrderDetailPage({
           </div>
         </div>
 
-        <div className="s4-actions" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="s4-actions s4-header-actions" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
           {canReject ? (
             <HeaderButton
               tone="danger"
@@ -611,6 +625,62 @@ export default function OrderDetailPage({
             <OrderDetailDeleteTools orderId={order.id} onError={(m) => setError(m)} />
           </div>
         </div>
+      </div>
+
+      {/* ===== Mobile sticky fulfillment action bar ===== */}
+      <div
+        className="s4-mobile-bar"
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 40,
+          gap: 8,
+          padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
+          overflowX: "auto",
+          background: "rgba(12,13,17,0.92)",
+          backdropFilter: "blur(12px)",
+          borderTop: `1px solid ${C.border}`,
+        }}
+      >
+        {canApprove ? (
+          <HeaderButton
+            tone="success"
+            disabled={busy}
+            onClick={() => runAction("Paiement confirmé.", () => approvePaymentAction(order.id))}
+          >
+            Confirmer le paiement
+          </HeaderButton>
+        ) : null}
+        <HeaderButton
+          tone="neutral"
+          disabled={busy}
+          onClick={() => {
+            setNextStatus(order.status === "delivered" ? "payment_confirmed" : order.status);
+            setStatusModalOpen(true);
+          }}
+        >
+          Changer le statut
+        </HeaderButton>
+        {canIssue ? (
+          <HeaderButton
+            tone="neutral"
+            disabled={busy}
+            onClick={() => openReviewEmail("request_proof", "Demander un nouveau justificatif")}
+          >
+            Justificatif
+          </HeaderButton>
+        ) : null}
+        {canReject ? (
+          <HeaderButton
+            tone="danger"
+            disabled={busy}
+            onClick={() => openReviewEmail("reject", "Refuser le paiement")}
+          >
+            Refuser
+          </HeaderButton>
+        ) : null}
       </div>
 
       {/* ===== Proof modal ===== */}
@@ -981,6 +1051,57 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+function CopyButton({ value, label = "Copier" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy(event: ReactMouseEvent) {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch (copyError) {
+      console.error("Failed to copy to clipboard", copyError);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={`${label} : ${value}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        height: 22,
+        padding: "0 7px",
+        flexShrink: 0,
+        borderRadius: 6,
+        border: `1px solid ${copied ? C.successBorder : C.borderStrong}`,
+        background: copied ? C.successSoft : C.surfaceInput,
+        color: copied ? C.successText : C.muted,
+        fontSize: 10.5,
+        fontWeight: 600,
+        cursor: "pointer",
+      }}
+    >
+      {copied ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+      {copied ? "Copié" : label}
+    </button>
+  );
+}
+
 function Banner({
   children,
   tone,
@@ -1126,16 +1247,20 @@ function ItemsCard({ order }: { order: AdminOrderDTO }) {
                     <span
                       key={`${code.code}-${codeIndex}`}
                       style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
                         fontFamily: MONO,
                         fontSize: 11,
                         color: C.successText,
                         background: C.successSoft,
                         border: `1px solid ${C.successBorder}`,
                         borderRadius: 6,
-                        padding: "2px 7px",
+                        padding: "2px 4px 2px 7px",
                       }}
                     >
                       {code.code}
+                      <CopyButton value={code.code} label="" />
                     </span>
                   ))}
                 </div>
@@ -1196,15 +1321,18 @@ function PaymentCard({
         {rows.map(([label, value]) => (
           <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
             <span style={{ color: C.muted, flexShrink: 0 }}>{label}</span>
-            <span
-              style={{
-                color: C.text,
-                fontFamily: label === "Référence" || label === "Montant" ? MONO : undefined,
-                textAlign: "right",
-                wordBreak: "break-word",
-              }}
-            >
-              {value}
+            <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <span
+                style={{
+                  color: C.text,
+                  fontFamily: label === "Référence" || label === "Montant" ? MONO : undefined,
+                  textAlign: "right",
+                  wordBreak: "break-word",
+                }}
+              >
+                {value}
+              </span>
+              {label === "Référence" ? <CopyButton value={value} label="" /> : null}
             </span>
           </div>
         ))}
@@ -1362,6 +1490,7 @@ function DeliverySection({
                 <span style={{ flex: 1, fontSize: 12.5, fontFamily: MONO, color: C.successText, wordBreak: "break-all" }}>
                   {code.code}
                 </span>
+                <CopyButton value={code.code} />
                 <span style={{ fontSize: 11, color: C.successText, flexShrink: 0 }}>✓ livré</span>
               </CodeRow>
             ));
