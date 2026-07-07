@@ -11,6 +11,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "discord:setup": "tsx scripts/discord-setup.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -30,6 +31,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^16.6.1",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.9",
     "postcss": "^8.4.49",

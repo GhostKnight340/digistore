@@ -18,6 +18,7 @@ import {
   verifyPassword,
   type AuthActionResult,
 } from "@/lib/auth";
+import { notifyAccountCreated } from "@/lib/discord/notify";
 
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -113,6 +114,13 @@ export async function registerCustomerAction(input: {
         error,
       });
     }
+
+    void notifyAccountCreated({
+      customerId: customer.id,
+      name,
+      email,
+      createdAt: new Date().toISOString(),
+    });
 
     revalidatePath("/account");
     return {

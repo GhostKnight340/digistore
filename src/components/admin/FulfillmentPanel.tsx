@@ -154,68 +154,113 @@ export default function FulfillmentPanel() {
             Aucune commande ne correspond à ce filtre.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase text-muted">
-                <tr className="border-b border-border">
-                  <th className="px-5 py-3 font-medium">Commande</th>
-                  <th className="px-5 py-3 font-medium">Client</th>
-                  <th className="px-5 py-3 font-medium">Date</th>
-                  <th className="px-5 py-3 font-medium">Total</th>
-                  <th className="px-5 py-3 font-medium">Statut</th>
-                  <th className="px-5 py-3 font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleOrders.map((order) => (
-                  <tr key={order.id} className="border-b border-border/60">
-                    <td className="px-5 py-3 font-mono text-xs text-white">
-                      {order.id}
-                    </td>
-                    <td className="px-5 py-3">
-                      <p className="text-white">{order.customerName}</p>
-                      <p className="text-xs text-muted">{order.customerEmail}</p>
-                    </td>
-                    <td className="px-5 py-3 text-muted">
-                      {formatDate(order.createdAt)}
-                    </td>
-                    <td className="px-5 py-3 text-white">
-                      {formatMAD(order.totalMad)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`chip ${orderStatusBadgeClass(order.status)}`}
-                      >
-                        {orderStatusShort(order.status)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Link
-                          href={`/admin/orders/${order.id}`}
-                          className="text-xs font-medium text-accent hover:text-accent-hover"
-                        >
-                          {isDelivered(order.status) ? "Voir" : "Traiter"}
-                        </Link>
-                        <OrderRowDelete
-                          orderId={order.id}
-                          onSuccess={async (successMessage) => {
-                            setMessage(successMessage);
-                            setLoadError("");
-                            await load();
-                          }}
-                          onError={(errorMessage) => {
-                            setLoadError(errorMessage);
-                            setMessage("");
-                          }}
-                        />
-                      </div>
-                    </td>
+          <>
+            {/* Desktop / tablet: table */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase text-muted">
+                  <tr className="border-b border-border">
+                    <th className="px-5 py-3 font-medium">Commande</th>
+                    <th className="px-5 py-3 font-medium">Client</th>
+                    <th className="px-5 py-3 font-medium">Date</th>
+                    <th className="px-5 py-3 font-medium">Total</th>
+                    <th className="px-5 py-3 font-medium">Statut</th>
+                    <th className="px-5 py-3 font-medium">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {visibleOrders.map((order) => (
+                    <tr key={order.id} className="border-b border-border/60">
+                      <td className="px-5 py-3 font-mono text-xs text-white">
+                        {order.id}
+                      </td>
+                      <td className="px-5 py-3">
+                        <p className="text-white">{order.customerName}</p>
+                        <p className="text-xs text-muted">{order.customerEmail}</p>
+                      </td>
+                      <td className="px-5 py-3 text-muted">
+                        {formatDate(order.createdAt)}
+                      </td>
+                      <td className="px-5 py-3 text-white">
+                        {formatMAD(order.totalMad)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`chip ${orderStatusBadgeClass(order.status)}`}
+                        >
+                          {orderStatusShort(order.status)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Link
+                            href={`/admin/orders/${order.id}`}
+                            className="text-xs font-medium text-accent hover:text-accent-hover"
+                          >
+                            {isDelivered(order.status) ? "Voir" : "Traiter"}
+                          </Link>
+                          <OrderRowDelete
+                            orderId={order.id}
+                            onSuccess={async (successMessage) => {
+                              setMessage(successMessage);
+                              setLoadError("");
+                              await load();
+                            }}
+                            onError={(errorMessage) => {
+                              setLoadError(errorMessage);
+                              setMessage("");
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile: order cards */}
+            <div className="divide-y divide-border md:hidden">
+              {visibleOrders.map((order) => (
+                <div key={order.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs text-muted">{order.id}</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-white">{order.customerName}</p>
+                      <p className="truncate text-xs text-muted">{order.customerEmail}</p>
+                    </div>
+                    <span className={`chip shrink-0 ${orderStatusBadgeClass(order.status)}`}>
+                      {orderStatusShort(order.status)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-muted">
+                    <span>{formatDate(order.createdAt)}</span>
+                    <span className="text-sm font-semibold text-white">{formatMAD(order.totalMad)}</span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Link
+                      href={`/admin/orders/${order.id}`}
+                      className="btn-primary h-11 flex-1 text-sm"
+                    >
+                      {isDelivered(order.status) ? "Voir la commande" : "Traiter la commande"}
+                    </Link>
+                    <OrderRowDelete
+                      orderId={order.id}
+                      onSuccess={async (successMessage) => {
+                        setMessage(successMessage);
+                        setLoadError("");
+                        await load();
+                      }}
+                      onError={(errorMessage) => {
+                        setLoadError(errorMessage);
+                        setMessage("");
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </section>
 

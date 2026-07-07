@@ -5,7 +5,15 @@ import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { publicOrderReference } from "@/lib/db/orders";
 import { absoluteAppUrl } from "@/lib/orderNumber";
+import {
+  notifyPaymentStatusChange,
+  notifyFulfillmentNeeded,
+  notifyFulfillmentCompleted,
+  notifyStockAlert,
+} from "@/lib/discord/notify";
 import type { ActionResult, ItemAssignment } from "@/lib/dto";
+
+const LOW_STOCK_THRESHOLD = 3;
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
   await ensureDatabaseReady();
@@ -55,6 +63,21 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
     } catch (emailError) {
       console.error("[email:payment_confirmed]", emailError);
     }
+
+    const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+    void notifyPaymentStatusChange({
+      orderId,
+      publicOrderNumber: reference.number,
+      fromStatus: order.status,
+      toStatus: "payment_confirmed",
+      adminUrl,
+    });
+    void notifyFulfillmentNeeded({
+      orderId,
+      publicOrderNumber: reference.number,
+      itemCount: await prisma.orderItem.count({ where: { orderId } }),
+      adminUrl,
+    });
 
     return { ok: true };
   } catch (error) {
@@ -120,6 +143,10 @@ export async function deliverOrder(
 
   try {
     const deliveredValues: string[] = [];
+    const consumedByVariant = new Map<
+      string,
+      { productId: string; variantId: string | null; count: number }
+    >();
     await timeAdmin("admin.deliverOrder", "transaction.deliverCodes", () => prisma.$transaction(async (tx) => {
       for (const item of order.items) {
         const assignment = assignments.find((entry) => entry.orderItemId === item.id);
@@ -159,6 +186,18 @@ export async function deliverOrder(
             }
             digitalCodeId = entry.digitalCodeId;
             deliveredValues.push(code.code);
+
+            const variantKey = `${code.productId}:${code.variantId ?? ""}`;
+            const existing = consumedByVariant.get(variantKey);
+            if (existing) {
+              existing.count += 1;
+            } else {
+              consumedByVariant.set(variantKey, {
+                productId: code.productId,
+                variantId: code.variantId,
+                count: 1,
+              });
+            }
           } else {
             manualCode = entry.manualCode!.trim();
             deliveredValues.push(manualCode);
@@ -212,6 +251,14 @@ export async function deliverOrder(
       console.error("[email:order_delivered]", emailError);
     }
 
+    void notifyFulfillmentCompleted({
+      orderId,
+      publicOrderNumber: reference.number,
+      adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
+    });
+
+    void checkStockThresholds([...consumedByVariant.values()]);
+
     return { ok: true };
   } catch (error) {
     console.error("[deliverOrder]", error);
@@ -219,5 +266,58 @@ export async function deliverOrder(
       ok: false,
       error: error instanceof Error ? error.message : "Livraison impossible.",
     };
+  }
+}
+
+/**
+ * Fires low-stock / out-of-stock alerts only on the sale that crosses a
+ * threshold, not on every subsequent sale while already below it:
+ *  - low_stock fires once when remaining drops from above the threshold to
+ *    at-or-below it (and still > 0).
+ *  - out_of_stock fires once, separately, when remaining hits exactly 0.
+ */
+async function checkStockThresholds(
+  consumed: { productId: string; variantId: string | null; count: number }[],
+): Promise<void> {
+  for (const entry of consumed) {
+    try {
+      const afterCount = await prisma.digitalCode.count({
+        where: {
+          productId: entry.productId,
+          variantId: entry.variantId,
+          status: "unused",
+        },
+      });
+      const beforeCount = afterCount + entry.count;
+
+      const crossedIntoLowStock =
+        beforeCount > LOW_STOCK_THRESHOLD && afterCount <= LOW_STOCK_THRESHOLD && afterCount > 0;
+      const crossedIntoOutOfStock = beforeCount > 0 && afterCount === 0;
+      if (!crossedIntoLowStock && !crossedIntoOutOfStock) continue;
+
+      const [product, variant] = await Promise.all([
+        prisma.product.findUnique({ where: { id: entry.productId }, select: { name: true } }),
+        entry.variantId
+          ? prisma.productVariant.findUnique({
+              where: { id: entry.variantId },
+              select: { name: true, faceValue: true, faceCurrency: true },
+            })
+          : Promise.resolve(null),
+      ]);
+
+      void notifyStockAlert({
+        productName: product?.name ?? entry.productId,
+        variantName: variant
+          ? variant.faceValue != null
+            ? `${variant.faceValue} ${variant.faceCurrency}`
+            : variant.name
+          : undefined,
+        remaining: afterCount,
+        threshold: LOW_STOCK_THRESHOLD,
+        status: crossedIntoOutOfStock ? "out_of_stock" : "low_stock",
+      });
+    } catch (error) {
+      console.error("[stock:threshold-check]", error);
+    }
   }
 }

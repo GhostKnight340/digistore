@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
 import { setCustomerSession } from "@/lib/auth";
+import { notifyAccountCreated } from "@/lib/discord/notify";
 
 const GOOGLE_STATE_COOKIE = "ghost_google_oauth_state";
 
@@ -100,6 +101,7 @@ export async function GET(request: Request) {
   const existingByGoogleId = await prisma.customer.findFirst({ where: { googleId: profile.sub } });
   const existingByEmail = await prisma.customer.findUnique({ where: { email } });
   const existing = existingByGoogleId ?? existingByEmail;
+  const isNewAccount = !existing;
 
   try {
     const customer = existing
@@ -131,6 +133,16 @@ export async function GET(request: Request) {
         });
 
     await setCustomerSession(customer.id, true);
+
+    if (isNewAccount) {
+      void notifyAccountCreated({
+        customerId: customer.id,
+        name,
+        email,
+        createdAt: now.toISOString(),
+      });
+    }
+
     return NextResponse.redirect(new URL(mode === "register" ? "/account" : "/account/orders", base));
   } catch (error) {
     console.error("[auth:google:customer]", error);

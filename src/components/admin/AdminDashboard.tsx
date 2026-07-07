@@ -124,10 +124,12 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
         <AdminOverview
           firstName={admin.name.trim().split(/\s+/)[0] ?? ""}
           onOpenReviewQueue={() => setActiveTab("payments")}
+          onOpenInventory={() => setActiveTab("inventory")}
         />
       ) : (
         <div style={{ height: "100%", overflowY: "auto" }}>
-          <div style={{ padding: "26px 28px" }}>
+          <div className="admin-panel-pad" style={{ padding: "26px 28px" }}>
+            <style>{`@media (max-width: 640px) { .admin-panel-pad { padding: 16px !important; } }`}</style>
             <Suspense fallback={panelFallback}>{renderPanel(activeTab)}</Suspense>
           </div>
         </div>

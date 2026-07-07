@@ -4,6 +4,7 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
+import { notifyOrderCreated } from "@/lib/discord/notify";
 import {
   absoluteAppUrl,
   formatPublicOrderNumber,
@@ -760,7 +761,12 @@ export async function createOrder(
   const bySlug = new Map(
     products.map((product) => [
       product.slug,
-      { productId: product.id, variantId: null as string | null, unitPriceMad: product.priceMad },
+      {
+        productId: product.id,
+        variantId: null as string | null,
+        unitPriceMad: product.priceMad,
+        name: product.name,
+      },
     ]),
   );
   for (const variant of variants) {
@@ -768,6 +774,7 @@ export async function createOrder(
       productId: variant.productId,
       variantId: variant.id,
       unitPriceMad: variant.priceMad,
+      name: `${variant.product.name} - ${variant.name}`,
     });
   }
   const lineItems = input.items
@@ -779,6 +786,7 @@ export async function createOrder(
         variantId: purchasable.variantId,
         quantity: item.quantity,
         unitPriceMad: purchasable.unitPriceMad,
+        name: purchasable.name,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -862,6 +870,18 @@ export async function createOrder(
     } catch (emailError) {
       console.error("[email:order_received]", emailError);
     }
+
+    void notifyOrderCreated({
+      orderId: order.id,
+      publicOrderNumber: reference.number,
+      totalMad,
+      paymentMethod: input.paymentMethod,
+      itemSummary: lineItems
+        .map((item) => `${item.quantity}x ${item.name}`)
+        .join(", "),
+      adminUrl: absoluteAppUrl(`/admin/orders/${order.id}`),
+      createdAt: new Date().toISOString(),
+    });
 
     return {
       id: order.id,

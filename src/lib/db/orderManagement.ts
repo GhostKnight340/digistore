@@ -1,8 +1,19 @@
 import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { publicOrderReference } from "@/lib/db/orders";
+import { absoluteAppUrl } from "@/lib/orderNumber";
+import { notifyPaymentStatusChange } from "@/lib/discord/notify";
 import type { ActionResult } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
+
+const NOTIFIABLE_PAYMENT_STATUSES: OrderStatus[] = [
+  "payment_submitted",
+  "payment_confirmed",
+  "payment_issue",
+  "rejected",
+  "refunded",
+];
 
 const ORDER_STATUSES: OrderStatus[] = [
   "pending_payment",
@@ -109,15 +120,19 @@ export async function changeOrderStatus(
   }
 
   try {
+    let fromStatus: string | undefined;
+    let createdAt: Date | undefined;
     await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: input.orderId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, createdAt: true },
       });
       if (!order) throw new Error("Commande introuvable.");
       if (order.status === input.toStatus) {
         throw new Error("La commande a deja ce statut.");
       }
+      fromStatus = order.status;
+      createdAt = order.createdAt;
 
       await tx.order.update({
         where: { id: input.orderId },
@@ -135,6 +150,18 @@ export async function changeOrderStatus(
         },
       });
     });
+
+    if (NOTIFIABLE_PAYMENT_STATUSES.includes(input.toStatus) && createdAt) {
+      const reference = await publicOrderReference({ id: input.orderId, createdAt });
+      void notifyPaymentStatusChange({
+        orderId: input.orderId,
+        publicOrderNumber: reference.number,
+        fromStatus,
+        toStatus: input.toStatus,
+        note: input.note?.trim() || undefined,
+        adminUrl: absoluteAppUrl(`/admin/orders/${input.orderId}`),
+      });
+    }
 
     return { ok: true };
   } catch (error) {

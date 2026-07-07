@@ -11,6 +11,10 @@ import { absoluteAppUrl } from "@/lib/orderNumber";
 import { publicOrderReference } from "@/lib/db/orders";
 import { getAdminPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
+import {
+  notifyPaymentStatusChange,
+  notifyFulfillmentNeeded,
+} from "@/lib/discord/notify";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
@@ -112,6 +116,14 @@ export async function submitPayment(
       console.error("[email:proof_received]", emailError);
     }
 
+    void notifyPaymentStatusChange({
+      orderId,
+      publicOrderNumber: reference.number,
+      fromStatus: "pending_payment",
+      toStatus: "payment_submitted",
+      adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
+    });
+
     return { ok: true };
   } catch (error) {
     console.error("[submitPayment]", error);
@@ -202,6 +214,26 @@ async function setPaymentStatus(
     } catch (emailError) {
       console.error(`[email:${emailType}]`, emailError);
     }
+
+    const reference = await publicOrderReference(order);
+    const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+    void notifyPaymentStatusChange({
+      orderId,
+      publicOrderNumber: reference.number,
+      fromStatus: order.status,
+      toStatus,
+      note,
+      adminUrl,
+    });
+    if (toStatus === "payment_confirmed") {
+      void notifyFulfillmentNeeded({
+        orderId,
+        publicOrderNumber: reference.number,
+        itemCount: await prisma.orderItem.count({ where: { orderId } }),
+        adminUrl,
+      });
+    }
+
     return { ok: true };
   } catch (error) {
     console.error("[setPaymentStatus]", error);
