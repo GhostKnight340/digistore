@@ -60,7 +60,13 @@ import {
   saveCategory,
 } from "@/lib/db/categories";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
-import type { EmailTemplateKey } from "@/lib/emailTemplates";
+import { getStoreSettings } from "@/lib/db/catalog";
+import {
+  renderEmailTemplate,
+  sampleVariablesForKey,
+  type EmailTemplateKey,
+  type RenderedEmailTemplate,
+} from "@/lib/emailTemplates";
 import type {
   ActionResult,
   AdminCategoryDTO,
@@ -104,30 +110,41 @@ export async function getAdminOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   return getAdminOrdersPage({ take: 10 });
 }
 
+export async function previewEmailTemplateAction(
+  templateKey: EmailTemplateKey,
+  subject: string,
+  body: string,
+): Promise<RenderedEmailTemplate> {
+  await assertAdminAccess();
+  const settings = await getStoreSettings();
+  const variables = sampleVariablesForKey(templateKey);
+  return renderEmailTemplate(settings, templateKey, variables, { subject, body });
+}
+
 export async function sendTestEmailAction(
   to: string,
   templateKey: EmailTemplateKey,
+  subject: string,
+  body: string,
 ): Promise<ActionResult> {
   await assertAdminAccess();
   const recipient = to.trim();
   if (!recipient || !recipient.includes("@")) {
     return { ok: false, error: "Adresse email invalide." };
   }
+  const settings = await getStoreSettings();
+  const variables = sampleVariablesForKey(templateKey);
+  const rendered = renderEmailTemplate(settings, templateKey, variables, { subject, body });
   const result = await sendTransactionalEmail({
     to: recipient,
     templateKey,
     type: "test_email",
-    variables: {
-      customer_name: "Client test",
-      order_number: "#TEST",
-      order_url: "https://ghost.ma/order/test",
-      payment_url: "https://ghost.ma/payment/test",
-      delivery_url: "https://ghost.ma/delivery/test",
-      total: "100 MAD",
-      reason: "Test admin",
-    },
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+    variables,
     metadata: { source: "admin_test_email" },
-    manuallyEdited: false,
+    manuallyEdited: true,
   });
   return result.ok
     ? { ok: true }

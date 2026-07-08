@@ -348,8 +348,9 @@ export function renderEmailTemplate(
   settings: StoreSettings,
   key: EmailTemplateKey,
   variables: Variables,
+  templateOverride?: { subject: string; body: string },
 ): RenderedEmailTemplate {
-  const template = settings.emailTemplates[key] ?? {
+  const template = templateOverride ?? settings.emailTemplates[key] ?? {
     subject: key,
     body: "",
   };
@@ -397,4 +398,102 @@ export function renderEmailTemplate(
     text,
     html: brandedEmailHtml(key, subject, text, baseVariables, settings),
   };
+}
+
+export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateKey, string> = {
+  welcome: "Bienvenue",
+  email_verification: "Vérification d'e-mail",
+  email_confirmation: "Confirmation d'e-mail",
+  password_reset: "Réinitialisation du mot de passe",
+  password_changed: "Mot de passe modifié",
+  order_received: "Commande reçue",
+  awaiting_payment: "Paiement en attente",
+  proof_received: "Justificatif reçu",
+  new_proof_requested: "Nouveau justificatif demandé",
+  payment_rejected: "Paiement refusé",
+  payment_confirmed: "Paiement confirmé",
+  order_delivered: "Commande livrée",
+  refund_update: "Mise à jour du remboursement",
+};
+
+type TemplateVariable = { key: string; sample: string };
+
+export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable[]> = {
+  welcome: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "account_url", sample: "https://ghost.ma/account" },
+  ],
+  email_verification: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "verification_url", sample: "https://ghost.ma/verify/example" },
+  ],
+  email_confirmation: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "account_url", sample: "https://ghost.ma/account" },
+  ],
+  password_reset: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "reset_password_url", sample: "https://ghost.ma/reset-password/example" },
+  ],
+  password_changed: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "account_url", sample: "https://ghost.ma/account" },
+  ],
+  order_received: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "payment_url", sample: "https://ghost.ma/payment/example" },
+    { key: "total", sample: "250 MAD" },
+  ],
+  awaiting_payment: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "payment_url", sample: "https://ghost.ma/payment/example" },
+    { key: "total", sample: "250 MAD" },
+  ],
+  proof_received: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "payment_url", sample: "https://ghost.ma/payment/example" },
+  ],
+  new_proof_requested: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "payment_url", sample: "https://ghost.ma/payment/example" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "reason", sample: "Justificatif illisible" },
+  ],
+  payment_rejected: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "payment_url", sample: "https://ghost.ma/payment/example" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "reason", sample: "Justificatif illisible" },
+  ],
+  payment_confirmed: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+  ],
+  order_delivered: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "delivery_url", sample: "https://ghost.ma/delivery/example" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "codes", sample: "AAAA-BBBB-CCCC" },
+  ],
+  refund_update: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "reason", sample: "Remboursement partiel" },
+    { key: "total", sample: "250 MAD" },
+  ],
+};
+
+export function sampleVariablesForKey(key: EmailTemplateKey): Record<string, string> {
+  const vars = EMAIL_TEMPLATE_VARIABLES[key] ?? [];
+  return Object.fromEntries(vars.map((variable) => [variable.key, variable.sample]));
 }

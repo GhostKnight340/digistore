@@ -1,58 +1,46 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { sendTestEmailAction } from "@/app/actions/admin";
-import type { EmailTemplateKey } from "@/lib/emailTemplates";
-
-const labels: Record<string, string> = {
-  welcome: "Welcome",
-  email_confirmation: "Email confirmation",
-  password_reset: "Password reset",
-  order_received: "Order received",
-  awaiting_payment: "Awaiting payment",
-  proof_received: "Proof received",
-  new_proof_requested: "New proof requested",
-  payment_rejected: "Payment rejected",
-  payment_confirmed: "Payment confirmed",
-  order_delivered: "Order delivered",
-  refund_update: "Refund update",
-};
-
-const sample: Record<string, string> = {
-  customer_name: "Amine",
-  order_number: "#000128",
-  order_url: "https://ghost.ma/order/example",
-  payment_url: "https://ghost.ma/payment/example",
-  delivery_url: "https://ghost.ma/delivery/example",
-  total: "250 MAD",
-  reason: "Justificatif illisible",
-  support_email: "support@ghost.ma",
-  support_whatsapp: "+212 600 000 000",
-  codes: "AAAA-BBBB-CCCC",
-};
-
-function renderTemplate(value: string) {
-  return value.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) => sample[key] ?? `{{${key}}}`);
-}
+import { previewEmailTemplateAction, sendTestEmailAction } from "@/app/actions/admin";
+import {
+  EMAIL_TEMPLATE_LABELS,
+  EMAIL_TEMPLATE_VARIABLES,
+  type EmailTemplateKey,
+  type RenderedEmailTemplate,
+} from "@/lib/emailTemplates";
 
 export default function EmailTemplatesPanel() {
   const { settings, saveSettings } = useStoreSettings();
-  const keys = Object.keys(settings.emailTemplates);
-  const [active, setActive] = useState(keys[0] ?? "order_received");
+  const keys = Object.keys(settings.emailTemplates) as EmailTemplateKey[];
+  const [active, setActive] = useState<EmailTemplateKey>(keys[0] ?? "order_received");
   const [draft, setDraft] = useState(settings.emailTemplates);
   const [message, setMessage] = useState("");
   const [testRecipient, setTestRecipient] = useState(
     process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "",
   );
+  const [preview, setPreview] = useState<RenderedEmailTemplate | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const template = draft[active];
-  const preview = useMemo(
-    () => ({
-      subject: renderTemplate(template.subject),
-      body: renderTemplate(template.body),
-    }),
-    [template],
-  );
+  const variables = EMAIL_TEMPLATE_VARIABLES[active] ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    setPreviewLoading(true);
+    const timeout = setTimeout(() => {
+      previewEmailTemplateAction(active, template.subject, template.body)
+        .then((rendered) => {
+          if (!cancelled) setPreview(rendered);
+        })
+        .finally(() => {
+          if (!cancelled) setPreviewLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [active, template.subject, template.body]);
 
   async function save() {
     const result = await saveSettings({ ...settings, emailTemplates: draft });
@@ -60,7 +48,7 @@ export default function EmailTemplatesPanel() {
   }
 
   async function sendTest() {
-    const result = await sendTestEmailAction(testRecipient, active as EmailTemplateKey);
+    const result = await sendTestEmailAction(testRecipient, active, template.subject, template.body);
     setMessage(result.ok ? "Email test traité. Consultez EmailLog pour le statut." : result.error ?? "Envoi impossible.");
   }
 
@@ -76,7 +64,7 @@ export default function EmailTemplatesPanel() {
               active === key ? "bg-accent/10 text-white" : "text-muted hover:bg-surface hover:text-white"
             }`}
           >
-            {labels[key] ?? key}
+            {EMAIL_TEMPLATE_LABELS[key] ?? key}
           </button>
         ))}
       </aside>
@@ -84,8 +72,12 @@ export default function EmailTemplatesPanel() {
       <div className="space-y-5">
         <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-base/95 p-4 backdrop-blur">
           <div>
-            <h2 className="text-xl font-bold text-white">Templates email</h2>
-            <p className="text-xs text-muted">Variables: {Object.keys(sample).map((key) => `{{${key}}}`).join(" ")}</p>
+            <h2 className="text-xl font-bold text-white">
+              {EMAIL_TEMPLATE_LABELS[active] ?? active}
+            </h2>
+            <p className="text-xs text-muted">
+              Variables disponibles : {variables.map((variable) => `{{${variable.key}}}`).join(" ")}
+            </p>
           </div>
           <button type="button" onClick={save} className="btn-primary h-10 px-4 text-xs">
             Enregistrer
@@ -140,10 +132,21 @@ export default function EmailTemplatesPanel() {
 
         <section className="card p-5">
           <p className="text-xs uppercase tracking-wide text-muted">Aperçu</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">{preview.subject}</h3>
-          <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-border bg-surface p-4 text-sm leading-relaxed text-muted">
-            {preview.body}
-          </pre>
+          <h3 className="mt-2 text-lg font-semibold text-white">
+            {preview?.subject ?? (previewLoading ? "Chargement…" : "")}
+          </h3>
+          <div className="mt-4 overflow-hidden rounded-xl border border-border bg-surface">
+            {preview ? (
+              <iframe
+                title="Aperçu de l'email"
+                srcDoc={preview.html}
+                sandbox=""
+                className="h-[720px] w-full bg-white"
+              />
+            ) : (
+              <p className="p-4 text-sm text-muted">Chargement de l&apos;aperçu…</p>
+            )}
+          </div>
         </section>
       </div>
     </section>
