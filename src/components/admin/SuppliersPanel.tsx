@@ -1,5 +1,10 @@
 "use client";
 
+// ⚠️ LANGUAGE: THIS PAGE IS INTENTIONALLY IN ENGLISH.
+// The rest of the admin UI is French, but the "Provider API" dashboard is kept
+// in English by the owner's explicit request. Do NOT translate this file back
+// to French. If you touch it, keep all user-facing strings in English.
+
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
@@ -25,24 +30,24 @@ import type {
 } from "@/lib/dto";
 
 const RANGES: { id: SupplierTimeRange; label: string }[] = [
-  { id: "today", label: "Aujourd’hui" },
-  { id: "7d", label: "7 jours" },
-  { id: "30d", label: "30 jours" },
+  { id: "today", label: "Today" },
+  { id: "7d", label: "7 days" },
+  { id: "30d", label: "30 days" },
 ];
 
 const MAPPING_FILTERS: { id: "all" | ReloadlyMappingStatus; label: string }[] = [
-  { id: "all", label: "Tous" },
-  { id: "linked", label: "Liés" },
-  { id: "unlinked", label: "Non liés" },
-  { id: "incomplete", label: "Erreur" },
-  { id: "disabled", label: "Désactivés" },
+  { id: "all", label: "All" },
+  { id: "linked", label: "Linked" },
+  { id: "unlinked", label: "Unlinked" },
+  { id: "incomplete", label: "Error" },
+  { id: "disabled", label: "Disabled" },
 ];
 
 const STATUS_META: Record<ReloadlyMappingStatus, { label: string; cls: string }> = {
-  linked: { label: "Lié", cls: "border-green-500/40 text-green-400" },
-  unlinked: { label: "Non lié", cls: "border-border-strong text-muted" },
-  incomplete: { label: "Erreur", cls: "border-amber-500/40 text-amber-400" },
-  disabled: { label: "Désactivé", cls: "border-border-strong text-faint" },
+  linked: { label: "Linked", cls: "border-green-500/40 text-green-400" },
+  unlinked: { label: "Unlinked", cls: "border-border-strong text-muted" },
+  incomplete: { label: "Error", cls: "border-amber-500/40 text-amber-400" },
+  disabled: { label: "Disabled", cls: "border-border-strong text-faint" },
 };
 
 export default function SuppliersPanel() {
@@ -72,9 +77,12 @@ export default function SuppliersPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-white">API fournisseur</h2>
+        <h2 className="text-xl font-bold text-white">Provider API</h2>
         <p className="mt-1 text-sm text-muted">
-          État, correspondances et commandes du fournisseur de cartes cadeaux Reloadly.
+          Status, mappings and orders for the Reloadly gift-card provider.
+        </p>
+        <p className="mt-1 text-xs text-faint">
+          This page is intentionally in English (the rest of the admin is French). Keep it in English.
         </p>
       </div>
 
@@ -110,10 +118,9 @@ function SandboxBanner() {
         </svg>
       </span>
       <div>
-        <p className="text-sm font-bold uppercase tracking-wide text-amber-300">Mode Sandbox</p>
+        <p className="text-sm font-bold uppercase tracking-wide text-amber-300">Sandbox Mode</p>
         <p className="mt-1 text-sm text-amber-100/90">
-          Les commandes fournisseur effectuées dans cet environnement sont des tests et ne livrent pas
-          de véritables cartes cadeaux.
+          Provider orders placed in this environment are tests and do not deliver real gift cards.
         </p>
       </div>
     </div>
@@ -137,17 +144,17 @@ function ProviderCard({
   const connection = !overview
     ? { label: "…", cls: "text-muted" }
     : !overview.configured
-      ? { label: "Non configuré", cls: "text-red-400" }
+      ? { label: "Not configured", cls: "text-red-400" }
       : health?.ok
-        ? { label: "Connecté", cls: "text-green-400" }
+        ? { label: "Connected", cls: "text-green-400" }
         : health
-          ? { label: "Erreur de connexion", cls: "text-red-400" }
-          : { label: "Vérification…", cls: "text-muted" };
+          ? { label: "Connection error", cls: "text-red-400" }
+          : { label: "Checking…", cls: "text-muted" };
   const auth = !health
     ? { label: "…", cls: "text-muted" }
     : health.authWorking
-      ? { label: "Fonctionnelle", cls: "text-green-400" }
-      : { label: "Échouée", cls: "text-red-400" };
+      ? { label: "Working", cls: "text-green-400" }
+      : { label: "Failed", cls: "text-red-400" };
 
   return (
     <section className="card p-5">
@@ -173,21 +180,21 @@ function ProviderCard({
       </div>
 
       <dl className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Field label="Connexion"><span className={connection.cls}>{connection.label}</span></Field>
-        <Field label="Authentification"><span className={auth.cls}>{auth.label}</span></Field>
-        <Field label="Solde du portefeuille">
+        <Field label="Connection"><span className={connection.cls}>{connection.label}</span></Field>
+        <Field label="Authentication"><span className={auth.cls}>{auth.label}</span></Field>
+        <Field label="Wallet balance">
           {health?.balance
-            ? `${health.balance.amount.toLocaleString("fr-FR")} ${health.balance.currency}`
+            ? `${health.balance.amount.toLocaleString("en-US")} ${health.balance.currency}`
             : health && health.ok
-              ? "Indisponible"
+              ? "Unavailable"
               : "—"}
         </Field>
-        <Field label="Dernière vérification">
+        <Field label="Last checked">
           {health ? formatDate(health.checkedAt) : "—"}
         </Field>
-        <Field label="Webhook">Non applicable</Field>
-        <Field label="Fulfillment automatique">
-          {overview?.automaticFulfillment ? "Activé" : "Désactivé (manuel)"}
+        <Field label="Webhook">Not applicable</Field>
+        <Field label="Automatic fulfillment">
+          {overview?.automaticFulfillment ? "Enabled" : "Disabled (manual)"}
         </Field>
       </dl>
 
@@ -203,10 +210,10 @@ function ProviderCard({
         disabled={testing}
         className="btn-ghost mt-5 w-full sm:w-auto"
       >
-        {testing ? "Test en cours…" : "Tester la connexion"}
+        {testing ? "Testing…" : "Test connection"}
       </button>
       <p className="mt-2 text-xs text-faint">
-        Test en lecture seule — aucune commande n’est passée.
+        Read-only test — no order is placed.
       </p>
     </section>
   );
@@ -234,7 +241,7 @@ function MetricsSection() {
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-white">Indicateurs</h3>
+        <h3 className="text-sm font-semibold text-white">Metrics</h3>
         <div className="flex gap-1 rounded-xl border border-border bg-surface p-1 text-xs">
           {RANGES.map((r) => (
             <button
@@ -251,13 +258,12 @@ function MetricsSection() {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Metric label="Produits liés" value={metrics?.linkedProducts} />
-        <Metric label="Produits non liés" value={metrics?.unlinkedProducts} />
-        <Metric label="Commandes fournisseur" value={metrics?.providerOrders} hint="réussies" />
+        <Metric label="Linked products" value={metrics?.linkedProducts} />
+        <Metric label="Unlinked products" value={metrics?.unlinkedProducts} />
+        <Metric label="Provider orders" value={metrics?.providerOrders} hint="successful" />
       </div>
       <p className="text-xs text-faint">
-        Commandes échouées, en attente et taux de réussite arrivent avec le journal des tentatives
-        fournisseur (phase 2).
+        Failed, pending and success-rate metrics arrive with the provider attempt log (phase 2).
       </p>
     </section>
   );
@@ -294,7 +300,7 @@ function MappingSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-white">Correspondance des produits</h3>
+      <h3 className="text-sm font-semibold text-white">Product mapping</h3>
       <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-surface p-1 text-xs">
         {MAPPING_FILTERS.map((f) => {
           const count = f.id === "all" ? mappings.length : mappings.filter((m) => m.status === f.id).length;
@@ -317,9 +323,9 @@ function MappingSection() {
       </div>
 
       {!loaded ? (
-        <p className="card p-5 text-sm text-muted">Chargement…</p>
+        <p className="card p-5 text-sm text-muted">Loading…</p>
       ) : visible.length === 0 ? (
-        <p className="card p-5 text-sm text-muted">Aucune variante dans cette catégorie.</p>
+        <p className="card p-5 text-sm text-muted">No variant in this category.</p>
       ) : (
         <div className="space-y-2">
           {visible.map((m) => (
@@ -385,14 +391,14 @@ function MappingRow({ mapping }: { mapping: ReloadlyMappingDTO }) {
             disabled={checking}
             className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted hover:text-white disabled:opacity-50"
           >
-            {checking ? "Vérification…" : "Tester la disponibilité"}
+            {checking ? "Checking…" : "Test availability"}
           </button>
         )}
         <Link
           href="?tab=products"
           className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted hover:text-white"
         >
-          Modifier la correspondance
+          Edit mapping
         </Link>
       </div>
 
@@ -409,10 +415,10 @@ function MappingRow({ mapping }: { mapping: ReloadlyMappingDTO }) {
           {check.error ? (
             check.error
           ) : check.ok ? (
-            <>Disponible — {check.productName} ({check.currency}, {check.country}).</>
+            <>Available — {check.productName} ({check.currency}, {check.country}).</>
           ) : (
             <>
-              <p className="font-semibold">Incompatibilités :</p>
+              <p className="font-semibold">Mismatches:</p>
               <ul className="mt-1 list-disc pl-4">
                 {check.issues.map((i, idx) => (
                   <li key={idx}>{i}</li>
@@ -460,19 +466,19 @@ function CatalogSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-white">Catalogue fournisseur</h3>
+      <h3 className="text-sm font-semibold text-white">Provider catalog</h3>
       <div className="card p-4">
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
             className="input sm:w-32"
-            placeholder="Pays (ex. FR)"
+            placeholder="Country (e.g. FR)"
             value={country}
             maxLength={2}
             onChange={(e) => setCountry(e.target.value.toUpperCase())}
           />
           <input
             className="input flex-1"
-            placeholder="Nom / marque (ex. Steam)"
+            placeholder="Name / brand (e.g. Steam)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && search(0)}
@@ -483,12 +489,12 @@ function CatalogSection() {
             disabled={loading}
             className="btn-primary sm:w-auto"
           >
-            {loading ? "…" : "Rechercher"}
+            {loading ? "…" : "Search"}
           </button>
         </div>
         <p className="mt-2 text-[11px] text-faint">
-          Le filtre par nom s’applique aux résultats de la page courante (l’API Reloadly ne filtre que
-          par pays).
+          The name filter applies to the current page’s results (Reloadly’s API only filters by
+          country).
         </p>
 
         {error && (
@@ -500,7 +506,7 @@ function CatalogSection() {
         {data && (
           <div className="mt-4 space-y-2">
             {data.products.length === 0 ? (
-              <p className="text-sm text-muted">Aucun produit pour ces critères.</p>
+              <p className="text-sm text-muted">No product for these criteria.</p>
             ) : (
               data.products.map((p) => (
                 <div key={p.productId} className="rounded-xl border border-border bg-surface p-3">
@@ -513,12 +519,12 @@ function CatalogSection() {
                         {p.currency}
                       </p>
                     </div>
-                    {p.mapped && <span className="chip border-green-500/40 text-green-400">Lié</span>}
+                    {p.mapped && <span className="chip border-green-500/40 text-green-400">Linked</span>}
                   </div>
                   <p className="mt-1.5 text-xs text-muted">
                     {p.denominationType === "FIXED"
-                      ? `Valeurs : ${p.fixedDenominations.join(", ") || "—"}`
-                      : `Plage : ${p.minDenomination ?? "?"} – ${p.maxDenomination ?? "?"}`}
+                      ? `Values: ${p.fixedDenominations.join(", ") || "—"}`
+                      : `Range: ${p.minDenomination ?? "?"} – ${p.maxDenomination ?? "?"}`}
                   </p>
                 </div>
               ))
@@ -532,7 +538,7 @@ function CatalogSection() {
                   onClick={() => search(page - 1)}
                   className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
                 >
-                  Précédent
+                  Previous
                 </button>
                 <span>
                   Page {page + 1} / {data.totalPages}
@@ -543,7 +549,7 @@ function CatalogSection() {
                   onClick={() => search(page + 1)}
                   className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
                 >
-                  Suivant
+                  Next
                 </button>
               </div>
             )}
@@ -570,13 +576,11 @@ function ProviderOrdersSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-white">Commandes fournisseur</h3>
+      <h3 className="text-sm font-semibold text-white">Provider orders</h3>
       {!loaded ? (
-        <p className="card p-5 text-sm text-muted">Chargement…</p>
+        <p className="card p-5 text-sm text-muted">Loading…</p>
       ) : orders.length === 0 ? (
-        <p className="card p-5 text-sm text-muted">
-          Aucune commande Reloadly enregistrée pour le moment.
-        </p>
+        <p className="card p-5 text-sm text-muted">No Reloadly order recorded yet.</p>
       ) : (
         <div className="space-y-2">
           {orders.map((o) => (
@@ -593,13 +597,13 @@ function ProviderOrdersSection() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="chip border-green-500/40 text-green-400">Réussie</span>
+                <span className="chip border-green-500/40 text-green-400">Successful</span>
                 <button
                   type="button"
                   onClick={() => setDetail(o)}
                   className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-muted hover:text-white"
                 >
-                  Détail
+                  Details
                 </button>
               </div>
             </div>
@@ -626,20 +630,20 @@ function ProviderOrderDrawer({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-white">Transaction fournisseur</h3>
+          <h3 className="text-base font-semibold text-white">Provider transaction</h3>
           <button type="button" onClick={onClose} className="text-muted hover:text-white">
             ✕
           </button>
         </div>
 
         <dl className="mt-5 space-y-3 text-sm">
-          <Row label="Commande Ghost">
+          <Row label="Ghost order">
             <Link href={`/admin/orders/${order.orderId}`} className="font-mono text-accent">
               {order.publicOrderNumber}
             </Link>
           </Row>
-          <Row label="Fournisseur">Reloadly</Row>
-          <Row label="Environnement">
+          <Row label="Provider">Reloadly</Row>
+          <Row label="Environment">
             <span
               className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
                 order.environment === "sandbox"
@@ -650,17 +654,17 @@ function ProviderOrderDrawer({
               {order.environment === "sandbox" ? "Sandbox" : "Live"}
             </span>
           </Row>
-          <Row label="Produit Ghost">{order.productName}</Row>
-          <Row label="Transaction Reloadly">
+          <Row label="Ghost product">{order.productName}</Row>
+          <Row label="Reloadly transaction">
             <span className="font-mono">{order.reloadlyTransactionId ?? "—"}</span>
           </Row>
-          <Row label="Créée le">{formatDate(order.createdAt)}</Row>
+          <Row label="Created">{formatDate(order.createdAt)}</Row>
         </dl>
 
         <div className="mt-6">
-          <p className="text-[11px] uppercase tracking-wide text-faint">Étapes</p>
+          <p className="text-[11px] uppercase tracking-wide text-faint">Steps</p>
           <ol className="mt-2 space-y-2 text-sm">
-            {["Demande créée", "Envoyée au fournisseur", "Traitée", "Terminée"].map((step) => (
+            {["Request created", "Sent to provider", "Processing", "Completed"].map((step) => (
               <li key={step} className="flex items-center gap-2 text-green-300">
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500/20 text-[10px]">
                   ✓
@@ -672,8 +676,8 @@ function ProviderOrderDrawer({
         </div>
 
         <p className="mt-6 rounded-xl border border-border bg-surface px-4 py-3 text-xs text-faint">
-          Le suivi complet du cycle de vie (statut en direct, tentatives, réconciliation) arrive avec le
-          journal des tentatives fournisseur. Le code livré n’est jamais affiché ici.
+          Full lifecycle tracking (live status, attempts, reconciliation) arrives with the provider
+          attempt log. The delivered code is never shown here.
         </p>
       </div>
     </div>
@@ -702,12 +706,12 @@ function RoutingSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-white">État du routage</h3>
+      <h3 className="text-sm font-semibold text-white">Fulfillment routing</h3>
       <div className="card p-5">
         <p className="text-sm text-muted">
-          Chaque variante possède <strong className="text-white">une seule source</strong> de stock
-          (inventaire local, saisie manuelle, ou Reloadly). Il n’existe pas de source de secours
-          automatique — l’architecture actuelle ne le supporte pas.
+          Each variant has <strong className="text-white">a single stock source</strong> (local
+          inventory, manual entry, or Reloadly). There is no automatic fallback — the current
+          architecture does not support it.
         </p>
         {linked.length > 0 && (
           <ul className="mt-4 space-y-2">
@@ -720,7 +724,7 @@ function RoutingSection() {
                   {m.productName} <span className="text-muted">· {m.variantName}</span>
                 </span>
                 <span className="text-xs text-muted">
-                  Source : <span className="font-medium text-accent">Reloadly</span> · Secours : aucun
+                  Source: <span className="font-medium text-accent">Reloadly</span> · Fallback: none
                 </span>
               </li>
             ))}
@@ -736,19 +740,18 @@ function RoutingSection() {
 function Phase2Notice({ sandbox }: { sandbox: boolean }) {
   return (
     <section className="card border-dashed p-5">
-      <h3 className="text-sm font-semibold text-white">Prochainement</h3>
+      <h3 className="text-sm font-semibold text-white">Coming soon</h3>
       <ul className="mt-2 space-y-1 text-sm text-muted">
         <li>
-          • <strong className="text-white">Tests Sandbox</strong> — exécuter une commande de test
-          {sandbox ? "" : " (uniquement en environnement Sandbox)"}
+          • <strong className="text-white">Sandbox tests</strong> — run a test order
+          {sandbox ? "" : " (Sandbox environment only)"}
         </li>
-        <li>• <strong className="text-white">Attention requise</strong> — file des échecs de fulfillment</li>
-        <li>• <strong className="text-white">Réessayer</strong> — relance sûre (anti double-achat)</li>
-        <li>• Métriques échecs / en attente / taux de réussite et événements Discord fournisseur</li>
+        <li>• <strong className="text-white">Attention required</strong> — fulfillment failure queue</li>
+        <li>• <strong className="text-white">Retry</strong> — safe re-run (no double purchase)</li>
+        <li>• Failure / pending / success-rate metrics and provider Discord events</li>
       </ul>
       <p className="mt-2 text-xs text-faint">
-        Ces fonctionnalités nécessitent le journal des tentatives fournisseur (phase 2, migration
-        additive).
+        These features require the provider attempt log (phase 2, additive migration).
       </p>
     </section>
   );

@@ -199,7 +199,9 @@ const NAV: NavGroup[] = [
       },
       {
         id: "suppliers",
-        label: "API fournisseur",
+        // Intentionally English — the Provider API page is kept in English by
+        // owner request (rest of the admin is French). Do not translate back.
+        label: "Provider API",
         icon: icon(
           <>
             <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5" />
