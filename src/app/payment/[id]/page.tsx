@@ -1,45 +1,48 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { formatMAD, formatDate } from "@/lib/format";
+import { formatMAD } from "@/lib/format";
+import { orderStatusLabel } from "@/lib/orderStatus";
 import {
-  orderStatusBadgeClass,
-  orderStatusLabel,
-  isDelivered,
-  isPendingPayment,
-  isPaymentSubmitted,
-  isPaymentConfirmed,
-} from "@/lib/orderStatus";
-import { getPaymentPageDataAction, submitPaymentAction } from "@/app/actions/payments";
+  getPaymentPageDataAction,
+  submitPaymentAction,
+  changePaymentMethodAction,
+} from "@/app/actions/payments";
 import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
-import PaymentBrandMark from "@/components/PaymentBrandMark";
 import PayPalButton from "@/components/PayPalButton";
+import RegionBadge from "@/components/RegionBadge";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
-import { paymentMethodDisplay } from "@/lib/paymentDisplay";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
-import type { PaymentMethodDTO } from "@/lib/dto";
+import type {
+  PaymentMethodDTO,
+  PaymentMethodType,
+  CustomerOrderDTO,
+} from "@/lib/dto";
 
 const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_PROOF_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "application/pdf"]);
 const ALLOWED_PROOF_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf"]);
+const COPY_RESET_MS = 1600;
 
-const METHOD_LABELS: Record<string, string> = {
+/** Customer-facing tab label per method type (design copy). */
+const TYPE_LABEL: Record<PaymentMethodType, string> = {
   bank: "Virement bancaire",
-  usdt: "USDT",
   paypal: "PayPal",
   card: "Carte bancaire",
-  test: "Paiement test",
+  crypto: "USDT / Crypto",
+  cash: "Espèces",
+  custom: "Autre",
 };
 
-export default function PaymentPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+const madWhole = (n: number) => new Intl.NumberFormat("en-US").format(n);
+const madExact = (n: number) =>
+  new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+export default function PaymentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [data, setData] = useState<PaymentPageDataDTO | null>(null);
   const [ready, setReady] = useState(false);
@@ -49,8 +52,8 @@ export default function PaymentPage({
     try {
       const result = await getPaymentPageDataAction(id);
       setData(result);
-    } catch (error) {
-      console.error("[payment] Failed to load order", error);
+    } catch (err) {
+      console.error("[payment] Failed to load order", err);
       setError("Impossible de charger la commande. Veuillez réessayer.");
     } finally {
       setReady(true);
@@ -76,20 +79,14 @@ export default function PaymentPage({
   }, [shouldPoll, refresh]);
 
   if (!ready) {
-    return (
-      <div className="container-page py-20 text-center text-muted">
-        Chargement...
-      </div>
-    );
+    return <div className="container-page py-24 text-center text-muted">Chargement…</div>;
   }
 
   if (!data) {
     return (
       <div className="container-page py-10">
         <div className="card grid place-items-center px-6 py-20 text-center">
-          <p className="text-lg font-semibold text-white">
-            {error || "Commande introuvable"}
-          </p>
+          <p className="text-lg font-semibold text-white">{error || "Commande introuvable"}</p>
           <Link href="/products" className="btn-primary mt-6">
             Parcourir le catalogue
           </Link>
@@ -98,175 +95,81 @@ export default function PaymentPage({
     );
   }
 
-  const { order, config } = data;
-  const method = resolveOrderPaymentMethod(order.paymentMethod, config.methods);
-  const whatsapp = config.support.whatsappNumber.replace(/\s/g, "");
-  const publicOrderNumber = getPublicOrderLabel(order);
-
   return (
-    <div className="container-page py-10">
-      <div className="mx-auto max-w-3xl space-y-6">
-        {/* ── Header ── */}
-        <section className="rounded-[22px] border border-border-strong bg-gradient-to-b from-surface2 to-base px-5 py-8 text-center shadow-card sm:px-8">
-          <span className={`chip ${orderStatusBadgeClass(order.status)}`}>
-            {statusLabel(order.status)}
-          </span>
-          <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">
-            {pageTitle(order.status)}
-          </h1>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            {pageSubtitle(order.status)}
-          </p>
-
-          <dl className="mx-auto mt-6 grid max-w-xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
-            <VaultMeta label="Commande" value={publicOrderNumber} />
-            <VaultMeta label="Méthode" value={method?.name ?? METHOD_LABELS[order.paymentMethod] ?? "Paiement"} />
-            <VaultMeta label="Total" value={formatMAD(order.totalMad)} />
-            <VaultMeta label="Date" value={formatDate(order.createdAt)} />
-          </dl>
-        </section>
-
-        {/* ── Status-specific content ── */}
-        {isPendingPayment(order.status) && (
-          <PendingPaymentSection
-            orderId={order.id}
-            totalMad={order.totalMad}
-            method={method}
-            onSubmitted={refresh}
-            setError={setError}
-          />
-        )}
-
-        {isPaymentSubmitted(order.status) && (
-          <StatusCard
-            icon="🔍"
-            iconClass="border-blue-500/30 bg-blue-500/15"
-            title="Confirmation en cours"
-            body="Votre paiement a été soumis. Nous le vérifions actuellement. Cette page se met à jour automatiquement."
-          />
-        )}
-
-        {order.status === "payment_confirmed" && !isDelivered(order.status) && (
-          <StatusCard
-            icon="✓"
-            iconClass="border-accent/30 bg-accent/15"
-            iconTextClass="text-accent"
-            title="Paiement confirmé"
-            body="Votre paiement a été confirmé. Votre commande est prête pour livraison. Nous vous livrerons votre code très bientôt."
-          />
-        )}
-
-        {order.status === "payment_issue" && (
-          <IssueCard
-            title="Une erreur semble s'être produite lors du paiement."
-            body="Veuillez contacter notre support WhatsApp avec votre numéro de commande."
-            whatsapp={whatsapp}
-            orderReference={publicOrderNumber}
-          />
-        )}
-
-        {order.status === "rejected" && (
-          <IssueCard
-            title="Paiement refusé"
-            body="Nous n'avons pas pu confirmer votre paiement. Veuillez nous contacter sur WhatsApp avec votre numéro de commande."
-            whatsapp={whatsapp}
-            orderReference={publicOrderNumber}
-            isRejection
-          />
-        )}
-
-        {isDelivered(order.status) && (
-          <DeliveredSection order={order} />
-        )}
-
-        {error && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        {/* ── Order summary ── */}
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold text-white">Articles commandés</h2>
-          <ul className="mt-3 space-y-2">
-            {order.items.map((item) => (
-              <li key={item.id} className="flex justify-between text-sm text-muted">
-                <span>{item.name} <span className="text-muted/70">×{item.quantity}</span></span>
-                <span className="text-white">{formatMAD(item.unitPriceMad * item.quantity)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ── Support footer ── */}
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold text-white">Besoin d'aide?</h2>
-          <p className="mt-1 text-xs text-muted">
-            Contactez le support avec votre numéro de commande:{" "}
-            <span className="font-mono text-text">{publicOrderNumber}</span>
-          </p>
-          <a
-            href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai une question concernant ma commande ${publicOrderNumber}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-green-400 hover:text-green-300"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden>
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.13.553 4.13 1.523 5.874L0 24l6.305-1.494A11.924 11.924 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.655-.51-5.18-1.396l-.367-.219-3.811.902.962-3.706-.24-.381A10 10 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-            </svg>
-            WhatsApp Support
-          </a>
-        </section>
-
-        <div className="flex gap-3">
-          <Link href="/account" className="btn-ghost flex-1 text-center">
-            Mes commandes
-          </Link>
-          <Link href="/products" className="btn-primary flex-1 text-center">
-            Retour à la boutique
-          </Link>
-        </div>
-      </div>
-    </div>
+    <PaymentExperience
+      data={data}
+      refresh={refresh}
+      error={error}
+      setError={setError}
+    />
   );
 }
 
-// ─── Section: Pending Payment ─────────────────────────────────────────────────
+// ─── Main experience ──────────────────────────────────────────────────────────
 
-function PendingPaymentSection({
-  orderId,
-  totalMad,
-  method,
-  onSubmitted,
+function PaymentExperience({
+  data,
+  refresh,
+  error,
   setError,
 }: {
-  orderId: string;
-  totalMad: number;
-  method: PaymentMethodDTO | null;
-  onSubmitted: () => void;
+  data: PaymentPageDataDTO;
+  refresh: () => void;
+  error: string;
   setError: (e: string) => void;
 }) {
+  const { order, config } = data;
+  const { getProduct } = useProductCatalog();
+
+  const publicOrderNumber = getPublicOrderLabel(order);
+  const whatsapp = config.support.whatsappNumber.replace(/\s/g, "");
+  const total = order.totalMad;
+
+  // Customer-visible methods (already active + visible + not archived).
+  const methods = config.methods;
+  const currentMethod = resolveOrderPaymentMethod(order.paymentMethod, methods);
+  const orderedTypes = useMemo(() => {
+    const seen: PaymentMethodType[] = [];
+    for (const m of methods) if (!seen.includes(m.type)) seen.push(m.type);
+    return seen;
+  }, [methods]);
+  const activeType: PaymentMethodType | null =
+    currentMethod?.type ?? orderedTypes[0] ?? null;
+  const methodsOfActiveType = methods.filter((m) => m.type === activeType);
+  const activeMethod = currentMethod ?? methodsOfActiveType[0] ?? null;
+
+  // ── Local state ──
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofError, setProofError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [switching, setSwitching] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalChecked, setModalChecked] = useState(false);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const display = method ? paymentMethodDisplay(method) : null;
-  const details = method?.details ?? {};
-  const comingSoon = method?.type === "card" && Boolean(details.comingSoon);
-  const proofRequired = method?.proofRequired ?? true;
-  const configurationError = !method
-    ? "Ce mode de paiement n'est pas disponible pour le moment. Contactez l'administrateur."
-    : "";
-  const methodUnavailable = !method || comingSoon;
-  const proofMissing = proofRequired && !proofFile;
-  const disabledReason =
-    (methodUnavailable ? configurationError : "") ||
-    proofError ||
-    (proofMissing ? "Veuillez sélectionner un justificatif de paiement avant de continuer." : "");
-  const submitDisabled = submitting || Boolean(disabledReason);
+  const status = order.status;
+  const isPending = status === "pending_payment";
+  const isSubmitted = status === "payment_submitted";
+  const isConfirmed = status === "payment_confirmed";
+  const isDelivered = status === "delivered";
+  const isRejected = status === "rejected" || status === "payment_issue";
+
+  const details = activeMethod?.details ?? {};
+  const comingSoon = activeMethod?.type === "card" && Boolean(details.comingSoon);
+  const automated =
+    activeMethod?.type === "paypal" || (activeMethod?.type === "card" && !comingSoon);
+  const proofRequired = activeMethod?.proofRequired ?? true;
+  const proofBased = isPending && !automated && !comingSoon && !chooserOpen;
+
+  function copy(key: string, value: string) {
+    copyToClipboard(value).catch(() => {});
+    setCopied(key);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(null), COPY_RESET_MS);
+  }
 
   function handleProofChange(file: File | null) {
     if (!file) {
@@ -274,45 +177,36 @@ function PendingPaymentSection({
       setProofError("");
       return;
     }
-
-    const error = validateProofFile(file);
-    if (error) {
+    const err = validateProofFile(file);
+    if (err) {
       setProofFile(null);
-      setProofError(error);
-      setError(error);
-      if (fileRef.current) fileRef.current.value = "";
+      setProofError(err);
+      setError(err);
       return;
     }
-
     setProofFile(file);
     setProofError("");
     setError("");
   }
 
   async function handleSubmit() {
-    if (methodUnavailable) {
-      setError(configurationError);
-      return;
-    }
-    if (proofError) {
-      setError(proofError);
-      return;
-    }
+    if (!activeMethod || automated || comingSoon) return;
     if (proofRequired && !proofFile) {
-      setError("Veuillez télécharger un justificatif de paiement.");
+      setError("Veuillez ajouter votre justificatif de paiement avant de continuer.");
       return;
     }
+    if (proofError) return;
     setError("");
     setSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append("orderId", orderId);
+      fd.append("orderId", order.id);
       if (proofFile) fd.append("proof", proofFile);
       const res = await submitPaymentAction(fd);
-      if (!res.ok) {
-        setError(res.error ?? "Une erreur est survenue.");
-      } else {
-        onSubmitted();
+      if (!res.ok) setError(res.error ?? "Une erreur est survenue.");
+      else {
+        setProofFile(null);
+        refresh();
       }
     } catch {
       setError("Une erreur est survenue. Veuillez réessayer.");
@@ -321,257 +215,1308 @@ function PendingPaymentSection({
     }
   }
 
-  async function copyAddress(text: string) {
+  async function changeMethod(methodId: string) {
+    if (!methodId || methodId === activeMethod?.id) return;
+    setSwitching(true);
+    setError("");
     try {
-      await copyToClipboard(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("[payment] Copy failed", error);
-      setCopied(false);
-      setError("Impossible de copier automatiquement. Sélectionnez le texte manuellement.");
+      const res = await changePaymentMethodAction(order.id, methodId);
+      if (!res.ok) setError(res.error ?? "Modification impossible.");
+      else {
+        setProofFile(null);
+        setProofError("");
+        refresh();
+      }
+    } catch {
+      setError("Modification impossible. Veuillez réessayer.");
+    } finally {
+      setSwitching(false);
     }
   }
 
-  if (!method || !display) {
-    return (
-      <div className="card p-5 text-sm text-muted">
-        {configurationError || "Ce mode de paiement n'est pas disponible pour le moment."}
-      </div>
-    );
-  }
+  // Header status badge — amber while pending, blue once submitted.
+  const submitted = isSubmitted || isConfirmed || isDelivered;
+  const badge = submitted
+    ? { label: isPending ? "En attente" : orderStatusLabel(status), color: "#8DB4FF", bg: "rgba(62,123,250,0.12)", bd: "rgba(62,123,250,0.28)", dot: "#3E7BFA" }
+    : isRejected
+      ? { label: orderStatusLabel(status), color: "#E8A6A6", bg: "rgba(224,92,92,0.12)", bd: "rgba(224,92,92,0.28)", dot: "#E05C5C" }
+      : { label: "En attente de paiement", color: "#F0C466", bg: "rgba(232,168,56,0.12)", bd: "rgba(232,168,56,0.26)", dot: "#E8A838" };
+
+  const headerInstruction = isRejected
+    ? "Nous n’avons pas pu valider votre paiement. Consultez le détail ci-dessous."
+    : isConfirmed || isDelivered
+      ? "Votre paiement a été confirmé. Votre commande est en cours de préparation."
+      : isSubmitted
+        ? "Votre justificatif est en cours de vérification."
+        : activeMethod?.type === "bank"
+          ? `Effectuez un virement de ${formatMAD(total)} vers le compte ci-dessous, puis ajoutez votre justificatif.`
+          : "Réglez le montant ci-dessous pour valider votre commande.";
+
+  const product = order.items[0] ? getProduct(order.items[0].productId) : undefined;
 
   return (
-    <div className="space-y-4">
-      {/* Instructions header */}
-      {method.customerNote && (
-        <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm text-muted">
-          {method.customerNote}
-        </div>
-      )}
-
-      {/* ── Bank Transfer ── */}
-      {method.type === "bank" && (
-        <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <PaymentBrandMark display={display} active className="h-11 w-11 shrink-0" />
-            <div>
-              <h2 className="text-base font-semibold text-white">{display.displayName}</h2>
-              <p className="text-xs text-muted">{display.subtitle}</p>
+    <div className="container-page py-8 min-[900px]:py-10">
+      <div className={`mx-auto max-w-[1130px] ${proofBased ? "pb-[104px] min-[900px]:pb-0" : ""}`}>
+        {/* ── Compact payment header ── */}
+        <div className="mb-6 flex flex-col gap-6 rounded-[18px] border border-white/[0.08] bg-[linear-gradient(150deg,#12141B,#0C0D12)] p-6 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-7 min-[900px]:p-7">
+          <div className="min-w-0 flex-1">
+            <span
+              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold"
+              style={{ color: badge.color, background: badge.bg, borderColor: badge.bd }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: badge.dot }} />
+              {badge.label}
+            </span>
+            <h1 className="mt-3 text-[26px] font-semibold leading-tight tracking-[-0.025em] text-white min-[900px]:text-[29px]">
+              {isRejected ? "Vérifions votre paiement" : "Finalisez votre paiement"}
+            </h1>
+            <p className="mt-1.5 max-w-[440px] text-sm leading-relaxed text-[#9A9FAB]">
+              {headerInstruction}
+            </p>
+            <div className="mt-4 flex items-center gap-6">
+              <Meta label="Commande">
+                <span className="font-mono">{publicOrderNumber}</span>
+              </Meta>
+              <span className="h-8 w-px bg-white/[0.09]" />
+              <Meta label="Méthode">{activeMethod?.name ?? "Paiement"}</Meta>
             </div>
           </div>
-
-          <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
-            {details.bankName && <BankField label="Banque" value={details.bankName} />}
-            {details.accountHolder && <BankField label="Titulaire" value={details.accountHolder} />}
-            {details.rib && <BankField label="RIB" value={details.rib} copyable />}
-            {details.iban && <BankField label="IBAN" value={details.iban} copyable />}
-            {details.accountNumber && <BankField label="Compte" value={details.accountNumber} copyable />}
-            {details.swift && <BankField label="SWIFT/BIC" value={details.swift} />}
-            <BankField label="Montant" value={formatMAD(totalMad)} />
-            <BankField label="Motif" value="E-commerce" copyable />
-          </dl>
-
-          {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
-        </div>
-      )}
-
-      {/* ── Crypto ── */}
-      {method.type === "crypto" && (
-        <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <PaymentBrandMark display={display} active className="h-11 w-11 shrink-0" />
-            <div>
-              <h2 className="text-base font-semibold text-white">{display.displayName}</h2>
-              <p className="text-xs text-muted">{display.subtitle}</p>
+          <div className="shrink-0 rounded-[15px] border border-[rgba(62,123,250,0.22)] bg-[#0A0B0F] p-5 shadow-[inset_0_0_0_1px_rgba(62,123,250,0.04),0_0_40px_rgba(62,123,250,0.08)] min-[900px]:w-[250px]">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8DA6E8]">
+              Montant à payer
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-mono text-[44px] font-semibold leading-none tracking-[-0.03em] text-white">
+                {madWhole(total)}
+              </span>
+              <span className="text-lg font-semibold text-[#9FB8FF]">MAD</span>
+            </div>
+            <div className="mt-3 flex items-center gap-2 border-t border-white/[0.07] pt-3 text-[12.5px] text-[#7A808C]">
+              <LockIcon /> Vérification manuelle sécurisée
             </div>
           </div>
+        </div>
 
-          {details.walletAddress ? (
-            <div className="mt-4 space-y-3">
-              <div>
-                <p className="mb-1 text-xs uppercase tracking-wide text-faint">
-                  Adresse {details.network ?? ""}
-                </p>
-                <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2">
-                  <code className="min-w-0 flex-1 break-all text-xs text-white">
-                    {details.walletAddress}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => copyAddress(details.walletAddress ?? "")}
-                    className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-white"
-                  >
-                    {copied ? "Copié ✓" : "Copier"}
-                  </button>
+        {/* ── 3-step orientation (bank flow only) ── */}
+        {isPending && !chooserOpen && activeMethod?.type === "bank" && (
+          <StepRow proofSelected={!!proofFile} />
+        )}
+
+        {/* ── Two-column layout ── */}
+        <div className="grid grid-cols-1 items-start gap-6 min-[900px]:grid-cols-[1fr_356px]">
+          {/* MAIN */}
+          <div className="flex flex-col gap-5">
+            {/* Method tabs */}
+            {isPending && !chooserOpen && orderedTypes.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto rounded-[13px] border border-white/[0.07] bg-[#0B0C10] p-[5px] [scrollbar-width:none] [&::-webkit-scrollbar]:h-0">
+                {orderedTypes.map((type) => {
+                  const on = type === activeType;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      disabled={switching}
+                      onClick={() => {
+                        const first = methods.find((m) => m.type === type);
+                        if (first) changeMethod(first.id);
+                      }}
+                      className={`h-[38px] shrink-0 whitespace-nowrap rounded-[9px] px-4 text-[13px] font-semibold transition-all disabled:opacity-60 min-[900px]:flex-1 min-[900px]:px-0 ${
+                        on
+                          ? "bg-[#1C2536] text-[#EAF0FF] shadow-[inset_0_0_0_1px_rgba(62,123,250,0.35)]"
+                          : "bg-transparent text-[#8A909C] hover:text-[#C4C9D4]"
+                      }`}
+                    >
+                      {TYPE_LABEL[type]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Chooser (after change-method confirmation) */}
+            {isPending && chooserOpen && (
+              <div className="overflow-hidden rounded-2xl border border-[rgba(62,123,250,0.3)] bg-[#0F1015] shadow-[0_0_0_3px_rgba(62,123,250,0.1)]">
+                <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
+                  <h2 className="text-base font-semibold text-white">
+                    Choisissez un nouveau moyen de paiement
+                  </h2>
+                  <p className="mt-0.5 text-[13px] text-[#9A9FAB]">
+                    Votre commande {publicOrderNumber} reste inchangée — seul le mode de paiement change.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3 px-[22px] pb-[22px] pt-4">
+                  {methods.map((m) => {
+                    const on = m.id === activeMethod?.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        disabled={switching}
+                        onClick={() => {
+                          setChooserOpen(false);
+                          changeMethod(m.id);
+                        }}
+                        className={`flex items-center gap-3 rounded-[13px] bg-[#0B0C10] p-[15px] text-left transition disabled:opacity-60 ${
+                          on
+                            ? "border-[1.5px] border-accent shadow-[0_0_0_3px_rgba(62,123,250,0.14)]"
+                            : "border border-white/[0.09] hover:border-white/20"
+                        }`}
+                      >
+                        <MethodGlyph method={m} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[14.5px] font-semibold text-white">{m.name}</div>
+                          <div className="mt-0.5 truncate text-[12.5px] text-[#9A9FAB]">
+                            {m.subtitle || TYPE_LABEL[m.type]}
+                          </div>
+                        </div>
+                        <span
+                          className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full ${
+                            on ? "bg-accent" : "border-[1.6px] border-white/20"
+                          }`}
+                        >
+                          {on && <CheckIcon className="h-3 w-3" stroke="#fff" width={3} />}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <dl className="grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
-                {details.network && <BankField label="Réseau" value={details.network} />}
-                <BankField label="Montant" value={`${(totalMad / 10).toFixed(2)} USDT`} />
-                <BankField label="Motif" value="E-commerce" />
-              </dl>
-              {details.minAmountNote && <p className="text-sm text-muted">{details.minAmountNote}</p>}
-              {details.instructions && <p className="text-sm text-muted">{details.instructions}</p>}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-muted">
-              L&apos;adresse de portefeuille est en cours de configuration. Veuillez réessayer ultérieurement.
-            </p>
-          )}
-        </div>
-      )}
+            )}
 
-      {/* ── PayPal (automated) ── */}
-      {method.type === "paypal" && (
-        <div className="card p-5 text-center">
-          <PaymentBrandMark display={display} active className="mx-auto h-14 w-14" />
-          <h2 className="mt-4 text-base font-semibold text-white">{display.displayName}</h2>
-          <p className="mt-2 text-sm text-muted">
-            Payez {formatMAD(totalMad)} en toute sécurité avec PayPal. Confirmation automatique.
-          </p>
-          <div className="mx-auto mt-5 max-w-xs">
-            <PayPalButton
-              orderId={orderId}
-              currency={details.paypalCurrency || "USD"}
-              onConfirmed={onSubmitted}
-              onError={setError}
-            />
-          </div>
-          {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
-        </div>
-      )}
+            {/* Pending modules */}
+            {isPending && !chooserOpen && activeMethod && (
+              <>
+                {activeMethod.type === "bank" && (
+                  <BankModule
+                    method={activeMethod}
+                    methodsOfType={methodsOfActiveType}
+                    total={total}
+                    reference={publicOrderNumber}
+                    copied={copied}
+                    onCopy={copy}
+                    switching={switching}
+                    onSelectMethod={changeMethod}
+                  />
+                )}
 
-      {/* ── Card (automated, via PayPal guest checkout) ── */}
-      {method.type === "card" && (
-        <div className="card p-5 text-center">
-          {details.comingSoon ? (
-            <>
-              <PaymentBrandMark display={display} active className="mx-auto mb-3 h-14 w-14" />
-              <h2 className="mt-4 text-base font-semibold text-white">
-                {details.statusNote || "Paiement par carte bientôt disponible."}
-              </h2>
-              <p className="mt-2 text-sm text-muted">Veuillez choisir une autre méthode de paiement.</p>
-            </>
-          ) : (
-            <>
-              <PaymentBrandMark display={display} active className="mx-auto h-14 w-14" />
-              <h2 className="mt-4 text-base font-semibold text-white">{display.displayName}</h2>
-              <p className="mt-2 text-sm text-muted">
-                Payez {formatMAD(totalMad)} en toute sécurité par carte. Confirmation automatique.
-              </p>
-              <div className="mx-auto mt-5 max-w-xs">
-                <PayPalButton
-                  orderId={orderId}
-                  currency={details.paypalCurrency || "USD"}
-                  fundingSource="card"
-                  onConfirmed={onSubmitted}
-                  onError={setError}
-                />
+                {activeMethod.type === "crypto" && (
+                  <CryptoModule
+                    method={activeMethod}
+                    methodsOfType={methodsOfActiveType}
+                    total={total}
+                    copied={copied}
+                    onCopy={copy}
+                    switching={switching}
+                    onSelectMethod={changeMethod}
+                  />
+                )}
+
+                {activeMethod.type === "paypal" && (
+                  <PayPalModule
+                    orderId={order.id}
+                    method={activeMethod}
+                    total={total}
+                    onConfirmed={refresh}
+                    onError={setError}
+                  />
+                )}
+
+                {activeMethod.type === "card" && (
+                  <CardModule
+                    orderId={order.id}
+                    method={activeMethod}
+                    total={total}
+                    onConfirmed={refresh}
+                    onError={setError}
+                  />
+                )}
+
+                {(activeMethod.type === "cash" || activeMethod.type === "custom") && (
+                  <GenericModule method={activeMethod} />
+                )}
+
+                {/* Proof upload + submit */}
+                {proofBased && (
+                  <ProofCard
+                    proofFile={proofFile}
+                    proofRequired={proofRequired}
+                    submitting={submitting}
+                    proofError={proofError}
+                    onChange={handleProofChange}
+                    onSubmit={handleSubmit}
+                  />
+                )}
+              </>
+            )}
+
+            {/* Awaiting verification */}
+            {isSubmitted && <AwaitingCard order={order} onTrack={() => refresh()} />}
+
+            {/* Confirmed */}
+            {isConfirmed && (
+              <TerminalConfirmed order={order} total={total} publicOrderNumber={publicOrderNumber} />
+            )}
+
+            {/* Rejected / issue */}
+            {isRejected && (
+              <TerminalRejected
+                total={total}
+                whatsapp={whatsapp}
+                orderReference={publicOrderNumber}
+              />
+            )}
+
+            {/* Delivered */}
+            {isDelivered && <DeliveredSection order={order} />}
+
+            {error && (
+              <div className="rounded-xl border border-[rgba(224,92,92,0.3)] bg-[rgba(224,92,92,0.08)] px-4 py-3 text-sm text-[#E8A6A6]">
+                {error}
               </div>
-              {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── Cash / Custom ── */}
-      {(method.type === "cash" || method.type === "custom") && (
-        <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <PaymentBrandMark display={display} active className="h-11 w-11 shrink-0" />
-            <div>
-              <h2 className="text-base font-semibold text-white">
-                {details.customLabel || display.displayName}
-              </h2>
-              <p className="text-xs text-muted">{display.subtitle}</p>
-            </div>
-          </div>
-          {details.fields && details.fields.length > 0 && (
-            <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
-              {details.fields.map((field, i) => (
-                <BankField key={`${field.label}-${i}`} label={field.label} value={field.value} />
-              ))}
-            </dl>
-          )}
-          {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
-        </div>
-      )}
-
-      {/* ── Proof Upload + Submit (not for card or PayPal, which confirms automatically) ── */}
-      {method.type !== "card" && method.type !== "paypal" && (
-        <div className="card p-5">
-          <h2 className="text-sm font-semibold text-white">
-            {proofRequired ? "Justificatif de paiement (requis)" : "Justificatif de paiement (optionnel)"}
-          </h2>
-          <p className="mt-1 text-xs text-muted">
-            Formats acceptés: PNG, JPG, JPEG, PDF · Taille max: 5 Mo
-          </p>
-
-          <div className="mt-3">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
-              className="hidden"
-              onChange={(e) => handleProofChange(e.target.files?.[0] ?? null)}
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface px-4 py-4 text-sm text-muted hover:border-accent/50 hover:text-white"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5" aria-hidden>
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
-              </svg>
-              {proofFile ? proofFile.name : "Sélectionner un fichier"}
-            </button>
-            {proofError && <p className="mt-2 text-xs text-red-300">{proofError}</p>}
-            {proofFile && (
-              <button
-                type="button"
-                onClick={() => {
-                  setProofFile(null);
-                  setProofError("");
-                  if (fileRef.current) fileRef.current.value = "";
-                }}
-                className="mt-1 text-xs text-muted hover:text-red-400"
-              >
-                Supprimer le fichier
-              </button>
             )}
           </div>
 
-          <button
-            type="button"
+          {/* SIDEBAR */}
+          <div className="flex flex-col gap-4 min-[900px]:sticky min-[900px]:top-5">
+            {/* Order summary — collapsible on mobile */}
+            <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+              <button
+                type="button"
+                onClick={() => setSummaryOpen((v) => !v)}
+                className="flex w-full items-center justify-between border-b border-white/[0.06] px-[18px] py-[15px] text-left min-[900px]:pointer-events-none"
+              >
+                <h2 className="text-[14.5px] font-semibold text-white">Récapitulatif</h2>
+                <span className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-[#7A808C]">{publicOrderNumber}</span>
+                  <ChevronIcon
+                    className={`h-[18px] w-[18px] text-[#7A808C] transition-transform min-[900px]:hidden ${
+                      summaryOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </span>
+              </button>
+              <div className={`${summaryOpen ? "block" : "hidden"} min-[900px]:block`}>
+                <div className="px-[18px] py-4">
+                  {order.items.map((item, i) => {
+                    const p = getProduct(item.productId);
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center gap-3 pb-[15px] ${
+                          i < order.items.length - 1 ? "" : "border-b border-white/[0.06]"
+                        }`}
+                      >
+                        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[11px] border border-white/[0.06]">
+                          {p ? (
+                            <ProductArt
+                              category={p.category}
+                              imageUrl={p.imageUrl}
+                              label={p.name}
+                              className="h-full w-full"
+                            />
+                          ) : (
+                            <div className="h-full w-full bg-[linear-gradient(145deg,#1d2638,#0d1017)]" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13.5px] font-semibold text-white">
+                            {item.name}
+                          </div>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-[#7A808C]">
+                            <span className="truncate font-mono">{item.productId}</span>
+                            {p?.region && <RegionBadge code={p.region} variant="chip" size="micro" />}
+                            <span className="shrink-0">· Qté {item.quantity}</span>
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-mono text-[13px] text-white">
+                          {formatMAD(item.unitPriceMad * item.quantity)}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex justify-between pt-[13px] text-[13px]">
+                    <span className="text-[#9A9FAB]">Sous-total</span>
+                    <span className="font-mono text-white">{formatMAD(total)}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/[0.06] pb-[13px] pt-[9px] text-[13px]">
+                    <span className="text-[#9A9FAB]">Livraison</span>
+                    <span className="font-medium text-[#5BC98C]">Numérique · gratuit</span>
+                  </div>
+                  <div className="flex items-baseline justify-between pt-[13px]">
+                    <span className="text-sm font-semibold text-white">Total</span>
+                    <span className="font-mono text-xl font-semibold text-white">
+                      {formatMAD(total)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 rounded-[10px] border border-white/[0.06] bg-[#0B0C10] px-3 py-2.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#646A77]">
+                      Méthode
+                    </span>
+                    <span className="ml-auto text-[13px] font-semibold text-white">
+                      {activeMethod?.name ?? "Paiement"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* After your payment */}
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1015] px-[18px] py-4">
+              <div className="mb-2.5 flex items-center gap-2">
+                <ClockIcon className="h-4 w-4 text-[#9FB8FF]" />
+                <h2 className="text-sm font-semibold text-white">Après votre paiement</h2>
+              </div>
+              <p className="text-[12.5px] leading-relaxed text-[#9A9FAB]">
+                Après l’envoi de votre justificatif, votre paiement sera vérifié. Vous pourrez suivre
+                le statut de votre commande depuis cette page et votre espace client.
+              </p>
+            </div>
+
+            {/* Change method */}
+            {isPending && methods.length > 1 && (
+              <div className="rounded-2xl border border-white/[0.06] bg-[#0B0C10] px-[18px] py-4">
+                <div className="text-[13px] font-semibold text-white">
+                  Vous préférez payer autrement ?
+                </div>
+                <p className="mb-3 mt-0.5 text-xs text-[#7A808C]">
+                  Possible tant que vous n’avez pas encore payé.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalChecked(false);
+                    setModalOpen(true);
+                  }}
+                  className="flex h-[42px] w-full items-center justify-center gap-2 rounded-[11px] border border-white/[0.12] bg-[#12141B] text-[13px] font-medium text-[#C4C9D4] hover:bg-[#171b26]"
+                >
+                  <SwitchIcon className="h-3.5 w-3.5" />
+                  Changer de moyen de paiement
+                </button>
+              </div>
+            )}
+
+            {/* Support */}
+            <a
+              href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(
+                `Bonjour, j'ai une question concernant ma commande ${publicOrderNumber}`,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-[#0F1015] px-[18px] py-3.5 text-[#C4C9D4]"
+            >
+              <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-[rgba(62,123,250,0.1)]">
+                <ChatIcon className="h-4 w-4 text-[#9FB8FF]" />
+              </span>
+              <div className="flex-1">
+                <div className="text-[13px] font-semibold text-white">
+                  Un problème avec votre paiement ?
+                </div>
+                <div className="text-xs text-[#9FB8FF]">Contacter le support</div>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky mobile CTA */}
+      {proofBased && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-[linear-gradient(180deg,rgba(7,8,9,0),#070809_30%)] px-4 pb-5 pt-3 min-[900px]:hidden">
+          <SubmitButton
+            enabled={!!proofFile && !submitting}
+            submitting={submitting}
             onClick={handleSubmit}
-            disabled={submitDisabled}
-            className="btn-primary mt-5 w-full disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting ? "Envoi en cours..." : "J'ai effectué le paiement"}
-          </button>
-          {disabledReason && !submitting && (
-            <p className="mt-2 text-xs text-muted">{disabledReason}</p>
-          )}
+          />
+          <div className="mt-1.5 text-center text-[11px] text-[#646A77]">
+            {proofFile ? "Vérification sous ~30 min" : "Ajoutez un justificatif pour continuer"}
+          </div>
+        </div>
+      )}
+
+      {/* Change-method modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(4,5,7,0.72)] p-6 backdrop-blur-[4px]">
+          <div className="w-full max-w-[440px] overflow-hidden rounded-[18px] border border-white/10 bg-[#12141B] shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
+            <div className="px-[26px] pb-5 pt-6">
+              <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(232,168,56,0.28)] bg-[rgba(232,168,56,0.13)]">
+                <AlertIcon className="h-5 w-5 text-[#E8A838]" />
+              </span>
+              <h2 className="text-lg font-semibold text-white">Changer de moyen de paiement ?</h2>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-[#9A9FAB]">
+                Avant de continuer, confirmez que vous n’avez pas encore effectué ni envoyé de
+                paiement avec le moyen de paiement actuel.
+              </p>
+              <button
+                type="button"
+                onClick={() => setModalChecked((v) => !v)}
+                className={`mt-[18px] flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left ${
+                  modalChecked
+                    ? "border border-[rgba(62,123,250,0.3)] bg-[rgba(62,123,250,0.08)]"
+                    : "border border-white/10 bg-[#0B0C10]"
+                }`}
+              >
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-md ${
+                    modalChecked ? "border-[1.5px] border-accent bg-accent" : "border-[1.6px] border-white/25"
+                  }`}
+                >
+                  {modalChecked && <CheckIcon className="h-3 w-3" stroke="#fff" width={3} />}
+                </span>
+                <span className="text-[13px] leading-snug text-[#EAF0FF]">
+                  Je confirme ne pas avoir encore effectué ni envoyé le paiement.
+                </span>
+              </button>
+            </div>
+            <div className="flex gap-3 px-[26px] pb-[22px] pt-4">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="h-[46px] flex-1 rounded-xl border border-white/[0.12] bg-transparent text-sm font-semibold text-[#C4C9D4] hover:bg-white/[0.04]"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={!modalChecked}
+                onClick={() => {
+                  if (!modalChecked) return;
+                  setModalOpen(false);
+                  setChooserOpen(true);
+                }}
+                className={`h-[46px] flex-1 rounded-xl text-sm font-semibold transition ${
+                  modalChecked
+                    ? "bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-white shadow-[0_8px_22px_rgba(62,123,250,0.3)]"
+                    : "cursor-not-allowed border border-white/[0.08] bg-[#161821] text-[#5A606D]"
+                }`}
+              >
+                Confirmer et changer
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Section: Delivered ───────────────────────────────────────────────────────
+// ─── Header helpers ─────────────────────────────────────────────────────────
 
-function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
+function Meta({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#646A77]">
+        {label}
+      </div>
+      <div className="text-[14.5px] font-semibold text-white">{children}</div>
+    </div>
+  );
+}
+
+function StepRow({ proofSelected }: { proofSelected: boolean }) {
+  const steps = [
+    { n: 1, label: "Choisissez votre banque", state: "done" as const },
+    { n: 2, label: "Effectuez le virement", state: proofSelected ? ("done" as const) : ("active" as const) },
+    { n: 3, label: "Envoyez votre justificatif", state: proofSelected ? ("active" as const) : ("todo" as const) },
+  ];
+  return (
+    <>
+      {/* Mobile: slim 3-segment progress bar */}
+      <div className="mb-4 flex items-center gap-1.5 min-[900px]:hidden">
+        {steps.map((s) => (
+          <span
+            key={s.n}
+            className="h-1 flex-1 rounded-full"
+            style={{
+              background:
+                s.state === "done" ? "#5BC98C" : s.state === "active" ? "#3E7BFA" : "rgba(255,255,255,0.1)",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Desktop: 3 orientation cards */}
+      <div className="mb-6 hidden items-stretch gap-3 min-[900px]:flex">
+        {steps.map((s) => {
+        const done = s.state === "done";
+        const active = s.state === "active";
+        const wrap = done
+          ? "border-[rgba(91,201,140,0.26)] bg-[rgba(91,201,140,0.07)]"
+          : active
+            ? "border-[rgba(62,123,250,0.26)] bg-[rgba(62,123,250,0.07)]"
+            : "border-white/[0.07] bg-[#0B0C10]";
+        return (
+          <div
+            key={s.n}
+            className={`flex flex-1 items-center gap-3 rounded-[13px] border p-[13px_15px] ${wrap}`}
+          >
+            <span
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full font-mono text-[13px] font-semibold ${
+                done
+                  ? "bg-[#5BC98C] text-[#0A1F14]"
+                  : active
+                    ? "bg-accent text-white shadow-[0_0_0_4px_rgba(62,123,250,0.16)]"
+                    : "border-[1.5px] border-white/[0.18] text-[#646A77]"
+              }`}
+            >
+              {done ? <CheckIcon className="h-3 w-3" stroke="#fff" width={3} /> : s.n}
+            </span>
+            <div className="min-w-0">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[#646A77]">
+                Étape {s.n}
+              </div>
+              <div
+                className={`text-[13.5px] font-semibold leading-tight ${
+                  done || active ? "text-white" : "text-[#7A808C]"
+                }`}
+              >
+                {s.label}
+              </div>
+            </div>
+          </div>
+        );
+        })}
+      </div>
+    </>
+  );
+}
+
+// ─── Bank module ────────────────────────────────────────────────────────────
+
+function BankModule({
+  method,
+  methodsOfType,
+  total,
+  reference,
+  copied,
+  onCopy,
+  switching,
+  onSelectMethod,
+}: {
+  method: PaymentMethodDTO;
+  methodsOfType: PaymentMethodDTO[];
+  total: number;
+  reference: string;
+  copied: string | null;
+  onCopy: (key: string, value: string) => void;
+  switching: boolean;
+  onSelectMethod: (id: string) => void;
+}) {
+  const d = method.details;
+  const rows: { key: string; label: string; value: string; mono?: boolean }[] = [];
+  if (d.accountHolder) rows.push({ key: "tit", label: "Titulaire", value: d.accountHolder });
+  if (d.rib || d.accountNumber)
+    rows.push({ key: "rib", label: "RIB / Numéro de compte", value: (d.rib || d.accountNumber)!, mono: true });
+  if (d.iban) rows.push({ key: "iban", label: "IBAN", value: d.iban, mono: true });
+  if (d.swift) rows.push({ key: "swift", label: "SWIFT / BIC", value: d.swift, mono: true });
+  rows.push({ key: "motif", label: "Motif / Référence", value: reference, mono: true });
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
+        <h2 className="text-base font-semibold text-white">
+          {methodsOfType.length > 1 ? "Choisissez votre banque" : method.name}
+        </h2>
+        <p className="mt-1 text-[13px] text-[#9A9FAB]">
+          Virez le montant exact vers {methodsOfType.length > 1 ? "l’un des comptes" : "le compte"} ci-dessous.
+        </p>
+      </div>
+
+      {methodsOfType.length > 1 && (
+        <div className="flex gap-2.5 overflow-x-auto px-[22px] pb-1.5 pt-[18px] [scrollbar-width:none] [&::-webkit-scrollbar]:h-0">
+          {methodsOfType.map((m) => {
+            const on = m.id === method.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={switching}
+                onClick={() => onSelectMethod(m.id)}
+                className={`flex shrink-0 items-center gap-2.5 rounded-xl bg-[#0B0C10] p-[11px_14px] transition disabled:opacity-60 ${
+                  on
+                    ? "border-[1.5px] border-accent shadow-[0_0_0_3px_rgba(62,123,250,0.13)]"
+                    : "border border-white/[0.09] hover:border-white/20"
+                }`}
+              >
+                <MethodGlyph method={m} small />
+                <span className="whitespace-nowrap text-[13.5px] font-semibold text-white">
+                  {m.name}
+                </span>
+                <span
+                  className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full ${
+                    on ? "bg-accent" : "border-[1.5px] border-white/[0.18]"
+                  }`}
+                >
+                  {on && <CheckIcon className="h-2.5 w-2.5" stroke="#fff" width={3.2} />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="px-[22px] pb-[22px] pt-3.5">
+        {/* Amount hero */}
+        <div className="mb-3.5 flex items-center gap-4 rounded-[13px] border border-[rgba(62,123,250,0.22)] bg-[rgba(62,123,250,0.07)] p-[16px_18px]">
+          <div className="flex-1">
+            <div className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-[#8DA6E8]">
+              Montant exact à virer
+            </div>
+            <div className="font-mono text-[26px] font-semibold tracking-[-0.01em] text-white">
+              {madExact(total)} MAD
+            </div>
+          </div>
+          <CopyButton
+            copied={copied === "amt"}
+            onClick={() => onCopy("amt", madExact(total))}
+            variant="primary"
+          />
+        </div>
+
+        {/* Detail rows */}
+        <div className="overflow-hidden rounded-[13px] border border-white/[0.06] bg-[#0B0C10]">
+          {rows.map((r, i) => (
+            <div
+              key={r.key}
+              className={`flex items-center gap-3 p-[13px_16px] ${
+                i < rows.length - 1 ? "border-b border-white/[0.05]" : ""
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-[#646A77]">
+                  {r.label}
+                </div>
+                <div
+                  className={`overflow-hidden text-ellipsis text-sm font-medium text-white ${
+                    r.mono ? "font-mono" : ""
+                  } max-[899px]:whitespace-nowrap min-[900px]:break-all`}
+                >
+                  {r.value}
+                </div>
+              </div>
+              <CopyButton copied={copied === r.key} onClick={() => onCopy(r.key, r.value)} />
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-3.5 flex items-start gap-2 text-[12.5px] text-[#7A808C]">
+          <InfoIcon className="mt-px h-3.5 w-3.5 shrink-0" />
+          {method.customerNote ||
+            "Une fois le virement effectué, ajoutez votre justificatif ci-dessous pour lancer la vérification."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Crypto module ──────────────────────────────────────────────────────────
+
+function CryptoModule({
+  method,
+  methodsOfType,
+  total,
+  copied,
+  onCopy,
+  switching,
+  onSelectMethod,
+}: {
+  method: PaymentMethodDTO;
+  methodsOfType: PaymentMethodDTO[];
+  total: number;
+  copied: string | null;
+  onCopy: (key: string, value: string) => void;
+  switching: boolean;
+  onSelectMethod: (id: string) => void;
+}) {
+  const d = method.details;
+  const usdt = madExact(total / 10);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
+        <h2 className="text-base font-semibold text-white">{method.name || "Paiement en USDT"}</h2>
+        <p className="mt-1 text-[13px] text-[#9A9FAB]">
+          Envoyez le montant exact à l’adresse ci-dessous.
+          {methodsOfType.length > 1 ? " Sélectionnez d’abord le réseau." : ""}
+        </p>
+      </div>
+      <div className="px-[22px] pb-[22px] pt-5">
+        {methodsOfType.length > 1 && (
+          <div className="mb-4 flex gap-2">
+            {methodsOfType.map((m) => {
+              const on = m.id === method.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  disabled={switching}
+                  onClick={() => onSelectMethod(m.id)}
+                  className={`h-[38px] flex-1 rounded-[10px] text-[13px] font-semibold transition disabled:opacity-60 ${
+                    on
+                      ? "border-[1.5px] border-accent bg-[rgba(62,123,250,0.12)] text-[#EAF0FF]"
+                      : "border border-white/[0.09] bg-[#0B0C10] text-[#8A909C]"
+                  }`}
+                >
+                  {m.details.network || m.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {d.walletAddress ? (
+          <div className="flex items-center gap-[18px]">
+            <div className="grid h-[120px] w-[120px] shrink-0 place-items-center rounded-xl bg-white p-2.5">
+              <div
+                className="h-full w-full rounded-[3px]"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(90deg,#000 0 6px,#fff 6px 12px),repeating-linear-gradient(0deg,#000 0 6px,transparent 6px 12px)",
+                }}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="mb-3 flex gap-4">
+                <div>
+                  <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-[#646A77]">
+                    Montant
+                  </div>
+                  <div className="font-mono text-lg font-semibold text-white">{usdt} USDT</div>
+                </div>
+                {d.network && (
+                  <div>
+                    <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-[#646A77]">
+                      Réseau
+                    </div>
+                    <div className="text-[15px] font-semibold text-white">{d.network}</div>
+                  </div>
+                )}
+              </div>
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-[#646A77]">
+                Adresse du portefeuille
+              </div>
+              <div className="flex items-center gap-2.5 rounded-[11px] border border-white/[0.07] bg-[#0B0C10] px-3.5 py-[11px]">
+                <span className="min-w-0 flex-1 break-all font-mono text-[13px] text-white">
+                  {d.walletAddress}
+                </span>
+                <CopyButton copied={copied === "wallet"} onClick={() => onCopy("wallet", d.walletAddress!)} />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-[#9A9FAB]">
+            L’adresse de portefeuille est en cours de configuration. Veuillez réessayer ultérieurement.
+          </p>
+        )}
+        <div className="mt-4 flex items-center gap-2.5 rounded-[11px] border border-[rgba(232,168,56,0.22)] bg-[rgba(232,168,56,0.07)] px-3.5 py-3 text-[12.5px] text-[#F0C466]">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-[#E8A838] shadow-[0_0_8px_#E8A838]" />
+          En attente de la transaction — la commande se confirme après 1 confirmation réseau.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PayPal module ──────────────────────────────────────────────────────────
+
+function PayPalModule({
+  orderId,
+  method,
+  total,
+  onConfirmed,
+  onError,
+}: {
+  orderId: string;
+  method: PaymentMethodDTO;
+  total: number;
+  onConfirmed: () => void;
+  onError: (m: string) => void;
+}) {
+  const currency = method.details.paypalCurrency || "USD";
+  const rate = method.details.paypalExchangeRate || 10;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
+        <h2 className="text-base font-semibold text-white">Payer avec PayPal</h2>
+        <p className="mt-1 text-[13px] text-[#9A9FAB]">
+          Vous serez redirigé vers PayPal pour régler en toute sécurité.
+        </p>
+      </div>
+      <div className="p-[22px]">
+        <AmountPanel total={total} convertedLabel={`${madExact(total / rate)} ${currency}`} />
+        <div className="mt-4">
+          <PayPalButton orderId={orderId} currency={currency} onConfirmed={onConfirmed} onError={onError} />
+        </div>
+        <p className="mt-3 flex items-center justify-center gap-2 text-[12.5px] text-[#646A77]">
+          <LockIcon /> La confirmation est automatique après le paiement PayPal.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Card module ────────────────────────────────────────────────────────────
+
+function CardModule({
+  orderId,
+  method,
+  total,
+  onConfirmed,
+  onError,
+}: {
+  orderId: string;
+  method: PaymentMethodDTO;
+  total: number;
+  onConfirmed: () => void;
+  onError: (m: string) => void;
+}) {
+  const currency = method.details.paypalCurrency || "USD";
+  if (method.details.comingSoon) {
+    return (
+      <div className="rounded-2xl border border-white/[0.07] bg-[#0F1015] p-6 text-center">
+        <h2 className="text-base font-semibold text-white">
+          {method.details.statusNote || "Paiement par carte bientôt disponible."}
+        </h2>
+        <p className="mt-2 text-sm text-[#9A9FAB]">Veuillez choisir une autre méthode de paiement.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
+        <h2 className="text-base font-semibold text-white">Payer par carte bancaire</h2>
+        <p className="mt-1 text-[13px] text-[#9A9FAB]">
+          Visa, Mastercard, CMI — traité en toute sécurité via PayPal.
+        </p>
+      </div>
+      <div className="p-[22px]">
+        <AmountPanel total={total} cardMarks />
+        <div className="mt-4">
+          <PayPalButton
+            orderId={orderId}
+            currency={currency}
+            fundingSource="card"
+            onConfirmed={onConfirmed}
+            onError={onError}
+          />
+        </div>
+        <div className="mt-4 flex items-start gap-2.5 rounded-[11px] border border-white/[0.07] bg-[#0B0C10] px-3.5 py-3">
+          <PopupIcon className="mt-px h-4 w-4 shrink-0 text-[#9FB8FF]" />
+          <div>
+            <div className="mb-0.5 text-[12.5px] font-semibold text-[#EAF0FF]">
+              Une fenêtre sécurisée PayPal va s’ouvrir
+            </div>
+            <div className="text-[12.5px] leading-relaxed text-[#9A9FAB]">
+              Saisissez les informations de votre carte dans la fenêtre, sans quitter cette page. La
+              confirmation est automatique après le paiement.
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 flex items-center justify-center gap-2 text-xs text-[#646A77]">
+          <LockIcon /> Vos données de carte ne transitent jamais par ghost.ma.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function GenericModule({ method }: { method: PaymentMethodDTO }) {
+  const d = method.details;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
+        <h2 className="text-base font-semibold text-white">{d.customLabel || method.name}</h2>
+        <p className="mt-1 text-[13px] text-[#9A9FAB]">{method.subtitle}</p>
+      </div>
+      {d.fields && d.fields.length > 0 && (
+        <div className="m-[22px] overflow-hidden rounded-[13px] border border-white/[0.06] bg-[#0B0C10]">
+          {d.fields.map((f, i) => (
+            <div
+              key={`${f.label}-${i}`}
+              className={`flex items-center justify-between p-[13px_16px] ${
+                i < d.fields!.length - 1 ? "border-b border-white/[0.05]" : ""
+              }`}
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#646A77]">
+                {f.label}
+              </span>
+              <span className="font-mono text-sm text-white">{f.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {d.instructions && <p className="px-[22px] pb-[22px] text-sm text-[#9A9FAB]">{d.instructions}</p>}
+    </div>
+  );
+}
+
+function AmountPanel({
+  total,
+  convertedLabel,
+  cardMarks,
+}: {
+  total: number;
+  convertedLabel?: string;
+  cardMarks?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-[13px] border border-[rgba(62,123,250,0.22)] bg-[rgba(62,123,250,0.07)] p-[16px_18px]">
+      <div className="flex-1">
+        <div className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-[#8DA6E8]">
+          Montant
+        </div>
+        <div className="font-mono text-[26px] font-semibold text-white">{madExact(total)} MAD</div>
+      </div>
+      {convertedLabel && (
+        <div className="text-right">
+          <div className="text-[11.5px] text-[#646A77]">≈ à débiter</div>
+          <div className="text-sm font-semibold text-[#9FB8FF]">{convertedLabel}</div>
+        </div>
+      )}
+      {cardMarks && (
+        <div className="flex shrink-0 gap-1.5">
+          <span className="flex h-[30px] items-center rounded-[7px] bg-white px-2.5 text-xs font-bold italic text-[#1A1F71]">
+            VISA
+          </span>
+          <span className="relative flex h-[30px] w-[38px] items-center justify-center rounded-[7px] bg-white">
+            <span className="absolute left-1.5 h-[15px] w-[15px] rounded-full bg-[#EB001B]" />
+            <span className="absolute right-1.5 h-[15px] w-[15px] rounded-full bg-[#F79E1B] opacity-90" />
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Proof card ─────────────────────────────────────────────────────────────
+
+function ProofCard({
+  proofFile,
+  proofRequired,
+  submitting,
+  proofError,
+  onChange,
+  onSubmit,
+}: {
+  proofFile: File | null;
+  proofRequired: boolean;
+  submitting: boolean;
+  proofError: string;
+  onChange: (f: File | null) => void;
+  onSubmit: () => void;
+}) {
+  const enabled = (!proofRequired || !!proofFile) && !submitting;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
+        <h2 className="text-base font-semibold text-white">Justificatif de paiement</h2>
+        <p className="mt-1 text-[13px] text-[#9A9FAB]">
+          Ajoutez une capture d’écran ou un reçu de votre virement.
+        </p>
+      </div>
+      <div className="px-[22px] pb-[22px] pt-5">
+        {!proofFile ? (
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[14px] border-[1.5px] border-dashed border-white/[0.16] bg-[#0B0C10] px-5 py-[34px] text-center">
+            <span className="grid h-[52px] w-[52px] place-items-center rounded-[14px] border border-[rgba(62,123,250,0.24)] bg-[rgba(62,123,250,0.1)]">
+              <UploadIcon className="h-[22px] w-[22px] text-[#9FB8FF]" />
+            </span>
+            <div>
+              <div className="mb-0.5 text-[14.5px] font-semibold text-white">
+                Glissez votre fichier ici, ou <span className="text-[#9FB8FF]">parcourez</span>
+              </div>
+              <div className="text-[12.5px] text-[#646A77]">PNG, JPG, JPEG ou PDF — 5 Mo max.</div>
+            </div>
+            <input
+              type="file"
+              accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+              className="hidden"
+              onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        ) : (
+          <div className="flex items-center gap-3.5 rounded-[13px] border border-[rgba(91,201,140,0.3)] bg-[#0B0C10] p-[15px_16px]">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[11px] bg-[rgba(91,201,140,0.13)]">
+              <FileIcon className="h-5 w-5 text-[#5BC98C]" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-white">{proofFile.name}</div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-[#5BC98C]">
+                <CheckIcon className="h-3 w-3" stroke="#5BC98C" width={2.6} />
+                {formatFileSize(proofFile.size)} · prêt à envoyer
+              </div>
+            </div>
+            <label className="flex h-[34px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[9px] border border-white/[0.12] bg-[#12141B] px-3 text-[12.5px] font-medium text-[#C4C9D4]">
+              Remplacer
+              <input
+                type="file"
+                accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+                className="hidden"
+                onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] border border-[rgba(224,92,92,0.28)] bg-[rgba(224,92,92,0.08)] text-[#E88B8B]"
+              aria-label="Supprimer le fichier"
+            >
+              <CloseIcon className="h-[15px] w-[15px]" />
+            </button>
+          </div>
+        )}
+
+        {proofError && <p className="mt-2 text-xs text-[#E8A6A6]">{proofError}</p>}
+
+        {/* Desktop inline CTA */}
+        <div className="mt-4 hidden min-[900px]:block">
+          <SubmitButton enabled={enabled} submitting={submitting} onClick={onSubmit} />
+        </div>
+        <p className="mt-3 hidden text-center text-xs text-[#646A77] min-[900px]:block">
+          {proofFile
+            ? "Le justificatif sera vérifié manuellement — généralement sous 30 minutes."
+            : "Ajoutez d’abord votre justificatif de virement pour activer l’envoi."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SubmitButton({
+  enabled,
+  submitting,
+  onClick,
+}: {
+  enabled: boolean;
+  submitting: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!enabled}
+      className={`flex h-[50px] w-full items-center justify-center gap-2.5 rounded-[13px] text-[15px] font-semibold transition-all min-[900px]:h-[50px] ${
+        enabled
+          ? "bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-white shadow-[0_10px_26px_rgba(62,123,250,0.35)]"
+          : "cursor-not-allowed border border-white/[0.08] bg-[#161821] text-[#5A606D]"
+      }`}
+    >
+      <span>{submitting ? "Envoi en cours…" : "Envoyer le justificatif"}</span>
+      {!submitting && enabled && <SendIcon className="h-[17px] w-[17px]" />}
+    </button>
+  );
+}
+
+// ─── Awaiting verification ──────────────────────────────────────────────────
+
+function AwaitingCard({ order, onTrack }: { order: CustomerOrderDTO; onTrack: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[rgba(62,123,250,0.22)] bg-[#0F1015]">
+      <div className="border-b border-white/[0.06] px-[26px] py-7 text-center">
+        <span className="mb-4 inline-flex h-[60px] w-[60px] items-center justify-center rounded-full border border-[rgba(62,123,250,0.3)] bg-[rgba(62,123,250,0.12)]">
+          <ClockIcon className="h-7 w-7 text-[#9FB8FF]" />
+        </span>
+        <h2 className="text-xl font-semibold text-white">Justificatif envoyé</h2>
+        <p className="mx-auto mt-1.5 max-w-[400px] text-sm text-[#9A9FAB]">
+          Votre paiement est en cours de vérification. Vous n’avez rien d’autre à faire — nous
+          confirmons votre commande dès validation.
+        </p>
+        {order.proofUploaded && (
+          <div className="mt-4 inline-flex items-center gap-2.5 rounded-[11px] border border-white/[0.07] bg-[#0B0C10] px-3.5 py-2.5">
+            <FileIcon className="h-4 w-4 text-[#5BC98C]" />
+            <span className="text-[13px] font-medium text-white">Justificatif reçu</span>
+          </div>
+        )}
+      </div>
+      <div className="px-[26px] py-[22px]">
+        <TimelineStep
+          state="done"
+          title="Justificatif reçu"
+          sub="Il y a quelques instants"
+          connector="done"
+        />
+        <TimelineStep
+          state="active"
+          title="Vérification en cours"
+          sub="Généralement sous 30 minutes (heures ouvrables)"
+          connector="pending"
+        />
+        <TimelineStep
+          state="todo"
+          title="Commande confirmée"
+          sub="Reçu par e-mail et sur votre espace client"
+        />
+        <div className="mt-4 flex items-center gap-2.5 rounded-[11px] border border-[rgba(62,123,250,0.16)] bg-[rgba(62,123,250,0.06)] px-3.5 py-3 text-[12.5px] text-[#9FB8FF]">
+          <InfoIcon className="h-[15px] w-[15px] shrink-0 text-[#9FB8FF]" />
+          Inutile de renvoyer un justificatif. Suivez l’avancement depuis cette page à tout moment.
+        </div>
+        <Link
+          href={`/order/${order.publicOrderPathSegment}`}
+          onClick={onTrack}
+          className="mt-3.5 flex h-11 w-full items-center justify-center rounded-[11px] border border-white/10 bg-[#12141B] text-[13.5px] font-medium text-[#C4C9D4] hover:bg-[#171b26]"
+        >
+          Suivre ma commande
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function TimelineStep({
+  state,
+  title,
+  sub,
+  connector,
+}: {
+  state: "done" | "active" | "todo";
+  title: string;
+  sub: string;
+  connector?: "done" | "pending";
+}) {
+  return (
+    <div className="flex gap-3.5">
+      <div className="flex flex-col items-center">
+        <span
+          className={`grid h-[26px] w-[26px] place-items-center rounded-full ${
+            state === "done"
+              ? "bg-[#5BC98C]"
+              : state === "active"
+                ? "border-[1.5px] border-accent bg-[rgba(62,123,250,0.15)]"
+                : "border-[1.5px] border-white/[0.14]"
+          }`}
+        >
+          {state === "done" ? (
+            <CheckIcon className="h-3 w-3" stroke="#0A1F14" width={3} />
+          ) : state === "active" ? (
+            <span className="h-2 w-2 rounded-full bg-accent" />
+          ) : (
+            <span className="h-2 w-2 rounded-full bg-white/[0.14]" />
+          )}
+        </span>
+        {connector && (
+          <span
+            className="min-h-[22px] w-0.5 flex-1"
+            style={{
+              background:
+                connector === "done"
+                  ? "linear-gradient(#5BC98C,rgba(62,123,250,0.5))"
+                  : "rgba(255,255,255,0.08)",
+            }}
+          />
+        )}
+      </div>
+      <div className={connector ? "pb-5" : ""}>
+        <div
+          className={`text-sm font-semibold ${
+            state === "active" ? "text-[#9FB8FF]" : state === "todo" ? "text-[#7A808C]" : "text-white"
+          }`}
+        >
+          {title}
+        </div>
+        <div className="text-[12.5px] text-[#646A77]">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Terminal states ────────────────────────────────────────────────────────
+
+function TerminalConfirmed({
+  order,
+  total,
+  publicOrderNumber,
+}: {
+  order: CustomerOrderDTO;
+  total: number;
+  publicOrderNumber: string;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[rgba(91,201,140,0.28)] bg-[#0F1015]">
+      <div className="p-[26px] text-center">
+        <span className="mb-4 inline-flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[rgba(91,201,140,0.36)] bg-[rgba(91,201,140,0.14)]">
+          <CheckIcon className="h-7 w-7" stroke="#5BC98C" width={2.4} />
+        </span>
+        <h2 className="text-[19px] font-semibold text-white">Paiement confirmé</h2>
+        <p className="mx-auto mt-1.5 max-w-[340px] text-[13.5px] text-[#9A9FAB]">
+          Votre paiement de <strong className="text-white">{formatMAD(total)}</strong> a été vérifié.
+          Votre commande {publicOrderNumber} est en cours de préparation.
+        </p>
+      </div>
+      <div className="px-[22px] pb-[22px]">
+        <Link
+          href={`/order/${order.publicOrderPathSegment}`}
+          className="flex h-[46px] w-full items-center justify-center rounded-xl bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-sm font-semibold text-white"
+        >
+          Voir ma commande
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function TerminalRejected({
+  total,
+  whatsapp,
+  orderReference,
+}: {
+  total: number;
+  whatsapp: string;
+  orderReference: string;
+}) {
+  const contactHref = (msg: string) =>
+    `https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[rgba(224,92,92,0.3)] bg-[#0F1015]">
+      <div className="px-6 pb-[18px] pt-6">
+        <div className="mb-3.5 flex items-center gap-3.5">
+          <span className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-xl border border-[rgba(224,92,92,0.3)] bg-[rgba(224,92,92,0.13)]">
+            <AlertCircleIcon className="h-[21px] w-[21px] text-[#E88B8B]" />
+          </span>
+          <div>
+            <h2 className="text-[17px] font-semibold text-white">Justificatif à renvoyer</h2>
+            <p className="mt-0.5 text-[13px] text-[#9A9FAB]">
+              Nous n’avons pas pu vérifier votre paiement.
+            </p>
+          </div>
+        </div>
+        <div className="rounded-[11px] border border-[rgba(224,92,92,0.2)] bg-[rgba(224,92,92,0.07)] px-3.5 py-3 text-[12.5px] leading-relaxed text-[#E8A6A6]">
+          Vérifiez que le montant du justificatif correspond bien à {formatMAD(total)}, puis renvoyez
+          une image lisible du virement via le support.
+        </div>
+      </div>
+      <div className="flex gap-3 px-[22px] pb-[22px]">
+        <a
+          href={contactHref(`Bonjour, j'ai un problème avec ma commande ${orderReference}`)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-[46px] flex-1 items-center justify-center rounded-xl border border-white/[0.12] bg-transparent text-[13.5px] font-semibold text-[#C4C9D4] hover:bg-white/[0.04]"
+        >
+          Contacter le support
+        </a>
+        <a
+          href={contactHref(`Bonjour, je souhaite renvoyer un justificatif pour ma commande ${orderReference}`)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-[46px] flex-1 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-[13.5px] font-semibold text-white"
+        >
+          Renvoyer un justificatif
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── Delivered ──────────────────────────────────────────────────────────────
+
+function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
   const { getProduct } = useProductCatalog();
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-4 text-center">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full border border-green-500/30 bg-green-500/15 text-xl">
-          ✓
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-[rgba(91,201,140,0.28)] bg-[#0F1015] px-4 py-5 text-center">
+        <span className="mx-auto inline-flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[rgba(91,201,140,0.36)] bg-[rgba(91,201,140,0.14)]">
+          <CheckIcon className="h-7 w-7" stroke="#5BC98C" width={2.4} />
         </span>
-        <p className="mt-3 font-semibold text-green-300">Commande livrée</p>
-        <p className="mt-1 text-sm text-muted">
-          Vos codes sont disponibles ci-dessous. Révélez-les uniquement lorsque vous êtes prêt à les utiliser.
+        <p className="mt-3 text-[19px] font-semibold text-white">Commande livrée</p>
+        <p className="mx-auto mt-1 max-w-[360px] text-sm text-[#9A9FAB]">
+          Vos codes sont disponibles ci-dessous. Révélez-les uniquement lorsque vous êtes prêt à les
+          utiliser.
         </p>
       </div>
 
@@ -581,36 +1526,36 @@ function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
           .filter((d) => d.orderItemId === item.id || (!d.orderItemId && d.productId === item.productId))
           .map((d) => d.code)
           .filter(Boolean);
-
         return (
-          <article key={item.id} className="card overflow-hidden">
-            <div className="grid gap-5 p-5 sm:grid-cols-[100px_1fr]">
+          <article
+            key={item.id}
+            className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]"
+          >
+            <div className="grid gap-4 p-5 sm:grid-cols-[92px_1fr]">
               {product && (
                 <ProductArt
                   category={product.category}
                   imageUrl={product.imageUrl}
                   label={product.name}
-                  className="h-20 w-full rounded-xl sm:h-20 sm:w-24"
+                  className="h-20 w-full rounded-xl sm:w-[92px]"
                 />
               )}
               <div>
                 <h3 className="font-semibold text-white">{item.name}</h3>
-                <p className="mt-1 text-sm text-muted">Quantité: {item.quantity}</p>
+                <p className="mt-1 text-sm text-[#9A9FAB]">Quantité : {item.quantity}</p>
               </div>
             </div>
-            <div className="border-t border-border bg-base/35 p-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-faint">
-                Code{codes.length > 1 ? "s" : ""} livrés
+            <div className="border-t border-white/[0.06] bg-black/20 p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#646A77]">
+                Code{codes.length > 1 ? "s" : ""} livré{codes.length > 1 ? "s" : ""}
               </p>
               <div className="space-y-3">
                 {codes.length === 0 ? (
-                  <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
+                  <p className="rounded-xl border border-white/[0.06] bg-[#0B0C10] px-4 py-3 text-sm text-[#9A9FAB]">
                     Aucun code n’a encore été attribué à cette commande.
                   </p>
                 ) : (
-                  codes.map((code, i) => (
-                    <CopyCode key={`${code}-${i}`} code={code} index={i} />
-                  ))
+                  codes.map((code, i) => <CopyCode key={`${code}-${i}`} code={code} index={i} />)
                 )}
               </div>
             </div>
@@ -621,119 +1566,88 @@ function DeliveredSection({ order }: { order: PaymentPageDataDTO["order"] }) {
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Shared pieces ──────────────────────────────────────────────────────────
 
-function StatusCard({
-  icon,
-  iconClass,
-  iconTextClass,
-  title,
-  body,
-}: {
-  icon: string;
-  iconClass: string;
-  iconTextClass?: string;
-  title: string;
-  body: string;
-}) {
+function MethodGlyph({ method, small }: { method: PaymentMethodDTO; small?: boolean }) {
+  const size = small ? "h-[34px] w-[34px] text-[11px] rounded-[9px]" : "h-[42px] w-[42px] text-base rounded-[11px]";
+  const initials = (method.initials || method.name.slice(0, 3)).slice(0, 4).toUpperCase();
   return (
-    <div className="card p-6 text-center">
-      <span className={`mx-auto grid h-14 w-14 place-items-center rounded-full border text-2xl ${iconClass} ${iconTextClass ?? ""}`}>
-        {icon}
-      </span>
-      <p className="mt-4 font-semibold text-white">{title}</p>
-      <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
-    </div>
-  );
-}
-
-function IssueCard({
-  title,
-  body,
-  whatsapp,
-  orderReference,
-  isRejection,
-}: {
-  title: string;
-  body: string;
-  whatsapp: string;
-  orderReference: string;
-  isRejection?: boolean;
-}) {
-  return (
-    <div className={`card p-6 text-center border ${isRejection ? "border-red-500/30 bg-red-500/5" : "border-orange-500/30 bg-orange-500/5"}`}>
-      <span className={`mx-auto grid h-14 w-14 place-items-center rounded-full border text-2xl ${isRejection ? "border-red-500/30 bg-red-500/15" : "border-orange-500/30 bg-orange-500/15"}`}>
-        {isRejection ? "✕" : "⚠"}
-      </span>
-      <p className="mt-4 font-semibold text-white">{title}</p>
-      <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
-      <a
-        href={`https://wa.me/${whatsapp}?text=Bonjour, j'ai un problème avec ma commande ${orderReference}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-700"
-      >
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden>
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.13.553 4.13 1.523 5.874L0 24l6.305-1.494A11.924 11.924 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.655-.51-5.18-1.396l-.367-.219-3.811.902.962-3.706-.24-.381A10 10 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-        </svg>
-        Contacter le support WhatsApp
-      </a>
-    </div>
-  );
-}
-
-function BankField({
-  label,
-  value,
-  copyable,
-}: {
-  label: string;
-  value: string;
-  copyable?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  return (
-    <div className="flex items-center justify-between bg-surface px-4 py-3">
-      <div>
-        <dt className="text-[11px] uppercase tracking-wide text-faint">{label}</dt>
-        <dd className="mt-0.5 font-mono text-sm text-white">{value}</dd>
-      </div>
-      {copyable && (
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              await copyToClipboard(value);
-              setCopyFailed(false);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            } catch {
-              setCopied(false);
-              setCopyFailed(true);
-              setTimeout(() => setCopyFailed(false), 2000);
-            }
-          }}
-          className="shrink-0 text-xs text-muted hover:text-white"
-        >
-          {copyFailed ? "Erreur copie" : copied ? "Copié ✓" : "Copier"}
-        </button>
+    <span
+      className={`grid shrink-0 place-items-center overflow-hidden border border-white/[0.08] font-mono font-semibold text-[#EAF0FF] ${size}`}
+      style={{
+        background: `linear-gradient(145deg, ${method.accentColor}, ${method.accentColor}22)`,
+      }}
+    >
+      {method.logoUrl && method.logoType !== "initials" ? (
+        <img src={method.logoUrl} alt={method.name} className="h-full w-full object-contain p-1.5" />
+      ) : (
+        initials
       )}
-    </div>
+    </span>
   );
+}
+
+function CopyButton({
+  copied,
+  onClick,
+  variant = "ghost",
+}: {
+  copied: boolean;
+  onClick: () => void;
+  variant?: "ghost" | "primary";
+}) {
+  const base =
+    "flex shrink-0 items-center justify-center gap-1.5 font-semibold transition-all";
+  if (variant === "primary") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${base} h-10 rounded-[11px] px-4 text-[13.5px] ${
+          copied
+            ? "border border-[rgba(91,201,140,0.4)] bg-[rgba(91,201,140,0.16)] text-[#5BC98C]"
+            : "bg-accent text-white shadow-[0_6px_16px_rgba(62,123,250,0.3)]"
+        }`}
+      >
+        <CopyIcon className="h-3.5 w-3.5" />
+        {copied ? "Copié" : "Copier"}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${base} rounded-[9px] text-[12.5px] max-[899px]:h-10 max-[899px]:w-10 min-[900px]:h-[34px] min-[900px]:px-3 ${
+        copied
+          ? "border border-[rgba(91,201,140,0.4)] bg-[rgba(91,201,140,0.14)] text-[#5BC98C]"
+          : "border border-white/10 bg-[#12141B] text-[#9FB8FF]"
+      }`}
+      aria-label="Copier"
+    >
+      <CopyIcon className="h-3.5 w-3.5" />
+      <span className="max-[899px]:hidden">{copied ? "Copié" : "Copier"}</span>
+    </button>
+  );
+}
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1048576) return `${Math.round(bytes / 1024)} Ko`;
+  return `${(bytes / 1048576).toFixed(1)} Mo`;
 }
 
 function validateProofFile(file: File): string {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   const validType = file.type ? ALLOWED_PROOF_TYPES.has(file.type) : ALLOWED_PROOF_EXTENSIONS.has(extension);
   const validExtension = ALLOWED_PROOF_EXTENSIONS.has(extension);
-
   if (!validType || !validExtension) {
     return "Format non supporté. Utilisez PNG, JPG, JPEG ou PDF.";
   }
   if (file.size > MAX_PROOF_SIZE_BYTES) {
-    return "Fichier trop volumineux. Taille maximum: 5 Mo.";
+    return "Fichier trop volumineux. Taille maximum : 5 Mo.";
   }
   return "";
 }
@@ -743,7 +1657,6 @@ async function copyToClipboard(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     return;
   }
-
   const textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.setAttribute("readonly", "");
@@ -751,51 +1664,149 @@ async function copyToClipboard(text: string): Promise<void> {
   textarea.style.left = "-9999px";
   document.body.appendChild(textarea);
   textarea.select();
-  const copied = document.execCommand("copy");
+  const ok = document.execCommand("copy");
   document.body.removeChild(textarea);
-  if (!copied) throw new Error("Clipboard copy failed");
+  if (!ok) throw new Error("Clipboard copy failed");
 }
 
-function VaultMeta({ label, value }: { label: string; value: string }) {
+// ─── Icons (Feather-style, stroke ~1.9) ─────────────────────────────────────
+
+type IconProps = { className?: string };
+
+function svgProps(className?: string) {
+  return {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    className,
+    "aria-hidden": true,
+  };
+}
+
+function CheckIcon({ className, stroke = "currentColor", width = 2 }: { className?: string; stroke?: string; width?: number }) {
   return (
-    <div className="bg-surface px-4 py-3">
-      <dt className="text-[11px] uppercase tracking-wide text-faint">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-semibold text-white">{value}</dd>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 }
-
-function statusLabel(status: string): string {
-  return orderStatusLabel(status);
+function CopyIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
 }
-
-function pageTitle(status: string): string {
-  switch (status) {
-    case "pending_payment": return "Effectuez votre paiement";
-    case "payment_submitted": return "Vérification en cours";
-    case "payment_confirmed": return "Paiement confirmé";
-    case "payment_issue": return "Problème de paiement";
-    case "rejected": return "Paiement refusé";
-    case "delivered": return "Vos codes sont prêts";
-    default: return "Statut de commande";
-  }
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="#5BC98C" strokeWidth={2} className="h-3.5 w-3.5 shrink-0" aria-hidden>
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
 }
-
-function pageSubtitle(status: string): string {
-  switch (status) {
-    case "pending_payment":
-      return "Suivez les instructions ci-dessous pour finaliser votre paiement.";
-    case "payment_submitted":
-      return "Votre paiement a été soumis. Nous le vérifions actuellement. Cette page se met à jour automatiquement.";
-    case "payment_confirmed":
-      return "Votre paiement a été confirmé. Votre commande est en cours de préparation.";
-    case "payment_issue":
-      return "Une anomalie a été détectée. Contactez notre support pour résoudre le problème.";
-    case "rejected":
-      return "Nous n'avons pas pu valider votre paiement.";
-    case "delivered":
-      return "Vos codes sont disponibles ci-dessous. Affichez-les uniquement lorsque vous êtes prêt à les utiliser.";
-    default:
-      return "";
-  }
+function ClockIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+function InfoIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}
+function UploadIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+function FileIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+function CloseIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+function SendIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  );
+}
+function ChevronIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+function SwitchIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <polyline points="17 1 21 5 17 9" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  );
+}
+function ChatIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function AlertIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+function AlertCircleIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+function PopupIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
 }

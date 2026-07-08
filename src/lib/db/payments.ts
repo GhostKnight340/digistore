@@ -9,7 +9,7 @@ import {
 } from "@/lib/email/send-email";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import { publicOrderReference } from "@/lib/db/orders";
-import { getAdminPaymentMethods } from "@/lib/db/paymentMethods";
+import { getAdminPaymentMethods, getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import {
   notifyPaymentStatusChange,
@@ -130,6 +130,55 @@ export async function submitPayment(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Soumission impossible.",
+    };
+  }
+}
+
+/**
+ * Customer: switch a still-unpaid order to a different payment method. Only
+ * allowed while the order is `pending_payment` (before any proof/capture), and
+ * only to a method the customer can actually see (active + visible + not
+ * archived). Records a `method_change` payment event for the order timeline.
+ */
+export async function changeOrderPaymentMethod(
+  orderId: string,
+  methodId: string,
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) return { ok: false, error: "Commande introuvable." };
+  if (order.status !== "pending_payment") {
+    return { ok: false, error: "Le mode de paiement ne peut plus être modifié." };
+  }
+  if (order.paymentMethod === methodId) return { ok: true };
+
+  const { methods } = await getPublicPaymentMethods();
+  const target = methods.find((m) => m.id === methodId);
+  if (!target) return { ok: false, error: "Ce mode de paiement n’est pas disponible." };
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: "pending_payment" },
+        data: { paymentMethod: methodId },
+      });
+      if (updated.count !== 1) {
+        throw new Error("Le statut de la commande a changé entre-temps.");
+      }
+      await tx.paymentEvent.create({
+        data: {
+          orderId,
+          type: "method_change",
+          note: `Mode de paiement changé vers ${target.name}.`,
+        },
+      });
+    });
+    return { ok: true };
+  } catch (error) {
+    console.error("[changeOrderPaymentMethod]", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Modification impossible.",
     };
   }
 }

@@ -2,6 +2,7 @@
 
 import {
   submitPayment,
+  changeOrderPaymentMethod,
   approvePayment,
   rejectPayment,
   markPaymentIssue,
@@ -78,6 +79,15 @@ function normalizeProofMimeType(file: File): string | null {
   if (file.type && ALLOWED_PROOF_TYPES.has(file.type)) return file.type;
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   return PROOF_TYPE_BY_EXTENSION[extension] ?? null;
+}
+
+/** Customer: switch a pending order to a different (customer-visible) method. */
+export async function changePaymentMethodAction(
+  orderId: string,
+  methodId: string,
+): Promise<ActionResult> {
+  if (!orderId || !methodId) return { ok: false, error: "Paramètres manquants." };
+  return changeOrderPaymentMethod(orderId, methodId);
 }
 
 // ─── Admin payment review actions ─────────────────────────────────────────────
