@@ -25,7 +25,7 @@ function loadPaypalSdk(clientId: string, currency: string): Promise<void> {
   if (sdkLoadPromise) return sdkLoadPromise;
   sdkLoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture&disable-funding=card,credit`;
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => {
