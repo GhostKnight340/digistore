@@ -75,14 +75,14 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
 
     const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
     void notifyPaymentStatusChange({
-      orderId,
+      order,
       publicOrderNumber: reference.number,
       fromStatus: order.status,
       toStatus: "payment_confirmed",
       adminUrl,
     });
     void notifyFulfillmentNeeded({
-      orderId,
+      order,
       publicOrderNumber: reference.number,
       itemCount: await prisma.orderItem.count({ where: { orderId } }),
       adminUrl,
@@ -116,6 +116,9 @@ export async function deliverOrder(
           customerName: true,
           customerEmail: true,
           totalMad: true,
+          paymentMethod: true,
+          discordMessageId: true,
+          discordThreadId: true,
           createdAt: true,
           items: {
             select: {
@@ -331,14 +334,14 @@ export async function deliverOrder(
 
     const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
     void notifyPaymentStatusChange({
-      orderId,
+      order,
       publicOrderNumber: reference.number,
       fromStatus: "payment_confirmed",
       toStatus: "delivered",
       adminUrl,
     });
     void notifyFulfillmentCompleted({
-      orderId,
+      order,
       publicOrderNumber: reference.number,
       adminUrl,
     });

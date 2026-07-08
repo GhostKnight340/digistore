@@ -228,12 +228,50 @@ export type DiscordMessagePayload = {
   embeds?: DiscordEmbed[];
 };
 
+export type DiscordMessage = {
+  id: string;
+  channel_id: string;
+};
+
 export function postChannelMessage(
   channelId: string,
   payload: DiscordMessagePayload,
-): Promise<unknown> {
+): Promise<DiscordMessage> {
   return discordRequest(`/channels/${channelId}/messages`, {
     method: "POST",
     body: payload,
   });
+}
+
+export function editChannelMessage(
+  channelId: string,
+  messageId: string,
+  payload: DiscordMessagePayload,
+): Promise<DiscordMessage> {
+  return discordRequest(`/channels/${channelId}/messages/${messageId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export type DiscordThread = {
+  id: string;
+};
+
+// Threads are just channels for messaging purposes — postChannelMessage /
+// editChannelMessage both work unchanged against a thread id.
+const THREAD_AUTO_ARCHIVE_MINUTES = 10080; // 7 days, Discord's max
+
+export function startThreadFromMessage(
+  channelId: string,
+  messageId: string,
+  name: string,
+): Promise<DiscordThread> {
+  return discordRequest<DiscordThread>(
+    `/channels/${channelId}/messages/${messageId}/threads`,
+    {
+      method: "POST",
+      body: { name: name.slice(0, 100), auto_archive_duration: THREAD_AUTO_ARCHIVE_MINUTES },
+    },
+  );
 }

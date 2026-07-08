@@ -123,10 +123,28 @@ export async function changeOrderStatus(
   try {
     let fromStatus: string | undefined;
     let createdAt: Date | undefined;
+    let cardOrder:
+      | {
+          id: string;
+          status: string;
+          totalMad: number;
+          paymentMethod: string;
+          discordMessageId: string | null;
+          discordThreadId: string | null;
+        }
+      | undefined;
     await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: input.orderId },
-        select: { id: true, status: true, createdAt: true },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          totalMad: true,
+          paymentMethod: true,
+          discordMessageId: true,
+          discordThreadId: true,
+        },
       });
       if (!order) throw new Error("Commande introuvable.");
       if (order.status === input.toStatus) {
@@ -134,6 +152,7 @@ export async function changeOrderStatus(
       }
       fromStatus = order.status;
       createdAt = order.createdAt;
+      cardOrder = order;
 
       await tx.order.update({
         where: { id: input.orderId },
@@ -152,10 +171,10 @@ export async function changeOrderStatus(
       });
     });
 
-    if (NOTIFIABLE_PAYMENT_STATUSES.includes(input.toStatus) && createdAt) {
+    if (NOTIFIABLE_PAYMENT_STATUSES.includes(input.toStatus) && createdAt && cardOrder) {
       const reference = await publicOrderReference({ id: input.orderId, createdAt });
       void notifyPaymentStatusChange({
-        orderId: input.orderId,
+        order: cardOrder,
         publicOrderNumber: reference.number,
         fromStatus,
         toStatus: input.toStatus,

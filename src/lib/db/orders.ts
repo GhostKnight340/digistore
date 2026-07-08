@@ -886,15 +886,12 @@ export async function createOrder(
     }
 
     void notifyOrderCreated({
-      orderId: order.id,
+      order,
       publicOrderNumber: reference.number,
-      totalMad,
-      paymentMethod: input.paymentMethod,
       itemSummary: lineItems
         .map((item) => `${item.quantity}x ${item.name}`)
         .join(", "),
       adminUrl: absoluteAppUrl(`/admin/orders/${order.id}`),
-      createdAt: new Date().toISOString(),
     });
 
     return {

@@ -117,7 +117,7 @@ export async function submitPayment(
     }
 
     void notifyPaymentStatusChange({
-      orderId,
+      order,
       publicOrderNumber: reference.number,
       fromStatus: "pending_payment",
       toStatus: "payment_submitted",
@@ -218,7 +218,7 @@ async function setPaymentStatus(
     const reference = await publicOrderReference(order);
     const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
     void notifyPaymentStatusChange({
-      orderId,
+      order,
       publicOrderNumber: reference.number,
       fromStatus: order.status,
       toStatus,
@@ -227,7 +227,7 @@ async function setPaymentStatus(
     });
     if (toStatus === "payment_confirmed") {
       void notifyFulfillmentNeeded({
-        orderId,
+        order,
         publicOrderNumber: reference.number,
         itemCount: await prisma.orderItem.count({ where: { orderId } }),
         adminUrl,
@@ -462,7 +462,7 @@ async function transitionPaypalStatus(
   const reference = await publicOrderReference(order);
   const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
   void notifyPaymentStatusChange({
-    orderId,
+    order,
     publicOrderNumber: reference.number,
     fromStatus,
     toStatus: opts.toStatus,
@@ -472,7 +472,7 @@ async function transitionPaypalStatus(
 
   if (opts.triggerFulfillment) {
     void notifyFulfillmentNeeded({
-      orderId,
+      order,
       publicOrderNumber: reference.number,
       itemCount: await prisma.orderItem.count({ where: { orderId } }),
       adminUrl,

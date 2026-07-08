@@ -8,6 +8,7 @@ import {
   type DiscordEmbed,
   type DiscordMessagePayload,
 } from "./client";
+import { createOrderCard, postOrderThreadEvent } from "./orderThread";
 
 /**
  * Never-throw contract: every exported function here resolves, never
@@ -57,32 +58,40 @@ function embed(partial: DiscordEmbed): DiscordMessagePayload {
 }
 
 // ---------------------------------------------------------------------------
-// #orders-feed — every order/payment lifecycle event, in one place
+// #orders — one parent "card" per order (edited in place as status changes),
+// each with a thread holding that order's full lifecycle timeline. See
+// ./orderThread.ts for the create/recover/edit machinery.
 // ---------------------------------------------------------------------------
 
-export type NewOrderNotification = {
-  orderId: string;
-  publicOrderNumber: string;
+/** The subset of an Order row every order-thread notification needs. */
+export type OrderNotificationOrder = {
+  id: string;
+  status: string;
   totalMad: number;
   paymentMethod: string;
+  discordMessageId: string | null;
+  discordThreadId: string | null;
+};
+
+export type NewOrderNotification = {
+  order: OrderNotificationOrder;
+  publicOrderNumber: string;
   itemSummary: string;
   adminUrl: string;
-  createdAt: string;
 };
 
 export function notifyOrderCreated(input: NewOrderNotification): Promise<void> {
-  return safeSend("ordersFeed", () =>
-    embed({
-      title: `New order ${input.publicOrderNumber}`,
-      color: COLOR.blue,
-      fields: [
-        { name: "Total", value: formatMAD(input.totalMad), inline: true },
-        { name: "Payment method", value: input.paymentMethod, inline: true },
-        { name: "Items", value: input.itemSummary },
-        { name: "Admin", value: input.adminUrl },
-      ],
-    }),
-  );
+  return createOrderCard({
+    orderId: input.order.id,
+    publicOrderNumber: input.publicOrderNumber,
+    status: input.order.status,
+    totalMad: input.order.totalMad,
+    paymentMethod: input.order.paymentMethod,
+    itemSummary: input.itemSummary,
+    adminUrl: input.adminUrl,
+    discordMessageId: input.order.discordMessageId,
+    discordThreadId: input.order.discordThreadId,
+  });
 }
 
 const ORDER_STATUS_COLOR: Record<string, number> = {
@@ -106,7 +115,7 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 };
 
 export type PaymentStatusNotification = {
-  orderId: string;
+  order: OrderNotificationOrder;
   publicOrderNumber: string;
   fromStatus?: string;
   toStatus: string;
@@ -122,9 +131,19 @@ export function notifyPaymentStatusChange(
     ? `${input.fromStatus} → ${input.toStatus}`
     : input.toStatus;
 
-  return safeSend("ordersFeed", () =>
+  return postOrderThreadEvent(
+    {
+      orderId: input.order.id,
+      publicOrderNumber: input.publicOrderNumber,
+      status: input.toStatus,
+      totalMad: input.order.totalMad,
+      paymentMethod: input.order.paymentMethod,
+      adminUrl: input.adminUrl,
+      discordMessageId: input.order.discordMessageId,
+      discordThreadId: input.order.discordThreadId,
+    },
     embed({
-      title: `${label} — order ${input.publicOrderNumber}`,
+      title: label,
       color: ORDER_STATUS_COLOR[input.toStatus] ?? COLOR.gray,
       fields: [
         { name: "Status", value: transition },
@@ -136,11 +155,13 @@ export function notifyPaymentStatusChange(
 }
 
 // ---------------------------------------------------------------------------
-// #fulfillment
+// Fulfillment lifecycle — also posted into the order's thread, not a
+// separate channel, so #orders' thread stays the single source of truth for
+// that order's timeline.
 // ---------------------------------------------------------------------------
 
 export type FulfillmentNeededNotification = {
-  orderId: string;
+  order: OrderNotificationOrder;
   publicOrderNumber: string;
   itemCount: number;
   adminUrl: string;
@@ -149,9 +170,19 @@ export type FulfillmentNeededNotification = {
 export function notifyFulfillmentNeeded(
   input: FulfillmentNeededNotification,
 ): Promise<void> {
-  return safeSend("fulfillment", () =>
+  return postOrderThreadEvent(
+    {
+      orderId: input.order.id,
+      publicOrderNumber: input.publicOrderNumber,
+      status: "payment_confirmed",
+      totalMad: input.order.totalMad,
+      paymentMethod: input.order.paymentMethod,
+      adminUrl: input.adminUrl,
+      discordMessageId: input.order.discordMessageId,
+      discordThreadId: input.order.discordThreadId,
+    },
     embed({
-      title: `Fulfillment needed — order ${input.publicOrderNumber}`,
+      title: "Fulfillment needed",
       description: "Payment confirmed. This order is waiting for code assignment.",
       color: COLOR.teal,
       fields: [
@@ -163,7 +194,7 @@ export function notifyFulfillmentNeeded(
 }
 
 export type FulfillmentCompletedNotification = {
-  orderId: string;
+  order: OrderNotificationOrder;
   publicOrderNumber: string;
   adminUrl: string;
 };
@@ -171,9 +202,19 @@ export type FulfillmentCompletedNotification = {
 export function notifyFulfillmentCompleted(
   input: FulfillmentCompletedNotification,
 ): Promise<void> {
-  return safeSend("fulfillment", () =>
+  return postOrderThreadEvent(
+    {
+      orderId: input.order.id,
+      publicOrderNumber: input.publicOrderNumber,
+      status: "delivered",
+      totalMad: input.order.totalMad,
+      paymentMethod: input.order.paymentMethod,
+      adminUrl: input.adminUrl,
+      discordMessageId: input.order.discordMessageId,
+      discordThreadId: input.order.discordThreadId,
+    },
     embed({
-      title: `Delivered — order ${input.publicOrderNumber}`,
+      title: "Delivered",
       description: "Codes have been assigned and the order is now delivered.",
       color: COLOR.green,
       fields: [{ name: "Admin", value: input.adminUrl }],

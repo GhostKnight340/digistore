@@ -7,7 +7,6 @@
 
 export type DiscordChannelKey =
   | "ordersFeed"
-  | "fulfillment"
   | "accounts"
   | "support"
   | "stockAlerts"
@@ -29,8 +28,9 @@ export const DISCORD_SERVER_STRUCTURE: DiscordCategoryDefinition[] = [
   {
     name: "📦 ORDERS",
     channels: [
+      // One parent card message per order, with a thread per order holding
+      // its full lifecycle timeline — see src/lib/discord/orderThread.ts.
       { key: "ordersFeed", name: "orders-feed", envVar: "DISCORD_CHANNEL_ORDERS_FEED_ID" },
-      { key: "fulfillment", name: "fulfillment", envVar: "DISCORD_CHANNEL_FULFILLMENT_ID" },
     ],
   },
   {
