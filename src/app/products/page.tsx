@@ -4,7 +4,7 @@ import RegionBadge from "@/components/RegionBadge";
 import { getCatalogPage, getRegionCounts } from "@/lib/db/catalog";
 import { REGION_LIST } from "@/lib/regions";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Catalogue - ghost.ma",

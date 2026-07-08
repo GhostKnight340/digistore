@@ -4,7 +4,7 @@ import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 const steps = [
   { n: 1, title: "Choisissez un produit", text: "Sélectionnez le produit et la quantité." },

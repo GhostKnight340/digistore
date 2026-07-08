@@ -1,6 +1,8 @@
 import { getStoreSettings } from "@/lib/db/catalog";
 import LegalArticle from "@/components/legal/LegalArticle";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = { title: "Mentions légales - ghost.ma" };
 
 export default async function LegalNoticePage() {
