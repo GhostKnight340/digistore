@@ -18,6 +18,7 @@ const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplatesPanel"));
 const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
 const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
+const SuppliersPanel = lazy(() => import("@/components/admin/SuppliersPanel"));
 
 const panelFallback = (
   <section className="card p-6 text-sm text-muted">Chargement de la section...</section>
@@ -65,13 +66,7 @@ function renderPanel(activeTab: string) {
     case "customers":
       return <CustomersPanel />;
     case "suppliers":
-      return (
-        <RestoredPanel
-          title="API fournisseur"
-          eyebrow="Section admin"
-          text="Les contrôles de l'API fournisseur sont disponibles ici. Les automatisations existantes restent inchangées."
-        />
-      );
+      return <SuppliersPanel />;
     case "refunds":
       return (
         <RestoredPanel

@@ -465,3 +465,102 @@ export interface PaymentMethodValidation {
   complete: boolean;
   fieldErrors: Record<string, string>;
 }
+
+// ─── Provider / Reloadly (API fournisseur) DTOs ───────────────────────────────
+
+export type SupplierEnvironment = "sandbox" | "live";
+export type SupplierTimeRange = "today" | "7d" | "30d";
+
+/** Static, config-derived provider state (no external API call). */
+export interface ReloadlyOverviewDTO {
+  configured: boolean;
+  environment: SupplierEnvironment;
+  /** Delivery is admin-triggered; there is no automatic fulfillment today. */
+  automaticFulfillment: boolean;
+  /** Reloadly gift cards is synchronous — no webhook exists. */
+  webhook: "configured" | "not_configured" | "not_applicable";
+}
+
+/** Result of an explicit, read-only connection/auth test. */
+export interface ReloadlyHealthDTO {
+  ok: boolean;
+  configured: boolean;
+  authWorking: boolean;
+  environment: SupplierEnvironment;
+  checkedAt: string;
+  /** Wallet balance if the account/permissions expose it; null otherwise. */
+  balance: { amount: number; currency: string } | null;
+  /** Safe error message (status + provider message only), never credentials. */
+  error: string | null;
+}
+
+export interface ReloadlyMetricsDTO {
+  linkedProducts: number;
+  unlinkedProducts: number;
+  /** Successful Reloadly deliveries within the selected range. */
+  providerOrders: number;
+  range: SupplierTimeRange;
+}
+
+export type ReloadlyMappingStatus = "linked" | "incomplete" | "unlinked" | "disabled";
+
+export interface ReloadlyMappingDTO {
+  variantId: string;
+  productSlug: string;
+  productName: string;
+  variantName: string;
+  region: string;
+  priceMad: number;
+  faceValue: number | null;
+  faceCurrency: string;
+  reloadlyProductId: number | null;
+  reloadlyCountryCode: string | null;
+  status: ReloadlyMappingStatus;
+}
+
+export interface ReloadlyProviderOrderDTO {
+  deliveredCodeId: string;
+  orderId: string;
+  publicOrderNumber: string;
+  productName: string;
+  reloadlyTransactionId: number | null;
+  environment: SupplierEnvironment;
+  status: "successful";
+  createdAt: string;
+}
+
+export interface ReloadlyCatalogProductDTO {
+  productId: number;
+  productName: string;
+  brandName: string;
+  country: string;
+  countryName: string;
+  currency: string;
+  denominationType: string;
+  fixedDenominations: number[];
+  minDenomination: number | null;
+  maxDenomination: number | null;
+  /** True when a Ghost variant already maps to this Reloadly product. */
+  mapped: boolean;
+}
+
+export interface ReloadlyCatalogPageDTO {
+  products: ReloadlyCatalogProductDTO[];
+  page: number;
+  totalPages: number;
+  totalElements: number;
+}
+
+/** Read-only validation that a Reloadly product fits a Ghost variant. */
+export interface ReloadlyAvailabilityDTO {
+  ok: boolean;
+  productId: number;
+  productName: string | null;
+  country: string | null;
+  currency: string | null;
+  denominationType: string | null;
+  fixedDenominations: number[];
+  /** Mismatches (currency / country / denomination) in French, if any. */
+  issues: string[];
+  error: string | null;
+}

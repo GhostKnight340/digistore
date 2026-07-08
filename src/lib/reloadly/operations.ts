@@ -66,6 +66,24 @@ export async function getGiftCardProduct(
   );
 }
 
+export type ReloadlyAccountBalance = {
+  balance: number;
+  currencyCode: string;
+  currencyName: string;
+  updatedAt: string;
+};
+
+/**
+ * Reads the Reloadly wallet balance for the configured account. Read-only and
+ * safe for an admin health/overview view — spends nothing, places no order.
+ */
+export async function getAccountBalance(): Promise<ReloadlyAccountBalance> {
+  return reloadlyRequest<ReloadlyAccountBalance>(
+    getGiftCardsBaseUrl(),
+    "/accounts/balance",
+  );
+}
+
 export type PlaceGiftCardOrderInput = {
   productId: number;
   countryCode: string;
