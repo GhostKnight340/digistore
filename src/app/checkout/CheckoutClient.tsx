@@ -62,6 +62,23 @@ export default function CheckoutClient({
     [methods],
   );
 
+  // A successful submit clears the cart and then navigates to the
+  // server-rendered /payment/[id] page, which takes a moment to load. During
+  // that window the cart is empty but we are redirecting, not idle — show a
+  // redirect state instead of flashing the "nothing to pay" empty state.
+  if (submitting && cart.length === 0) {
+    return (
+      <div className="container-page py-10">
+        <div className="card grid place-items-center px-6 py-20 text-center">
+          <div className="size-8 animate-spin rounded-full border-2 border-border-strong border-t-white" />
+          <p className="mt-5 text-lg font-semibold text-white">
+            Redirection vers le paiement…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (ready && cart.length === 0) {
     return (
       <div className="container-page py-10">
