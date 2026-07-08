@@ -92,6 +92,10 @@ export interface AdminOrderSummaryDTO {
   customerName: string;
   customerEmail: string;
   paymentMethod: string;
+  /** Resolved customer-facing method name. Orders store the method id (a cuid)
+   * rather than a friendly label, so this is computed from the payment-method
+   * config; falls back to a legacy label map then a generic label. */
+  paymentMethodLabel: string;
   totalMad: number;
   createdAt: string;
   items: OrderItemDTO[];

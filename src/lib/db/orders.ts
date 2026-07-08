@@ -11,8 +11,10 @@ import {
   formatPublicOrderPathSegment,
   parsePublicOrderNumber,
 } from "@/lib/orderNumber";
+import { getAdminPaymentMethods } from "./paymentMethods";
+import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import type { OrderStatus } from "@/lib/types";
-import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO } from "@/lib/dto";
+import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO, PaymentMethodDTO } from "@/lib/dto";
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
@@ -272,13 +274,17 @@ function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] }
   });
 }
 
-function buildAdminSummaryDTO(order: AdminOrderSummaryRecord): AdminOrderSummaryDTO {
+function buildAdminSummaryDTO(
+  order: AdminOrderSummaryRecord,
+  methods: PaymentMethodDTO[],
+): AdminOrderSummaryDTO {
   return {
     id: order.id,
     status: order.status as OrderStatus,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
     paymentMethod: order.paymentMethod,
+    paymentMethodLabel: resolveMethodLabel(order.paymentMethod, methods),
     totalMad: order.totalMad,
     createdAt: iso(order.createdAt),
     items: order.items.map((item) => ({
@@ -339,14 +345,17 @@ export async function getAdminOrdersPage(options: {
   statuses?: string[];
 } = {}): Promise<AdminOrderSummaryDTO[]> {
   await ensureDatabaseReady();
-  const orders = await timeAdmin(
-    "admin.orders",
-    "order.findMany.summary",
-    () => loadAdminOrderSummaries(options),
-    (rows) => rows.length,
-  );
+  const [orders, { methods }] = await Promise.all([
+    timeAdmin(
+      "admin.orders",
+      "order.findMany.summary",
+      () => loadAdminOrderSummaries(options),
+      (rows) => rows.length,
+    ),
+    getAdminPaymentMethods(),
+  ]);
 
-  return orders.map(buildAdminSummaryDTO);
+  return orders.map((order) => buildAdminSummaryDTO(order, methods));
 }
 
 export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDTO | null> {
@@ -456,11 +465,16 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   test: "Test",
 };
 
-function paymentMethodLabel(method: string) {
-  // Orders created after the payment-methods migration store the specific
-  // PaymentMethod id (a cuid) rather than a friendly type — only the legacy
-  // literal strings have a nice label available without an extra query.
-  return PAYMENT_METHOD_LABELS[method] ?? "Paiement";
+/**
+ * Resolve an order's stored `paymentMethod` (a PaymentMethod id for orders
+ * created after the payment-methods migration, or a legacy type string for
+ * older ones) to a customer-facing label. Falls back to the legacy label map,
+ * then a generic label.
+ */
+function resolveMethodLabel(paymentMethod: string, methods: PaymentMethodDTO[]): string {
+  const method = resolveOrderPaymentMethod(paymentMethod, methods);
+  if (method) return method.name;
+  return PAYMENT_METHOD_LABELS[paymentMethod] ?? "Paiement";
 }
 
 /**
@@ -582,7 +596,7 @@ export async function getAdminOverviewMetrics(): Promise<AdminOverviewMetricsDTO
       return {
         id: order.id,
         ref: `#${order.id.slice(-6).toUpperCase()}`,
-        label: `${itemLabel} · ${paymentMethodLabel(order.paymentMethod)}`,
+        label: `${itemLabel} · ${order.paymentMethodLabel}`,
         waitMin: Math.max(0, Math.round((now.getTime() - new Date(order.createdAt).getTime()) / 60000)),
       };
     }),

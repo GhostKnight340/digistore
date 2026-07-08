@@ -18,14 +18,6 @@ const TABS: { id: TabFilter; label: string }[] = [
   { id: "all", label: "Tous" },
 ];
 
-const METHOD_LABELS: Record<string, string> = {
-  bank: "Virement",
-  usdt: "USDT",
-  paypal: "PayPal",
-  card: "Carte",
-  test: "Test",
-};
-
 export default function PaymentsPanel() {
   const [orders, setOrders] = useState<AdminOrderSummaryDTO[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -144,7 +136,7 @@ export default function PaymentsPanel() {
                       <p className="text-xs text-muted">{order.customerEmail}</p>
                     </td>
                     <td className="px-4 py-3 text-muted">
-                      {METHOD_LABELS[order.paymentMethod] ?? "Paiement"}
+                      {order.paymentMethodLabel}
                     </td>
                     <td className="px-4 py-3 font-semibold text-white">
                       {formatMAD(order.totalMad)}
