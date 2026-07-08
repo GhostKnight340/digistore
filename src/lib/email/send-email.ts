@@ -20,7 +20,6 @@ type SendEmailInput = {
   customerId?: string | null;
   variables?: EmailMetadata;
   subject?: string;
-  html?: string;
   text?: string;
   metadata?: EmailMetadata;
   manuallyEdited?: boolean;
@@ -34,13 +33,6 @@ type EmailSendResult = {
   providerMessageId?: string;
   error?: string;
 };
-
-const AUTH_TEMPLATE_KEYS = new Set<EmailTemplateKey>([
-  "email_verification",
-  "welcome",
-  "password_reset",
-  "password_changed",
-]);
 
 function fromAddress() {
   const name = process.env.EMAIL_FROM_NAME || "ghost.ma";
@@ -59,38 +51,13 @@ function metadataToJson(metadata?: EmailMetadata): Prisma.InputJsonValue | undef
   ) as Prisma.InputJsonObject;
 }
 
-function isBrandedHtml(html: string) {
-  return (
-    html.includes("<!DOCTYPE html>") &&
-    html.includes("<table") &&
-    html.includes("style=") &&
-    html.includes("background") &&
-    html.includes("border-radius") &&
-    !html.trim().startsWith("<p>")
-  );
-}
-
 export async function renderTransactionalEmail(
   templateKey: EmailTemplateKey,
   variables: EmailMetadata = {},
-  overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "html" | "text">> = {},
+  overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "text">> = {},
 ): Promise<RenderedEmailTemplate> {
   const settings = await getStoreSettings();
-  const rendered = renderEmailTemplate(settings, templateKey, variables);
-  const text = overrides.text ?? rendered.text;
-  const overrideHtml = overrides.html?.trim();
-  const html =
-    overrideHtml && isBrandedHtml(overrideHtml) && !AUTH_TEMPLATE_KEYS.has(templateKey)
-      ? overrideHtml
-      : rendered.html;
-  if (AUTH_TEMPLATE_KEYS.has(templateKey) && !isBrandedHtml(html)) {
-    throw new Error(`Auth email template ${templateKey} did not render branded HTML.`);
-  }
-  return {
-    subject: overrides.subject ?? rendered.subject,
-    text,
-    html,
-  };
+  return renderEmailTemplate(settings, templateKey, variables, overrides);
 }
 
 export async function sendTransactionalEmail(
@@ -99,7 +66,6 @@ export async function sendTransactionalEmail(
   await ensureDatabaseReady();
   const rendered = await renderTransactionalEmail(input.templateKey, input.variables, {
     subject: input.subject,
-    html: input.html,
     text: input.text,
   });
   const settings = await getStoreSettings();
@@ -150,8 +116,6 @@ export async function sendTransactionalEmail(
     const subject = rendered.subject;
     const html = rendered.html;
     const text = rendered.text;
-
-    console.log(html);
 
     const { data, error: resendError } = await resend.emails.send({
       from,

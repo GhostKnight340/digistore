@@ -208,7 +208,6 @@ async function setPaymentStatus(
         type: emailType,
         subject: preview.subject || subject,
         text: preview.text || body,
-        html: preview.html,
         variables: preview.variables,
       });
     } catch (emailError) {
@@ -271,7 +270,7 @@ export async function applyPaymentStatusWithEmail(
   note: string,
   emailType: string,
   templateKey: EmailTemplateKey,
-  email: { subject: string; text: string; html?: string },
+  email: { subject: string; text: string },
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -302,7 +301,6 @@ export async function applyPaymentStatusWithEmail(
         type: emailType,
         subject: email.subject,
         text: email.text,
-        html: email.html,
         manuallyEdited: true,
         variables: {
           customer_name: order.customerName,
@@ -452,7 +450,6 @@ async function transitionPaypalStatus(
       type: opts.emailType,
       subject: preview.subject || opts.subject,
       text: preview.text || opts.body,
-      html: preview.html,
       variables: preview.variables,
     });
   } catch (emailError) {

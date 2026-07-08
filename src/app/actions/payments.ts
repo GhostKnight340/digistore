@@ -114,7 +114,7 @@ export async function getPaymentEmailPreviewAction(
 export async function sendPaymentReviewEmailAction(
   orderId: string,
   intent: "reject" | "request_proof" | "refund_update",
-  email: { subject: string; text: string; html?: string },
+  email: { subject: string; text: string },
   reason?: string,
 ): Promise<ActionResult> {
   await requireAdminCustomer();

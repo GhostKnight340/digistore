@@ -348,6 +348,7 @@ export function renderEmailTemplate(
   settings: StoreSettings,
   key: EmailTemplateKey,
   variables: Variables,
+  overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "text">> = {},
 ): RenderedEmailTemplate {
   const template = settings.emailTemplates[key] ?? {
     subject: key,
@@ -365,12 +366,14 @@ export function renderEmailTemplate(
     );
 
   const subject =
-    key === "password_changed"
+    overrides.subject ??
+    (key === "password_changed"
       ? "Votre mot de passe ghost.ma a été modifié"
-      : render(template.subject);
+      : render(template.subject));
   const renderedBody = render(template.body);
   const text =
-    key === "password_changed"
+    overrides.text ??
+    (key === "password_changed"
       ? [
           `Bonjour ${variableString(baseVariables, "customer_name") || "client"},`,
           "",
@@ -391,7 +394,7 @@ export function renderEmailTemplate(
           "",
           "Merci pour votre achat.",
         ].join("\n")
-      : renderedBody;
+      : renderedBody);
   return {
     subject,
     text,
