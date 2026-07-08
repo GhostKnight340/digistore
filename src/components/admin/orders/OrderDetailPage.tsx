@@ -26,6 +26,7 @@ import {
   sendPaymentReviewEmailAction,
   getPaymentProofAction,
 } from "@/app/actions/payments";
+import { retryReloadlyFulfillmentAction } from "@/app/actions/reloadly";
 import type {
   AdminCodeDTO,
   AdminOrderDTO,
@@ -123,6 +124,11 @@ function eventDate(order: AdminOrderDTO, toStatus: string) {
 
 function eventNote(order: AdminOrderDTO, toStatus: string) {
   return order.paymentEvents.find((event) => event.toStatus === toStatus)?.note ?? null;
+}
+
+/** Units of this item still needing a code — total minus what's already delivered. */
+function remainingUnits(item: { quantity: number; deliveredCount?: number }) {
+  return Math.max(0, item.quantity - (item.deliveredCount ?? 0));
 }
 
 function initialsOf(name: string) {
@@ -245,7 +251,7 @@ export default function OrderDetailPage({
   useEffect(() => {
     const init: Record<string, AssignmentEntry[]> = {};
     for (const item of order.items) {
-      init[item.id] = Array.from({ length: item.quantity }, () => ({}));
+      init[item.id] = Array.from({ length: remainingUnits(item) }, () => ({}));
     }
     setEntries(init);
 
@@ -281,23 +287,24 @@ export default function OrderDetailPage({
 
   const allFilled = order.items.every((item) =>
     (entries[item.id] ?? [])
-      .slice(0, item.quantity)
+      .slice(0, remainingUnits(item))
       .every((entry) => entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId),
   );
 
   const manualCountsValid = order.items.every((item) => {
+    const remaining = remainingUnits(item);
     const filled = (entries[item.id] ?? [])
-      .slice(0, item.quantity)
+      .slice(0, remaining)
       .filter((entry) => entry.manualCode?.trim() || entry.reloadlyProductId).length;
-    return filled === item.quantity;
+    return filled === remaining;
   });
 
   const totalCodes = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const readyCodes = order.items.reduce((sum, item) => {
     const filled = (entries[item.id] ?? [])
-      .slice(0, item.quantity)
+      .slice(0, remainingUnits(item))
       .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId).length;
-    return sum + filled;
+    return sum + filled + (item.deliveredCount ?? 0);
   }, 0);
   const deliverReady = (manualMode ? manualCountsValid : allFilled) && canDeliver;
 
@@ -360,6 +367,12 @@ export default function OrderDetailPage({
       ),
     );
     setReviewEmail(null);
+  }
+
+  async function handleRetryReloadly(orderItemId: string) {
+    await runAction("Nouvelle tentative Reloadly effectuée.", () =>
+      retryReloadlyFulfillmentAction(order.id, orderItemId),
+    );
   }
 
   async function handleDeliver() {
@@ -583,6 +596,7 @@ export default function OrderDetailPage({
             deliverReady={deliverReady}
             onSetEntry={setEntry}
             onDeliver={handleDeliver}
+            onRetryReloadly={handleRetryReloadly}
           />
         </div>
 
@@ -1433,6 +1447,7 @@ function DeliverySection({
   deliverReady,
   onSetEntry,
   onDeliver,
+  onRetryReloadly,
 }: {
   order: AdminOrderDTO;
   delivered: boolean;
@@ -1447,8 +1462,12 @@ function DeliverySection({
   deliverReady: boolean;
   onSetEntry: (itemId: string, index: number, entry: AssignmentEntry) => void;
   onDeliver: () => void;
+  onRetryReloadly: (orderItemId: string) => void;
 }) {
   const editable = canDeliver && !delivered;
+  const hasReloadlyItems = order.items.some(
+    (item) => item.variantStockControl === "reloadly" && item.variantReloadlyProductId != null,
+  );
 
   return (
     <div style={{ ...cardStyle, padding: 16 }}>
@@ -1466,6 +1485,23 @@ function DeliverySection({
         >
           {manualMode ? "Saisie manuelle" : "Stock automatique"}
         </span>
+        {hasReloadlyItems && (
+          <span
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: 0.3,
+              color: "#E8A838",
+              background: "rgba(232,168,56,0.14)",
+              border: "1px solid rgba(232,168,56,0.3)",
+              borderRadius: 999,
+              padding: "2px 8px",
+            }}
+          >
+            Reloadly Sandbox
+          </span>
+        )}
         <span style={{ marginLeft: "auto", fontSize: 11.5, color: C.faint }}>
           {delivered ? "Livré" : `${readyCodes} / ${totalCodes} code${totalCodes > 1 ? "s" : ""} prêt${readyCodes > 1 ? "s" : ""}`}
         </span>
@@ -1478,38 +1514,88 @@ function DeliverySection({
           const deliveredCodes = order.deliveredCodes.filter(
             (code) => code.orderItemId === item.id || code.productId === item.productId,
           );
+          const isReloadlyMapped = item.variantStockControl === "reloadly" && item.variantReloadlyProductId != null;
+          const failed = item.fulfillmentStatus === "failed";
+          const remaining = remainingUnits(item);
+
+          const failedBanner = failed && !delivered ? (
+            <div
+              key={`${item.id}-failed`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+                border: `1px solid ${C.dangerBorder}`,
+                background: "rgba(224,92,92,0.08)",
+                borderRadius: 8,
+                padding: "8px 10px",
+              }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 600, color: C.danger, flexShrink: 0 }}>
+                ⚠ Échec Reloadly (Sandbox)
+              </span>
+              <span style={{ flex: 1, minWidth: 120, fontSize: 11.5, color: C.muted }}>
+                {item.name} — {item.fulfillmentError ?? "Erreur inconnue."}
+                {item.fulfillmentAttempts ? ` (tentative ${item.fulfillmentAttempts})` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRetryReloadly(item.id)}
+                disabled={busy}
+                style={{
+                  flexShrink: 0,
+                  height: 26,
+                  padding: "0 10px",
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: `1px solid ${C.accentBorder}`,
+                  background: C.accentSoft,
+                  color: C.accentText,
+                  cursor: busy ? "default" : "pointer",
+                }}
+              >
+                🔁 Réessayer via Reloadly
+              </button>
+            </div>
+          ) : null;
+
+          // Already-delivered units for this item (e.g. auto-fulfilled by
+          // Reloadly at payment confirmation) — shown read-only regardless
+          // of whether the whole order has finished delivery yet.
+          const deliveredRows = deliveredCodes.map((code, index) => (
+            <CodeRow key={`${item.id}-done-${index}`} label={item.name} border={C.successBorder}>
+              <span style={{ flex: 1, fontSize: 12.5, fontFamily: MONO, color: C.successText, wordBreak: "break-all" }}>
+                {code.code}
+              </span>
+              <CopyButton value={code.code} />
+              <span style={{ fontSize: 11, color: C.successText, flexShrink: 0 }}>
+                {item.fulfillmentSource === "reloadly" ? "✓ Reloadly" : "✓ livré"}
+              </span>
+            </CodeRow>
+          ));
 
           if (delivered) {
-            return deliveredCodes.map((code, index) => (
-              <CodeRow
-                key={`${item.id}-${index}`}
-                label={item.name}
-                border={C.successBorder}
-              >
-                <span style={{ flex: 1, fontSize: 12.5, fontFamily: MONO, color: C.successText, wordBreak: "break-all" }}>
-                  {code.code}
-                </span>
-                <CopyButton value={code.code} />
-                <span style={{ fontSize: 11, color: C.successText, flexShrink: 0 }}>✓ livré</span>
-              </CodeRow>
-            ));
+            return deliveredRows;
           }
 
           if (!editable) {
-            // Not yet deliverable (payment not confirmed): show awaited slots.
-            return Array.from({ length: item.quantity }).map((_, index) => (
+            // Not yet deliverable (payment not confirmed): show awaited slots
+            // for whatever isn't already delivered.
+            const awaiting = Array.from({ length: remaining }).map((_, index) => (
               <CodeRow key={`${item.id}-${index}`} label={item.name} border={C.borderInput}>
                 <span style={{ flex: 1, fontSize: 12.5, color: C.faint }}>En attente de confirmation</span>
                 <span style={{ fontSize: 11, color: C.faint, flexShrink: 0 }}>#{index + 1}</span>
               </CodeRow>
             ));
+            return [failedBanner, ...deliveredRows, ...awaiting];
           }
 
-          return Array.from({ length: item.quantity }).map((_, index) => {
+          const inputRows = Array.from({ length: remaining }).map((_, index) => {
             const entry = list[index] ?? {};
             const filled = Boolean(entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId);
-            const reloadlyAvailable =
-              item.variantStockControl === "reloadly" && item.variantReloadlyProductId != null;
+            const reloadlyAvailable = isReloadlyMapped;
             const reloadlyChosen = Boolean(entry.reloadlyProductId);
             return (
               <CodeRow
@@ -1620,6 +1706,8 @@ function DeliverySection({
               </CodeRow>
             );
           });
+
+          return [failedBanner, ...deliveredRows, ...inputRows];
         })}
       </div>
 

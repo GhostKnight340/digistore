@@ -91,6 +91,12 @@ model ProductVariant {
   // Only used when stockControl = "reloadly"
   reloadlyProductId   Int?
   reloadlyCountryCode String?
+  // When true, deliverOrder()'s automatic pre-pass (fired on payment
+  // confirmation) will attempt to purchase this variant from Reloadly
+  // without any admin action. When false, the variant stays mapped to
+  // Reloadly (for the admin's manual "Via Reloadly" delivery toggle) but
+  // is never purchased automatically.
+  reloadlyAutomationEnabled Boolean @default(false)
   active           Boolean  @default(true)
   featured         Boolean  @default(false)
   sortOrder        Int      @default(0)
@@ -227,12 +233,28 @@ model OrderItem {
   quantity     Int
   unitPriceMad Int
 
+  // Automatic-supplier fulfillment tracking (Reloadly today). Independent of
+  // Order.status, which stays the single customer-facing lifecycle field —
+  // these columns exist so a partially-automated order (some items fulfilled
+  // by Reloadly, others still needing a manual code) can be represented and
+  // retried without losing state.
+  // fulfillmentStatus: "pending" | "fulfilled" | "failed"
+  fulfillmentStatus        String    @default("pending")
+  // fulfillmentSource: "reloadly" | "manual" | null (not yet attempted)
+  fulfillmentSource         String?
+  fulfillmentError          String?
+  reloadlyTransactionId     Int?
+  reloadlyOrderId           Int?
+  fulfillmentAttempts       Int       @default(0)
+  lastFulfillmentAttemptAt  DateTime?
+
   order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product        Product         @relation(fields: [productId], references: [id])
   variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   deliveredCodes DeliveredCode[]
 
   @@index([variantId])
+  @@index([fulfillmentStatus])
 }
 
 model DeliveredCode {

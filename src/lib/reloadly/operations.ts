@@ -66,6 +66,71 @@ export async function getGiftCardProduct(
   );
 }
 
+/**
+ * Admin catalog search: lists Reloadly gift-card products (paginated,
+ * optionally filtered by country), shaped for the "map this variant to
+ * Reloadly" admin picker. Reloadly's `/products` endpoint has no free-text
+ * search, so a `query` string is matched client-side (product/brand name)
+ * against the requested page.
+ */
+export async function searchGiftCardProductsForAdmin(options?: {
+  page?: number;
+  size?: number;
+  countryCode?: string;
+  query?: string;
+}): Promise<{
+  results: {
+    productId: number;
+    productName: string;
+    countryCode: string;
+    countryName: string;
+    currencyCode: string;
+    denominationType: string;
+    fixedDenominations: number[];
+    minDenomination: number | null;
+    maxDenomination: number | null;
+    logoUrl: string | null;
+    brandName: string;
+  }[];
+  page: number;
+  totalPages: number;
+  totalElements: number;
+}> {
+  const page = await getGiftCardProducts({
+    page: options?.page ?? 0,
+    size: options?.size ?? 25,
+    countryCode: options?.countryCode,
+  });
+
+  const query = options?.query?.trim().toLowerCase();
+  const content = query
+    ? page.content.filter(
+        (product) =>
+          product.productName.toLowerCase().includes(query) ||
+          product.brand?.brandName?.toLowerCase().includes(query),
+      )
+    : page.content;
+
+  return {
+    results: content.map((product) => ({
+      productId: product.productId,
+      productName: product.productName,
+      countryCode: product.country?.isoName ?? "",
+      countryName: product.country?.name ?? "",
+      currencyCode: product.recipientCurrencyCode,
+      denominationType: product.denominationType,
+      fixedDenominations: product.fixedRecipientDenominations ?? [],
+      minDenomination: product.minRecipientDenomination,
+      maxDenomination: product.maxRecipientDenomination,
+      logoUrl: product.logoUrls?.[0] ?? null,
+      brandName: product.brand?.brandName ?? "",
+    })),
+    page: page.number,
+    totalPages: page.totalPages,
+    totalElements: page.totalElements,
+  };
+}
+
 export type PlaceGiftCardOrderInput = {
   productId: number;
   countryCode: string;

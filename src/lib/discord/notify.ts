@@ -181,6 +181,52 @@ export function notifyFulfillmentCompleted(
   );
 }
 
+export type FulfillmentAutoCompletedNotification = {
+  orderId: string;
+  publicOrderNumber: string;
+  itemName: string;
+  adminUrl: string;
+};
+
+/** A single order item was auto-fulfilled by Reloadly (sandbox). */
+export function notifyFulfillmentAutoCompleted(
+  input: FulfillmentAutoCompletedNotification,
+): Promise<void> {
+  return safeSend("fulfillment", () =>
+    embed({
+      title: `Auto-fulfilled via Reloadly (sandbox) — order ${input.publicOrderNumber}`,
+      description: input.itemName,
+      color: COLOR.green,
+      fields: [{ name: "Admin", value: input.adminUrl }],
+    }),
+  );
+}
+
+export type FulfillmentFailedNotification = {
+  orderId: string;
+  publicOrderNumber: string;
+  itemName: string;
+  error: string;
+  adminUrl: string;
+};
+
+/** Automatic Reloadly fulfillment failed for one item — needs manual review. */
+export function notifyFulfillmentFailed(
+  input: FulfillmentFailedNotification,
+): Promise<void> {
+  return safeSend("fulfillment", () =>
+    embed({
+      title: `⚠ Reloadly fulfillment failed — order ${input.publicOrderNumber}`,
+      description: `${input.itemName}\n\nNever lost the order — flagged for manual review or retry in admin.`,
+      color: COLOR.red,
+      fields: [
+        { name: "Error", value: input.error.slice(0, 1000) },
+        { name: "Admin", value: input.adminUrl },
+      ],
+    }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // #accounts
 // ---------------------------------------------------------------------------

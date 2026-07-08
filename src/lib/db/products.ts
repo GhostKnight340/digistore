@@ -64,6 +64,7 @@ function toVariant(product: ProductRow, variant: ProductRow["variants"][number])
     inventoryUnused: variant._count.digitalCodes,
     reloadlyProductId: variant.reloadlyProductId,
     reloadlyCountryCode: variant.reloadlyCountryCode,
+    reloadlyAutomationEnabled: variant.reloadlyAutomationEnabled,
   };
 }
 
@@ -84,6 +85,7 @@ function productAsFallbackVariant(product: ProductRow): VariantDTO {
     inventoryUnused: product._count.digitalCodes,
     reloadlyProductId: null,
     reloadlyCountryCode: null,
+    reloadlyAutomationEnabled: false,
   };
 }
 
@@ -638,6 +640,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       featured: data.featured,
       reloadlyProductId: data.reloadlyProductId,
       reloadlyCountryCode: data.reloadlyCountryCode,
+      reloadlyAutomationEnabled: data.reloadlyAutomationEnabled,
     };
 
     if ((originalSlug === product.slug || originalSlug === product.id) && product.variants.length === 0) {

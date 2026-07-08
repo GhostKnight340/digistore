@@ -21,6 +21,8 @@ import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import { REGION_LIST } from "@/lib/regions";
+import { searchReloadlyProductsAction } from "@/app/actions/reloadly";
+import type { ReloadlyProductSearchResultDTO } from "@/lib/dto";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -182,6 +184,7 @@ export default function ProductsPanel() {
       stockMode: variant.stockMode,
       reloadlyProductId: variant.reloadlyProductId,
       reloadlyCountryCode: variant.reloadlyCountryCode,
+      reloadlyAutomationEnabled: variant.reloadlyAutomationEnabled,
     };
   }
 
@@ -308,6 +311,7 @@ export default function ProductsPanel() {
       inventoryUnused: 0,
       reloadlyProductId: null,
       reloadlyCountryCode: null,
+      reloadlyAutomationEnabled: false,
     });
     setDraft(parent);
     setMsg(null);
@@ -344,6 +348,7 @@ export default function ProductsPanel() {
       stockMode: newVariantDraft.stockMode,
       reloadlyProductId: newVariantDraft.reloadlyProductId,
       reloadlyCountryCode: newVariantDraft.reloadlyCountryCode,
+      reloadlyAutomationEnabled: newVariantDraft.reloadlyAutomationEnabled,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -407,6 +412,7 @@ export default function ProductsPanel() {
       stockMode: v.stockMode,
       reloadlyProductId: v.reloadlyProductId,
       reloadlyCountryCode: v.reloadlyCountryCode,
+      reloadlyAutomationEnabled: v.reloadlyAutomationEnabled,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -891,7 +897,8 @@ function isVariantDirty(original: VariantDTO, draft: VariantDTO) {
     original.stockControl !== draft.stockControl ||
     original.stockMode !== draft.stockMode ||
     original.reloadlyProductId !== draft.reloadlyProductId ||
-    original.reloadlyCountryCode !== draft.reloadlyCountryCode
+    original.reloadlyCountryCode !== draft.reloadlyCountryCode ||
+    original.reloadlyAutomationEnabled !== draft.reloadlyAutomationEnabled
   );
 }
 
@@ -1363,6 +1370,33 @@ function VariantForm({
             </Field>
           </>
         )}
+      </div>
+      {v.stockControl === "reloadly" && (
+        <div className="mt-4 flex flex-col gap-3">
+          <div
+            className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5"
+          >
+            <ToggleSwitch
+              label="Fulfillment automatique"
+              checkedLabel="Activé"
+              uncheckedLabel="Désactivé (livraison manuelle « Via Reloadly »)"
+              checked={v.reloadlyAutomationEnabled}
+              onChange={(val) => onChange("reloadlyAutomationEnabled", val)}
+            />
+            <span className="ml-auto shrink-0 rounded-full border border-amber-500/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+              Reloadly Sandbox
+            </span>
+          </div>
+          {v.reloadlyAutomationEnabled && (
+            <p className="text-xs text-white/50">
+              Dès qu&apos;une commande contenant cette variante passe en « paiement confirmé »,
+              le code sera acheté et livré automatiquement via Reloadly (mode sandbox).
+            </p>
+          )}
+          <ReloadlyMappingPanel v={v} onChange={onChange} />
+        </div>
+      )}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={`Affichage du stock · ${v.inventoryUnused} code(s)`}>
           <select
             className="input"
@@ -1397,6 +1431,130 @@ function VariantForm({
         />
       </div>
     </>
+  );
+}
+
+// ─── Reloadly sandbox catalog picker ────────────────────────────────────────
+// Admin-only browser over Reloadly's gift-card product catalog (requirement:
+// search/list Reloadly sandbox products and map one to this local variant).
+// Selecting a result fills productId/country/currency and, when the product
+// has a single fixed denomination, the face value too — never touches the
+// local `priceMad` field, which stays under admin control.
+
+function ReloadlyMappingPanel({
+  v,
+  onChange,
+}: {
+  v: VariantDTO;
+  onChange: <K extends keyof VariantDTO>(k: K, val: VariantDTO[K]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [country, setCountry] = useState(v.reloadlyCountryCode ?? "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [results, setResults] = useState<ReloadlyProductSearchResultDTO[]>([]);
+  const [searched, setSearched] = useState(false);
+
+  async function runSearch() {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await searchReloadlyProductsAction({
+        countryCode: country.trim().toUpperCase() || undefined,
+        query: query.trim() || undefined,
+      });
+      setResults(data.results);
+      setSearched(true);
+      if (data.results.length === 0 && data.totalElements === 0) {
+        setError("Aucun résultat (Reloadly non configuré ou aucun produit trouvé).");
+      }
+    } catch (searchError) {
+      setError(searchError instanceof Error ? searchError.message : "Recherche impossible.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function applyProduct(product: ReloadlyProductSearchResultDTO) {
+    onChange("reloadlyProductId", product.productId);
+    onChange("reloadlyCountryCode", product.countryCode);
+    onChange("faceCurrency", product.currencyCode);
+    if (product.denominationType === "FIXED" && product.fixedDenominations.length === 1) {
+      onChange("faceValue", product.fixedDenominations[0]);
+    }
+    setOpen(false);
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between text-left text-xs font-medium text-white/70 hover:text-white"
+      >
+        <span>🔍 Parcourir le catalogue Reloadly (Sandbox)</span>
+        <span>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            <input
+              className="input flex-1"
+              placeholder="Nom du produit (ex. Amazon, Steam…)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && runSearch()}
+            />
+            <input
+              className="input w-24"
+              placeholder="Pays (US)"
+              maxLength={2}
+              value={country}
+              onChange={(e) => setCountry(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && runSearch()}
+            />
+            <button type="button" className="btn-ghost px-3 text-xs" onClick={runSearch} disabled={loading}>
+              {loading ? "Recherche…" : "Rechercher"}
+            </button>
+          </div>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          {searched && !error && results.length === 0 && (
+            <p className="text-xs text-white/50">Aucun produit trouvé.</p>
+          )}
+          {results.length > 0 && (
+            <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
+              {results.map((product) => (
+                <button
+                  type="button"
+                  key={product.productId}
+                  onClick={() => applyProduct(product)}
+                  className="flex items-center gap-3 rounded-md border border-white/10 bg-black/20 p-2 text-left hover:border-blue-500/50 hover:bg-blue-500/5"
+                >
+                  {product.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.logoUrl} alt="" className="h-8 w-8 shrink-0 rounded object-contain" />
+                  ) : (
+                    <div className="h-8 w-8 shrink-0 rounded bg-white/10" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-medium text-white">{product.productName}</div>
+                    <div className="truncate text-[11px] text-white/50">
+                      #{product.productId} · {product.countryName || product.countryCode} · {product.currencyCode}
+                      {" · "}
+                      {product.denominationType === "FIXED"
+                        ? `Fixe: ${product.fixedDenominations.join(", ") || "—"}`
+                        : `Plage: ${product.minDenomination ?? "?"}–${product.maxDenomination ?? "?"}`}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-[11px] font-medium text-blue-400">Utiliser →</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

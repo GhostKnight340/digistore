@@ -15,6 +15,7 @@ import {
   notifyPaymentStatusChange,
   notifyFulfillmentNeeded,
 } from "@/lib/discord/notify";
+import { attemptAutomaticReloadlyFulfillment } from "@/lib/db/fulfillment";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
 const ALLOWED_PROOF_TYPES = [
@@ -232,6 +233,12 @@ async function setPaymentStatus(
         itemCount: await prisma.orderItem.count({ where: { orderId } }),
         adminUrl,
       });
+      // Never lets a Reloadly failure break payment confirmation — the
+      // function itself catches everything and just leaves the item(s)
+      // flagged for manual review/retry in admin.
+      void attemptAutomaticReloadlyFulfillment(orderId).catch((error) =>
+        console.error("[attemptAutomaticReloadlyFulfillment]", error),
+      );
     }
 
     return { ok: true };
@@ -477,6 +484,9 @@ async function transitionPaypalStatus(
       itemCount: await prisma.orderItem.count({ where: { orderId } }),
       adminUrl,
     });
+    void attemptAutomaticReloadlyFulfillment(orderId).catch((error) =>
+      console.error("[attemptAutomaticReloadlyFulfillment]", error),
+    );
   }
 
   return { ok: true };

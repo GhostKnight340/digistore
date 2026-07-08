@@ -114,6 +114,14 @@ function buildCustomerDTO(
       variantStockControl: item.variant?.stockControl,
       variantReloadlyProductId: item.variant?.reloadlyProductId ?? null,
       variantReloadlyCountryCode: item.variant?.reloadlyCountryCode ?? null,
+      variantReloadlyAutomationEnabled: item.variant?.reloadlyAutomationEnabled ?? false,
+      fulfillmentStatus: item.fulfillmentStatus,
+      fulfillmentSource: item.fulfillmentSource,
+      fulfillmentError: item.fulfillmentError,
+      reloadlyTransactionId: item.reloadlyTransactionId,
+      reloadlyOrderId: item.reloadlyOrderId,
+      fulfillmentAttempts: item.fulfillmentAttempts,
+      deliveredCount: data.deliveredCodes.filter((code) => code.orderItemId === item.id).length,
     })),
     deliveredCodes: canExposeCodes
       ? data.deliveredCodes.map((delivered) => ({
@@ -159,6 +167,12 @@ function loadOrder(id: string) {
           variantId: true,
           quantity: true,
           unitPriceMad: true,
+          fulfillmentStatus: true,
+          fulfillmentSource: true,
+          fulfillmentError: true,
+          reloadlyTransactionId: true,
+          reloadlyOrderId: true,
+          fulfillmentAttempts: true,
           product: { select: { slug: true, name: true } },
           variant: {
             select: {
@@ -169,6 +183,7 @@ function loadOrder(id: string) {
               stockControl: true,
               reloadlyProductId: true,
               reloadlyCountryCode: true,
+              reloadlyAutomationEnabled: true,
             },
           },
         },

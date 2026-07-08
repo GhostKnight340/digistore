@@ -16,6 +16,19 @@ export interface OrderItemDTO {
   variantStockControl?: string;
   variantReloadlyProductId?: number | null;
   variantReloadlyCountryCode?: string | null;
+  variantReloadlyAutomationEnabled?: boolean;
+  // Automatic-supplier fulfillment state (see OrderItem in schema.prisma).
+  // "pending" | "fulfilled" | "failed"
+  fulfillmentStatus?: string;
+  fulfillmentSource?: string | null;
+  fulfillmentError?: string | null;
+  reloadlyTransactionId?: number | null;
+  reloadlyOrderId?: number | null;
+  fulfillmentAttempts?: number;
+  // How many units of this item already have a DeliveredCode row (local,
+  // manual, or reloadly) — used by the admin delivery UI to only ask for
+  // the remaining, not-yet-fulfilled units.
+  deliveredCount?: number;
 }
 
 export interface DeliveredCodeDTO {
@@ -230,6 +243,7 @@ export interface VariantDTO {
   inventoryUnused: number;
   reloadlyProductId: number | null;
   reloadlyCountryCode: string | null;
+  reloadlyAutomationEnabled: boolean;
 }
 
 export interface ParentProductDTO {
@@ -286,6 +300,7 @@ export interface SaveVariantInput {
   stockMode: string;
   reloadlyProductId: number | null;
   reloadlyCountryCode: string | null;
+  reloadlyAutomationEnabled: boolean;
 }
 
 export interface FeaturedVariantOptionDTO {
@@ -360,6 +375,30 @@ export interface ItemAssignment {
 export interface ActionResult {
   ok: boolean;
   error?: string;
+}
+
+// ─── Reloadly admin lookup ─────────────────────────────────────────────────
+
+/** One row of the admin "browse Reloadly sandbox catalog" search results. */
+export interface ReloadlyProductSearchResultDTO {
+  productId: number;
+  productName: string;
+  countryCode: string;
+  countryName: string;
+  currencyCode: string;
+  denominationType: string; // "FIXED" | "RANGE"
+  fixedDenominations: number[];
+  minDenomination: number | null;
+  maxDenomination: number | null;
+  logoUrl: string | null;
+  brandName: string;
+}
+
+export interface ReloadlyProductSearchDTO {
+  results: ReloadlyProductSearchResultDTO[];
+  page: number;
+  totalPages: number;
+  totalElements: number;
 }
 
 // ─── Payment method DTOs ──────────────────────────────────────────────────────
