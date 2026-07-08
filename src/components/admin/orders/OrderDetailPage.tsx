@@ -163,8 +163,12 @@ function formatWaiting(ms: number) {
 
 export default function OrderDetailPage({
   initialOrder,
+  paymentMethodLabel,
 }: {
   initialOrder: AdminOrderDTO;
+  /** Resolved customer-facing method name (orders store the method id, not a
+   * friendly label). Falls back to the legacy label map / raw value. */
+  paymentMethodLabel?: string;
 }) {
   const { settings } = useStoreSettings();
   const [order, setOrder] = useState(initialOrder);
@@ -559,7 +563,7 @@ export default function OrderDetailPage({
 
           <div className="s4-pay">
             <PaymentCard
-              method={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
+              method={paymentMethodLabel ?? METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
               reference={paymentReference}
               total={formatMAD(order.totalMad)}
               submittedAt={submittedAt ? formatDate(submittedAt) : "Non soumis"}
