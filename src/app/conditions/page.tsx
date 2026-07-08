@@ -1,1 +1,1 @@
-export { default, metadata } from "../terms/page";
+export { default, metadata, revalidate } from "../terms/page";

@@ -1,9 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
-  const headers = new Headers(request.headers);
-  headers.set("x-current-path", request.nextUrl.pathname);
-  return NextResponse.next({ request: { headers } });
+const MAINTENANCE_BYPASS_PREFIXES = [
+  "/admin",
+  "/payment",
+  "/order",
+  "/delivery",
+  "/find-order",
+  "/maintenance",
+  "/api",
+  "/auth",
+];
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const bypassed = MAINTENANCE_BYPASS_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  if (bypassed) {
+    return NextResponse.next();
+  }
+
+  try {
+    const statusUrl = new URL("/api/maintenance-status", request.nextUrl.origin);
+    const res = await fetch(statusUrl, { next: { revalidate: 30 } });
+    if (res.ok) {
+      const { enabled } = (await res.json()) as { enabled: boolean };
+      if (enabled) {
+        return NextResponse.redirect(new URL("/maintenance", request.url));
+      }
+    }
+  } catch {
+    // Fail open: don't block the storefront if the status check itself errors.
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {

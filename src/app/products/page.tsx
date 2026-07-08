@@ -4,7 +4,7 @@ import RegionBadge from "@/components/RegionBadge";
 import { getCatalogPage, getRegionCounts } from "@/lib/db/catalog";
 import { REGION_LIST } from "@/lib/regions";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Catalogue - ghost.ma",
@@ -27,7 +27,15 @@ export default async function ProductsPage({
       take: 24,
     }),
     getRegionCounts(),
-  ]);
+  ]).catch((error) => {
+    // See src/app/page.tsx: keep ISR resilient to a build-time DB outage
+    // instead of failing the build; the next revalidation will retry.
+    console.error("[ProductsPage] falling back to defaults, catalog fetch failed:", error);
+    return [
+      { categories: [], products: [], total: 0, page, pageSize: 24 },
+      {} as Record<string, number>,
+    ] as const;
+  });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const totalRegionCount = Object.values(regionCounts).reduce((sum, n) => sum + n, 0);
 

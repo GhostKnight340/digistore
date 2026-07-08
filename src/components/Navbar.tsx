@@ -13,22 +13,37 @@ const links = [
   { href: "/support", label: "Support" },
 ];
 
-export default function Navbar({
-  customer,
-}: {
-  customer?: { name: string; email: string } | null;
-}) {
+type NavbarCustomer = { name: string; email: string } | null;
+
+export default function Navbar() {
   const { cartCount, ready } = useStore();
   const { settings } = useStoreSettings();
   const pathname = usePathname();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [customer, setCustomer] = useState<NavbarCustomer>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     setSearchOpen(false);
     setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/session/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { customer: null }))
+      .then((data: { customer: NavbarCustomer }) => {
+        if (!cancelled) setCustomer(data.customer ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomer(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Refetch on navigation so login/logout redirects pick up the new session.
   }, [pathname]);
 
   function logout() {

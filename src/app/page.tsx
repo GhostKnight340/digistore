@@ -3,8 +3,9 @@ import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import { defaultStoreSettings } from "@/lib/storeSettings";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 const steps = [
   { n: 1, title: "Choisissez un produit", text: "Sélectionnez le produit et la quantité." },
@@ -16,7 +17,14 @@ export default async function HomePage() {
   const [{ categories, products }, settings] = await Promise.all([
     getCatalogData(),
     getStoreSettings(),
-  ]);
+  ]).catch((error) => {
+    // The DB may be unreachable while this route is prerendered for ISR
+    // (e.g. at build time on platforms that don't expose it there). Fall
+    // back to an empty/default render instead of failing the build; the
+    // next revalidation picks up real data once the DB is reachable.
+    console.error("[HomePage] falling back to defaults, catalog fetch failed:", error);
+    return [{ categories: [], products: [] }, defaultStoreSettings] as const;
+  });
 
   const productsById = new Map(products.map((product) => [product.id, product]));
   const featured = settings.featuredProductIds

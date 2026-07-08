@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import { StoreSettingsProvider } from "@/context/StoreSettingsContext";
 import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import StorefrontChrome from "@/components/StorefrontChrome";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
-import { getCurrentCustomer } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "ghost.ma - Cartes de jeu au Maroc",
@@ -22,19 +19,10 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [catalog, settings, customer] = await Promise.all([
+  const [catalog, settings] = await Promise.all([
     getCatalogData().catch(() => ({ categories: [], products: [] })),
     getStoreSettings().catch(() => undefined),
-    getCurrentCustomer().catch(() => null),
   ]);
-  const pathname = (await headers()).get("x-current-path") ?? "/";
-  const maintenanceAllowed =
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/payment") ||
-    pathname.startsWith("/order") ||
-    pathname.startsWith("/delivery") ||
-    pathname.startsWith("/find-order");
-  const showMaintenance = Boolean(settings?.maintenance.enabled && !maintenanceAllowed);
 
   return (
     <html lang="en">
@@ -61,40 +49,7 @@ export default async function RootLayout({
             products={catalog.products}
           >
             <StoreProvider>
-              {showMaintenance ? (
-                <main className="grid min-h-screen place-items-center px-6 py-12">
-                  <section className="w-full max-w-xl rounded-2xl border border-border bg-card p-8 text-center shadow-card">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                      Maintenance
-                    </p>
-                    <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">
-                      {settings?.branding.siteName ?? "ghost.ma"} revient bientôt
-                    </h1>
-                    <p className="mt-4 text-sm leading-relaxed text-muted">
-                      {settings?.maintenance.message}
-                    </p>
-                    <div className="mt-6 flex justify-center gap-3 text-xs text-muted">
-                      <span>{settings?.footer.contactEmail}</span>
-                      <span>·</span>
-                      <span>{settings?.footer.whatsappNumber}</span>
-                    </div>
-                  </section>
-                </main>
-              ) : (
-                <div className="flex min-h-screen flex-col">
-                  {pathname.startsWith("/admin") ? null : (
-                    <Navbar
-                      customer={
-                        customer
-                          ? { name: customer.name, email: customer.email }
-                          : null
-                      }
-                    />
-                  )}
-                  <main className="flex-1">{children}</main>
-                  {pathname.startsWith("/admin") ? null : <Footer />}
-                </div>
-              )}
+              <StorefrontChrome>{children}</StorefrontChrome>
             </StoreProvider>
           </ProductCatalogProvider>
         </StoreSettingsProvider>
