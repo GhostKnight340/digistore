@@ -18,3 +18,4 @@ prisma/dev.db-journal
 *.db-journal
 *.db-wal
 *.db-shm
+.env*
