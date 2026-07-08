@@ -10,6 +10,7 @@ interface PayPalButtonsInstance {
 
 interface PayPalNamespace {
   Buttons: (config: Record<string, unknown>) => PayPalButtonsInstance;
+  FUNDING: Record<string, string>;
 }
 
 declare global {
@@ -25,7 +26,7 @@ function loadPaypalSdk(clientId: string, currency: string): Promise<void> {
   if (sdkLoadPromise) return sdkLoadPromise;
   sdkLoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture&disable-funding=card,credit`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture&components=buttons`;
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => {
@@ -48,11 +49,16 @@ export default function PayPalButton({
   currency,
   onConfirmed,
   onError,
+  fundingSource = "paypal",
 }: {
   orderId: string;
   currency: string;
   onConfirmed: () => void;
   onError: (message: string) => void;
+  /** Restricts this button instance to a single funding source, so a
+   * PayPal-only button and a card-only button can coexist without either
+   * pulling in the other's option. */
+  fundingSource?: "paypal" | "card";
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false);
@@ -70,9 +76,15 @@ export default function PayPalButton({
     loadPaypalSdk(clientId, currency)
       .then(() => {
         if (cancelled || !containerRef.current || !window.paypal) return;
+        const fundingSourceValue =
+          window.paypal.FUNDING[fundingSource.toUpperCase()] ?? window.paypal.FUNDING.PAYPAL;
         window.paypal
           .Buttons({
-            style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
+            fundingSource: fundingSourceValue,
+            style:
+              fundingSource === "card"
+                ? { layout: "vertical", shape: "rect", label: "pay" }
+                : { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
             createOrder: async () => {
               if (busyRef.current) throw new Error("Une opération est déjà en cours.");
               busyRef.current = true;
@@ -137,9 +149,9 @@ export default function PayPalButton({
     return () => {
       cancelled = true;
     };
-    // Re-render fresh buttons only if the order or currency actually change.
+    // Re-render fresh buttons only if the order, currency, or funding source change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, currency]);
+  }, [orderId, currency, fundingSource]);
 
   return (
     <div>

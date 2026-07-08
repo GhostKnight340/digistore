@@ -57,8 +57,13 @@ export async function createPaypalOrderForGhostOrder(
 
   const { methods } = await getAdminPaymentMethods();
   const method = resolveOrderPaymentMethod(order.paymentMethod, methods);
-  if (!method || method.type !== "paypal") {
+  // "card" is guest checkout through PayPal's own card processing — same
+  // backend, just a different button/funding source client-side.
+  if (!method || (method.type !== "paypal" && method.type !== "card")) {
     return { ok: false, error: "PayPal n'est pas disponible pour cette commande." };
+  }
+  if (method.type === "card" && method.details.comingSoon) {
+    return { ok: false, error: "Le paiement par carte n'est pas encore disponible." };
   }
 
   // Idempotent: reuse the existing PayPal order if one was already created

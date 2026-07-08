@@ -447,6 +447,21 @@ function DetailsTab({
             uncheckedLabel="Non"
           />
         </div>
+        <TextField
+          label="Devise PayPal (ex: USD)"
+          value={details.paypalCurrency ?? ""}
+          onChange={(v) => setDetail("paypalCurrency", v.toUpperCase())}
+          placeholder="USD"
+        />
+        <TextField
+          label="Taux de change (MAD pour 1 unité)"
+          value={details.paypalExchangeRate != null ? String(details.paypalExchangeRate) : ""}
+          onChange={(v) => {
+            const parsed = Number(v);
+            setDetail("paypalExchangeRate", Number.isFinite(parsed) && parsed > 0 ? parsed : undefined);
+          }}
+          placeholder="10"
+        />
         <div className="sm:col-span-2">
           <TextField label="Message affiché au client" value={details.statusNote ?? ""} onChange={(v) => setDetail("statusNote", v)} textarea />
         </div>

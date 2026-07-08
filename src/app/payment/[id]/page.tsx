@@ -442,14 +442,36 @@ function PendingPaymentSection({
         </div>
       )}
 
-      {/* ── Card ── */}
+      {/* ── Card (automated, via PayPal guest checkout) ── */}
       {method.type === "card" && (
-        <div className="card p-8 text-center">
-          <PaymentBrandMark display={display} active className="mx-auto mb-3 h-14 w-14" />
-          <h2 className="mt-4 text-base font-semibold text-white">
-            {details.statusNote || "Paiement par carte bientôt disponible."}
-          </h2>
-          <p className="mt-2 text-sm text-muted">Veuillez choisir une autre méthode de paiement.</p>
+        <div className="card p-5 text-center">
+          {details.comingSoon ? (
+            <>
+              <PaymentBrandMark display={display} active className="mx-auto mb-3 h-14 w-14" />
+              <h2 className="mt-4 text-base font-semibold text-white">
+                {details.statusNote || "Paiement par carte bientôt disponible."}
+              </h2>
+              <p className="mt-2 text-sm text-muted">Veuillez choisir une autre méthode de paiement.</p>
+            </>
+          ) : (
+            <>
+              <PaymentBrandMark display={display} active className="mx-auto h-14 w-14" />
+              <h2 className="mt-4 text-base font-semibold text-white">{display.displayName}</h2>
+              <p className="mt-2 text-sm text-muted">
+                Payez {formatMAD(totalMad)} en toute sécurité par carte. Confirmation automatique.
+              </p>
+              <div className="mx-auto mt-5 max-w-xs">
+                <PayPalButton
+                  orderId={orderId}
+                  currency={details.paypalCurrency || "USD"}
+                  fundingSource="card"
+                  onConfirmed={onSubmitted}
+                  onError={setError}
+                />
+              </div>
+              {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
+            </>
+          )}
         </div>
       )}
 
