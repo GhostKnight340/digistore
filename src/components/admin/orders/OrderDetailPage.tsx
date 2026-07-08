@@ -13,6 +13,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isInventoryEnabled } from "@/lib/storeSettings";
 import { isDelivered, orderStatusLabel, orderStatusShort } from "@/lib/orderStatus";
 import {
   changeOrderStatusAction,
@@ -190,7 +191,8 @@ export default function OrderDetailPage({
     text: string;
     reason: string;
   } | null>(null);
-  const manualMode = settings.inventoryMode === "manual";
+  // Inventory OFF also forces manual/provider fulfillment (no local code pool).
+  const manualMode = settings.inventoryMode === "manual" || !isInventoryEnabled(settings);
 
   const delivered = isDelivered(order.status);
   const canApprove =

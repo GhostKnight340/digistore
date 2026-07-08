@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getAdminNavCountsAction } from "@/app/actions/admin";
 import AdminShell, { type AdminIdentity, type NavCounts } from "@/components/admin/AdminShell";
 import AdminOverview from "@/components/admin/AdminOverview";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isInventoryEnabled } from "@/lib/storeSettings";
 
 const SettingsPanel = lazy(() => import("@/components/admin/SettingsPanel"));
 const ProductsPanel = lazy(() => import("@/components/admin/ProductsPanel"));
@@ -34,7 +36,7 @@ function RestoredPanel({ title, eyebrow, text }: { title: string; eyebrow: strin
   );
 }
 
-function renderPanel(activeTab: string) {
+function renderPanel(activeTab: string, inventoryOn: boolean) {
   switch (activeTab) {
     case "settings":
       return <SettingsPanel />;
@@ -49,7 +51,15 @@ function renderPanel(activeTab: string) {
     case "featured":
       return <FeaturedProductsPanel />;
     case "inventory":
-      return <InventoryPanel />;
+      return inventoryOn ? (
+        <InventoryPanel />
+      ) : (
+        <RestoredPanel
+          title="Système d'inventaire désactivé"
+          eyebrow="Section admin"
+          text="Le système d'inventaire est désactivé. Réactivez-le depuis Boutique → Système d'inventaire pour gérer le stock."
+        />
+      );
     case "payments":
       return <PaymentsPanel />;
     case "payment-settings":
@@ -86,6 +96,8 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
   const tabParam = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(tabParam ?? "overview");
   const [navCounts, setNavCounts] = useState<NavCounts | null>(null);
+  const { settings } = useStoreSettings();
+  const inventoryOn = isInventoryEnabled(settings);
 
   // Honor deep links like /admin?tab=orders (used by standalone routes such as
   // the order-detail page navigating back through the sidebar).
@@ -125,7 +137,7 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
         <div style={{ height: "100%", overflowY: "auto" }}>
           <div className="admin-panel-pad" style={{ padding: "26px 28px" }}>
             <style>{`@media (max-width: 640px) { .admin-panel-pad { padding: 16px !important; } }`}</style>
-            <Suspense fallback={panelFallback}>{renderPanel(activeTab)}</Suspense>
+            <Suspense fallback={panelFallback}>{renderPanel(activeTab, inventoryOn)}</Suspense>
           </div>
         </div>
       )}

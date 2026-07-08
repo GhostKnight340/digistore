@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { defaultStoreSettings, type StoreSettings } from "@/lib/storeSettings";
+import { defaultStoreSettings, isInventoryEnabled, type StoreSettings } from "@/lib/storeSettings";
 import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { uploadImageFile } from "@/lib/clientUpload";
@@ -123,6 +123,19 @@ export default function SettingsPanel() {
           </p>
         )}
       </div>
+
+      <Panel title="Système d'inventaire">
+        <ToggleSwitch
+          className="rounded-xl border border-border bg-base px-3 py-3"
+          label="Système d'inventaire"
+          checked={isInventoryEnabled(draft)}
+          onChange={(checked) => update("inventoryEnabled", checked)}
+        />
+        <p className="mt-3 text-sm text-muted">
+          Lorsque l&apos;inventaire est désactivé, les produits ne sont plus bloqués par le stock et
+          les outils de stock sont masqués.
+        </p>
+      </Panel>
 
       <Panel title="Identité">
         <div className="grid gap-4 sm:grid-cols-2">

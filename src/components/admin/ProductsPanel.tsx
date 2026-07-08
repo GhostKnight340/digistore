@@ -21,6 +21,8 @@ import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import { REGION_LIST } from "@/lib/regions";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isInventoryEnabled } from "@/lib/storeSettings";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1246,6 +1248,8 @@ function VariantForm({
   v: VariantDTO;
   onChange: <K extends keyof VariantDTO>(k: K, val: VariantDTO[K]) => void;
 }) {
+  const { settings } = useStoreSettings();
+  const inventoryOn = isInventoryEnabled(settings);
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1363,22 +1367,26 @@ function VariantForm({
             </Field>
           </>
         )}
-        <Field label={`Affichage du stock · ${v.inventoryUnused} code(s)`}>
-          <select
-            className="input"
-            value={v.stockMode}
-            onChange={(e) => onChange("stockMode", e.target.value)}
-          >
-            {STOCK_MODE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Stock (codes non utilisés)">
-          <input className="input" value={v.inventoryUnused} disabled readOnly />
-        </Field>
+        {inventoryOn && (
+          <>
+            <Field label={`Affichage du stock · ${v.inventoryUnused} code(s)`}>
+              <select
+                className="input"
+                value={v.stockMode}
+                onChange={(e) => onChange("stockMode", e.target.value)}
+              >
+                {STOCK_MODE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Stock (codes non utilisés)">
+              <input className="input" value={v.inventoryUnused} disabled readOnly />
+            </Field>
+          </>
+        )}
       </div>
       <div className="mt-4 flex gap-6">
         <ToggleSwitch

@@ -7,6 +7,7 @@ import {
   getProductCatalog,
 } from "@/lib/db/catalog";
 import { getInventoryGroups } from "@/lib/db/inventory";
+import { isStockTracked } from "@/lib/storeSettings";
 import type { Product, StockStatus } from "@/lib/types";
 
 export async function getStorefrontProductsAction(): Promise<Product[]> {
@@ -39,7 +40,7 @@ async function getStockMap() {
 
 async function withStockStatus(products: Product[]): Promise<Product[]> {
   const settings = await getStoreSettings();
-  if (settings.inventoryMode === "manual") {
+  if (!isStockTracked(settings)) {
     return products.map((product) => ({ ...product, stockStatus: "in_stock" }));
   }
   const stock = await getStockMap();
@@ -66,7 +67,7 @@ export async function getCategoryStockStatusesAction(): Promise<
     getProductCatalog(),
   ]);
   const settings = await getStoreSettings();
-  if (settings.inventoryMode === "manual") {
+  if (!isStockTracked(settings)) {
     return Object.fromEntries(products.map((product) => [product.category, "in_stock" as const]));
   }
   const productStock = new Map(inventory.map((row) => [row.productId, row.unused]));

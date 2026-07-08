@@ -7,6 +7,8 @@ import {
   getInventoryProductsAction,
 } from "@/app/actions/admin";
 import type { AdminOverviewMetricsDTO } from "@/lib/dto";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isInventoryEnabled } from "@/lib/storeSettings";
 
 const C = {
   surface: "#0F1015",
@@ -131,6 +133,8 @@ export default function AdminOverview({
   onOpenReviewQueue: () => void;
   onOpenInventory?: () => void;
 }) {
+  const { settings } = useStoreSettings();
+  const inventoryOn = isInventoryEnabled(settings);
   const [metrics, setMetrics] = useState<AdminOverviewMetricsDTO | null>(null);
   const [outOfStock, setOutOfStock] = useState<{ out: number; low: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,27 +144,30 @@ export default function AdminOverview({
     setLoading(true);
     setError(false);
     try {
-      const [m, inventory] = await Promise.all([
-        getAdminOverviewMetricsAction(),
-        getInventoryProductsAction(),
-      ]);
-      let out = 0;
-      let low = 0;
-      for (const product of inventory) {
-        for (const variant of product.variants) {
-          if (variant.unused === 0) out += 1;
-          else if (variant.unused <= LOW_STOCK_MAX) low += 1;
-        }
-      }
+      const m = await getAdminOverviewMetricsAction();
       setMetrics(m);
-      setOutOfStock({ out, low });
+      // Inventory OFF → skip the stock scan and hide the stock KPI entirely.
+      if (!inventoryOn) {
+        setOutOfStock(null);
+      } else {
+        const inventory = await getInventoryProductsAction();
+        let out = 0;
+        let low = 0;
+        for (const product of inventory) {
+          for (const variant of product.variants) {
+            if (variant.unused === 0) out += 1;
+            else if (variant.unused <= LOW_STOCK_MAX) low += 1;
+          }
+        }
+        setOutOfStock({ out, low });
+      }
     } catch (err) {
       console.error("Failed to load overview metrics", err);
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [inventoryOn]);
 
   useEffect(() => {
     load();
@@ -322,6 +329,7 @@ export default function AdminOverview({
                   : `Plus ancienne : ${metrics.oldestReviewWaitMin} min`}
               </div>
             </KpiCard>
+            {inventoryOn && (
             <KpiCard
               label="SKU en rupture"
               labelColor={C.danger}
@@ -333,6 +341,7 @@ export default function AdminOverview({
                 {outOfStock ? `${outOfStock.low} en stock faible` : " "}
               </div>
             </KpiCard>
+            )}
           </div>
 
           {/* two col */}

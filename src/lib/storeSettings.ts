@@ -24,6 +24,11 @@ export type FooterPaymentBadgeSetting = {
 };
 
 export type StoreSettings = {
+  /** Global inventory system switch. When false, the stock/inventory system is
+   * hidden and purchases are never blocked by quantity — availability is
+   * controlled only by the manual active/inactive fields. Inventory data is
+   * preserved and reappears when re-enabled. */
+  inventoryEnabled: boolean;
   inventoryMode: "automatic" | "manual";
   maintenance: {
     enabled: boolean;
@@ -97,6 +102,7 @@ export type StoreSettings = {
 };
 
 export const defaultStoreSettings: StoreSettings = {
+  inventoryEnabled: true,
   inventoryMode: "automatic",
   maintenance: {
     enabled: false,
@@ -297,6 +303,28 @@ export const defaultStoreSettings: StoreSettings = {
   },
 };
 
+/**
+ * Single source of truth for the global inventory toggle. Use this everywhere
+ * instead of ad-hoc checks. Defaults to enabled for any settings blob that
+ * predates the toggle.
+ */
+export function isInventoryEnabled(
+  settings: Pick<StoreSettings, "inventoryEnabled">,
+): boolean {
+  return settings.inventoryEnabled !== false;
+}
+
+/**
+ * True only when stock quantities should be tracked and may block a purchase:
+ * inventory globally enabled AND not in the "manual" (always in-stock) mode.
+ * When false, availability is decided solely by manual active/inactive fields.
+ */
+export function isStockTracked(
+  settings: Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">,
+): boolean {
+  return isInventoryEnabled(settings) && settings.inventoryMode !== "manual";
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -315,6 +343,10 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
           ? value.maintenance.enabled
           : defaultStoreSettings.maintenance.enabled,
     },
+    inventoryEnabled:
+      typeof value.inventoryEnabled === "boolean"
+        ? value.inventoryEnabled
+        : defaultStoreSettings.inventoryEnabled,
     inventoryMode:
       value.inventoryMode === "manual" || value.inventoryMode === "automatic"
         ? value.inventoryMode

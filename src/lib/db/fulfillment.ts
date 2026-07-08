@@ -4,6 +4,8 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { publicOrderReference } from "@/lib/db/orders";
+import { getStoreSettings } from "@/lib/db/catalog";
+import { isInventoryEnabled } from "@/lib/storeSettings";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import {
   notifyPaymentStatusChange,
@@ -447,6 +449,9 @@ async function resolveReloadlyEntry(input: {
 async function checkStockThresholds(
   consumed: { productId: string; variantId: string | null; count: number }[],
 ): Promise<void> {
+  // No stock system → no low/out-of-stock alerts.
+  const settings = await getStoreSettings();
+  if (!isInventoryEnabled(settings)) return;
   for (const entry of consumed) {
     try {
       const afterCount = await prisma.digitalCode.count({

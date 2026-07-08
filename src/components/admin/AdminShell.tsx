@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isInventoryEnabled } from "@/lib/storeSettings";
 
 /** Literal design tokens from the admin handoff (docs/admin-handoff/05-Design-Tokens.md). */
 const C = {
@@ -303,6 +305,17 @@ export default function AdminShell({
   const [searchFocus, setSearchFocus] = useState(false);
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { settings } = useStoreSettings();
+
+  // Inventory OFF → hide the Stock section entirely (the inventory system
+  // should look as if it doesn't exist).
+  const nav = useMemo(() => {
+    if (isInventoryEnabled(settings)) return NAV;
+    return NAV.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.id !== "inventory"),
+    })).filter((group) => group.items.length > 0);
+  }, [settings]);
 
   // Close the drawer automatically if the viewport grows back to desktop width.
   useEffect(() => {
@@ -315,7 +328,7 @@ export default function AdminShell({
   }
 
   const currentLabel =
-    NAV.flatMap((group) => group.items).find((item) => item.id === active)?.label ?? "ghost.ma";
+    nav.flatMap((group) => group.items).find((item) => item.id === active)?.label ?? "ghost.ma";
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#070809", color: C.text }}>
@@ -418,7 +431,7 @@ export default function AdminShell({
             gap: "3px",
           }}
         >
-          {NAV.map((group, gi) => (
+          {nav.map((group, gi) => (
             <div key={group.heading ?? `group-${gi}`} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
               {group.divider ? (
                 <div style={{ height: "1px", background: C.borderHairline, margin: "14px 8px" }} />

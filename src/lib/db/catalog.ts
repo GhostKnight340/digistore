@@ -3,7 +3,15 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { cache } from "react";
 import { ensureDatabaseReady, prisma } from "./prisma";
-import { defaultStoreSettings, mergeStoreSettings, type StoreSettings } from "@/lib/storeSettings";
+import {
+  defaultStoreSettings,
+  mergeStoreSettings,
+  isInventoryEnabled,
+  type StoreSettings,
+} from "@/lib/storeSettings";
+
+/** Subset of settings the stock helpers need. */
+type StockOpts = Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">;
 import type { Category, Product, ProductVariantOption, StockMode, StockStatus } from "@/lib/types";
 
 type ProductWithCategory = Awaited<ReturnType<typeof getActiveProductRows>>[number];
@@ -34,19 +42,29 @@ function normalizeStockMode(value: string): StockMode {
     : "automatic";
 }
 
-function isVariantPublic(row: ProductWithCategory, variant: ProductWithCategory["variants"][number]) {
-  return row.active && variant.active && normalizeStockMode(variant.stockMode) !== "force_out_of_stock";
+function isVariantPublic(
+  row: ProductWithCategory,
+  variant: ProductWithCategory["variants"][number],
+  opts?: StockOpts,
+) {
+  if (!row.active || !variant.active) return false;
+  // Inventory OFF: availability is active-only — the force_out_of_stock
+  // stock-mode override is an inventory lever and is ignored.
+  if (opts && !isInventoryEnabled(opts)) return true;
+  return normalizeStockMode(variant.stockMode) !== "force_out_of_stock";
 }
 
 function variantStockStatus(
   row: ProductWithCategory,
   variant: ProductWithCategory["variants"][number],
-  inventoryMode: StoreSettings["inventoryMode"] = "automatic",
+  opts?: StockOpts,
 ): StockStatus {
   const stockMode = normalizeStockMode(variant.stockMode);
   if (stockMode === "force_in_stock") return "in_stock";
+  // Inventory OFF: never out-of-stock on quantity or force_out override.
+  if (opts && !isInventoryEnabled(opts)) return "in_stock";
   if (stockMode === "force_out_of_stock") return "out_of_stock";
-  if (inventoryMode === "manual") return "in_stock";
+  if (!opts || opts.inventoryMode === "manual") return "in_stock";
   return variant._count.digitalCodes > 0 ? "in_stock" : "out_of_stock";
 }
 
@@ -59,7 +77,7 @@ function variantTitle(parentName: string, variant: ProductWithCategory["variants
 function toVariantOption(
   row: ProductWithCategory,
   variant: ProductWithCategory["variants"][number],
-  inventoryMode?: StoreSettings["inventoryMode"],
+  opts?: StockOpts,
 ): ProductVariantOption {
   return {
     id: variant.id,
@@ -71,14 +89,14 @@ function toVariantOption(
     active: variant.active,
     featured: variant.featured,
     stockMode: normalizeStockMode(variant.stockMode),
-    stockStatus: variantStockStatus(row, variant, inventoryMode),
+    stockStatus: variantStockStatus(row, variant, opts),
   };
 }
 
 function toVariantProduct(
   row: ProductWithCategory,
   variant: ProductWithCategory["variants"][number],
-  inventoryMode?: StoreSettings["inventoryMode"],
+  opts?: StockOpts,
 ): Product {
   const title = variantTitle(row.name, variant);
   const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
@@ -96,18 +114,18 @@ function toVariantProduct(
     description: row.description,
     imageUrl,
     featured: variant.featured,
-    stockStatus: variantStockStatus(row, variant, inventoryMode),
+    stockStatus: variantStockStatus(row, variant, opts),
   };
 }
 
 function toParentProduct(
   row: ProductWithCategory,
   selectedVariantId?: string,
-  inventoryMode?: StoreSettings["inventoryMode"],
+  opts?: StockOpts,
 ): Product {
   const variants = row.variants
-    .filter((variant) => isVariantPublic(row, variant))
-    .map((variant) => toVariantOption(row, variant, inventoryMode));
+    .filter((variant) => isVariantPublic(row, variant, opts))
+    .map((variant) => toVariantOption(row, variant, opts));
   const selectedVariant =
     variants.find((variant) => variant.id === selectedVariantId) ?? variants[0];
   const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
@@ -268,9 +286,9 @@ export async function getCatalogPage(options: {
   const variantProducts = productRows
     .flatMap((row, productIndex) =>
       row.variants
-        .filter((variant) => isVariantPublic(row, variant))
+        .filter((variant) => isVariantPublic(row, variant, settings))
         .map((variant, variantIndex) => ({
-          product: toVariantProduct(row, variant, settings.inventoryMode),
+          product: toVariantProduct(row, variant, settings),
           productIndex,
           variantIndex,
         })),
@@ -316,7 +334,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     include: productCatalogInclude,
   });
   const settings = await getStoreSettings();
-  return product ? toParentProduct(product, undefined, settings.inventoryMode) : null;
+  return product ? toParentProduct(product, undefined, settings) : null;
 }
 
 export async function getParentProductSlugs(): Promise<string[]> {
@@ -349,8 +367,8 @@ export async function getProductsByCategorySlug(
   const settings = await getStoreSettings();
   return products.flatMap((row) =>
     row.variants
-      .filter((variant) => isVariantPublic(row, variant))
-      .map((variant) => toVariantProduct(row, variant, settings.inventoryMode)),
+      .filter((variant) => isVariantPublic(row, variant, settings))
+      .map((variant) => toVariantProduct(row, variant, settings)),
   );
 }
 

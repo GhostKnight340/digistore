@@ -8,6 +8,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMAD, formatDate } from "@/lib/format";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isInventoryEnabled } from "@/lib/storeSettings";
 import {
   getReloadlyOverviewAction,
   testReloadlyConnectionAction,
@@ -697,6 +699,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function RoutingSection() {
   const [mappings, setMappings] = useState<ReloadlyMappingDTO[]>([]);
+  const { settings } = useStoreSettings();
+  const inventoryOn = isInventoryEnabled(settings);
 
   useEffect(() => {
     getReloadlyMappingsAction().then(setMappings).catch(() => setMappings([]));
@@ -709,9 +713,9 @@ function RoutingSection() {
       <h3 className="text-sm font-semibold text-white">Fulfillment routing</h3>
       <div className="card p-5">
         <p className="text-sm text-muted">
-          Each variant has <strong className="text-white">a single stock source</strong> (local
-          inventory, manual entry, or Reloadly). There is no automatic fallback — the current
-          architecture does not support it.
+          Each variant has <strong className="text-white">a single source</strong> (
+          {inventoryOn ? "local inventory, manual entry, or Reloadly" : "manual entry or Reloadly"}).
+          There is no automatic fallback — the current architecture does not support it.
         </p>
         {linked.length > 0 && (
           <ul className="mt-4 space-y-2">
