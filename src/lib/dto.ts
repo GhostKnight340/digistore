@@ -42,6 +42,8 @@ export interface CustomerOrderDTO {
   customerName: string;
   customerEmail: string;
   paymentMethod: string;
+  /** Selected bank account id for bank-transfer orders; null otherwise. */
+  bankAccountId: string | null;
   totalMad: number;
   createdAt: string;
   items: OrderItemDTO[];
@@ -75,6 +77,10 @@ export interface EmailLogDTO {
 export interface AdminOrderDTO extends CustomerOrderDTO {
   emailLogs: EmailLogDTO[];
   proofMimeType: string | null;
+  /** Resolved, human-readable payment method label (e.g. "Virement bancaire"). */
+  paymentMethodLabel: string;
+  /** Selected bank name for bank-transfer orders; null otherwise. */
+  bankName: string | null;
 }
 
 export interface AdminPaymentProofDTO {
@@ -378,6 +384,8 @@ export interface PaymentMethodDetails {
   accountHolder?: string;
   iban?: string;
   swift?: string;
+  /** Optional QR code image URL shown on the payment page. */
+  qrUrl?: string;
   // paypal
   email?: string;
   meLink?: string;

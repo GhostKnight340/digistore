@@ -68,7 +68,10 @@ export type OrderNotificationOrder = {
   id: string;
   status: string;
   totalMad: number;
+  /** May be a friendly label ("Virement bancaire") when resolved by the caller. */
   paymentMethod: string;
+  /** Selected bank name for bank-transfer orders; shown as a separate field. */
+  bankName?: string | null;
   discordMessageId: string | null;
   discordThreadId: string | null;
 };
@@ -87,6 +90,7 @@ export function notifyOrderCreated(input: NewOrderNotification): Promise<void> {
     status: input.order.status,
     totalMad: input.order.totalMad,
     paymentMethod: input.order.paymentMethod,
+    bankName: input.order.bankName ?? null,
     itemSummary: input.itemSummary,
     adminUrl: input.adminUrl,
     discordMessageId: input.order.discordMessageId,
@@ -138,6 +142,7 @@ export function notifyPaymentStatusChange(
       status: input.toStatus,
       totalMad: input.order.totalMad,
       paymentMethod: input.order.paymentMethod,
+      bankName: input.order.bankName ?? null,
       adminUrl: input.adminUrl,
       discordMessageId: input.order.discordMessageId,
       discordThreadId: input.order.discordThreadId,
@@ -177,6 +182,7 @@ export function notifyFulfillmentNeeded(
       status: "payment_confirmed",
       totalMad: input.order.totalMad,
       paymentMethod: input.order.paymentMethod,
+      bankName: input.order.bankName ?? null,
       adminUrl: input.adminUrl,
       discordMessageId: input.order.discordMessageId,
       discordThreadId: input.order.discordThreadId,
@@ -209,6 +215,7 @@ export function notifyFulfillmentCompleted(
       status: "delivered",
       totalMad: input.order.totalMad,
       paymentMethod: input.order.paymentMethod,
+      bankName: input.order.bankName ?? null,
       adminUrl: input.adminUrl,
       discordMessageId: input.order.discordMessageId,
       discordThreadId: input.order.discordThreadId,

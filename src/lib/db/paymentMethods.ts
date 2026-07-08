@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
+import { describeOrderPaymentMethod } from "@/lib/paymentMethod";
 import type {
   PaymentMethodDTO,
   PaymentMethodDetails,
@@ -111,6 +112,26 @@ export async function getPublicPaymentMethods(): Promise<PaymentConfigDTO> {
     methods: methods.filter(isUsable).map(rowToMethod),
     support: rowToSupport(support),
   };
+}
+
+/** All payment methods as DTOs (incl. archived), for order-side resolution. */
+export async function getAllPaymentMethodDTOs(): Promise<PaymentMethodDTO[]> {
+  await ensureDatabaseReady();
+  const methods = await prisma.paymentMethod.findMany({ orderBy: { sortOrder: "asc" } });
+  return methods.map(rowToMethod);
+}
+
+/**
+ * Friendly payment-method label + selected bank name for an order. Used by
+ * Discord notifications and the admin order detail so both new bank-transfer
+ * orders and legacy per-bank orders read cleanly.
+ */
+export async function resolveOrderPaymentSummary(order: {
+  paymentMethod: string;
+  bankAccountId?: string | null;
+}): Promise<{ label: string; bankName: string | null }> {
+  const methods = await getAllPaymentMethodDTOs();
+  return describeOrderPaymentMethod(order, methods);
 }
 
 /** Every method (incl. inactive/hidden/archived), for the admin table. */

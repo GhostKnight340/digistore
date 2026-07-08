@@ -356,6 +356,10 @@ function DetailsTab({
   if (type === "bank") {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-[11.5px] text-muted">
+          Chaque banque est un mode « Virement bancaire » distinct. Au checkout, elles sont
+          regroupées sous une seule option ; le client choisit sa banque sur la page de paiement.
+        </div>
         <TextField label="Nom de la banque" value={details.bankName ?? ""} onChange={(v) => setDetail("bankName", v)} />
         <TextField label="Titulaire du compte" value={details.accountHolder ?? ""} onChange={(v) => setDetail("accountHolder", v)} />
         <TextField
@@ -367,6 +371,14 @@ function DetailsTab({
         <TextField label="Numéro de compte" value={details.accountNumber ?? ""} onChange={(v) => setDetail("accountNumber", v)} />
         <TextField label="IBAN" value={details.iban ?? ""} onChange={(v) => setDetail("iban", v)} />
         <TextField label="SWIFT / BIC" value={details.swift ?? ""} onChange={(v) => setDetail("swift", v)} />
+        <div className="sm:col-span-2">
+          <TextField
+            label="QR code (URL de l'image, optionnel)"
+            value={details.qrUrl ?? ""}
+            onChange={(v) => setDetail("qrUrl", v)}
+            placeholder="https://…"
+          />
+        </div>
         <div className="sm:col-span-2">
           <TextField label="Instructions" value={details.instructions ?? ""} onChange={(v) => setDetail("instructions", v)} textarea />
         </div>

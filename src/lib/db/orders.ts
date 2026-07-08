@@ -5,6 +5,8 @@ import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
 import { notifyOrderCreated } from "@/lib/discord/notify";
+import { resolveOrderPaymentSummary } from "@/lib/db/paymentMethods";
+import { BANK_TRANSFER_METHOD_ID, BANK_TRANSFER_LABEL } from "@/lib/paymentMethod";
 import {
   absoluteAppUrl,
   formatPublicOrderNumber,
@@ -103,6 +105,7 @@ function buildCustomerDTO(
     customerName: data.customerName,
     customerEmail: data.customerEmail,
     paymentMethod: data.paymentMethod,
+    bankAccountId: data.bankAccountId ?? null,
     totalMad: data.totalMad,
     createdAt: iso(data.createdAt),
     items: data.items.map((item) => ({
@@ -147,6 +150,7 @@ function loadOrder(id: string) {
       customerName: true,
       customerEmail: true,
       paymentMethod: true,
+      bankAccountId: true,
       totalMad: true,
       createdAt: true,
       paymentProvider: true,
@@ -368,10 +372,13 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
 
   if (!order) return null;
   const reference = await publicOrderReference(order);
+  const summary = await resolveOrderPaymentSummary(order);
   return {
     ...buildCustomerDTO(order, reference, { includeUndeliveredCodes: true }),
     emailLogs: emailLogs.map(buildEmailLogDTO),
     proofMimeType: order.paymentProof?.mimeType ?? null,
+    paymentMethodLabel: summary.label,
+    bankName: summary.bankName,
   };
 }
 
@@ -450,6 +457,7 @@ export async function getAdminNavCounts(): Promise<{
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   bank: "Virement bancaire",
+  [BANK_TRANSFER_METHOD_ID]: BANK_TRANSFER_LABEL,
   usdt: "Crypto",
   crypto: "Crypto",
   card: "Carte",
@@ -885,8 +893,9 @@ export async function createOrder(
       console.error("[email:order_received]", emailError);
     }
 
+    const paymentSummary = await resolveOrderPaymentSummary(order);
     void notifyOrderCreated({
-      order,
+      order: { ...order, paymentMethod: paymentSummary.label, bankName: paymentSummary.bankName },
       publicOrderNumber: reference.number,
       itemSummary: lineItems
         .map((item) => `${item.quantity}x ${item.name}`)

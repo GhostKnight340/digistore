@@ -9,8 +9,14 @@ import {
 } from "@/lib/email/send-email";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import { publicOrderReference } from "@/lib/db/orders";
-import { getAdminPaymentMethods } from "@/lib/db/paymentMethods";
-import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
+import { getAdminPaymentMethods, resolveOrderPaymentSummary } from "@/lib/db/paymentMethods";
+import {
+  resolveOrderPaymentMethod,
+  isBankTransferOrder,
+  resolveSelectedBank,
+  describeOrderPaymentMethod,
+} from "@/lib/paymentMethod";
+import type { PaymentMethodDTO } from "@/lib/dto";
 import {
   notifyPaymentStatusChange,
   notifyFulfillmentNeeded,
@@ -24,9 +30,19 @@ const ALLOWED_PROOF_TYPES = [
   "application/pdf",
 ];
 
+/** Active bank account (type "bank") by id, or null. */
+function findActiveBank(methods: PaymentMethodDTO[], id: string | null | undefined): PaymentMethodDTO | null {
+  if (!id) return null;
+  const method = methods.find((m) => m.id === id);
+  return method && method.type === "bank" && method.status === "active" && method.visible && !method.archivedAt
+    ? method
+    : null;
+}
+
 export async function submitPayment(
   orderId: string,
   proof?: { fileName: string; mimeType: string; dataBase64: string },
+  bankAccountId?: string | null,
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -37,8 +53,26 @@ export async function submitPayment(
 
   const { methods } = await getAdminPaymentMethods();
   const method = resolveOrderPaymentMethod(order.paymentMethod, methods);
-  const proofRequired =
-    method?.proofRequired ?? !["paypal", "card", "test"].includes(order.paymentMethod);
+  const isBank = isBankTransferOrder(order.paymentMethod, methods);
+
+  // Resolve + lock the specific bank account for a bank transfer. Prefer the
+  // account the customer just chose, then any previously stored one, then the
+  // safe fallback (sole active bank auto-selects).
+  let finalBankId: string | null = order.bankAccountId ?? null;
+  if (isBank) {
+    const chosen =
+      findActiveBank(methods, bankAccountId) ??
+      findActiveBank(methods, order.bankAccountId) ??
+      resolveSelectedBank({ paymentMethod: order.paymentMethod, bankAccountId: order.bankAccountId }, methods);
+    if (!chosen) {
+      return { ok: false, error: "Aucune banque n'est disponible pour le moment." };
+    }
+    finalBankId = chosen.id;
+  }
+
+  const proofRequired = isBank
+    ? (methods.find((m) => m.id === finalBankId)?.proofRequired ?? true)
+    : (method?.proofRequired ?? !["paypal", "card", "test"].includes(order.paymentMethod));
   if (proofRequired && !proof) {
     return { ok: false, error: "Un justificatif de paiement est requis pour ce mode de paiement." };
   }
@@ -56,13 +90,28 @@ export async function submitPayment(
   }
 
   try {
+    const bankChanged = isBank && finalBankId !== (order.bankAccountId ?? null);
     await prisma.$transaction(async (tx) => {
       const updated = await tx.order.updateMany({
         where: { id: orderId, status: "pending_payment" },
-        data: { status: "payment_submitted" },
+        data: {
+          status: "payment_submitted",
+          ...(isBank ? { bankAccountId: finalBankId } : {}),
+        },
       });
       if (updated.count !== 1) {
         throw new Error("Le paiement a déjà été soumis ou le statut de la commande a changé.");
+      }
+
+      if (bankChanged) {
+        const bank = methods.find((m) => m.id === finalBankId);
+        await tx.paymentEvent.create({
+          data: {
+            orderId,
+            type: "bank_selected",
+            note: `Compte sélectionné : ${bank?.details.bankName || bank?.name || finalBankId}`,
+          },
+        });
       }
 
       if (proof) {
@@ -116,8 +165,12 @@ export async function submitPayment(
       console.error("[email:proof_received]", emailError);
     }
 
+    const summary = describeOrderPaymentMethod(
+      { paymentMethod: order.paymentMethod, bankAccountId: finalBankId },
+      methods,
+    );
     void notifyPaymentStatusChange({
-      order,
+      order: { ...order, paymentMethod: summary.label, bankName: summary.bankName },
       publicOrderNumber: reference.number,
       fromStatus: "pending_payment",
       toStatus: "payment_submitted",
@@ -131,6 +184,56 @@ export async function submitPayment(
       ok: false,
       error: error instanceof Error ? error.message : "Soumission impossible.",
     };
+  }
+}
+
+/**
+ * Records the bank account a customer selects on the payment page (before proof
+ * submission). Persists the choice and writes an audit PaymentEvent whenever it
+ * changes so the timeline reflects switches. Only allowed while the order is
+ * still safely pending; once proof is in the selection is locked.
+ */
+export async function selectOrderBankAccount(
+  orderId: string,
+  bankAccountId: string,
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) return { ok: false, error: "Commande introuvable." };
+  if (order.status !== "pending_payment") {
+    return { ok: false, error: "La banque ne peut plus être modifiée." };
+  }
+
+  const { methods } = await getAdminPaymentMethods();
+  if (!isBankTransferOrder(order.paymentMethod, methods)) {
+    return { ok: false, error: "Cette commande n'est pas un virement bancaire." };
+  }
+  const bank = findActiveBank(methods, bankAccountId);
+  if (!bank) return { ok: false, error: "Banque indisponible." };
+  if (order.bankAccountId === bank.id) return { ok: true };
+
+  try {
+    const previous = order.bankAccountId
+      ? methods.find((m) => m.id === order.bankAccountId)
+      : null;
+    const previousName = previous?.details.bankName || previous?.name;
+    const nextName = bank.details.bankName || bank.name;
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({ where: { id: orderId }, data: { bankAccountId: bank.id } });
+      await tx.paymentEvent.create({
+        data: {
+          orderId,
+          type: "bank_selected",
+          note: previousName
+            ? `Banque changée : ${previousName} → ${nextName}`
+            : `Compte sélectionné : ${nextName}`,
+        },
+      });
+    });
+    return { ok: true };
+  } catch (error) {
+    console.error("[selectOrderBankAccount]", error);
+    return { ok: false, error: "Sélection impossible." };
   }
 }
 
@@ -217,8 +320,10 @@ async function setPaymentStatus(
 
     const reference = await publicOrderReference(order);
     const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+    const paymentSummary = await resolveOrderPaymentSummary(order);
+    const notifyOrder = { ...order, paymentMethod: paymentSummary.label, bankName: paymentSummary.bankName };
     void notifyPaymentStatusChange({
-      order,
+      order: notifyOrder,
       publicOrderNumber: reference.number,
       fromStatus: order.status,
       toStatus,
@@ -227,7 +332,7 @@ async function setPaymentStatus(
     });
     if (toStatus === "payment_confirmed") {
       void notifyFulfillmentNeeded({
-        order,
+        order: notifyOrder,
         publicOrderNumber: reference.number,
         itemCount: await prisma.orderItem.count({ where: { orderId } }),
         adminUrl,
@@ -461,8 +566,10 @@ async function transitionPaypalStatus(
 
   const reference = await publicOrderReference(order);
   const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+  const paymentSummary = await resolveOrderPaymentSummary(order);
+  const notifyOrder = { ...order, paymentMethod: paymentSummary.label, bankName: paymentSummary.bankName };
   void notifyPaymentStatusChange({
-    order,
+    order: notifyOrder,
     publicOrderNumber: reference.number,
     fromStatus,
     toStatus: opts.toStatus,
@@ -472,7 +579,7 @@ async function transitionPaypalStatus(
 
   if (opts.triggerFulfillment) {
     void notifyFulfillmentNeeded({
-      order,
+      order: notifyOrder,
       publicOrderNumber: reference.number,
       itemCount: await prisma.orderItem.count({ where: { orderId } }),
       adminUrl,

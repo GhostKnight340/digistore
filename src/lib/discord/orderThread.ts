@@ -58,6 +58,7 @@ export type OrderCardData = {
   status: string;
   totalMad: number;
   paymentMethod: string;
+  bankName?: string | null;
   itemSummary?: string;
   adminUrl: string;
   discordMessageId: string | null;
@@ -75,6 +76,7 @@ function cardPayload(data: OrderCardData): DiscordMessagePayload {
           { name: "Status", value: label, inline: true },
           { name: "Total", value: formatMAD(data.totalMad), inline: true },
           { name: "Payment method", value: data.paymentMethod, inline: true },
+          ...(data.bankName ? [{ name: "Bank", value: data.bankName, inline: true }] : []),
           ...(data.itemSummary ? [{ name: "Items", value: data.itemSummary }] : []),
           { name: "Admin", value: data.adminUrl },
         ],

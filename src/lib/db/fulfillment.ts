@@ -4,6 +4,7 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { publicOrderReference } from "@/lib/db/orders";
+import { resolveOrderPaymentSummary } from "@/lib/db/paymentMethods";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import {
   notifyPaymentStatusChange,
@@ -74,15 +75,17 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
     }
 
     const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+    const paymentSummary = await resolveOrderPaymentSummary(order);
+    const notifyOrder = { ...order, paymentMethod: paymentSummary.label, bankName: paymentSummary.bankName };
     void notifyPaymentStatusChange({
-      order,
+      order: notifyOrder,
       publicOrderNumber: reference.number,
       fromStatus: order.status,
       toStatus: "payment_confirmed",
       adminUrl,
     });
     void notifyFulfillmentNeeded({
-      order,
+      order: notifyOrder,
       publicOrderNumber: reference.number,
       itemCount: await prisma.orderItem.count({ where: { orderId } }),
       adminUrl,
@@ -333,15 +336,17 @@ export async function deliverOrder(
     }
 
     const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+    const paymentSummary = await resolveOrderPaymentSummary(order);
+    const notifyOrder = { ...order, paymentMethod: paymentSummary.label, bankName: paymentSummary.bankName };
     void notifyPaymentStatusChange({
-      order,
+      order: notifyOrder,
       publicOrderNumber: reference.number,
       fromStatus: "payment_confirmed",
       toStatus: "delivered",
       adminUrl,
     });
     void notifyFulfillmentCompleted({
-      order,
+      order: notifyOrder,
       publicOrderNumber: reference.number,
       adminUrl,
     });

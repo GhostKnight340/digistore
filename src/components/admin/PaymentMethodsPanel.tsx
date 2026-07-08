@@ -17,7 +17,13 @@ import PreviewCard from "@/components/admin/payment-methods/PreviewCard";
 import AddMethodDialog from "@/components/admin/payment-methods/AddMethodDialog";
 import MethodEditorDrawer from "@/components/admin/payment-methods/MethodEditorDrawer";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
-import { PAYMENT_METHOD_TYPES, paymentMethodTypeLabel, validatePaymentMethod } from "@/lib/paymentMethod";
+import {
+  PAYMENT_METHOD_TYPES,
+  paymentMethodTypeLabel,
+  validatePaymentMethod,
+  buildCheckoutMethods,
+  bankMethods,
+} from "@/lib/paymentMethod";
 import type { PaymentMethodDTO, PaymentMethodType, SaveMethodInput, SupportConfigDTO } from "@/lib/dto";
 
 function isComplete(method: PaymentMethodDTO): boolean {
@@ -71,6 +77,9 @@ export default function PaymentMethodsPanel() {
     () => activeMethods.filter((m) => m.status === "active" && m.visible),
     [activeMethods],
   );
+  // Checkout collapses every active bank account into one "Virement bancaire".
+  const checkoutPreview = useMemo(() => buildCheckoutMethods(previewMethods), [previewMethods]);
+  const previewBanks = useMemo(() => bankMethods(previewMethods), [previewMethods]);
   const warnings = useMemo(
     () => activeMethods.filter((m) => m.status === "active" && m.visible && !isComplete(m)),
     [activeMethods],
@@ -301,14 +310,18 @@ export default function PaymentMethodsPanel() {
             </p>
             <div className="rounded-[14px] border border-border bg-[#0B0C10] p-4">
               <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-faint">Mode de paiement</div>
-              {previewMethods.length === 0 ? (
+              {checkoutPreview.length === 0 ? (
                 <p className="px-1 py-6 text-center text-[12.5px] text-faint">
                   Aucune méthode visible — les clients ne peuvent pas commander.
                 </p>
               ) : (
                 <div className="space-y-2.5">
-                  {previewMethods.map((m) => (
-                    <PreviewCard key={m.id} method={m} selected={selectedId ? selectedId === m.id : m.id === previewMethods[0].id} />
+                  {checkoutPreview.map((m, i) => (
+                    <PreviewCard
+                      key={m.id}
+                      method={m}
+                      selected={selectedId ? selectedId === m.id : i === 0}
+                    />
                   ))}
                 </div>
               )}
@@ -316,6 +329,37 @@ export default function PaymentMethodsPanel() {
                 Confirmer la commande
               </button>
             </div>
+
+            {previewBanks.length > 0 && (
+              <div className="mt-4 rounded-[14px] border border-border bg-[#0B0C10] p-4">
+                <div className="mb-1 font-mono text-[11px] uppercase tracking-wide text-faint">
+                  Page de paiement · Virement bancaire
+                </div>
+                <p className="mb-3 text-[11px] text-faint">Choisissez votre banque</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {previewBanks.map((bank, i) => (
+                    <div
+                      key={bank.id}
+                      className={`flex items-center gap-2 rounded-xl border p-2 ${
+                        i === 0 ? "border-accent bg-accent/10" : "border-border bg-base"
+                      }`}
+                    >
+                      <PaymentBrandMark
+                        display={paymentMethodDisplay(bank)}
+                        active={i === 0}
+                        className="h-7 w-7 shrink-0 rounded-lg"
+                      />
+                      <span className="truncate text-[12px] font-medium text-text">
+                        {bank.details.bankName || bank.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] text-faint">
+                  Les coordonnées de la banque sélectionnée (RIB, IBAN…) s&apos;affichent ici.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

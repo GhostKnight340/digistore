@@ -559,7 +559,11 @@ export default function OrderDetailPage({
 
           <div className="s4-pay">
             <PaymentCard
-              method={METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
+              method={
+                order.bankName
+                  ? `${order.paymentMethodLabel} — ${order.bankName}`
+                  : order.paymentMethodLabel || METHOD_LABELS[order.paymentMethod] || order.paymentMethod
+              }
               reference={paymentReference}
               total={formatMAD(order.totalMad)}
               submittedAt={submittedAt ? formatDate(submittedAt) : "Non soumis"}

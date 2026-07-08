@@ -135,7 +135,16 @@ model Order {
   // status: "pending_payment" | "payment_submitted" | "payment_confirmed"
   //       | "payment_issue" | "rejected" | "delivered" | "refunded" | "cancelled"
   status        String   @default("pending_payment")
+  // For new bank orders this is the generic literal "BANK_TRANSFER"; the
+  // specific bank account chosen on the payment page is stored in
+  // `bankAccountId`. Legacy orders may still hold a specific PaymentMethod id
+  // (or an old coarse type like "bank" / "CIH BANK") — see
+  // resolveOrderPaymentMethod / describeOrderPaymentMethod for safe display.
   paymentMethod String
+  // The PaymentMethod id (type "bank") the customer selected on the payment
+  // page for a bank transfer. Null until chosen; locked once proof is
+  // submitted. Never set for non-bank methods.
+  bankAccountId String?
   totalMad      Int
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt

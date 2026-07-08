@@ -11,14 +11,24 @@ import {
   isPaymentSubmitted,
   isPaymentConfirmed,
 } from "@/lib/orderStatus";
-import { getPaymentPageDataAction, submitPaymentAction } from "@/app/actions/payments";
+import {
+  getPaymentPageDataAction,
+  submitPaymentAction,
+  selectOrderBankAccountAction,
+} from "@/app/actions/payments";
 import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
 import PaymentBrandMark from "@/components/PaymentBrandMark";
 import PayPalButton from "@/components/PayPalButton";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
-import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
+import {
+  resolveOrderPaymentMethod,
+  isBankTransferOrder,
+  resolveSelectedBank,
+  bankMethods,
+  BANK_TRANSFER_LABEL,
+} from "@/lib/paymentMethod";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
 import type { PaymentPageDataDTO } from "@/app/actions/payments";
 import type { PaymentMethodDTO } from "@/lib/dto";
@@ -29,6 +39,7 @@ const ALLOWED_PROOF_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf"]);
 
 const METHOD_LABELS: Record<string, string> = {
   bank: "Virement bancaire",
+  BANK_TRANSFER: "Virement bancaire",
   usdt: "USDT",
   paypal: "PayPal",
   card: "Carte bancaire",
@@ -99,7 +110,13 @@ export default function PaymentPage({
   }
 
   const { order, config } = data;
-  const method = resolveOrderPaymentMethod(order.paymentMethod, config.methods);
+  const isBankOrder = isBankTransferOrder(order.paymentMethod, config.methods);
+  const banks = bankMethods(config.methods);
+  const method = isBankOrder ? null : resolveOrderPaymentMethod(order.paymentMethod, config.methods);
+  const selectedBank = isBankOrder ? resolveSelectedBank(order, config.methods) : null;
+  const methodLabel = isBankOrder
+    ? BANK_TRANSFER_LABEL
+    : method?.name ?? METHOD_LABELS[order.paymentMethod] ?? "Paiement";
   const whatsapp = config.support.whatsappNumber.replace(/\s/g, "");
   const publicOrderNumber = getPublicOrderLabel(order);
 
@@ -120,22 +137,38 @@ export default function PaymentPage({
 
           <dl className="mx-auto mt-6 grid max-w-xl gap-px overflow-hidden rounded-2xl border border-border bg-border/60 text-left sm:grid-cols-2">
             <VaultMeta label="Commande" value={publicOrderNumber} />
-            <VaultMeta label="Méthode" value={method?.name ?? METHOD_LABELS[order.paymentMethod] ?? "Paiement"} />
+            <VaultMeta label="Méthode" value={methodLabel} />
+            {isBankOrder && selectedBank && (
+              <VaultMeta
+                label="Banque"
+                value={selectedBank.details.bankName || selectedBank.name}
+              />
+            )}
             <VaultMeta label="Total" value={formatMAD(order.totalMad)} />
             <VaultMeta label="Date" value={formatDate(order.createdAt)} />
           </dl>
         </section>
 
         {/* ── Status-specific content ── */}
-        {isPendingPayment(order.status) && (
-          <PendingPaymentSection
-            orderId={order.id}
-            totalMad={order.totalMad}
-            method={method}
-            onSubmitted={refresh}
-            setError={setError}
-          />
-        )}
+        {isPendingPayment(order.status) &&
+          (isBankOrder ? (
+            <BankTransferSection
+              orderId={order.id}
+              totalMad={order.totalMad}
+              banks={banks}
+              initialSelectedBankId={selectedBank?.id ?? null}
+              onSubmitted={refresh}
+              setError={setError}
+            />
+          ) : (
+            <PendingPaymentSection
+              orderId={order.id}
+              totalMad={order.totalMad}
+              method={method}
+              onSubmitted={refresh}
+              setError={setError}
+            />
+          ))}
 
         {isPaymentSubmitted(order.status) && (
           <StatusCard
@@ -555,6 +588,271 @@ function PendingPaymentSection({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Section: Bank Transfer (Virement bancaire) ───────────────────────────────
+
+function BankTransferSection({
+  orderId,
+  totalMad,
+  banks,
+  initialSelectedBankId,
+  onSubmitted,
+  setError,
+}: {
+  orderId: string;
+  totalMad: number;
+  banks: PaymentMethodDTO[];
+  initialSelectedBankId: string | null;
+  onSubmitted: () => void;
+  setError: (e: string) => void;
+}) {
+  const [selectedBankId, setSelectedBankId] = useState<string | null>(
+    () => initialSelectedBankId ?? banks[0]?.id ?? null,
+  );
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofError, setProofError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const selectedBank = banks.find((b) => b.id === selectedBankId) ?? null;
+  const proofRequired = selectedBank?.proofRequired ?? true;
+  const proofMissing = proofRequired && !proofFile;
+  const disabledReason =
+    (!selectedBankId ? "Veuillez choisir votre banque." : "") ||
+    proofError ||
+    (proofMissing ? "Veuillez sélectionner un justificatif de paiement avant de continuer." : "");
+  const submitDisabled = submitting || Boolean(disabledReason);
+
+  function chooseBank(id: string) {
+    if (id === selectedBankId) return;
+    setSelectedBankId(id);
+    setError("");
+    // Persist + audit the switch; best-effort (the final choice is also locked
+    // in on submit, so a failure here never blocks the customer).
+    void selectOrderBankAccountAction(orderId, id).catch((err: unknown) => {
+      console.error("[payment] Failed to record bank selection", err);
+    });
+  }
+
+  function handleProofChange(file: File | null) {
+    if (!file) {
+      setProofFile(null);
+      setProofError("");
+      return;
+    }
+    const error = validateProofFile(file);
+    if (error) {
+      setProofFile(null);
+      setProofError(error);
+      setError(error);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setProofFile(file);
+    setProofError("");
+    setError("");
+  }
+
+  async function handleSubmit() {
+    if (!selectedBankId) {
+      setError("Veuillez choisir votre banque.");
+      return;
+    }
+    if (proofError) {
+      setError(proofError);
+      return;
+    }
+    if (proofRequired && !proofFile) {
+      setError("Veuillez télécharger un justificatif de paiement.");
+      return;
+    }
+    setError("");
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("orderId", orderId);
+      fd.append("bankAccountId", selectedBankId);
+      if (proofFile) fd.append("proof", proofFile);
+      const res = await submitPaymentAction(fd);
+      if (!res.ok) {
+        setError(res.error ?? "Une erreur est survenue.");
+      } else {
+        onSubmitted();
+      }
+    } catch {
+      setError("Une erreur est survenue. Veuillez réessayer.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (banks.length === 0) {
+    return (
+      <div className="card p-5 text-sm text-muted">
+        Aucune banque n&apos;est disponible pour le moment. Veuillez contacter le support.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm text-muted">
+        Effectuez le virement vers le compte sélectionné, puis ajoutez votre justificatif.
+      </div>
+
+      {/* ── Bank chooser ── */}
+      <div className="card p-5">
+        <h2 className="text-base font-semibold text-white">Virement bancaire</h2>
+        <p className="mt-1 text-sm text-muted">Choisissez votre banque</p>
+
+        <div className="mt-4 grid gap-2.5 sm:grid-cols-2" role="tablist" aria-label="Banques disponibles">
+          {banks.map((bank) => {
+            const display = paymentMethodDisplay(bank);
+            const active = bank.id === selectedBankId;
+            return (
+              <button
+                key={bank.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => chooseBank(bank.id)}
+                className={`flex min-h-[60px] items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                  active
+                    ? "border-accent bg-accent/10 shadow-[0_0_0_1px_rgba(62,123,250,0.18)]"
+                    : "border-border bg-surface/80 hover:border-accent/45 hover:bg-surface2/70"
+                }`}
+              >
+                <PaymentBrandMark display={display} active={active} className="h-10 w-10 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-white">
+                    {bank.details.bankName || bank.name}
+                  </span>
+                  {bank.subtitle && (
+                    <span className="mt-0.5 block truncate text-xs text-muted">{bank.subtitle}</span>
+                  )}
+                </span>
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${
+                    active ? "border-accent bg-accent text-white" : "border-border text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedBank && (
+          <div className="mt-5">
+            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-faint">
+              <span>Compte sélectionné</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <BankDetails bank={selectedBank} totalMad={totalMad} setError={setError} />
+          </div>
+        )}
+      </div>
+
+      {/* ── Proof upload + submit ── */}
+      <div className="card p-5">
+        <h2 className="text-sm font-semibold text-white">
+          {proofRequired ? "Justificatif de paiement (requis)" : "Justificatif de paiement (optionnel)"}
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Formats acceptés: PNG, JPG, JPEG, PDF · Taille max: 5 Mo
+        </p>
+
+        <div className="mt-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+            className="hidden"
+            onChange={(e) => handleProofChange(e.target.files?.[0] ?? null)}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface px-4 py-4 text-sm text-muted hover:border-accent/50 hover:text-white"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5" aria-hidden>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+            </svg>
+            {proofFile ? proofFile.name : "Sélectionner un fichier"}
+          </button>
+          {proofError && <p className="mt-2 text-xs text-red-300">{proofError}</p>}
+          {proofFile && (
+            <button
+              type="button"
+              onClick={() => {
+                setProofFile(null);
+                setProofError("");
+                if (fileRef.current) fileRef.current.value = "";
+              }}
+              className="mt-1 text-xs text-muted hover:text-red-400"
+            >
+              Supprimer le fichier
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitDisabled}
+          className="btn-primary mt-5 w-full disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitting ? "Envoi en cours..." : "J'ai effectué le paiement"}
+        </button>
+        {disabledReason && !submitting && (
+          <p className="mt-2 text-xs text-muted">{disabledReason}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BankDetails({
+  bank,
+  totalMad,
+  setError,
+}: {
+  bank: PaymentMethodDTO;
+  totalMad: number;
+  setError: (e: string) => void;
+}) {
+  const details = bank.details;
+  return (
+    <div className="space-y-3">
+      <dl className="grid gap-px overflow-hidden rounded-xl border border-border bg-border/60">
+        <BankField label="Banque" value={details.bankName || bank.name} />
+        {details.accountHolder && <BankField label="Titulaire" value={details.accountHolder} />}
+        {details.rib && <BankField label="RIB" value={details.rib} copyable />}
+        {details.iban && <BankField label="IBAN" value={details.iban} copyable />}
+        {details.accountNumber && <BankField label="Compte" value={details.accountNumber} copyable />}
+        {details.swift && <BankField label="SWIFT/BIC" value={details.swift} />}
+        <BankField label="Montant" value={formatMAD(totalMad)} copyable />
+        <BankField label="Motif" value="E-commerce" copyable />
+      </dl>
+
+      {details.qrUrl && (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4">
+          <p className="text-xs uppercase tracking-wide text-faint">QR code</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={details.qrUrl}
+            alt={`QR code ${details.bankName || bank.name}`}
+            className="h-40 w-40 rounded-lg bg-white object-contain p-2"
+            onError={() => setError("Le QR code de cette banque n'a pas pu être chargé.")}
+          />
+        </div>
+      )}
+
+      {details.instructions && <p className="text-sm text-muted">{details.instructions}</p>}
     </div>
   );
 }

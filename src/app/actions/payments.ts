@@ -2,6 +2,7 @@
 
 import {
   submitPayment,
+  selectOrderBankAccount,
   approvePayment,
   rejectPayment,
   markPaymentIssue,
@@ -51,6 +52,8 @@ export async function submitPaymentAction(formData: FormData): Promise<ActionRes
   const orderId = formData.get("orderId") as string | null;
   if (!orderId) return { ok: false, error: "Missing orderId." };
 
+  const bankAccountId = (formData.get("bankAccountId") as string | null) || null;
+
   const file = formData.get("proof") as File | null;
   let proof: { fileName: string; mimeType: string; dataBase64: string } | undefined;
 
@@ -71,7 +74,15 @@ export async function submitPaymentAction(formData: FormData): Promise<ActionRes
     };
   }
 
-  return submitPayment(orderId, proof);
+  return submitPayment(orderId, proof, bankAccountId);
+}
+
+/** Customer: record/lock the bank account chosen on the payment page. */
+export async function selectOrderBankAccountAction(
+  orderId: string,
+  bankAccountId: string,
+): Promise<ActionResult> {
+  return selectOrderBankAccount(orderId, bankAccountId);
 }
 
 function normalizeProofMimeType(file: File): string | null {
