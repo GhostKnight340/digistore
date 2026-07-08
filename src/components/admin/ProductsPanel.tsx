@@ -25,7 +25,7 @@ import { REGION_LIST } from "@/lib/regions";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
-const STOCK_CONTROLS = ["manual", "api"];
+const STOCK_CONTROLS = ["manual", "api", "reloadly"];
 const STOCK_MODE_OPTIONS = [
   { value: "automatic", label: "Automatique" },
   { value: "force_in_stock", label: "Forcer en stock" },
@@ -180,6 +180,8 @@ export default function ProductsPanel() {
       featured: variant.featured,
       stockControl: variant.stockControl,
       stockMode: variant.stockMode,
+      reloadlyProductId: variant.reloadlyProductId,
+      reloadlyCountryCode: variant.reloadlyCountryCode,
     };
   }
 
@@ -304,6 +306,8 @@ export default function ProductsPanel() {
       stockControl: "manual",
       stockMode: "automatic",
       inventoryUnused: 0,
+      reloadlyProductId: null,
+      reloadlyCountryCode: null,
     });
     setDraft(parent);
     setMsg(null);
@@ -317,7 +321,7 @@ export default function ProductsPanel() {
   async function saveNewVariant() {
     if (!draft || !newVariantDraft) return;
     if (!newVariantDraft.slug.trim() || !newVariantDraft.name.trim()) {
-      setMsg({ text: "Slug and name are required for the new variant.", ok: false });
+      setMsg({ text: "Le slug et le nom sont obligatoires pour la nouvelle variante.", ok: false });
       return;
     }
     setSaving(true);
@@ -338,6 +342,8 @@ export default function ProductsPanel() {
       featured: newVariantDraft.featured,
       stockControl: newVariantDraft.stockControl,
       stockMode: newVariantDraft.stockMode,
+      reloadlyProductId: newVariantDraft.reloadlyProductId,
+      reloadlyCountryCode: newVariantDraft.reloadlyCountryCode,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -399,6 +405,8 @@ export default function ProductsPanel() {
       featured: v.featured,
       stockControl: v.stockControl,
       stockMode: v.stockMode,
+      reloadlyProductId: v.reloadlyProductId,
+      reloadlyCountryCode: v.reloadlyCountryCode,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -881,7 +889,9 @@ function isVariantDirty(original: VariantDTO, draft: VariantDTO) {
     original.active !== draft.active ||
     original.featured !== draft.featured ||
     original.stockControl !== draft.stockControl ||
-    original.stockMode !== draft.stockMode
+    original.stockMode !== draft.stockMode ||
+    original.reloadlyProductId !== draft.reloadlyProductId ||
+    original.reloadlyCountryCode !== draft.reloadlyCountryCode
   );
 }
 
@@ -899,7 +909,7 @@ function DetailsTab({
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Product name *">
+        <Field label="Nom du produit *">
           <input
             className="input"
             value={draft.name}
@@ -930,7 +940,7 @@ function DetailsTab({
             onCategoryCreated={onCategoryCreated}
           />
         </Field>
-        <Field label="Brand / Platform">
+        <Field label="Marque / Plateforme">
           <input
             className="input"
             value={draft.brand ?? ""}
@@ -1252,7 +1262,7 @@ function VariantForm({
               onClick={() => onChange("slug", generateSku(v.name))}
               className="btn-ghost shrink-0 px-3 text-xs"
             >
-              Regenerate
+              Régénérer
             </button>
           </div>
         </Field>
@@ -1328,6 +1338,31 @@ function VariantForm({
             {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
           </select>
         </Field>
+        {v.stockControl === "reloadly" && (
+          <>
+            <Field label="Reloadly - Product ID">
+              <input
+                className="input"
+                type="number"
+                min="0"
+                value={v.reloadlyProductId ?? ""}
+                onChange={(e) =>
+                  onChange("reloadlyProductId", e.target.value === "" ? null : Number(e.target.value))
+                }
+                placeholder="ex. 18681"
+              />
+            </Field>
+            <Field label="Reloadly - Code pays">
+              <input
+                className="input"
+                value={v.reloadlyCountryCode ?? ""}
+                onChange={(e) => onChange("reloadlyCountryCode", e.target.value.toUpperCase() || null)}
+                placeholder="ex. US"
+                maxLength={2}
+              />
+            </Field>
+          </>
+        )}
         <Field label={`Affichage du stock · ${v.inventoryUnused} code(s)`}>
           <select
             className="input"

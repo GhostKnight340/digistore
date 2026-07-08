@@ -74,7 +74,7 @@ export async function createCategoryQuick(nameOrSlug: string): Promise<ActionRes
   await ensureDatabaseReady();
   const name = nameOrSlug.trim();
   const slug = slugify(name);
-  if (!name || !slug) return { ok: false, error: "Nom de cat?gorie invalide." };
+  if (!name || !slug) return { ok: false, error: "Nom de catégorie invalide." };
 
   const existing = await prisma.category.findFirst({
     where: { OR: [{ id: slug }, { slug }] },
@@ -107,7 +107,7 @@ export async function createCategoryQuick(nameOrSlug: string): Promise<ActionRes
       });
       if (raced) return { ok: true, category: toDTO(raced) };
     }
-    return { ok: false, error: error instanceof Error ? error.message : "Cr?ation impossible." };
+    return { ok: false, error: error instanceof Error ? error.message : "Création impossible." };
   }
 }
 
@@ -115,7 +115,7 @@ export async function ensureCategoryForProduct(value: string): Promise<ActionRes
   await ensureDatabaseReady();
   const raw = value.trim();
   const slug = slugify(raw);
-  if (!raw || !slug) return { ok: false, error: "Choisissez ou cr?ez une cat?gorie." };
+  if (!raw || !slug) return { ok: false, error: "Choisissez ou créez une catégorie." };
 
   const existing = await prisma.category.findFirst({
     where: { OR: [{ id: raw }, { slug: raw }, { id: slug }, { slug }] },
@@ -125,7 +125,7 @@ export async function ensureCategoryForProduct(value: string): Promise<ActionRes
 
   const created = await createCategoryQuick(raw);
   if (!created.ok || !created.category) {
-    return { ok: false, error: created.error ?? "Cr?ation de la cat?gorie impossible." };
+    return { ok: false, error: created.error ?? "Création de la catégorie impossible." };
   }
   return { ok: true, id: created.category.id };
 }

@@ -16,7 +16,7 @@ export default function DevOrderDetailTools({
 
   async function handleDeleteOrder() {
     const confirmed = window.confirm(
-      "Delete Order?\n\nThis permanently removes the order and all related test data: items, payment proofs, payment events, delivered-code rows, and email logs. This cannot be undone.",
+      "Supprimer la commande ?\n\nCette action supprime définitivement la commande et toutes les données de test associées : articles, preuves de paiement, événements de paiement, codes livrés et journaux e-mail. Cette action est irréversible.",
     );
     if (!confirmed) return;
 
@@ -38,7 +38,7 @@ export default function DevOrderDetailTools({
       onClick={handleDeleteOrder}
       className="w-full rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-500/20 disabled:opacity-50"
     >
-      Delete Order
+      Supprimer la commande
     </button>
   );
 }

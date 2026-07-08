@@ -27,11 +27,11 @@ model Product {
   region           String
   deliveryType     String
   imageUrl         String?
-  featured         Boolean  @default(false)
+  featured         Boolean  @default(true)
   active           Boolean  @default(true)
   sortOrder        Int      @default(0)
   createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt        DateTime @default(now()) @updatedAt
 
   categoryRecord Category? @relation(fields: [category], references: [id])
   digitalCodes   DigitalCode[]
@@ -58,7 +58,7 @@ model Category {
   active        Boolean  @default(true)
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime @default(now()) @updatedAt
 
   products Product[]
 }
@@ -83,15 +83,19 @@ model ProductVariant {
   priceMad         Int
   faceValue        Float?
   faceCurrency     String   @default("MAD")
+  // stockControl: "manual" | "api" | "reloadly"
   stockControl     String   @default("manual")
   stockMode        String   @default("automatic")
   supplierCost     Float?
   supplierCurrency String   @default("MAD")
+  // Only used when stockControl = "reloadly"
+  reloadlyProductId   Int?
+  reloadlyCountryCode String?
   active           Boolean  @default(true)
   featured         Boolean  @default(false)
   sortOrder        Int      @default(0)
   createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt        DateTime @default(now()) @updatedAt
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   digitalCodes DigitalCode[]
@@ -112,7 +116,7 @@ model DigitalCode {
   reservedAt      DateTime?
   usedAt          DateTime?
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  updatedAt       DateTime  @default(now()) @updatedAt
 
   product        Product         @relation(fields: [productId], references: [id])
   variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
@@ -134,7 +138,26 @@ model Order {
   paymentMethod String
   totalMad      Int
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime @default(now()) @updatedAt
+  // Live DB column, auto-populated on every insert. Not read by application
+  // code — public order numbers are computed on the fly from creation-order
+  // sequence (see src/lib/orderNumber.ts) rather than this column. Kept here
+  // only so the schema matches reality; not wired into any query.
+  orderNumber   Int      @unique @default(autoincrement())
+
+  // Automated payment provider reconciliation (e.g. PayPal). Null for manual
+  // methods (bank transfer, crypto, cash). Amount/currency are the values
+  // locked in when the provider order was created, so capture/webhook
+  // verification always compares against a fixed snapshot rather than a
+  // conversion rate that may have since changed.
+  paymentProvider           String?
+  paymentProviderOrderId    String?   @unique
+  paymentProviderCaptureId  String?   @unique
+  paymentProviderStatus     String?
+  paymentProviderRawStatus  String?
+  paymentProviderAmount     Float?
+  paymentProviderCurrency   String?
+  paymentConfirmedAt        DateTime?
 
   items          OrderItem[]
   deliveredCodes DeliveredCode[]
@@ -148,6 +171,8 @@ model Order {
   @@index([createdAt])
   @@index([paymentMethod])
   @@index([paymentMethod, createdAt])
+  @@index([customerId])
+  @@index([paymentProviderOrderId])
 }
 
 model Customer {
@@ -165,7 +190,7 @@ model Customer {
   lastLoginAt          DateTime?
   lastPasswordChangeAt DateTime?
   createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  updatedAt            DateTime  @default(now()) @updatedAt
   firstName            String?
   lastName             String?
 
@@ -217,6 +242,11 @@ model DeliveredCode {
   productId     String
   digitalCodeId String?
   manualCode    String?
+  // source: "local" | "reloadly" — audit metadata only, code text lives in
+  // digitalCode.code (local) or manualCode (manual entry + reloadly)
+  source                String   @default("local")
+  reloadlyTransactionId Int?
+  reloadlyOrderId       Int?
   deliveredAt   DateTime @default(now())
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -248,7 +278,7 @@ model EmailLog {
   manuallyEdited Boolean @default(false)
   metadata Json?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
@@ -288,6 +318,22 @@ model PaymentEvent {
 
   @@index([orderId])
   @@index([createdAt])
+}
+
+// Dedupe/idempotency ledger for verified payment-provider webhooks (PayPal,
+// etc). Only stores identifiers needed to reconcile — never the raw payload,
+// which may carry payer/payment details.
+model PaymentWebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String // "paypal"
+  eventId     String   @unique
+  eventType   String
+  resourceId  String?
+  orderId     String?
+  processedAt DateTime @default(now())
+
+  @@index([provider])
+  @@index([orderId])
 }
 
 // Generic, reorderable payment method shown at checkout. One row per
@@ -333,5 +379,5 @@ model SupportConfig {
 model StoreSetting {
   id        String   @id
   value     Json
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 }

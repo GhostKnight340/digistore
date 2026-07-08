@@ -95,7 +95,7 @@ export default function FindOrderPage() {
             disabled={loading}
             className="btn-primary w-full disabled:opacity-60"
           >
-            {loading ? "Recherche en cours?" : "Retrouver ma commande"}
+            {loading ? "Recherche en cours..." : "Retrouver ma commande"}
           </button>
         </form>
 

@@ -37,7 +37,7 @@ export default function AddToCartForm({
             type="button"
             onClick={() => setQty((q) => Math.max(1, q - 1))}
             className="h-10 w-10 text-lg text-muted transition hover:text-white"
-            aria-label="Diminuer la quantit?"
+            aria-label="Diminuer la quantité"
           >
             -
           </button>
@@ -48,7 +48,7 @@ export default function AddToCartForm({
             type="button"
             onClick={() => setQty((q) => Math.min(10, q + 1))}
             className="h-10 w-10 text-lg text-muted transition hover:text-white"
-            aria-label="Augmenter la quantit?"
+            aria-label="Augmenter la quantité"
           >
             +
           </button>

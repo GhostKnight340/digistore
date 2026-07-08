@@ -282,22 +282,21 @@ export default function OrderDetailPage({
   const allFilled = order.items.every((item) =>
     (entries[item.id] ?? [])
       .slice(0, item.quantity)
-      .every((entry) => entry.digitalCodeId || entry.manualCode?.trim()),
+      .every((entry) => entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId),
   );
 
   const manualCountsValid = order.items.every((item) => {
-    const codes = (entries[item.id] ?? [])
+    const filled = (entries[item.id] ?? [])
       .slice(0, item.quantity)
-      .map((entry) => entry.manualCode?.trim() ?? "")
-      .filter(Boolean);
-    return codes.length === item.quantity;
+      .filter((entry) => entry.manualCode?.trim() || entry.reloadlyProductId).length;
+    return filled === item.quantity;
   });
 
   const totalCodes = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const readyCodes = order.items.reduce((sum, item) => {
     const filled = (entries[item.id] ?? [])
       .slice(0, item.quantity)
-      .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim()).length;
+      .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId).length;
     return sum + filled;
   }, 0);
   const deliverReady = (manualMode ? manualCountsValid : allFilled) && canDeliver;
@@ -1508,14 +1507,21 @@ function DeliverySection({
 
           return Array.from({ length: item.quantity }).map((_, index) => {
             const entry = list[index] ?? {};
-            const filled = Boolean(entry.digitalCodeId || entry.manualCode?.trim());
+            const filled = Boolean(entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId);
+            const reloadlyAvailable =
+              item.variantStockControl === "reloadly" && item.variantReloadlyProductId != null;
+            const reloadlyChosen = Boolean(entry.reloadlyProductId);
             return (
               <CodeRow
                 key={`${item.id}-${index}`}
                 label={item.name}
                 border={filled ? C.successBorder : C.accentBorder}
               >
-                {manualMode ? (
+                {reloadlyChosen ? (
+                  <span style={{ flex: 1, fontSize: 12.5, color: C.accentText }}>
+                    Livraison automatique via Reloadly
+                  </span>
+                ) : manualMode ? (
                   <input
                     className="s4-input"
                     value={entry.manualCode ?? ""}
@@ -1581,6 +1587,32 @@ function DeliverySection({
                       }}
                     />
                   </div>
+                )}
+                {reloadlyAvailable && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSetEntry(
+                        item.id,
+                        index,
+                        reloadlyChosen ? {} : { reloadlyProductId: item.variantReloadlyProductId! },
+                      )
+                    }
+                    style={{
+                      flexShrink: 0,
+                      height: 28,
+                      padding: "0 10px",
+                      borderRadius: 7,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: `1px solid ${reloadlyChosen ? C.accentBorder : C.borderInput}`,
+                      background: reloadlyChosen ? C.accentSoft : "transparent",
+                      color: reloadlyChosen ? C.accentText : C.muted,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {reloadlyChosen ? "✕ Reloadly" : "⚡ Via Reloadly"}
+                  </button>
                 )}
                 <span style={{ fontSize: 11, color: filled ? C.successText : C.faint, flexShrink: 0 }}>
                   {filled ? "✓ prêt" : `#${index + 1}`}

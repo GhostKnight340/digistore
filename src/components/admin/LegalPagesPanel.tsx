@@ -80,10 +80,10 @@ export default function LegalPagesPanel() {
                 <FormatButton label="B" onClick={() => format("bold")} />
                 <FormatButton label="I" onClick={() => format("italic")} />
                 <FormatButton label="U" onClick={() => format("underline")} />
-                <FormatButton label="â€¢ Liste" onClick={() => format("insertUnorderedList")} />
+                <FormatButton label="• Liste" onClick={() => format("insertUnorderedList")} />
                 <FormatButton label="1. Liste" onClick={() => format("insertOrderedList")} />
                 <FormatButton label="Lien" onClick={insertLink} />
-                <FormatButton label="SÃ©parateur" onClick={() => insertHtml("<hr>")} />
+                <FormatButton label="Séparateur" onClick={() => insertHtml("<hr>")} />
               </div>
             </div>
             <div
@@ -96,16 +96,16 @@ export default function LegalPagesPanel() {
               className="legal-content input min-h-[30rem] max-w-none overflow-y-auto bg-surface py-3 text-sm leading-6 text-text focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
             />
             <p className="mt-2 text-xs text-muted">
-              Format pris en charge : titres, gras, italique, soulignÃ©, listes imbriquÃ©es, liens et sÃ©parateurs.
+              Format pris en charge : titres, gras, italique, souligné, listes imbriquées, liens et séparateurs.
             </p>
           </div>
         </section>
 
         <section className="card p-5">
           <div className="mb-5 border-b border-border pb-4">
-            <h3 className="text-lg font-bold text-white">AperÃ§u public</h3>
+            <h3 className="text-lg font-bold text-white">Aperçu public</h3>
             <p className="mt-1 text-xs text-muted">
-              Le rendu ci-dessous utilise la mÃªme mise en forme que les pages publiques.
+              Le rendu ci-dessous utilise la même mise en forme que les pages publiques.
             </p>
           </div>
           <div className="max-h-[42rem] overflow-y-auto pr-2">

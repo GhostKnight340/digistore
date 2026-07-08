@@ -4,6 +4,11 @@ Required for Vercel:
 
 - `DATABASE_URL`: Supabase PostgreSQL connection string. It must start with `postgresql://` or `postgres://`.
 
+Optional (feature-gated):
+
+- `RELOADLY_CLIENT_ID`, `RELOADLY_CLIENT_SECRET`, `RELOADLY_ENV`: Reloadly gift card supplier API. Not required — the app has no fulfillment dependency on Reloadly yet. See `docs/reloadly-integration.md`.
+- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_ENV`, `NEXT_PUBLIC_PAYPAL_CLIENT_ID`: PayPal automated payment method (Orders API v2). Not required — without these, a `paypal`-type payment method falls back to being unusable at checkout (the button reports "not configured") rather than failing closed on a real charge. See `docs/paypal-integration.md`.
+
 Operational notes:
 
 - Supabase/PostgreSQL is the source of truth for catalog, settings, payment configuration, orders, inventory, fulfillment, proofs, and events.

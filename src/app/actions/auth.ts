@@ -276,7 +276,7 @@ export async function updateCustomerPhoneAction(phoneInput: string): Promise<Aut
 
   const phone = normalizePhone(phoneInput);
   if (!isValidOptionalPhone(phone)) {
-    return { ok: false, error: "Veuillez saisir un numÃ©ro de tÃ©lÃ©phone valide." };
+    return { ok: false, error: "Veuillez saisir un numéro de téléphone valide." };
   }
 
   await prisma.customer.update({
@@ -286,7 +286,7 @@ export async function updateCustomerPhoneAction(phoneInput: string): Promise<Aut
   revalidatePath("/account");
   revalidatePath("/checkout");
   revalidatePath("/admin");
-  return { ok: true, message: "NumÃ©ro de tÃ©lÃ©phone enregistrÃ©." };
+  return { ok: true, message: "Numéro de téléphone enregistré." };
 }
 
 export async function changePasswordAction(input: {

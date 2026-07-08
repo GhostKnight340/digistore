@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   try {
     const admin = await getCurrentAdminCustomer();
     if (!admin) {
-      return NextResponse.json({ error: "Acces admin requis." }, { status: 403 });
+      return NextResponse.json({ error: "Accès admin requis." }, { status: 403 });
     }
 
     const form = await req.formData();

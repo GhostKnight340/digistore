@@ -10,6 +10,12 @@ export interface OrderItemDTO {
   name: string;
   quantity: number;
   unitPriceMad: number;
+  // Present only when the item's variant is Reloadly-sourced
+  // (variant.stockControl === "reloadly"); lets the delivery UI offer an
+  // "auto-fulfill via Reloadly" option instead of local/manual code entry.
+  variantStockControl?: string;
+  variantReloadlyProductId?: number | null;
+  variantReloadlyCountryCode?: string | null;
 }
 
 export interface DeliveredCodeDTO {
@@ -42,6 +48,10 @@ export interface CustomerOrderDTO {
   deliveredCodes: DeliveredCodeDTO[];
   proofUploaded: boolean;
   paymentEvents: PaymentEventDTO[];
+  paymentProvider: string | null;
+  paymentProviderOrderId: string | null;
+  paymentProviderStatus: string | null;
+  paymentConfirmedAt: string | null;
 }
 
 export interface EmailLogDTO {
@@ -218,6 +228,8 @@ export interface VariantDTO {
   stockControl: string;
   stockMode: string;
   inventoryUnused: number;
+  reloadlyProductId: number | null;
+  reloadlyCountryCode: string | null;
 }
 
 export interface ParentProductDTO {
@@ -272,6 +284,8 @@ export interface SaveVariantInput {
   featured: boolean;
   stockControl: string;
   stockMode: string;
+  reloadlyProductId: number | null;
+  reloadlyCountryCode: string | null;
 }
 
 export interface FeaturedVariantOptionDTO {
@@ -332,6 +346,10 @@ export interface AdminOverviewMetricsDTO {
 export interface AssignmentEntry {
   digitalCodeId?: string;
   manualCode?: string;
+  // Presence signals "fetch this code live from Reloadly at delivery time"
+  // instead of using a local/manual code. Mutually exclusive with the two
+  // fields above.
+  reloadlyProductId?: number;
 }
 
 export interface ItemAssignment {
@@ -364,6 +382,12 @@ export interface PaymentMethodDetails {
   email?: string;
   meLink?: string;
   buttonLabel?: string;
+  /** ISO 4217 settlement currency for the automated PayPal flow (MAD is not
+   * supported by PayPal). Defaults to "USD" when unset. */
+  paypalCurrency?: string;
+  /** MAD per 1 unit of `paypalCurrency`, used to convert the order total.
+   * Defaults to 10 when unset. */
+  paypalExchangeRate?: number;
   // crypto
   walletAddress?: string;
   network?: string;

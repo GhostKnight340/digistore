@@ -111,6 +111,9 @@ function buildCustomerDTO(
       name: orderItemName(item),
       quantity: item.quantity,
       unitPriceMad: item.unitPriceMad,
+      variantStockControl: item.variant?.stockControl,
+      variantReloadlyProductId: item.variant?.reloadlyProductId ?? null,
+      variantReloadlyCountryCode: item.variant?.reloadlyCountryCode ?? null,
     })),
     deliveredCodes: canExposeCodes
       ? data.deliveredCodes.map((delivered) => ({
@@ -128,6 +131,10 @@ function buildCustomerDTO(
       note: event.note,
       createdAt: iso(event.createdAt),
     })),
+    paymentProvider: data.paymentProvider,
+    paymentProviderOrderId: data.paymentProviderOrderId,
+    paymentProviderStatus: data.paymentProviderStatus,
+    paymentConfirmedAt: data.paymentConfirmedAt ? iso(data.paymentConfirmedAt) : null,
   };
 }
 
@@ -142,6 +149,10 @@ function loadOrder(id: string) {
       paymentMethod: true,
       totalMad: true,
       createdAt: true,
+      paymentProvider: true,
+      paymentProviderOrderId: true,
+      paymentProviderStatus: true,
+      paymentConfirmedAt: true,
       items: {
         select: {
           id: true,
@@ -155,6 +166,9 @@ function loadOrder(id: string) {
               name: true,
               faceValue: true,
               faceCurrency: true,
+              stockControl: true,
+              reloadlyProductId: true,
+              reloadlyCountryCode: true,
             },
           },
         },

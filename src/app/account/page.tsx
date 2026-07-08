@@ -27,8 +27,8 @@ export default async function AccountPage() {
           <div className="card mt-6 p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-bold text-white">Commandes recentes</h2>
-                <p className="mt-1 text-sm text-muted">Vos derniers achats lies a ce compte.</p>
+                <h2 className="text-lg font-bold text-white">Commandes récentes</h2>
+                <p className="mt-1 text-sm text-muted">Vos derniers achats liés à ce compte.</p>
               </div>
               <Link href="/account/orders" className="btn-ghost text-sm">Tout voir</Link>
             </div>

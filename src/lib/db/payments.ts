@@ -327,6 +327,213 @@ export async function applyPaymentStatusWithEmail(
   }
 }
 
+// ─── PayPal automated payment ──────────────────────────────────────────────
+//
+// The customer-approval redirect from PayPal is never trusted on its own —
+// every status transition here is driven by a server-side capture call or a
+// signature-verified webhook (see src/lib/paypal/operations.ts and
+// src/app/api/webhooks/paypal/route.ts). All transitions are idempotent so a
+// webhook and a browser capture racing (or a webhook replay) can't double-fire
+// emails/Discord/fulfillment notifications.
+
+/** Persists the PayPal order id created for a Ghost order, before approval/capture. */
+export async function savePaypalOrderCreated(
+  orderId: string,
+  input: { paypalOrderId: string; amountValue: string; currency: string },
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  try {
+    const updated = await prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: "pending_payment",
+        OR: [{ paymentProviderOrderId: null }, { paymentProviderOrderId: input.paypalOrderId }],
+      },
+      data: {
+        paymentProvider: "paypal",
+        paymentProviderOrderId: input.paypalOrderId,
+        paymentProviderStatus: "CREATED",
+        paymentProviderRawStatus: "CREATED",
+        paymentProviderAmount: Number(input.amountValue),
+        paymentProviderCurrency: input.currency,
+      },
+    });
+    if (updated.count !== 1) {
+      return { ok: false, error: "Impossible d'enregistrer la commande PayPal." };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("[savePaypalOrderCreated]", error);
+    return { ok: false, error: "Impossible d'enregistrer la commande PayPal." };
+  }
+}
+
+async function transitionPaypalStatus(
+  orderId: string,
+  opts: {
+    fromStatuses: string[];
+    toStatus: string;
+    providerStatus: string;
+    rawStatus: string;
+    captureId?: string;
+    amountValue?: string;
+    currency?: string;
+    note: string;
+    emailType: string;
+    templateKey: EmailTemplateKey;
+    subject: string;
+    body: string;
+    triggerFulfillment?: boolean;
+  },
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) return { ok: false, error: "Commande introuvable." };
+
+  // Already applied by a previous (possibly concurrent) call — treat as success.
+  if (
+    order.status === opts.toStatus &&
+    (!opts.captureId || order.paymentProviderCaptureId === opts.captureId)
+  ) {
+    return { ok: true };
+  }
+
+  const fromStatus = order.status;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: { in: opts.fromStatuses } },
+        data: {
+          status: opts.toStatus,
+          paymentProvider: "paypal",
+          paymentProviderStatus: opts.providerStatus,
+          paymentProviderRawStatus: opts.rawStatus,
+          ...(opts.captureId ? { paymentProviderCaptureId: opts.captureId } : {}),
+          ...(opts.amountValue ? { paymentProviderAmount: Number(opts.amountValue) } : {}),
+          ...(opts.currency ? { paymentProviderCurrency: opts.currency } : {}),
+          ...(opts.toStatus === "payment_confirmed" ? { paymentConfirmedAt: new Date() } : {}),
+        },
+      });
+      if (updated.count !== 1) {
+        throw new Error("PAYPAL_STATUS_CONFLICT");
+      }
+      await tx.paymentEvent.create({
+        data: { orderId, type: "status_change", fromStatus, toStatus: opts.toStatus, note: opts.note },
+      });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "PAYPAL_STATUS_CONFLICT") {
+      // Another concurrent call (webhook vs. browser capture) may have
+      // already applied this exact transition — treat that as success.
+      const latest = await prisma.order.findUnique({ where: { id: orderId } });
+      if (
+        latest &&
+        latest.status === opts.toStatus &&
+        (!opts.captureId || latest.paymentProviderCaptureId === opts.captureId)
+      ) {
+        return { ok: true };
+      }
+      return { ok: false, error: "Le statut de la commande a changé entre-temps." };
+    }
+    console.error("[transitionPaypalStatus]", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Mise à jour impossible.",
+    };
+  }
+
+  try {
+    const preview = await renderPaymentStatusEmailPreview(orderId, opts.templateKey, opts.note);
+    await sendTransactionalEmail({
+      to: order.customerEmail,
+      orderId,
+      customerId: order.customerId,
+      templateKey: opts.templateKey,
+      type: opts.emailType,
+      subject: preview.subject || opts.subject,
+      text: preview.text || opts.body,
+      html: preview.html,
+      variables: preview.variables,
+    });
+  } catch (emailError) {
+    console.error(`[email:${opts.emailType}]`, emailError);
+  }
+
+  const reference = await publicOrderReference(order);
+  const adminUrl = absoluteAppUrl(`/admin/orders/${orderId}`);
+  void notifyPaymentStatusChange({
+    orderId,
+    publicOrderNumber: reference.number,
+    fromStatus,
+    toStatus: opts.toStatus,
+    note: opts.note,
+    adminUrl,
+  });
+
+  if (opts.triggerFulfillment) {
+    void notifyFulfillmentNeeded({
+      orderId,
+      publicOrderNumber: reference.number,
+      itemCount: await prisma.orderItem.count({ where: { orderId } }),
+      adminUrl,
+    });
+  }
+
+  return { ok: true };
+}
+
+/** Marks a Ghost order paid after a trusted, server-verified PayPal capture. */
+export async function confirmPaypalPayment(
+  orderId: string,
+  input: { captureId: string; rawStatus: string; amountValue: string; currency: string },
+): Promise<ActionResult> {
+  return transitionPaypalStatus(orderId, {
+    fromStatuses: ["pending_payment", "payment_submitted"],
+    toStatus: "payment_confirmed",
+    providerStatus: "COMPLETED",
+    rawStatus: input.rawStatus,
+    captureId: input.captureId,
+    amountValue: input.amountValue,
+    currency: input.currency,
+    note: `Paiement PayPal capturé (capture ${input.captureId}).`,
+    emailType: "payment_confirmed",
+    templateKey: "payment_confirmed",
+    subject: "Paiement confirmé",
+    body: "Votre paiement PayPal a été confirmé. Votre produit numérique sera disponible sous peu.",
+    triggerFulfillment: true,
+  });
+}
+
+/** A PayPal capture came back denied/failed — flag for review, never auto-reject. */
+export async function markPaypalCaptureDenied(orderId: string, rawStatus: string): Promise<ActionResult> {
+  return transitionPaypalStatus(orderId, {
+    fromStatuses: ["pending_payment", "payment_submitted"],
+    toStatus: "payment_issue",
+    providerStatus: "DENIED",
+    rawStatus,
+    note: "Paiement PayPal refusé par PayPal.",
+    emailType: "payment_issue",
+    templateKey: "new_proof_requested",
+    subject: "Problème avec votre paiement",
+    body: "Votre paiement PayPal n'a pas pu être capturé. Contactez notre support WhatsApp.",
+  });
+}
+
+/** A completed PayPal capture was refunded or reversed after the fact. */
+export async function markPaypalRefunded(orderId: string, rawStatus: string): Promise<ActionResult> {
+  return transitionPaypalStatus(orderId, {
+    fromStatuses: ["payment_confirmed", "delivered"],
+    toStatus: "refunded",
+    providerStatus: rawStatus,
+    rawStatus,
+    note: "Paiement PayPal remboursé/annulé.",
+    emailType: "refund_update",
+    templateKey: "refund_update",
+    subject: "Mise à jour de remboursement",
+    body: "Votre paiement PayPal a été remboursé.",
+  });
+}
+
 export async function getPaymentProof(
   orderId: string,
 ): Promise<AdminPaymentProofDTO | null> {

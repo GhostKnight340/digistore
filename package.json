@@ -12,6 +12,7 @@
     "prisma:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "discord:setup": "tsx scripts/discord-setup.ts",
+    "reloadly:smoke-test": "tsx --conditions=react-server -r dotenv/config scripts/reloadly-smoke-test.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

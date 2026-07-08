@@ -126,7 +126,7 @@ export const defaultStoreSettings: StoreSettings = {
     featuredSubtitle: "Sélection vérifiée, livraison après confirmation du paiement.",
     howItWorksTitle: "Comment ça marche",
     howItWorksSubtitle: "Trois étapes simples, sans friction.",
-    whyChooseUsTitle: "Pourquoi choisir ghost.ma?",
+    whyChooseUsTitle: "Pourquoi choisir ghost.ma ?",
     whyChooseUsSubtitle: "Des produits numériques fiables, simples et rapides.",
     ctaTitle: "Prêt à commencer ?",
     ctaSubtitle: "Choisissez un produit et suivez votre commande après paiement.",

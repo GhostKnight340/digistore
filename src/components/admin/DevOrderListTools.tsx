@@ -19,7 +19,7 @@ export function DevOrderRowDelete({
 
   async function handleDeleteOrder() {
     const confirmed = window.confirm(
-      "Delete Order?\n\nThis permanently removes the order and all related test data: items, payment proofs, payment events, delivered-code rows, and email logs. This cannot be undone.",
+      "Supprimer la commande ?\n\nCette action supprime définitivement la commande et toutes les données de test associées : articles, preuves de paiement, événements de paiement, codes livrés et journaux e-mail. Cette action est irréversible.",
     );
     if (!confirmed) return;
 

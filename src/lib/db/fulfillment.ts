@@ -11,9 +11,18 @@ import {
   notifyFulfillmentCompleted,
   notifyStockAlert,
 } from "@/lib/discord/notify";
-import type { ActionResult, ItemAssignment } from "@/lib/dto";
+import type { ActionResult, AssignmentEntry, ItemAssignment } from "@/lib/dto";
+import {
+  placeGiftCardOrder,
+  getGiftCardOrderStatus,
+  getGiftCardOrderCards,
+  type ReloadlyGiftCardOrderCard,
+} from "@/lib/reloadly/operations";
 
 const LOW_STOCK_THRESHOLD = 3;
+const RELOADLY_SENDER_NAME = "ghost.ma";
+const RELOADLY_STATUS_POLL_ATTEMPTS = 3;
+const RELOADLY_STATUS_POLL_DELAY_MS = 1500;
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
   await ensureDatabaseReady();
@@ -114,6 +123,13 @@ export async function deliverOrder(
               productId: true,
               variantId: true,
               quantity: true,
+              variant: {
+                select: {
+                  reloadlyProductId: true,
+                  reloadlyCountryCode: true,
+                  faceValue: true,
+                },
+              },
             },
           },
         },
@@ -129,15 +145,63 @@ export async function deliverOrder(
   }
 
   for (const item of order.items) {
-    const assignment = assignments.find((entry) => entry.orderItemId === item.id);
-    const entries = (assignment?.codes ?? []).filter(
-      (entry) => entry.digitalCodeId || entry.manualCode?.trim(),
-    );
+    const entries = filledEntriesForItem(item, assignments);
     if (entries.length < item.quantity) {
       return {
         ok: false,
         error: "Attribuez un code à chaque unité avant la livraison.",
       };
+    }
+  }
+
+  // Resolve any Reloadly-sourced entries BEFORE opening a DB transaction —
+  // these are slow, fallible external HTTP calls (and real wallet spend) and
+  // must never happen while a Postgres transaction is held open. If any
+  // fails, we abort here with zero DB writes, same as the validation above.
+  //
+  // Note: this purchases from Reloadly per-entry, sequentially, with no
+  // persisted idempotency ledger. For an order with a single Reloadly item
+  // this is safe (all-or-nothing). If a delivery request spans multiple
+  // Reloadly-sourced items and a later one fails, re-clicking "Livrer" will
+  // re-purchase the earlier ones too — acceptable for the current
+  // single-supplier-item use case, not for high-volume multi-item orders.
+  const reloadlyResolutions = new Map<string, ResolvedReloadlyEntry>();
+  for (const item of order.items) {
+    const entries = filledEntriesForItem(item, assignments);
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      if (!entry.reloadlyProductId) continue;
+
+      const variant = item.variant;
+      if (!variant || variant.reloadlyProductId !== entry.reloadlyProductId) {
+        return { ok: false, error: "Configuration Reloadly invalide pour cet article." };
+      }
+      if (!variant.reloadlyCountryCode) {
+        return { ok: false, error: "Code pays Reloadly manquant pour cette variante." };
+      }
+      if (variant.faceValue == null) {
+        return { ok: false, error: "Valeur faciale manquante pour la variante Reloadly." };
+      }
+
+      try {
+        const resolved = await resolveReloadlyEntry({
+          productId: variant.reloadlyProductId,
+          countryCode: variant.reloadlyCountryCode,
+          unitPrice: variant.faceValue,
+          customIdentifier: `${orderId}-${item.id}-${index}`,
+          recipientEmail: order.customerEmail,
+        });
+        reloadlyResolutions.set(`${item.id}:${index}`, resolved);
+      } catch (error) {
+        console.error("[deliverOrder:reloadly]", error);
+        return {
+          ok: false,
+          error:
+            error instanceof Error
+              ? `Échec de la commande Reloadly : ${error.message}`
+              : "Échec de la commande Reloadly.",
+        };
+      }
     }
   }
 
@@ -149,14 +213,15 @@ export async function deliverOrder(
     >();
     await timeAdmin("admin.deliverOrder", "transaction.deliverCodes", () => prisma.$transaction(async (tx) => {
       for (const item of order.items) {
-        const assignment = assignments.find((entry) => entry.orderItemId === item.id);
-        const entries = (assignment?.codes ?? [])
-          .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim())
-          .slice(0, item.quantity);
+        const entries = filledEntriesForItem(item, assignments);
 
-        for (const entry of entries) {
+        for (let index = 0; index < entries.length; index += 1) {
+          const entry = entries[index];
           let digitalCodeId: string | null = null;
           let manualCode: string | null = null;
+          let source: string | undefined;
+          let reloadlyTransactionId: number | null = null;
+          let reloadlyOrderId: number | null = null;
 
           if (entry.digitalCodeId) {
             const code = await tx.digitalCode.findUnique({
@@ -198,6 +263,16 @@ export async function deliverOrder(
                 count: 1,
               });
             }
+          } else if (entry.reloadlyProductId) {
+            const resolved = reloadlyResolutions.get(`${item.id}:${index}`);
+            if (!resolved) {
+              throw new Error("Code Reloadly non résolu.");
+            }
+            manualCode = resolved.code;
+            source = "reloadly";
+            reloadlyTransactionId = resolved.transactionId;
+            reloadlyOrderId = resolved.reloadlyOrderId;
+            deliveredValues.push(resolved.code);
           } else {
             manualCode = entry.manualCode!.trim();
             deliveredValues.push(manualCode);
@@ -210,6 +285,9 @@ export async function deliverOrder(
               productId: item.productId,
               digitalCodeId,
               manualCode,
+              ...(source ? { source } : {}),
+              reloadlyTransactionId,
+              reloadlyOrderId,
             },
           });
         }
@@ -275,6 +353,85 @@ export async function deliverOrder(
       error: error instanceof Error ? error.message : "Livraison impossible.",
     };
   }
+}
+
+/**
+ * The same "is this slot filled" + "cap at item.quantity" logic used for
+ * validation, Reloadly pre-resolution, and the delivery transaction — kept
+ * in one place so all three stay in sync (they must agree on entry count
+ * and ordering for the pre-pass -> transaction correlation below to hold).
+ */
+function filledEntriesForItem(
+  item: { id: string; quantity: number },
+  assignments: ItemAssignment[],
+): AssignmentEntry[] {
+  const assignment = assignments.find((entry) => entry.orderItemId === item.id);
+  return (assignment?.codes ?? [])
+    .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId)
+    .slice(0, item.quantity);
+}
+
+type ResolvedReloadlyEntry = {
+  code: string;
+  transactionId: number;
+  reloadlyOrderId: number | null;
+};
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatReloadlyCards(cards: ReloadlyGiftCardOrderCard[]): string {
+  return cards
+    .map((card) => [card.cardNumber, card.pinCode].filter(Boolean).join(" / "))
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Places one Reloadly order and retrieves its redeem code, retrying the
+ * status check briefly if the order isn't immediately SUCCESSFUL (verified
+ * live: a normal sandbox order returns SUCCESSFUL synchronously from
+ * placeGiftCardOrder(), so this is a safety net, not the common path).
+ */
+async function resolveReloadlyEntry(input: {
+  productId: number;
+  countryCode: string;
+  unitPrice: number;
+  customIdentifier: string;
+  recipientEmail: string;
+}): Promise<ResolvedReloadlyEntry> {
+  const order = await placeGiftCardOrder({
+    productId: input.productId,
+    countryCode: input.countryCode,
+    quantity: 1,
+    unitPrice: input.unitPrice,
+    customIdentifier: input.customIdentifier,
+    senderName: RELOADLY_SENDER_NAME,
+    recipientEmail: input.recipientEmail,
+  });
+
+  let status = order.status;
+  for (
+    let attempt = 0;
+    status !== "SUCCESSFUL" && status !== "FAILED" && attempt < RELOADLY_STATUS_POLL_ATTEMPTS;
+    attempt += 1
+  ) {
+    await sleep(RELOADLY_STATUS_POLL_DELAY_MS);
+    status = (await getGiftCardOrderStatus(order.transactionId)).status;
+  }
+
+  if (status !== "SUCCESSFUL") {
+    throw new Error(`Commande Reloadly non aboutie (statut: ${status}).`);
+  }
+
+  const cards = await getGiftCardOrderCards(order.transactionId);
+  const code = formatReloadlyCards(cards);
+  if (!code) {
+    throw new Error("Reloadly n’a retourné aucun code pour cette commande.");
+  }
+
+  return { code, transactionId: order.transactionId, reloadlyOrderId: null };
 }
 
 /**

@@ -35,7 +35,7 @@ export default async function VerifyEmailPage({
         <p className="mt-2 text-sm text-muted">
           {ok
             ? "Votre compte ghost.ma est maintenant vérifié."
-            : "Demandez un nouveau lien depuis votre espace securite."}
+            : "Demandez un nouveau lien depuis votre espace sécurité."}
         </p>
         <Link href={ok ? "/account" : "/login"} className="btn-primary mt-6">
           Continuer

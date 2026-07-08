@@ -33,7 +33,7 @@ export default function CustomersPanel() {
         <div>
           <h2 className="font-bold text-white">Clients</h2>
           <p className="mt-0.5 text-xs text-muted">
-            Comptes clients et acheteurs invites suivis par commande.
+            Comptes clients et acheteurs invités suivis par commande.
           </p>
         </div>
         <button type="button" onClick={load} className="btn-ghost py-1 text-xs">
@@ -60,7 +60,7 @@ export default function CustomersPanel() {
                 <th className="px-5 py-3 font-medium">Commandes</th>
                 <th className="px-5 py-3 font-medium">LTV</th>
                 <th className="px-5 py-3 font-medium">Dernière connexion</th>
-                <th className="px-5 py-3 font-medium">Creation</th>
+                <th className="px-5 py-3 font-medium">Création</th>
                 <th className="px-5 py-3 font-medium">Dernière commande</th>
               </tr>
             </thead>

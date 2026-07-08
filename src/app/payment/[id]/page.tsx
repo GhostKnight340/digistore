@@ -15,6 +15,7 @@ import { getPaymentPageDataAction, submitPaymentAction } from "@/app/actions/pay
 import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
 import PaymentBrandMark from "@/components/PaymentBrandMark";
+import PayPalButton from "@/components/PayPalButton";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
@@ -264,7 +265,7 @@ function PendingPaymentSection({
   const disabledReason =
     (methodUnavailable ? configurationError : "") ||
     proofError ||
-    (proofMissing ? "Veuillez selectionner un justificatif de paiement avant de continuer." : "");
+    (proofMissing ? "Veuillez sélectionner un justificatif de paiement avant de continuer." : "");
   const submitDisabled = submitting || Boolean(disabledReason);
 
   function handleProofChange(file: File | null) {
@@ -421,23 +422,21 @@ function PendingPaymentSection({
         </div>
       )}
 
-      {/* ── PayPal ── */}
+      {/* ── PayPal (automated) ── */}
       {method.type === "paypal" && (
         <div className="card p-5 text-center">
           <PaymentBrandMark display={display} active className="mx-auto h-14 w-14" />
           <h2 className="mt-4 text-base font-semibold text-white">{display.displayName}</h2>
           <p className="mt-2 text-sm text-muted">
-            {details.email
-              ? `Envoyez ${formatMAD(totalMad)} à : ${details.email}`
-              : details.meLink
-                ? `Envoyez ${formatMAD(totalMad)} via : ${details.meLink}`
-                : "Les instructions PayPal seront bientôt disponibles."}
+            Payez {formatMAD(totalMad)} en toute sécurité avec PayPal. Confirmation automatique.
           </p>
-          <div className="mt-5 inline-block rounded-2xl border border-border bg-[#0070BA]/10 px-8 py-5 text-center">
-            <div className="text-2xl font-bold text-[#003087]">Pay</div>
-            <div className="text-2xl font-bold text-[#009cde]">Pal</div>
-            <p className="mt-2 text-xs text-muted">{formatMAD(totalMad)}</p>
-            <p className="mt-1 text-[10px] text-faint">Interface de paiement à venir</p>
+          <div className="mx-auto mt-5 max-w-xs">
+            <PayPalButton
+              orderId={orderId}
+              currency={details.paypalCurrency || "USD"}
+              onConfirmed={onSubmitted}
+              onError={setError}
+            />
           </div>
           {details.instructions && <p className="mt-3 text-sm text-muted">{details.instructions}</p>}
         </div>
@@ -477,8 +476,8 @@ function PendingPaymentSection({
         </div>
       )}
 
-      {/* ── Proof Upload + Submit (not for card) ── */}
-      {method.type !== "card" && (
+      {/* ── Proof Upload + Submit (not for card or PayPal, which confirms automatically) ── */}
+      {method.type !== "card" && method.type !== "paypal" && (
         <div className="card p-5">
           <h2 className="text-sm font-semibold text-white">
             {proofRequired ? "Justificatif de paiement (requis)" : "Justificatif de paiement (optionnel)"}
@@ -709,7 +708,7 @@ function validateProofFile(file: File): string {
   const validExtension = ALLOWED_PROOF_EXTENSIONS.has(extension);
 
   if (!validType || !validExtension) {
-    return "Format non supporte. Utilisez PNG, JPG, JPEG ou PDF.";
+    return "Format non supporté. Utilisez PNG, JPG, JPEG ou PDF.";
   }
   if (file.size > MAX_PROOF_SIZE_BYTES) {
     return "Fichier trop volumineux. Taille maximum: 5 Mo.";

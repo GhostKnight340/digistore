@@ -14,7 +14,7 @@ const TABS: { id: TabFilter; label: string }[] = [
   { id: "confirmed", label: "Confirmés" },
   { id: "issue", label: "Problèmes" },
   { id: "rejected", label: "Rejetés" },
-  { id: "delivered", label: "Livrés" },
+  { id: "delivered", label: "Livrées" },
   { id: "all", label: "Tous" },
 ];
 

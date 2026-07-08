@@ -57,7 +57,7 @@ export async function submitPaymentAction(formData: FormData): Promise<ActionRes
   if (file && file.size > 0) {
     const mimeType = normalizeProofMimeType(file);
     if (!mimeType) {
-      return { ok: false, error: "Format non supporte. Utilisez PNG, JPG, JPEG ou PDF." };
+      return { ok: false, error: "Format non supporté. Utilisez PNG, JPG, JPEG ou PDF." };
     }
     if (file.size > MAX_PROOF_SIZE_BYTES) {
       return { ok: false, error: "Fichier trop volumineux. Taille maximum: 5 Mo." };
