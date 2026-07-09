@@ -110,7 +110,9 @@ async function handleMessage(message: Message) {
     discordUserId: message.author.id,
     discordUsername: message.author.username ?? null,
     discordDisplayName: message.author.globalName ?? null,
-    discordAvatar: message.author.avatar ?? null,
+    // Send a full CDN URL (not the raw avatar hash) so it matches what the
+    // OAuth flow stores and can be rendered directly as an <img src>.
+    discordAvatar: message.author.avatarURL({ size: 128 }) ?? null,
   });
 
   // Coarse, code-free result line so host logs show the flow is working.

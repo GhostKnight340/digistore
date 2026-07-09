@@ -32,6 +32,11 @@ function DiscordGlyph({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+/** Only real http(s) URLs are safe as an <img src>; a bare avatar hash isn't. */
+function httpUrl(value: string | null | undefined): string | null {
+  return value && /^https?:\/\//i.test(value) ? value : null;
+}
+
 function Avatar({ url, fallback }: { url: string | null; fallback: string }) {
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
@@ -116,7 +121,7 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
       {!props.discordDmActivated && (
         <div className="mt-4">
           <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-            <Avatar url={props.discordAvatar} fallback={connectedName} />
+            <Avatar url={httpUrl(props.discordAvatar)} fallback={connectedName} />
             <div className="min-w-0 flex-1">
               <p className="font-medium text-white">Discord connecté</p>
               <p className="truncate text-sm text-muted">{connectedName}</p>
@@ -143,7 +148,7 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
       {props.discordDmActivated && (
         <div className="mt-4 space-y-4">
           <div className="flex items-center gap-3 rounded-xl border border-green-500/25 bg-green-500/[0.06] px-4 py-3">
-            <Avatar url={props.discordDmAvatar ?? props.discordAvatar} fallback={dmName} />
+            <Avatar url={httpUrl(props.discordDmAvatar) ?? httpUrl(props.discordAvatar)} fallback={dmName} />
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-2 font-medium text-white">
                 Discord connecté
