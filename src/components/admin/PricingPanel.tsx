@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatMAD, formatDate } from "@/lib/format";
+import { formatMAD, formatDate, timeAgoFr } from "@/lib/format";
 import {
   getPricingOverviewAction,
   runReloadlyCostSyncAction,
@@ -172,7 +172,10 @@ export default function PricingPanel() {
             {data.lastSync.status}
           </span>{" "}
           — {data.lastSync.costsUpserted} coût(s),{" "}
-          {data.lastSync.finishedAt ? formatDate(data.lastSync.finishedAt) : "en cours"}.
+          {data.lastSync.finishedAt
+            ? `${timeAgoFr(data.lastSync.finishedAt)} (${formatDate(data.lastSync.finishedAt)})`
+            : "en cours"}
+          .
           {data.lastSync.error ? ` Erreur : ${data.lastSync.error}` : ""}
         </p>
       )}

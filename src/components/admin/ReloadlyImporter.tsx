@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { formatMAD } from "@/lib/format";
+import { formatMAD, timeAgoFr } from "@/lib/format";
 import { REGION_LIST } from "@/lib/regions";
 import {
   searchReloadlyImportCatalogAction,
@@ -785,10 +785,10 @@ function ProductPrepCard({
             Reloadly #{d.productId}
           </p>
           <p className="mt-0.5 text-xs text-faint">
-            remise {d.discountPercentage}% · frais {d.senderFee}+{d.senderFeePercentage}% · coût synchro{" "}
+            remise {d.discountPercentage}% · frais {d.senderFee}+{d.senderFeePercentage}% ·{" "}
             <span className={stale ? "text-amber-400" : "text-muted"}>
-              {d.costSyncedAt ? new Date(d.costSyncedAt).toLocaleDateString() : "jamais"}
-              {stale ? " (obsolète)" : ""}
+              {d.costSyncedAt ? `Synchronisé ${timeAgoFr(d.costSyncedAt)}` : "Jamais synchronisé"}
+              {stale ? " (obsolète, > 7 j)" : ""}
             </span>
           </p>
         </div>
