@@ -57,6 +57,45 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+// Discord's `identify` scope returns no email, and Ghost.ma never merges
+// accounts on a provider email. A brand-new Discord account therefore gets a
+// stable, non-deliverable placeholder address keyed to the Discord id until the
+// customer completes their profile with a real email. This domain is internal
+// only: placeholder addresses are never shown as the customer email, never
+// receive mail, and never count as verified.
+const PLACEHOLDER_EMAIL_DOMAIN = "users.noreply.ghost.ma";
+
+export function buildPlaceholderEmail(discordId: string) {
+  return `discord-${discordId}@${PLACEHOLDER_EMAIL_DOMAIN}`;
+}
+
+export function isPlaceholderEmail(email: string | null | undefined): boolean {
+  return typeof email === "string" && email.toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
+}
+
+/** An account whose email is still the internal placeholder needs onboarding. */
+export function isProfileIncomplete(
+  customer: Pick<AuthCustomer, "email"> | { email: string },
+): boolean {
+  return isPlaceholderEmail(customer.email);
+}
+
+/**
+ * Number of usable login methods for an account. A password only counts when
+ * the account also has a real (non-placeholder) email, since email/password
+ * login is impossible without a deliverable address. Used to prevent unlinking
+ * the last method and locking the customer out.
+ */
+export function loginMethodCount(
+  customer: Pick<AuthCustomer, "hasPassword" | "googleId" | "discordId" | "email">,
+): number {
+  let count = 0;
+  if (customer.hasPassword && !isPlaceholderEmail(customer.email)) count += 1;
+  if (customer.googleId) count += 1;
+  if (customer.discordId) count += 1;
+  return count;
+}
+
 function authSecret() {
   const configured =
     process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || process.env.SESSION_SECRET;
@@ -324,14 +363,23 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
 }
 
 /**
- * Whether Discord can be safely disconnected without locking the customer out.
- * Only true when a password or Google login still authenticates the account —
- * i.e. Discord is not the sole credential.
+ * Whether a given provider can be safely disconnected without leaving the
+ * customer with zero usable login methods. Safe only when at least one OTHER
+ * method remains.
  */
-export function canDisconnectDiscord(
-  customer: Pick<AuthCustomer, "hasPassword" | "googleId">,
+export function canDisconnectProvider(
+  customer: Pick<AuthCustomer, "hasPassword" | "googleId" | "discordId" | "email">,
+  provider: "discord" | "google",
 ): boolean {
-  return customer.hasPassword || Boolean(customer.googleId);
+  const remaining = loginMethodCount(customer) - (provider === "discord" ? (customer.discordId ? 1 : 0) : (customer.googleId ? 1 : 0));
+  return remaining >= 1;
+}
+
+/** Back-compat shim for the Discord DM card. */
+export function canDisconnectDiscord(
+  customer: Pick<AuthCustomer, "hasPassword" | "googleId" | "discordId" | "email">,
+): boolean {
+  return canDisconnectProvider(customer, "discord");
 }
 
 export async function requireCustomer() {
@@ -354,6 +402,65 @@ export async function requireAdminCustomer() {
   if (!customer) redirect("/login?next=/admin");
   if (!isAdminCustomer(customer)) redirect("/403");
   return customer;
+}
+
+/**
+ * Moves a Discord identity (OAuth + verified DM state) from an incomplete,
+ * Discord-only account onto an existing target account, preserving the source's
+ * orders and email history, then deletes the now-empty source. Transactional.
+ * The caller must have proven control of BOTH accounts (OAuth for the Discord
+ * source, a password/Google login for the target). Returns a typed result; on
+ * success the caller should refresh the session to the target.
+ */
+export async function transferDiscordIdentity(
+  fromId: string,
+  toId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (fromId === toId) return { ok: false, error: "same_account" };
+  await ensureDatabaseReady();
+  return prisma.$transaction(async (tx) => {
+    const [from, to] = await Promise.all([
+      tx.customer.findUnique({ where: { id: fromId } }),
+      tx.customer.findUnique({ where: { id: toId } }),
+    ]);
+    if (!from || !to) return { ok: false, error: "not_found" };
+    if (!from.discordId) return { ok: false, error: "no_discord" };
+    if (to.discordId) return { ok: false, error: "already_linked" };
+
+    // Preserve the source account's data before removing it.
+    await tx.order.updateMany({ where: { customerId: fromId }, data: { customerId: toId } });
+    await tx.emailLog.updateMany({ where: { customerId: fromId }, data: { customerId: toId } });
+
+    // Delete the source FIRST so its unique discordId is freed before we assign
+    // the same id to the target (unique constraint is checked per statement).
+    await tx.customer.delete({ where: { id: fromId } });
+
+    await tx.customer.update({
+      where: { id: toId },
+      data: {
+        discordId: from.discordId,
+        discordUsername: from.discordUsername,
+        discordGlobalName: from.discordGlobalName,
+        discordAvatar: from.discordAvatar,
+        discordDmUserId: from.discordDmUserId,
+        discordDmUsername: from.discordDmUsername,
+        discordDmDisplayName: from.discordDmDisplayName,
+        discordDmAvatar: from.discordDmAvatar,
+        discordDmActivated: from.discordDmActivated,
+        discordDmActivatedAt: from.discordDmActivatedAt,
+        // Keep the target's own delivery preference if already on.
+        discordOrderDeliveryEnabled:
+          to.discordOrderDeliveryEnabled || from.discordOrderDeliveryEnabled,
+        image: to.image ?? from.discordAvatar,
+        authProvider: to.passwordHash
+          ? "password_discord"
+          : to.googleId
+            ? "google_discord"
+            : "discord",
+      },
+    });
+    return { ok: true };
+  });
 }
 
 export async function consumeAuthToken(token: string, type: AuthTokenType) {

@@ -1,13 +1,147 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import {
   canDisconnectDiscord,
   getCurrentCustomer,
+  isPlaceholderEmail,
+  normalizeEmail,
+  sendVerificationEmail,
+  setCustomerSession,
+  transferDiscordIdentity,
+  verifyPassword,
   type AuthActionResult,
 } from "@/lib/auth";
 import { generateActivationCode } from "@/lib/discord/activation";
+
+function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizePhone(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function isValidOptionalPhone(value: string) {
+  if (!value) return true;
+  if (!/^\+?[0-9][0-9\s().-]*$/.test(value)) return false;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 9 && digits.length <= 15;
+}
+
+/**
+ * Path A of Discord onboarding: replace the internal placeholder email with a
+ * real name/email/phone and send email verification. Never merges on a matching
+ * email — a collision is surfaced so the customer uses the link-existing path.
+ */
+export async function completeDiscordProfileAction(input: {
+  name: string;
+  email: string;
+  phone?: string;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+  if (!customer.discordId) return { ok: false, error: "Compte Discord introuvable." };
+
+  const name = input.name.trim();
+  const email = normalizeEmail(input.email);
+  const phone = normalizePhone(input.phone ?? "");
+  if (!name) return { ok: false, error: "Veuillez saisir votre nom complet." };
+  if (!isEmail(email)) return { ok: false, error: "Veuillez saisir une adresse e-mail valide." };
+  if (!isValidOptionalPhone(phone)) {
+    return { ok: false, error: "Veuillez saisir un numéro de téléphone valide." };
+  }
+
+  const emailOwner = await prisma.customer.findUnique({ where: { email } });
+  if (emailOwner && emailOwner.id !== customer.id) {
+    return {
+      ok: false,
+      error:
+        "Un compte existe déjà avec cette adresse e-mail. Utilisez « J’ai déjà un compte » pour y associer Discord.",
+    };
+  }
+
+  try {
+    const updated = await prisma.customer.update({
+      where: { id: customer.id },
+      data: {
+        name,
+        email,
+        phone: phone || null,
+        emailVerified: false,
+        emailVerifiedAt: null,
+      },
+    });
+    // Real email now — verification can actually be delivered.
+    try {
+      await sendVerificationEmail(updated);
+    } catch (error) {
+      console.error("[discord:complete:verification_email]", error);
+    }
+    revalidatePath("/account");
+    return {
+      ok: true,
+      message: "Profil finalisé. Vérifiez votre e-mail pour confirmer votre adresse.",
+      redirectTo: "/account",
+    };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return {
+        ok: false,
+        error:
+          "Un compte existe déjà avec cette adresse e-mail. Utilisez « J’ai déjà un compte » pour y associer Discord.",
+      };
+    }
+    console.error("[discord:complete]", error);
+    return { ok: false, error: "Impossible de finaliser le profil pour le moment." };
+  }
+}
+
+/**
+ * Path B (email/password): authenticate an existing account and move the
+ * current Discord identity onto it, then switch the session to that account.
+ */
+export async function linkDiscordToExistingByPasswordAction(input: {
+  email: string;
+  password: string;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const current = await getCurrentCustomer();
+  if (!current) return { ok: false, error: "Veuillez vous connecter." };
+  if (!current.discordId || !isPlaceholderEmail(current.email)) {
+    return { ok: false, error: "Cette action n’est disponible que pendant la finalisation Discord." };
+  }
+
+  const email = normalizeEmail(input.email);
+  const target = await prisma.customer.findUnique({ where: { email } });
+  const valid = await verifyPassword(input.password, target?.passwordHash ?? null);
+  if (!target || !valid) {
+    return { ok: false, error: "E-mail ou mot de passe incorrect." };
+  }
+  if (target.id === current.id) {
+    return { ok: false, error: "Choisissez un autre compte." };
+  }
+  if (target.discordId) {
+    return { ok: false, error: "Ce compte a déjà un Discord associé." };
+  }
+
+  const result = await transferDiscordIdentity(current.id, target.id);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.error === "already_linked"
+          ? "Ce compte a déjà un Discord associé."
+          : "Association impossible pour le moment.",
+    };
+  }
+  await setCustomerSession(target.id, true);
+  revalidatePath("/account");
+  return { ok: true, message: "Discord associé à votre compte.", redirectTo: "/account" };
+}
 
 /**
  * Generate (or regenerate) a one-time DM activation code for the current

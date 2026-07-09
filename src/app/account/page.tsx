@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { requireCustomer, getAccountOrders, canDisconnectDiscord } from "@/lib/auth";
+import {
+  requireCustomer,
+  getAccountOrders,
+  canDisconnectProvider,
+  isProfileIncomplete,
+} from "@/lib/auth";
 import { formatDate, formatMAD } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
@@ -7,25 +12,62 @@ import { getDiscordApplicationId } from "@/lib/discord/config";
 import AccountNav from "@/components/account/AccountNav";
 import AccountProfileForm from "./AccountProfileForm";
 import DiscordConnection from "@/components/account/DiscordConnection";
+import LoginMethods from "@/components/account/LoginMethods";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
+  const incomplete = isProfileIncomplete(customer);
+  // Sidebar/metrics must never surface the internal placeholder email.
+  const displayEmail = incomplete ? "" : customer.email;
 
   return (
     <div className="container-page py-10">
       <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-        <AccountNav name={customer.name} email={customer.email} />
+        <AccountNav name={customer.name} email={displayEmail} />
         <section>
           <h1 className="text-3xl font-bold text-white">Mon compte</h1>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             <Metric label="Nom" value={customer.name} />
-            <Metric label="E-mail" value={customer.email} />
-            <Metric label="Statut" value={customer.emailVerified ? "Vérifié" : "À vérifier"} />
+            <Metric label="E-mail" value={incomplete ? "Non renseigné" : customer.email} />
+            <Metric
+              label="Statut"
+              value={incomplete ? "Profil à compléter" : customer.emailVerified ? "Vérifié" : "À vérifier"}
+            />
           </div>
-          <AccountProfileForm phone={customer.phone} />
+
+          {incomplete ? (
+            <div className="card mt-6 border-amber-500/25 bg-amber-500/[0.05] p-6">
+              <h2 className="text-lg font-bold text-white">Complétez votre profil</h2>
+              <p className="mt-1 text-sm text-muted">
+                Ajoutez une adresse e-mail réelle pour finaliser votre compte, ou associez
+                Discord à un compte Ghost.ma existant.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link href="/auth/discord/complete" className="btn-primary text-sm">
+                  Compléter mon profil
+                </Link>
+                <Link href="/auth/discord/complete" className="btn-ghost text-sm">
+                  J’ai déjà un compte Ghost.ma
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <AccountProfileForm name={customer.name} phone={customer.phone} />
+          )}
+
+          <LoginMethods
+            googleConnected={Boolean(customer.googleId)}
+            discordConnected={Boolean(customer.discordId)}
+            discordUsername={customer.discordUsername}
+            hasPassword={customer.hasPassword}
+            emailUsable={!incomplete}
+            canDisconnectGoogle={canDisconnectProvider(customer, "google")}
+            canDisconnectDiscord={canDisconnectProvider(customer, "discord")}
+          />
+
           <DiscordConnection
             discordId={customer.discordId}
             discordUsername={customer.discordUsername}
@@ -36,7 +78,6 @@ export default async function AccountPage() {
             discordDmDisplayName={customer.discordDmDisplayName}
             discordDmAvatar={customer.discordDmAvatar}
             discordOrderDeliveryEnabled={customer.discordOrderDeliveryEnabled}
-            canDisconnect={canDisconnectDiscord(customer)}
             applicationId={getDiscordApplicationId() ?? null}
           />
           <div className="card mt-6 p-6">

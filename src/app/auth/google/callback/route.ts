@@ -1,7 +1,12 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
-import { setCustomerSession } from "@/lib/auth";
+import {
+  getCurrentCustomer,
+  isProfileIncomplete,
+  setCustomerSession,
+  transferDiscordIdentity,
+} from "@/lib/auth";
 import { notifyAccountCreated } from "@/lib/discord/notify";
 
 const GOOGLE_STATE_COOKIE = "ghost_google_oauth_state";
@@ -39,6 +44,10 @@ async function siteUrl(requestUrl: string) {
 
 function loginRedirect(requestUrl: string, error: string) {
   return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error)}`, requestUrl));
+}
+
+function accountRedirect(base: string, params: string) {
+  return NextResponse.redirect(new URL(`/account?${params}`, base));
 }
 
 export async function GET(request: Request) {
@@ -97,6 +106,83 @@ export async function GET(request: Request) {
   const email = profile.email.trim().toLowerCase();
   const name = profile.name?.trim() || profile.given_name?.trim() || email.split("@")[0] || "Client";
   const now = new Date();
+
+  // --- Link mode: attach Google to the already-authenticated account ---------
+  if (mode === "link") {
+    const current = await getCurrentCustomer();
+    if (!current) return loginRedirect(request.url, "google_state");
+    const owner = await prisma.customer.findFirst({ where: { googleId: profile.sub } });
+    if (owner && owner.id !== current.id) {
+      return accountRedirect(base, "error=google_already_linked");
+    }
+    try {
+      await prisma.customer.update({
+        where: { id: current.id },
+        data: {
+          googleId: profile.sub,
+          image: current.image ?? profile.picture ?? null,
+          authProvider: current.hasPassword ? "password_google" : "google",
+        },
+      });
+      return accountRedirect(base, "google=linked");
+    } catch (error) {
+      console.error("[auth:google:link]", error);
+      return accountRedirect(base, "error=google_account_conflict");
+    }
+  }
+
+  // --- Link-Discord mode: authenticate a Google account and move the current
+  //     (incomplete) Discord identity onto it. -------------------------------
+  if (mode === "link_discord") {
+    const from = await getCurrentCustomer();
+    if (!from || !from.discordId || !isProfileIncomplete(from)) {
+      return loginRedirect(request.url, "google_state");
+    }
+    try {
+      const googleOwner =
+        (await prisma.customer.findFirst({ where: { googleId: profile.sub } })) ??
+        (await prisma.customer.findUnique({ where: { email } }));
+      let targetId: string;
+      if (googleOwner) {
+        if (googleOwner.discordId) return accountRedirect(base, "error=discord_already_linked");
+        if (!googleOwner.googleId) {
+          await prisma.customer.update({
+            where: { id: googleOwner.id },
+            data: {
+              googleId: profile.sub,
+              emailVerified: googleOwner.emailVerified || profile.email_verified !== false,
+              emailVerifiedAt:
+                googleOwner.emailVerifiedAt ?? (profile.email_verified === false ? null : now),
+            },
+          });
+        }
+        targetId = googleOwner.id;
+      } else {
+        const created = await prisma.customer.create({
+          data: {
+            name,
+            email,
+            image: profile.picture ?? null,
+            googleId: profile.sub,
+            authProvider: "google",
+            emailVerified: profile.email_verified ?? true,
+            emailVerifiedAt: profile.email_verified === false ? null : now,
+            lastLoginAt: now,
+          },
+        });
+        targetId = created.id;
+      }
+      const transfer = await transferDiscordIdentity(from.id, targetId);
+      if (!transfer.ok) {
+        return accountRedirect(base, "error=discord_already_linked");
+      }
+      await setCustomerSession(targetId, true);
+      return accountRedirect(base, "discord=linked");
+    } catch (error) {
+      console.error("[auth:google:link_discord]", error);
+      return accountRedirect(base, "error=google_account_conflict");
+    }
+  }
 
   const existingByGoogleId = await prisma.customer.findFirst({ where: { googleId: profile.sub } });
   const existingByEmail = await prisma.customer.findUnique({ where: { email } });

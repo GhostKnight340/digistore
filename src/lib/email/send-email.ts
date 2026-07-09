@@ -48,6 +48,15 @@ const AUTH_TEMPLATE_KEYS = new Set<EmailTemplateKey>([
   "password_changed",
 ]);
 
+// Internal Discord onboarding placeholder addresses (see lib/auth.ts). Kept in
+// sync locally rather than imported, to avoid a circular auth <-> email import.
+// Placeholder addresses are non-deliverable and must never receive mail.
+const PLACEHOLDER_EMAIL_DOMAIN = "users.noreply.ghost.ma";
+
+function isPlaceholderRecipient(email: string): boolean {
+  return email.toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
+}
+
 function fromAddress() {
   const name = process.env.EMAIL_FROM_NAME || "ghost.ma";
   const address = process.env.EMAIL_FROM_ADDRESS || "no-reply@ghost.ma";
@@ -117,6 +126,31 @@ export async function sendTransactionalEmail(
   input: SendEmailInput,
 ): Promise<EmailSendResult> {
   await ensureDatabaseReady();
+
+  // Never send to an internal Discord onboarding placeholder address. Record a
+  // skipped log for audit and return a non-error result so callers (order
+  // emails, verification, etc.) proceed unaffected.
+  if (isPlaceholderRecipient(input.to)) {
+    const log = await prisma.emailLog.create({
+      data: {
+        orderId: input.orderId ?? null,
+        customerId: input.customerId ?? null,
+        type: input.type ?? input.templateKey,
+        templateKey: input.templateKey,
+        recipient: input.to,
+        subject: "",
+        body: "",
+        text: "",
+        html: "",
+        provider: "resend",
+        status: "simulated",
+        errorMessage: "Skipped: internal placeholder recipient.",
+        metadata: metadataToJson(input.metadata),
+      },
+    });
+    return { ok: true, status: "simulated", logId: log.id };
+  }
+
   const rendered = await renderTransactionalEmail(input.templateKey, input.variables, {
     subject: input.subject,
     body: input.body,

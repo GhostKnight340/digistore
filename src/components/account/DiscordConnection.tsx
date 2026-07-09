@@ -7,7 +7,6 @@ import {
   checkDiscordActivationAction,
   setDiscordDeliveryPreferenceAction,
   deactivateDiscordDmAction,
-  disconnectDiscordAction,
 } from "@/app/actions/discord";
 import Checkbox from "@/components/ui/Checkbox";
 
@@ -21,7 +20,6 @@ export type DiscordConnectionProps = {
   discordDmDisplayName: string | null;
   discordDmAvatar: string | null;
   discordOrderDeliveryEnabled: boolean;
-  canDisconnect: boolean;
   /** Discord application id = bot user id; used to open the bot profile/DM. */
   applicationId: string | null;
 };
@@ -86,17 +84,9 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
     }
   }
 
-  async function onDisconnect() {
-    setBusy(true);
-    const res = await disconnectDiscordAction();
-    setBusy(false);
-    if (res.ok) {
-      setBanner({ kind: "ok", text: res.message || "Compte Discord déconnecté." });
-      router.refresh();
-    } else {
-      setBanner({ kind: "error", text: res.error || "Action impossible." });
-    }
-  }
+  // Discord-as-login is managed in "Méthodes de connexion". This card is only
+  // about Discord DM delivery, so it appears once Discord is linked.
+  if (!props.discordId) return null;
 
   return (
     <div className="card mt-6 p-6">
@@ -104,7 +94,10 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
         <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#5865F2]/15">
           <DiscordGlyph />
         </span>
-        <h2 className="text-lg font-bold text-white">Discord</h2>
+        <div>
+          <h2 className="text-lg font-bold text-white">Messages Discord</h2>
+          <p className="text-xs text-muted">Livraison de vos commandes en message privé.</p>
+        </div>
       </div>
 
       {banner && (
@@ -119,25 +112,8 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
         </p>
       )}
 
-      {/* STATE A — not connected */}
-      {!props.discordId && (
-        <div className="mt-4">
-          <p className="text-sm text-muted">
-            Connectez votre compte Discord pour recevoir vos commandes directement en
-            message privé.
-          </p>
-          <a
-            href="/auth/discord?mode=link"
-            className="btn-primary mt-4 inline-flex items-center gap-2"
-          >
-            <DiscordGlyph className="h-4 w-4" />
-            Connecter Discord
-          </a>
-        </div>
-      )}
-
       {/* STATE B — connected, DM not activated */}
-      {props.discordId && !props.discordDmActivated && (
+      {!props.discordDmActivated && (
         <div className="mt-4">
           <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
             <Avatar url={props.discordAvatar} fallback={connectedName} />
@@ -161,7 +137,7 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
       )}
 
       {/* STATE C — DM activated */}
-      {props.discordId && props.discordDmActivated && (
+      {props.discordDmActivated && (
         <div className="mt-4 space-y-4">
           <div className="flex items-center gap-3 rounded-xl border border-green-500/25 bg-green-500/[0.06] px-4 py-3">
             <Avatar url={props.discordDmAvatar ?? props.discordAvatar} fallback={dmName} />
@@ -190,7 +166,7 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3 pt-1">
+          <div className="pt-1">
             <button
               type="button"
               onClick={onDeactivate}
@@ -199,20 +175,6 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
             >
               Désactiver les messages Discord
             </button>
-            {props.canDisconnect ? (
-              <button
-                type="button"
-                onClick={onDisconnect}
-                disabled={busy}
-                className="text-sm text-muted underline-offset-2 hover:text-white hover:underline disabled:opacity-60"
-              >
-                Déconnecter Discord
-              </button>
-            ) : (
-              <span className="text-xs text-faint">
-                Définissez un mot de passe pour pouvoir déconnecter Discord.
-              </span>
-            )}
           </div>
         </div>
       )}

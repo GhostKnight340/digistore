@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import {
+  canDisconnectProvider,
   clearCustomerSession,
   consumeAuthToken,
   getCurrentCustomer,
   hashPassword,
+  isPlaceholderEmail,
   normalizeEmail,
   sendPasswordChangedEmail,
   sendPasswordResetEmail,
@@ -267,6 +269,75 @@ export async function resendVerificationAction(): Promise<AuthActionResult> {
       error: "L'e-mail de vérification n'a pas pu être envoyé. Réessayez plus tard.",
     };
   }
+}
+
+export async function updateCustomerNameAction(nameInput: string): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+  const name = nameInput.trim().replace(/\s+/g, " ");
+  if (name.length < 2) return { ok: false, error: "Veuillez saisir votre nom complet." };
+  if (name.length > 80) return { ok: false, error: "Nom trop long." };
+
+  await prisma.customer.update({ where: { id: customer.id }, data: { name } });
+  revalidatePath("/account");
+  revalidatePath("/checkout");
+  return { ok: true, message: "Nom mis à jour." };
+}
+
+/**
+ * Sets a first password on an account that has none (Discord/Google-only),
+ * enabling email/password login. Requires a real (non-placeholder) email so the
+ * account is actually reachable by email; accounts still on the onboarding
+ * placeholder must complete their profile first.
+ */
+export async function setInitialPasswordAction(input: {
+  password: string;
+  confirmPassword: string;
+}): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const sessionCustomer = await getCurrentCustomer();
+  if (!sessionCustomer) return { ok: false, error: "Veuillez vous connecter." };
+  if (sessionCustomer.hasPassword) {
+    return { ok: false, error: "Un mot de passe est déjà défini. Utilisez « Modifier le mot de passe »." };
+  }
+  if (isPlaceholderEmail(sessionCustomer.email)) {
+    return { ok: false, error: "Ajoutez d’abord une adresse e-mail réelle à votre compte." };
+  }
+  if (input.password !== input.confirmPassword) {
+    return { ok: false, error: "Les mots de passe ne correspondent pas." };
+  }
+  const passwordError = validatePassword(input.password);
+  if (passwordError) return { ok: false, error: passwordError };
+
+  const updated = await prisma.customer.update({
+    where: { id: sessionCustomer.id },
+    data: {
+      passwordHash: await hashPassword(input.password),
+      lastPasswordChangeAt: new Date(),
+    },
+  });
+  await sendPasswordChangedEmail(updated);
+  revalidatePath("/account");
+  revalidatePath("/account/security");
+  return { ok: true, message: "Mot de passe défini." };
+}
+
+/** Disconnect Google login, unless it is the customer's only login method. */
+export async function disconnectGoogleAction(): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+  if (!customer.googleId) return { ok: true };
+  if (!canDisconnectProvider(customer, "google")) {
+    return {
+      ok: false,
+      error: "Définissez d’abord un mot de passe : Google est votre seule méthode de connexion.",
+    };
+  }
+  await prisma.customer.update({ where: { id: customer.id }, data: { googleId: null } });
+  revalidatePath("/account");
+  return { ok: true, message: "Compte Google déconnecté." };
 }
 
 export async function updateCustomerPhoneAction(phoneInput: string): Promise<AuthActionResult> {

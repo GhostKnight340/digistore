@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logoutCustomerAction } from "@/app/actions/auth";
+import { isPlaceholderEmail } from "@/lib/auth";
 
 async function logout() {
   "use server";
@@ -18,7 +19,9 @@ export default function AccountNav({ name, email }: { name: string; email: strin
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">{name}</p>
-            <p className="truncate text-xs text-muted">{email}</p>
+            <p className="truncate text-xs text-muted">
+              {email && !isPlaceholderEmail(email) ? email : "Profil à compléter"}
+            </p>
           </div>
         </div>
         <nav className="mt-5 space-y-1 text-sm">

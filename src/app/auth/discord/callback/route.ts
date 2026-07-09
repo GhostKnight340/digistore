@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
-import { getCurrentCustomer, setCustomerSession } from "@/lib/auth";
+import { buildPlaceholderEmail, getCurrentCustomer, setCustomerSession } from "@/lib/auth";
 import { getDiscordClientId, getDiscordClientSecret } from "@/lib/discord/config";
 import { notifyAccountCreated } from "@/lib/discord/notify";
 
@@ -167,14 +167,13 @@ export async function GET(request: Request) {
       customerId = existing.id;
     } else {
       // Discord's `identify` scope returns no email, and Ghost.ma never merges
-      // accounts on a provider email. Brand-new Discord accounts therefore get a
-      // stable, non-deliverable placeholder address keyed to the Discord id;
-      // the customer can set a real email later from their account.
-      const placeholderEmail = `discord-${discordId}@users.noreply.ghost.ma`;
+      // accounts on a provider email. A brand-new Discord account gets a stable,
+      // non-deliverable placeholder address keyed to the Discord id and is sent
+      // to the completion flow to add a real email or link an existing account.
       const created = await prisma.customer.create({
         data: {
           name: displayName,
-          email: placeholderEmail,
+          email: buildPlaceholderEmail(discordId),
           image: discordAvatar,
           authProvider: "discord",
           emailVerified: false,
@@ -194,6 +193,9 @@ export async function GET(request: Request) {
         email: `Discord: @${discordUsername ?? displayName}`,
         createdAt: now.toISOString(),
       });
+      // Brand-new Discord accounts have only a placeholder email — send them to
+      // the completion page to finish onboarding or link an existing account.
+      return NextResponse.redirect(new URL("/auth/discord/complete", base));
     }
 
     return NextResponse.redirect(

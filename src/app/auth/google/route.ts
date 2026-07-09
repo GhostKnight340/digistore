@@ -27,7 +27,18 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const mode = url.searchParams.get("mode") === "register" ? "register" : "login";
+  const requestedMode = url.searchParams.get("mode");
+  // login | register | link (attach Google to the current account)
+  //       | link_discord (authenticate a Google account and move the current
+  //       Discord identity onto it — used by the onboarding completion page).
+  const mode =
+    requestedMode === "register"
+      ? "register"
+      : requestedMode === "link"
+        ? "link"
+        : requestedMode === "link_discord"
+          ? "link_discord"
+          : "login";
   const state = randomBytes(24).toString("base64url");
   const base = await siteUrl(request.url);
 
