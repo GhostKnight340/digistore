@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginCustomerAction, registerCustomerAction } from "@/app/actions/auth";
 import PasswordField from "@/components/ui/PasswordField";
+import Checkbox from "@/components/ui/Checkbox";
 
 const googleErrors: Record<string, string> = {
   access_denied: "Connexion Google annulée.",
@@ -138,10 +139,7 @@ export default function LoginPage() {
             )}
             {mode === "login" && (
               <div className="flex items-center justify-between gap-3 text-sm">
-                <label className="flex items-center gap-2 text-muted">
-                  <input name="remember" type="checkbox" />
-                  Se souvenir de moi
-                </label>
+                <Checkbox name="remember" label="Se souvenir de moi" />
                 <Link href="/forgot-password" className="text-accent hover:text-accent-hover">
                   Mot de passe oublié ?
                 </Link>
