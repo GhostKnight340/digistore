@@ -12,6 +12,7 @@ import {
   getGhostParentOptionsAction,
   importReloadlyBatchAction,
 } from "@/app/actions/catalog-import";
+import { createCategoryQuickAction } from "@/app/actions/admin";
 import type {
   AdminCategoryDTO,
   GhostParentOptionDTO,
@@ -668,6 +669,9 @@ function PrepareView({
           onUpdateRow={(fv, patch) => updateRow(prep.detail.productId, fv, patch)}
           onReprice={(fv, m) => reprice(prep, fv, m)}
           onAddCustom={() => addCustom(prep)}
+          onCategoryCreated={(cat) =>
+            setCategories((prev) => (prev.some((c) => c.id === cat.id) ? prev : [...prev, cat]))
+          }
         />
       ))}
 
@@ -718,6 +722,7 @@ function ProductPrepCard({
   onUpdateRow,
   onReprice,
   onAddCustom,
+  onCategoryCreated,
 }: {
   prep: ProductPrep;
   preps: ProductPrep[];
@@ -727,9 +732,27 @@ function ProductPrepCard({
   onUpdateRow: (faceValue: number, patch: Partial<RowState>) => void;
   onReprice: (faceValue: number, margin: string) => void;
   onAddCustom: () => void;
+  onCategoryCreated: (category: AdminCategoryDTO) => void;
 }) {
   const d = prep.detail;
   const isRange = d.denominationType === "RANGE";
+  const [creatingCat, setCreatingCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [catBusy, setCatBusy] = useState(false);
+
+  const createCategory = async () => {
+    const name = newCatName.trim();
+    if (!name) return;
+    setCatBusy(true);
+    const res = await createCategoryQuickAction(name);
+    setCatBusy(false);
+    if (res.ok && res.category) {
+      onCategoryCreated(res.category);
+      onUpdate({ categoryId: res.category.id });
+      setNewCatName("");
+      setCreatingCat(false);
+    }
+  };
   const isNewParent = prep.groupChoice === "new-own" || prep.groupChoice.startsWith("share:");
   const isLead = prep.groupChoice === "new-own";
   const stale =
@@ -844,17 +867,46 @@ function ProductPrepCard({
           </div>
           <div>
             <label className="text-xs text-muted">Catégorie</label>
-            <select
-              value={prep.categoryId}
-              onChange={(e) => onUpdate({ categoryId: e.target.value })}
-              className={`mt-1 ${inputCls}`}
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1 flex gap-2">
+              <select
+                value={prep.categoryId}
+                onChange={(e) => onUpdate({ categoryId: e.target.value })}
+                className={inputCls}
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setCreatingCat((v) => !v)}
+                title="Nouvelle catégorie"
+                className="shrink-0 rounded-lg border border-border-strong px-3 text-sm text-muted"
+              >
+                +
+              </button>
+            </div>
+            {creatingCat && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), createCategory())}
+                  placeholder="Nom de la nouvelle catégorie"
+                  className={inputCls}
+                />
+                <button
+                  type="button"
+                  onClick={createCategory}
+                  disabled={catBusy || !newCatName.trim()}
+                  className="shrink-0 rounded-lg border border-accent/50 bg-accent/20 px-3 text-xs font-semibold text-accent-strong disabled:opacity-40"
+                >
+                  {catBusy ? "…" : "Créer"}
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <label className="text-xs text-muted">Marque</label>
