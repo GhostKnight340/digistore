@@ -243,6 +243,18 @@ export function postChannelMessage(
   });
 }
 
+/**
+ * Opens (or returns the existing) DM channel with a user. Requires the user to
+ * have DM'd the bot before or share a guild — always true here because DM
+ * delivery is gated on the customer having sent an activation code to the bot.
+ */
+export function createDmChannel(recipientId: string): Promise<DiscordChannel> {
+  return discordRequest<DiscordChannel>("/users/@me/channels", {
+    method: "POST",
+    body: { recipient_id: recipientId },
+  });
+}
+
 export function editChannelMessage(
   channelId: string,
   messageId: string,

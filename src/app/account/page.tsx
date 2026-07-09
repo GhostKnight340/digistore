@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { requireCustomer, getAccountOrders } from "@/lib/auth";
+import { requireCustomer, getAccountOrders, canDisconnectDiscord } from "@/lib/auth";
 import { formatDate, formatMAD } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
+import { getDiscordApplicationId } from "@/lib/discord/config";
 import AccountNav from "@/components/account/AccountNav";
 import AccountProfileForm from "./AccountProfileForm";
+import DiscordConnection from "@/components/account/DiscordConnection";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,19 @@ export default async function AccountPage() {
             <Metric label="Statut" value={customer.emailVerified ? "Vérifié" : "À vérifier"} />
           </div>
           <AccountProfileForm phone={customer.phone} />
+          <DiscordConnection
+            discordId={customer.discordId}
+            discordUsername={customer.discordUsername}
+            discordGlobalName={customer.discordGlobalName}
+            discordAvatar={customer.discordAvatar}
+            discordDmActivated={customer.discordDmActivated}
+            discordDmUsername={customer.discordDmUsername}
+            discordDmDisplayName={customer.discordDmDisplayName}
+            discordDmAvatar={customer.discordDmAvatar}
+            discordOrderDeliveryEnabled={customer.discordOrderDeliveryEnabled}
+            canDisconnect={canDisconnectDiscord(customer)}
+            applicationId={getDiscordApplicationId() ?? null}
+          />
           <div className="card mt-6 p-6">
             <div className="flex items-center justify-between gap-4">
               <div>

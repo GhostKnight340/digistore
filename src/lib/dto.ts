@@ -90,10 +90,24 @@ export interface EmailLogDTO {
   createdAt: string;
 }
 
+/** Discord connection + DM-delivery snapshot for the admin order view. */
+export interface AdminOrderDiscordDTO {
+  /** Customer's Discord state: none | connected (OAuth only) | activated (DM). */
+  connection: "none" | "connected" | "activated";
+  deliveryRequested: boolean;
+  /** NOT_REQUESTED | PENDING | SENT | FAILED */
+  deliveryStatus: string;
+  /** Safe failure category only — never a raw payload/code. */
+  deliveryError: string | null;
+  deliveryAttemptedAt: string | null;
+  deliverySentAt: string | null;
+}
+
 /** Admin order view — adds simulated email logs. */
 export interface AdminOrderDTO extends CustomerOrderDTO {
   emailLogs: EmailLogDTO[];
   proofMimeType: string | null;
+  discord: AdminOrderDiscordDTO;
 }
 
 export interface AdminPaymentProofDTO {

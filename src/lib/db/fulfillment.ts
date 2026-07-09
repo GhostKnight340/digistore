@@ -15,6 +15,7 @@ import {
   notifyFulfillmentCompleted,
   notifyStockAlert,
 } from "@/lib/discord/notify";
+import { deliverOrderViaDiscord } from "@/lib/discord/dm";
 import type { ActionResult, AssignmentEntry, DeliveredFieldDTO, ItemAssignment } from "@/lib/dto";
 import {
   placeGiftCardOrder,
@@ -360,6 +361,10 @@ export async function deliverOrder(
       publicOrderNumber: reference.number,
       adminUrl,
     });
+
+    // Optional Discord DM of the delivered code(s). Additive convenience only:
+    // never throws, never affects the delivered order status (see dm.ts).
+    void deliverOrderViaDiscord(orderId);
 
     void checkStockThresholds([...consumedByVariant.values()]);
 

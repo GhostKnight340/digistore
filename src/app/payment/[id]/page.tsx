@@ -14,6 +14,7 @@ import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
 import PayPalButton from "@/components/PayPalButton";
 import RegionBadge from "@/components/RegionBadge";
+import OrderDiscordDelivery from "@/components/payment/OrderDiscordDelivery";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
@@ -606,6 +607,11 @@ function PaymentExperience({
                 le statut de votre commande depuis cette page et votre espace client.
               </p>
             </div>
+
+            {/* Optional Discord DM delivery (additive; never blocks payment). */}
+            {!isCancelled && !isRejected && !isDelivered && (
+              <OrderDiscordDelivery orderId={order.id} />
+            )}
 
             {/* Change method */}
             {isPending && methods.length > 1 && (

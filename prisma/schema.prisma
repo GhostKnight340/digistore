@@ -174,6 +174,23 @@ model Order {
   discordMessageId String?
   discordThreadId  String?
 
+  // Optional per-order Discord DM delivery of the fulfilled code(s). This is an
+  // ADDITIVE convenience channel: it never gates whether the order is
+  // considered delivered. `discordDeliveryRequested` is chosen on the order and
+  // is independent of the customer's later global-preference changes.
+  // discordDeliveryStatus: "NOT_REQUESTED" | "PENDING" | "SENT" | "FAILED".
+  // `discordDeliveryError` holds a safe category only — never a raw payload/code.
+  discordDeliveryRequested  Boolean   @default(false)
+  // Whether the customer has explicitly chosen a per-order value yet. Lets the
+  // payment page seed the checkbox from the customer's global default exactly
+  // once without a later global-preference change (or a re-render) reverting an
+  // explicit per-order choice.
+  discordDeliveryPreferenceSet Boolean @default(false)
+  discordDeliveryStatus     String    @default("NOT_REQUESTED")
+  discordDeliveryAttemptedAt DateTime?
+  discordDeliverySentAt     DateTime?
+  discordDeliveryError      String?
+
   items          OrderItem[]
   deliveredCodes DeliveredCode[]
   emailLogs      EmailLog[]
@@ -209,13 +226,51 @@ model Customer {
   firstName            String?
   lastName             String?
 
+  // Discord OAuth identity (login/linking source of truth). Separate from the
+  // DM fields below: being OAuth-linked does NOT mean the bot can DM this user.
+  discordId           String?   @unique
+  discordUsername     String?
+  discordGlobalName   String?
+  discordAvatar       String?
+
+  // Verified Discord DM state. `discordDmUserId` is set ONLY by the DM worker
+  // after the customer sends a valid activation code to the bot — it, not the
+  // OAuth id, is the source of truth for DM delivery.
+  discordDmUserId      String?
+  discordDmUsername    String?
+  discordDmDisplayName String?
+  discordDmAvatar      String?
+  discordDmActivated   Boolean   @default(false)
+  discordDmActivatedAt DateTime?
+  // Customer's global default for whether future eligible orders also go to DM.
+  discordOrderDeliveryEnabled Boolean @default(false)
+
   orders Order[]
   emailLogs EmailLog[]
   authTokens AuthToken[]
+  discordActivationCodes DiscordActivationCode[]
 
   @@index([updatedAt])
   @@index([emailVerified])
   @@index([role])
+}
+
+// One-time codes the customer sends to the Ghost.ma bot to prove control of a
+// Discord account for DM delivery. Only the hash is stored; codes are
+// single-use, short-lived, and superseded codes are invalidated on generation.
+// Mirrors AuthToken conventions.
+model DiscordActivationCode {
+  id         String    @id @default(cuid())
+  customerId String
+  codeHash   String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([expiresAt])
 }
 
 model AuthToken {

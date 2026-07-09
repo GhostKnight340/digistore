@@ -440,7 +440,7 @@ export async function getAdminOrdersPage(options: {
 
 export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDTO | null> {
   await ensureDatabaseReady();
-  const [order, emailLogs] = await Promise.all([
+  const [order, emailLogs, discordRow] = await Promise.all([
     timeAdmin("admin.orderDetail", "order.findUnique.detail", () => loadOrder(orderId), (row) => (row ? 1 : 0)),
     timeAdmin(
       "admin.orderDetail",
@@ -453,14 +453,46 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
         }),
       (rows) => rows.length,
     ),
+    // Discord delivery + customer connection state — queried separately so the
+    // shared loadOrder()/OrderRecord shape (reused by customer-facing views that
+    // never join the customer) stays untouched.
+    prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        discordDeliveryRequested: true,
+        discordDeliveryStatus: true,
+        discordDeliveryError: true,
+        discordDeliveryAttemptedAt: true,
+        discordDeliverySentAt: true,
+        customer: { select: { discordId: true, discordDmActivated: true } },
+      },
+    }),
   ]);
 
   if (!order) return null;
   const reference = await publicOrderReference(order);
+  const connection: "none" | "connected" | "activated" = discordRow?.customer
+    ?.discordDmActivated
+    ? "activated"
+    : discordRow?.customer?.discordId
+      ? "connected"
+      : "none";
   return {
     ...buildCustomerDTO(order, reference, { includeUndeliveredCodes: true }),
     emailLogs: emailLogs.map(buildEmailLogDTO),
     proofMimeType: order.paymentProof?.mimeType ?? null,
+    discord: {
+      connection,
+      deliveryRequested: discordRow?.discordDeliveryRequested ?? false,
+      deliveryStatus: discordRow?.discordDeliveryStatus ?? "NOT_REQUESTED",
+      deliveryError: discordRow?.discordDeliveryError ?? null,
+      deliveryAttemptedAt: discordRow?.discordDeliveryAttemptedAt
+        ? iso(discordRow.discordDeliveryAttemptedAt)
+        : null,
+      deliverySentAt: discordRow?.discordDeliverySentAt
+        ? iso(discordRow.discordDeliverySentAt)
+        : null,
+    },
   };
 }
 

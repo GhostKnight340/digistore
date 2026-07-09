@@ -28,6 +28,22 @@ export type AuthCustomer = {
   lastLoginAt: Date | null;
   lastPasswordChangeAt: Date | null;
   createdAt: Date;
+  // Whether a password or another OAuth provider still authenticates this
+  // customer — used to decide if Discord can be safely disconnected.
+  hasPassword: boolean;
+  // Discord OAuth identity (login/link).
+  discordId: string | null;
+  discordUsername: string | null;
+  discordGlobalName: string | null;
+  discordAvatar: string | null;
+  // Verified Discord DM state (set only by the DM worker).
+  discordDmUserId: string | null;
+  discordDmUsername: string | null;
+  discordDmDisplayName: string | null;
+  discordDmAvatar: string | null;
+  discordDmActivated: boolean;
+  discordDmActivatedAt: Date | null;
+  discordOrderDeliveryEnabled: boolean;
 };
 
 export type AuthActionResult = {
@@ -261,9 +277,24 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
       lastPasswordChangeAt: true,
       createdAt: true,
       passwordHash: true,
+      discordId: true,
+      discordUsername: true,
+      discordGlobalName: true,
+      discordAvatar: true,
+      discordDmUserId: true,
+      discordDmUsername: true,
+      discordDmDisplayName: true,
+      discordDmAvatar: true,
+      discordDmActivated: true,
+      discordDmActivatedAt: true,
+      discordOrderDeliveryEnabled: true,
     },
   });
-  if (!customer || (!customer.passwordHash && !customer.googleId)) return null;
+  // A session is valid as long as SOME credential still authenticates the
+  // customer: a password, Google, or Discord.
+  if (!customer || (!customer.passwordHash && !customer.googleId && !customer.discordId)) {
+    return null;
+  }
   return {
     id: customer.id,
     name: customer.name,
@@ -277,7 +308,30 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     lastLoginAt: customer.lastLoginAt,
     lastPasswordChangeAt: customer.lastPasswordChangeAt,
     createdAt: customer.createdAt,
+    hasPassword: Boolean(customer.passwordHash),
+    discordId: customer.discordId,
+    discordUsername: customer.discordUsername,
+    discordGlobalName: customer.discordGlobalName,
+    discordAvatar: customer.discordAvatar,
+    discordDmUserId: customer.discordDmUserId,
+    discordDmUsername: customer.discordDmUsername,
+    discordDmDisplayName: customer.discordDmDisplayName,
+    discordDmAvatar: customer.discordDmAvatar,
+    discordDmActivated: customer.discordDmActivated,
+    discordDmActivatedAt: customer.discordDmActivatedAt,
+    discordOrderDeliveryEnabled: customer.discordOrderDeliveryEnabled,
   };
+}
+
+/**
+ * Whether Discord can be safely disconnected without locking the customer out.
+ * Only true when a password or Google login still authenticates the account —
+ * i.e. Discord is not the sole credential.
+ */
+export function canDisconnectDiscord(
+  customer: Pick<AuthCustomer, "hasPassword" | "googleId">,
+): boolean {
+  return customer.hasPassword || Boolean(customer.googleId);
 }
 
 export async function requireCustomer() {
