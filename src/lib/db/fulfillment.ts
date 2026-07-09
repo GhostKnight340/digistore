@@ -16,6 +16,7 @@ import {
   notifyStockAlert,
 } from "@/lib/discord/notify";
 import { deliverOrderViaDiscord } from "@/lib/discord/dm";
+import { recordReloadlyCostReconciliation } from "@/lib/db/pricing";
 import type { ActionResult, AssignmentEntry, DeliveredFieldDTO, ItemAssignment } from "@/lib/dto";
 import {
   placeGiftCardOrder,
@@ -366,6 +367,20 @@ export async function deliverOrder(
     // never throws, never affects the delivered order status (see dm.ts).
     void deliverOrderViaDiscord(orderId);
 
+    // §10 cost reconciliation — estimated (synced catalog) vs actual (Reloadly
+    // balanceInfo.cost). Append-only audit; never affects the delivered order,
+    // customer prices, or what the customer sees. Non-blocking.
+    for (const resolved of reloadlyResolutions.values()) {
+      void recordReloadlyCostReconciliation({
+        orderId,
+        reloadlyTransactionId: resolved.transactionId,
+        reloadlyProductId: resolved.reconciliation.reloadlyProductId,
+        recipientFaceValue: resolved.reconciliation.recipientFaceValue,
+        actualProviderCost: resolved.reconciliation.actualProviderCost,
+        currency: resolved.reconciliation.currency,
+      });
+    }
+
     void checkStockThresholds([...consumedByVariant.values()]);
 
     return { ok: true };
@@ -401,6 +416,13 @@ type ResolvedReloadlyEntry = {
   primary: string;
   transactionId: number;
   reloadlyOrderId: number | null;
+  /** For §10 cost reconciliation — captured from the order's balanceInfo. */
+  reconciliation: {
+    reloadlyProductId: number;
+    recipientFaceValue: number | null;
+    actualProviderCost: number;
+    currency: string;
+  };
 };
 
 function sleep(ms: number) {
@@ -502,7 +524,20 @@ async function resolveReloadlyEntry(input: {
     throw new Error("Reloadly n’a retourné aucun code pour cette commande.");
   }
 
-  return { fields, primary, transactionId: order.transactionId, reloadlyOrderId: null };
+  return {
+    fields,
+    primary,
+    transactionId: order.transactionId,
+    reloadlyOrderId: null,
+    reconciliation: {
+      reloadlyProductId: input.productId,
+      recipientFaceValue: input.unitPrice,
+      // balanceInfo.cost is the authoritative wallet-currency spend for this
+      // order; fall back to the transaction fee/amount only if absent.
+      actualProviderCost: order.balanceInfo?.cost ?? order.amount ?? 0,
+      currency: order.balanceInfo?.currencyCode ?? order.currencyCode,
+    },
+  };
 }
 
 /**

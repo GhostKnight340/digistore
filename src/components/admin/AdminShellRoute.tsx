@@ -3,7 +3,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getAdminNavCountsAction } from "@/app/actions/admin";
-import AdminShell, { type AdminIdentity, type NavCounts } from "@/components/admin/AdminShell";
+import AdminShell, {
+  ADMIN_STANDALONE_ROUTES,
+  type AdminIdentity,
+  type NavCounts,
+} from "@/components/admin/AdminShell";
 
 /**
  * Renders a standalone admin route (e.g. the order-detail page) inside the same
@@ -37,7 +41,11 @@ export default function AdminShellRoute({
   return (
     <AdminShell
       active={active}
-      onNavigate={(id) => router.push(id === "overview" ? "/admin" : `/admin?tab=${id}`)}
+      onNavigate={(id) =>
+        router.push(
+          ADMIN_STANDALONE_ROUTES[id] ?? (id === "overview" ? "/admin" : `/admin?tab=${id}`),
+        )
+      }
       counts={navCounts}
       admin={admin}
     >

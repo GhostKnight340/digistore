@@ -3,7 +3,11 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getAdminNavCountsAction } from "@/app/actions/admin";
-import AdminShell, { type AdminIdentity, type NavCounts } from "@/components/admin/AdminShell";
+import AdminShell, {
+  ADMIN_STANDALONE_ROUTES,
+  type AdminIdentity,
+  type NavCounts,
+} from "@/components/admin/AdminShell";
 import AdminOverview from "@/components/admin/AdminOverview";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
@@ -21,6 +25,7 @@ const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplates
 const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
 const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
 const SuppliersPanel = lazy(() => import("@/components/admin/SuppliersPanel"));
+const PricingPanel = lazy(() => import("@/components/admin/PricingPanel"));
 
 const panelFallback = (
   <section className="card p-6 text-sm text-muted">Chargement de la section...</section>
@@ -50,6 +55,8 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
       return <CategoriesPanel />;
     case "featured":
       return <FeaturedProductsPanel />;
+    case "pricing":
+      return <PricingPanel />;
     case "inventory":
       return inventoryOn ? (
         <InventoryPanel />
@@ -119,6 +126,12 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
   }, [activeTab]);
 
   function handleNavigate(id: string) {
+    // Standalone routes (e.g. the Reloadly importer) are full pages, not panels.
+    const standalone = ADMIN_STANDALONE_ROUTES[id];
+    if (standalone) {
+      router.push(standalone);
+      return;
+    }
     setActiveTab(id);
     // Keep the URL in sync without a full navigation so refresh/back behave.
     const query = id === "overview" ? "/admin" : `/admin?tab=${id}`;

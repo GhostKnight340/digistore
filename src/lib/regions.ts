@@ -59,3 +59,24 @@ export function regionNoteCopy(code: string | null | undefined): string {
 }
 
 export const REGION_LIST: RegionInfo[] = REGION_CODES.map((code) => REGION_TABLE[code]);
+
+// Reloadly country ISO codes that collapse to the "EU" region bucket.
+const RELOADLY_EU_ISO = new Set([
+  "AT", "BE", "CY", "DE", "ES", "FI", "GR", "IE", "IT", "NL", "PT", "LU", "LT",
+  "LV", "EE", "SK", "SI", "MT",
+]);
+
+/**
+ * Maps a Reloadly product's country ISO name to a Ghost region code.
+ * Best-effort: unknown countries return "" (the "incomplete" state) so the
+ * admin explicitly completes the region before publishing — never guessed.
+ */
+export function reloadlyCountryToRegion(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const code = iso.toUpperCase();
+  const direct: Record<string, RegionCode> = { GB: "UK", AE: "UAE" };
+  if (direct[code]) return direct[code];
+  if (isRegionCode(code)) return code;
+  if (RELOADLY_EU_ISO.has(code)) return "EU";
+  return "";
+}

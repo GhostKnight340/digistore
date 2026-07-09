@@ -29,6 +29,15 @@ const C = {
 
 export type NavCounts = { activeOrders: number; paymentReview: number };
 
+/**
+ * Nav ids that are their own standalone route rather than an in-place ?tab=
+ * panel. Both the dashboard and AdminShellRoute consult this so clicking the
+ * item routes to the page instead of trying to render a (nonexistent) panel.
+ */
+export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
+  "import-reloadly": "/admin/catalog/import-reloadly",
+};
+
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
 
 type NavItem = {
@@ -96,6 +105,27 @@ const NAV: NavGroup[] = [
         label: "Produits populaires",
         icon: icon(
           <polygon points="12 2 15.1 8.6 22 9.3 17 14.1 18.2 21 12 17.6 5.8 21 7 14.1 2 9.3 8.9 8.6 12 2" />,
+        ),
+      },
+      {
+        id: "pricing",
+        label: "Tarification",
+        icon: icon(
+          <>
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+            <line x1="7" y1="7" x2="7.01" y2="7" />
+          </>,
+        ),
+      },
+      {
+        id: "import-reloadly",
+        label: "Importer Reloadly",
+        icon: icon(
+          <>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </>,
         ),
       },
     ],

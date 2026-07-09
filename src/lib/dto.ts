@@ -601,3 +601,234 @@ export interface ReloadlyAvailabilityDTO {
   issues: string[];
   error: string | null;
 }
+
+// ─── Pricing subsystem DTOs (Phase 1) ────────────────────────────────────────
+
+/**
+ * Per-variant pricing status for the admin table.
+ *  - up_to_date       suggested == published
+ *  - changed          suggested differs from published (price drift)
+ *  - missing_cost     no synced provider cost for this denomination
+ *  - missing_fx       cost exists but supplier currency has no internal FX rate
+ *  - invalid_mapping  stockControl=reloadly but incomplete/broken mapping
+ */
+export type PricingRowStatus =
+  | "up_to_date"
+  | "changed"
+  | "missing_cost"
+  | "missing_fx"
+  | "invalid_mapping";
+
+export type PricingMarginSource =
+  | "variant_fixed_price"
+  | "variant"
+  | "product"
+  | "category"
+  | "global_default";
+
+export interface PricingRowDTO {
+  variantId: string;
+  productId: string;
+  productName: string;
+  variantLabel: string;
+  region: string;
+  categoryId: string;
+  faceValue: number | null;
+  faceCurrency: string;
+  reloadlyProductId: number | null;
+  reloadlyCountryCode: string | null;
+  environment: SupplierEnvironment;
+
+  // Provider cost (supplier currency) + conversion
+  providerCost: number | null;
+  supplierCurrency: string | null;
+  fxRateToMad: number | null;
+  costInMad: number | null;
+  costSyncedAt: string | null;
+
+  // Suggestion breakdown
+  marginSource: PricingMarginSource | null;
+  marginPct: number | null;
+  rawPriceMad: number | null;
+  suggestedPriceMad: number | null;
+
+  // Published price + deltas
+  publishedPriceMad: number;
+  differenceMad: number | null;
+  differencePct: number | null;
+
+  // Expected profitability at the *published* price
+  expectedGrossProfitMad: number | null;
+  expectedGrossMarginPct: number | null;
+
+  // Policy overrides currently set on this variant/product/category
+  variantMarginPct: number | null;
+  productMarginPct: number | null;
+  categoryMarginPct: number | null;
+  variantFixedPriceMad: number | null;
+
+  status: PricingRowStatus;
+}
+
+export interface PricingSettingsDTO {
+  fxRatesToMad: Record<string, number>;
+  defaultMarginPct: number;
+  roundingIncrement: 1 | 5 | 10;
+  roundingMode: "nearest" | "up";
+}
+
+export interface PricingLastSyncDTO {
+  environment: SupplierEnvironment;
+  status: "success" | "partial" | "failed";
+  productsSynced: number;
+  costsUpserted: number;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface PricingOverviewDTO {
+  environment: SupplierEnvironment;
+  configured: boolean;
+  settings: PricingSettingsDTO;
+  rows: PricingRowDTO[];
+  lastSync: PricingLastSyncDTO | null;
+}
+
+export interface PricingSyncResultDTO {
+  ok: boolean;
+  environment: SupplierEnvironment;
+  productsSynced: number;
+  costsUpserted: number;
+  skipped: number;
+  error: string | null;
+}
+
+export interface PublishPriceResultDTO {
+  ok: boolean;
+  variantId: string;
+  publishedPriceMad: number | null;
+  error: string | null;
+}
+
+// ─── Reloadly catalog importer (Phase 2) ─────────────────────────────────────
+
+/** How much of a Reloadly product is already present in the Ghost catalog. */
+export type ReloadlyImportMappingStatus = "added" | "partial" | "not_added";
+
+export interface ReloadlyImportSearchRowDTO {
+  productId: number;
+  productName: string;
+  brandName: string;
+  categoryName: string | null;
+  country: string;
+  countryName: string;
+  flagUrl: string | null;
+  logoUrl: string | null;
+  recipientCurrency: string;
+  denominationType: string;
+  fixedDenominations: number[];
+  minDenomination: number | null;
+  maxDenomination: number | null;
+  status: string; // Reloadly ACTIVE/INACTIVE
+  mappingStatus: ReloadlyImportMappingStatus;
+  mappedFaceValues: number[];
+}
+
+export interface ReloadlyImportSearchPageDTO {
+  rows: ReloadlyImportSearchRowDTO[];
+  page: number;
+  totalPages: number;
+  totalElements: number;
+}
+
+/** Per-denomination cost + suggested-price preview for the import panel. */
+export interface ReloadlyDenominationPreviewDTO {
+  faceValue: number;
+  faceCurrency: string;
+  providerCost: number | null;
+  supplierCurrency: string | null;
+  fxRateToMad: number | null;
+  costInMad: number | null;
+  marginSource: PricingMarginSource | null;
+  marginPct: number | null;
+  suggestedPriceMad: number | null;
+  expectedProfitMad: number | null;
+  expectedMarginPct: number | null;
+  /** True when a variant with this (product, faceValue, currency) already exists. */
+  alreadyExists: boolean;
+  /** For RANGE: whether this face value is within Reloadly's min/max. */
+  withinBounds: boolean;
+  error: string | null;
+}
+
+export interface ReloadlyImportDetailDTO {
+  productId: number;
+  productName: string;
+  brandName: string;
+  categoryName: string | null;
+  country: string;
+  countryName: string;
+  flagUrl: string | null;
+  logoUrl: string | null;
+  recipientCurrency: string;
+  senderCurrency: string;
+  denominationType: string;
+  status: string;
+  senderFee: number;
+  senderFeePercentage: number;
+  discountPercentage: number;
+  minDenomination: number | null;
+  maxDenomination: number | null;
+  redeemInstructionConcise: string | null;
+  redeemInstructionVerbose: string | null;
+  userIdRequired: boolean;
+  costSyncedAt: string | null;
+  /** Suggested Ghost-side defaults, all admin-editable. */
+  suggestedRegionCode: string;
+  suggestedCategoryId: string | null;
+  suggestedSlug: string;
+  /** FIXED: all offered denominations priced. RANGE: empty (admin defines them). */
+  denominations: ReloadlyDenominationPreviewDTO[];
+  environment: SupplierEnvironment;
+}
+
+export interface ImportReloadlyVariantInput {
+  faceValue: number;
+  faceCurrency: string;
+  publishedPriceMad: number;
+  marginPctOverride?: number | null;
+  fixedSuggestedPriceMad?: number | null;
+  active: boolean;
+  /** "reloadly" (API) or "manual". */
+  stockControl: string;
+}
+
+export interface ImportReloadlyProductInput {
+  reloadlyProductId: number;
+  reloadlyCountryCode: string;
+  // Parent product settings (all admin-controlled)
+  name: string;
+  slug: string;
+  categoryId: string;
+  brand: string;
+  description: string;
+  instructions: string;
+  regionCode: string;
+  active: boolean;
+  featured: boolean;
+  /** Optional temporary placeholder image (e.g. the Reloadly logo). */
+  imageUrl: string | null;
+  variants: ImportReloadlyVariantInput[];
+}
+
+export interface ImportReloadlyResultDTO {
+  ok: boolean;
+  productSlug: string | null;
+  productName: string | null;
+  createdProduct: boolean;
+  createdVariants: number;
+  skippedVariants: number;
+  skippedFaceValues: number[];
+  error: string | null;
+}

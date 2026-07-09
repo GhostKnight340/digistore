@@ -15,6 +15,8 @@
     "discord:dm-worker": "tsx scripts/discord-dm-worker.ts",
     "start:worker": "tsx scripts/discord-dm-worker.ts",
     "reloadly:smoke-test": "tsx --conditions=react-server -r dotenv/config scripts/reloadly-smoke-test.ts",
+    "reloadly:cost-sync": "tsx --conditions=react-server -r dotenv/config scripts/reloadly-cost-sync.ts",
+    "test": "node --conditions=react-server --import tsx --test \"test/**/*.test.ts\"",
     "postinstall": "prisma generate"
   },
   "prisma": {
