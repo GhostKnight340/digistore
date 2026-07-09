@@ -10,6 +10,7 @@ import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
+import { buildCheckoutMethods } from "@/lib/paymentMethod";
 import type { PaymentConfigDTO } from "@/lib/dto";
 import { getRegion } from "@/lib/regions";
 
@@ -26,9 +27,13 @@ export default function CheckoutClient({
 
   const [config, setConfig] = useState<PaymentConfigDTO | null>(initialConfig);
   const [configError, setConfigError] = useState(false);
-  const methods = config?.methods ?? [];
+  // Bank accounts (CIH, etc.) collapse into one "Virement bancaire" option at
+  // checkout; the customer picks the specific bank later on the payment page.
+  const methods = useMemo(() => buildCheckoutMethods(config?.methods ?? []), [config]);
 
-  const [methodId, setMethodId] = useState<string>(() => initialConfig?.methods[0]?.id ?? "");
+  const [methodId, setMethodId] = useState<string>(
+    () => buildCheckoutMethods(initialConfig?.methods ?? [])[0]?.id ?? "",
+  );
   const isLoggedIn = Boolean(initialCustomer);
   const [email, setEmail] = useState(initialCustomer?.email ?? "");
   const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
@@ -49,7 +54,7 @@ export default function CheckoutClient({
     getPaymentConfigAction()
       .then((cfg) => {
         setConfig(cfg);
-        setMethodId((current) => current || cfg.methods[0]?.id || "");
+        setMethodId((current) => current || buildCheckoutMethods(cfg.methods)[0]?.id || "");
       })
       .catch((err: unknown) => {
         console.error("[checkout] Failed to load payment config:", err);
