@@ -1,5 +1,11 @@
 # Production Environment
 
+> **Local vs production DB separation:** dev creds live in `.env.local`,
+> production creds in `.env.production.local` (never auto-loaded). Production DB
+> writes are guarded behind `CONFIRM_PRODUCTION_DB=true`. See
+> **`docs/db-safety.md`** for the full workflow, the `prod:status` / `prod:migrate`
+> commands, and which commands read vs. write.
+
 Required for Vercel:
 
 - `DATABASE_URL`: PostgreSQL connection string (pooled is fine for the running app). Must start with `postgresql://` or `postgres://`.

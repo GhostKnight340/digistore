@@ -22,3 +22,4 @@ prisma/dev.db-journal
 
 # ...but keep committed example env files (no real secrets)
 !.env.discord-worker.example
+!.env.example

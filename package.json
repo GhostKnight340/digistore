@@ -14,8 +14,10 @@
     "discord:setup": "tsx scripts/discord-setup.ts",
     "discord:dm-worker": "tsx scripts/discord-dm-worker.ts",
     "start:worker": "tsx scripts/discord-dm-worker.ts",
-    "reloadly:smoke-test": "tsx --conditions=react-server -r dotenv/config scripts/reloadly-smoke-test.ts",
-    "reloadly:cost-sync": "tsx --conditions=react-server -r dotenv/config scripts/reloadly-cost-sync.ts",
+    "reloadly:smoke-test": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/reloadly-smoke-test.ts",
+    "reloadly:cost-sync": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/reloadly-cost-sync.ts",
+    "prod:status": "node scripts/prod-op.mjs migrate status",
+    "prod:migrate": "node scripts/prod-op.mjs migrate deploy",
     "test": "node --conditions=react-server --import tsx --test \"test/**/*.test.ts\"",
     "postinstall": "prisma generate"
   },

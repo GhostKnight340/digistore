@@ -7,6 +7,10 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { categories, products } from "../src/lib/products";
+import { assertWriteAllowed } from "../scripts/lib/db-guard.mjs";
+
+// Seeding upserts catalog products + test codes — block accidental prod writes.
+assertWriteAllowed("prisma db seed");
 
 const prisma = new PrismaClient();
 

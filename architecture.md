@@ -774,6 +774,14 @@ PayPal button / crypto address, upload proof or pay) → payment confirmation
 
 Values are never committed. Grouped by runtime; exact names from the code.
 
+**Local vs production DB separation (`docs/db-safety.md`):** dev creds go in
+`.env.local`, production creds in `.env.production.local` (loaded **only** by
+`npm run prod:status` / `prod:migrate` via `scripts/prod-op.mjs`). A guard
+(`scripts/lib/db-guard.mjs` → `assertWriteAllowed`) blocks DB **writes** against
+production unless `CONFIRM_PRODUCTION_DB=true`, and auto-detects production by
+matching the active host against `.env.production.local`. Guarded scripts:
+`prisma db seed`, `reloadly:cost-sync`, and `prod-op.mjs`. Template: `.env.example`.
+
 ### Main web app (Vercel)
 | Variable | Purpose | Notes |
 |---|---|---|

@@ -10,8 +10,12 @@
 // silently pull production cost data.
 import { getReloadlyEnvironment } from "../src/lib/reloadly/config";
 import { syncReloadlyProviderCosts } from "../src/lib/db/pricing";
+import { assertWriteAllowed } from "./lib/db-guard.mjs";
 
 async function main() {
+  // Writes ReloadlyProviderCost / PricingSyncRun rows — block accidental prod writes.
+  assertWriteAllowed("reloadly:cost-sync");
+
   const environment = getReloadlyEnvironment();
   console.log(`[reloadly:cost-sync] environment = ${environment}`);
 
