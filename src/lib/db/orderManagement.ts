@@ -1,11 +1,31 @@
 import "server-only";
 
+import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { publicOrderReference } from "@/lib/db/orders";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import { notifyPaymentStatusChange } from "@/lib/discord/notify";
 import type { ActionResult } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
+
+/**
+ * A customer may be auto-removed while deleting orders ONLY if it is a pure
+ * orphaned GUEST record: no remaining orders, no login credential
+ * (password/Google/Discord), and not an admin.
+ *
+ * This guard exists because a previous version deleted ANY order-less customer
+ * (`{ orders: { none: {} } }`), which wiped registered accounts — including the
+ * admin's own — silently dropping their password and Discord link and
+ * recreating a Google-only account on the next login. NEVER widen this without
+ * keeping the credential + role guard.
+ */
+const ORPHAN_GUEST_CUSTOMER: Prisma.CustomerWhereInput = {
+  orders: { none: {} },
+  role: { not: "ADMIN" },
+  passwordHash: null,
+  googleId: null,
+  discordId: null,
+};
 
 const NOTIFIABLE_PAYMENT_STATUSES: OrderStatus[] = [
   "payment_submitted",
@@ -55,11 +75,9 @@ export async function deleteOrder(orderId: string): Promise<ActionResult> {
       await tx.orderItem.deleteMany({ where: { orderId } });
       await tx.order.delete({ where: { id: orderId } });
       if (order.customerId) {
+        // Only clean up a pure orphaned guest — never a loginable/admin account.
         await tx.customer.deleteMany({
-          where: {
-            id: order.customerId,
-            orders: { none: {} },
-          },
+          where: { id: order.customerId, ...ORPHAN_GUEST_CUSTOMER },
         });
       }
     });
@@ -91,7 +109,8 @@ export async function clearAllOrders(
       await tx.emailLog.deleteMany();
       await tx.orderItem.deleteMany();
       await tx.order.deleteMany();
-      await tx.customer.deleteMany({ where: { orders: { none: {} } } });
+      // Only sweep pure orphaned guests — preserve every registered/admin account.
+      await tx.customer.deleteMany({ where: ORPHAN_GUEST_CUSTOMER });
     });
 
     void resetOrderNumbering;
