@@ -607,7 +607,9 @@ async function importGroup(
     if (existing) {
       productRow = existing; // idempotent re-import — preserve state
     } else {
-      const category = await ensureCategoryForProduct(t.categoryId || "gaming");
+      // No silent "gaming" fallback — the importer always supplies a category;
+      // if it's somehow missing, fail loudly rather than mis-file the product.
+      const category = await ensureCategoryForProduct(t.categoryId);
       if (!category.ok || !category.id) throw new Error(category.error ?? "Catégorie introuvable.");
       const active = status === "publish";
       isDraft = !active;

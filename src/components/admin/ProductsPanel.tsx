@@ -141,7 +141,11 @@ export default function ProductsPanel() {
   }
 
   function openNew() {
-    const blank = emptyParent(categories[0]?.id ?? "");
+    // No silent default category: a new product starts with NO category, so the
+    // admin must explicitly pick or create one. Defaulting to the first category
+    // (e.g. "Gaming") silently mis-filed products whose category selection didn't
+    // fully take. save() blocks an empty category with a clear error.
+    const blank = emptyParent("");
     setSelectedSlug("__new__");
     setIsNew(true);
     setDraft(blank);
