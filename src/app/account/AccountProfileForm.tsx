@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateCustomerNameAction, updateCustomerPhoneAction } from "@/app/actions/auth";
+import { PencilIcon } from "@/components/account/icons";
 
 const MESSAGE_TIMEOUT_MS = 3000;
 
@@ -22,30 +23,35 @@ export default function AccountProfileForm({
     <div className="card p-6">
       <h2 className="text-lg font-bold text-white">Informations personnelles</h2>
 
-      <EditableField
-        label="Nom complet"
-        initial={name}
-        required
-        placeholder="Votre nom"
-        successMessage="Nom mis à jour."
-        save={(value) => updateCustomerNameAction(value)}
-      />
+      <div className="mt-4 divide-y divide-border">
+        <EditableField
+          label="Nom complet"
+          editLabel="Modifier le nom"
+          initial={name}
+          required
+          placeholder="Votre nom"
+          successMessage="Nom mis à jour."
+          save={(value) => updateCustomerNameAction(value)}
+        />
 
-      <EditableField
-        label="Numéro de téléphone"
-        initial={phone ?? ""}
-        placeholder="+212 6 00 00 00 00"
-        successMessage="Numéro de téléphone mis à jour."
-        save={(value) => updateCustomerPhoneAction(value)}
-        inputMode="tel"
-        autoComplete="tel"
-      />
+        <EditableField
+          label="Numéro de téléphone"
+          editLabel="Modifier le numéro de téléphone"
+          initial={phone ?? ""}
+          placeholder="+212 6 00 00 00 00"
+          successMessage="Numéro de téléphone mis à jour."
+          save={(value) => updateCustomerPhoneAction(value)}
+          inputMode="tel"
+          autoComplete="tel"
+        />
+      </div>
     </div>
   );
 }
 
 function EditableField({
   label,
+  editLabel,
   initial,
   required = false,
   placeholder,
@@ -55,6 +61,7 @@ function EditableField({
   autoComplete,
 }: {
   label: string;
+  editLabel: string;
   initial: string;
   required?: boolean;
   placeholder?: string;
@@ -118,10 +125,12 @@ function EditableField({
   }
 
   return (
-    <div className="mt-5">
-      <span className="mb-1.5 block text-sm font-medium text-white">{label}</span>
+    <div className="py-4 first:pt-0 last:pb-0">
       {showForm ? (
         <form onSubmit={submit}>
+          <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-faint">
+            {label}
+          </label>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -129,6 +138,7 @@ function EditableField({
             placeholder={placeholder}
             autoComplete={autoComplete}
             inputMode={inputMode}
+            autoFocus={editing}
           />
           {error ? (
             <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
@@ -151,13 +161,26 @@ function EditableField({
         </form>
       ) : (
         <>
-          <p className="text-base text-white">{savedValue}</p>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-faint">{label}</p>
+              <p className="mt-0.5 truncate text-base text-white">
+                {savedValue || <span className="text-muted">Non renseigné</span>}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={startEdit}
+              aria-label={editLabel}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-surface2"
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+              Modifier
+            </button>
+          </div>
           {message ? (
             <p className="mt-3 rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-400">{message}</p>
           ) : null}
-          <button type="button" onClick={startEdit} className="btn-ghost mt-4 h-10 px-4 text-sm">
-            Modifier
-          </button>
         </>
       )}
     </div>
