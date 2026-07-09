@@ -273,7 +273,7 @@ export default function CheckoutClient({
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-[13px] font-semibold text-[#EAF0FF]">Numéro de téléphone</span>
                   <span className={`text-[11.5px] ${phoneValid ? "text-[#5BC98C]" : "text-[#E8A838]"}`}>
-                    {phoneValid ? "Vérifié" : "Requis"}
+                    {phoneValid ? "Enregistré" : "Requis"}
                   </span>
                 </div>
                 <div
@@ -303,7 +303,7 @@ export default function CheckoutClient({
                   )}
                 </div>
                 <p className="mt-2 text-[11.5px] text-faint">
-                  Utilisé uniquement pour le suivi de la commande sur WhatsApp si nécessaire.
+                  Utilisé uniquement pour le suivi de votre commande si nécessaire.
                 </p>
               </label>
             </div>
