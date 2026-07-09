@@ -1,31 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { getFooterSocialLinks } from "@/lib/footerConfig";
-import { getPaymentConfigAction } from "@/app/actions/payments";
-import type { PaymentMethodDTO } from "@/lib/dto";
+import { getEnabledFooterPaymentBadges, getFooterSocialLinks } from "@/lib/footerConfig";
 
 export default function Footer() {
   const { settings } = useStoreSettings();
   const { categories } = useProductCatalog();
-  const [activeMethods, setActiveMethods] = useState<PaymentMethodDTO[]>([]);
-
-  // The footer's payment badges reflect the actual active + visible payment
-  // methods (not a separately-edited static list) so they never drift from
-  // what checkout really offers.
-  useEffect(() => {
-    getPaymentConfigAction()
-      .then((config) => setActiveMethods(config.methods))
-      .catch((error) => console.error("Failed to load footer payment methods", error));
-  }, []);
 
   if (!settings.homepage.showFooter) return null;
 
   const socialLinks = getFooterSocialLinks(settings);
-  const paymentBadges = activeMethods.map((method) => ({ id: method.id, label: method.name }));
+  // Same admin-managed badge list as the email footer (Boutique settings →
+  // "Badges de paiement du pied de page") — never individual bank accounts.
+  const paymentBadges = getEnabledFooterPaymentBadges(settings);
 
   return (
     <footer className="mt-20 border-t border-border bg-base/60">

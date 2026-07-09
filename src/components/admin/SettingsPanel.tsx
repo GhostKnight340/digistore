@@ -2,8 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { defaultStoreSettings, isInventoryEnabled, type StoreSettings } from "@/lib/storeSettings";
+import {
+  defaultStoreSettings,
+  isInventoryEnabled,
+  type FooterPaymentBadgeSetting,
+  type StoreSettings,
+} from "@/lib/storeSettings";
 import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
+import { getPaymentConfigAction } from "@/app/actions/payments";
+import { announcedPaymentMethods } from "@/lib/paymentMethod";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { uploadImageFile } from "@/lib/clientUpload";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
@@ -45,11 +52,38 @@ export default function SettingsPanel() {
   const [message, setMessage] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [autoStockStatuses, setAutoStockStatuses] = useState<Record<string, StockStatus>>({});
+  const [methodBadgeOptions, setMethodBadgeOptions] = useState<FooterPaymentBadgeSetting[]>([]);
 
   useEffect(() => {
     getStorefrontProductsAction().then(setProducts);
     getCategoryStockStatusesAction().then(setAutoStockStatuses);
+    // Offer one badge toggle per customer-facing payment method (banks
+    // collapsed into the single "Virement bancaire" entry). New options start
+    // disabled; they only persist once the admin toggles and saves.
+    getPaymentConfigAction()
+      .then((config) => {
+        setMethodBadgeOptions(
+          announcedPaymentMethods(config.methods).map((method) => ({
+            id: `method:${method.id}`,
+            label: method.name,
+            enabled: false,
+          })),
+        );
+      })
+      .catch(() => {});
   }, []);
+
+  const footerBadgeOptions = [
+    ...draft.footer.paymentBadges,
+    ...methodBadgeOptions.filter(
+      (option) =>
+        !draft.footer.paymentBadges.some(
+          (badge) =>
+            badge.id === option.id ||
+            badge.label.trim().toLowerCase() === option.label.trim().toLowerCase(),
+        ),
+    ),
+  ];
 
   useEffect(() => {
     setDraft(settings);
@@ -419,7 +453,7 @@ export default function SettingsPanel() {
             Ces badges sont affichés dans le pied de page du site et des e-mails.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {draft.footer.paymentBadges.map((badge) => (
+            {footerBadgeOptions.map((badge) => (
               <ToggleSwitch
                 key={badge.id}
                 className="rounded-xl border border-border bg-base px-3 py-3"
@@ -428,7 +462,7 @@ export default function SettingsPanel() {
                 onChange={(checked) =>
                   update("footer", {
                     ...draft.footer,
-                    paymentBadges: draft.footer.paymentBadges.map((item) =>
+                    paymentBadges: footerBadgeOptions.map((item) =>
                       item.id === badge.id ? { ...item, enabled: checked } : item,
                     ),
                   })
