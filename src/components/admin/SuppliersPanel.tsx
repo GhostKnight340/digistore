@@ -380,6 +380,14 @@ function MappingRow({ mapping }: { mapping: ReloadlyMappingDTO }) {
                 {mapping.reloadlyCountryCode ? ` · ${mapping.reloadlyCountryCode}` : ""}
               </span>
             )}
+            {mapping.regionMismatch && (
+              <span
+                className="rounded bg-amber-500/10 px-1.5 py-0.5 font-medium text-amber-400"
+                title="The Ghost region label differs from the region of the Reloadly card's origin country. Often intentional (e.g. a FR card that works EU-wide) — just confirm it's on purpose."
+              >
+                Ghost {mapping.region} ≠ Reloadly {mapping.reloadlyRegion}
+              </span>
+            )}
           </p>
         </div>
         <span className={`chip ${meta.cls}`}>{meta.label}</span>

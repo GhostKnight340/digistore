@@ -3,6 +3,7 @@ import "server-only";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { publicOrderReference } from "./orders";
 import { getReloadlyEnvironment } from "@/lib/reloadly/config";
+import { reloadlyCountryToRegion } from "@/lib/regions";
 import type {
   ReloadlyMappingDTO,
   ReloadlyMappingStatus,
@@ -51,6 +52,7 @@ export async function getReloadlyMappings(): Promise<ReloadlyMappingDTO[]> {
       faceValue: true,
       faceCurrency: true,
       active: true,
+      region: true,
       stockControl: true,
       reloadlyProductId: true,
       reloadlyCountryCode: true,
@@ -58,19 +60,35 @@ export async function getReloadlyMappings(): Promise<ReloadlyMappingDTO[]> {
     },
   });
 
-  return variants.map((v) => ({
-    variantId: v.id,
-    productSlug: v.product.slug,
-    productName: v.product.name,
-    variantName: variantLabel(v),
-    region: v.product.region,
-    priceMad: v.priceMad,
-    faceValue: v.faceValue,
-    faceCurrency: v.faceCurrency,
-    reloadlyProductId: v.reloadlyProductId,
-    reloadlyCountryCode: v.reloadlyCountryCode,
-    status: mappingStatus(v),
-  }));
+  return variants.map((v) => {
+    // Ghost region label (what customers see) vs the region implied by the
+    // Reloadly card's origin country. They can legitimately differ (e.g. a FR
+    // card that works EU-wide, labelled EU) — so this is an INFO flag, not an
+    // error. It just makes an unintended label↔card mismatch visible.
+    const region = v.region || v.product.region;
+    const reloadlyRegion = reloadlyCountryToRegion(v.reloadlyCountryCode);
+    const regionMismatch =
+      v.stockControl === "reloadly" &&
+      v.reloadlyProductId != null &&
+      !!region &&
+      !!reloadlyRegion &&
+      region !== reloadlyRegion;
+    return {
+      variantId: v.id,
+      productSlug: v.product.slug,
+      productName: v.product.name,
+      variantName: variantLabel(v),
+      region,
+      priceMad: v.priceMad,
+      faceValue: v.faceValue,
+      faceCurrency: v.faceCurrency,
+      reloadlyProductId: v.reloadlyProductId,
+      reloadlyCountryCode: v.reloadlyCountryCode,
+      reloadlyRegion: reloadlyRegion || null,
+      regionMismatch,
+      status: mappingStatus(v),
+    };
+  });
 }
 
 /** Reloadly-eligible line items on an order (for the pre-delivery mismatch check). */

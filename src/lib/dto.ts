@@ -554,6 +554,10 @@ export interface ReloadlyMappingDTO {
   faceCurrency: string;
   reloadlyProductId: number | null;
   reloadlyCountryCode: string | null;
+  /** Ghost region implied by the Reloadly card's origin country, if mappable. */
+  reloadlyRegion: string | null;
+  /** True when the Ghost region label differs from reloadlyRegion (info, not error). */
+  regionMismatch: boolean;
   status: ReloadlyMappingStatus;
 }
 
