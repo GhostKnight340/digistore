@@ -10,12 +10,14 @@ import {
   getGiftCardProducts,
   getGiftCardProduct,
   getAccountBalance,
+  validateReloadlyDenomination,
 } from "@/lib/reloadly/operations";
 import {
   getReloadlyMappings,
   getMappedReloadlyProductIds,
   getReloadlyMetrics,
   getReloadlyProviderOrders,
+  getReloadlyDeliveryTargets,
 } from "@/lib/db/suppliers";
 import type {
   ReloadlyAvailabilityDTO,
@@ -171,37 +173,10 @@ export async function testReloadlyAvailabilityAction(
   await requireAdminCustomer();
   try {
     const product = await getGiftCardProduct(productId);
-    const issues: string[] = [];
-
-    if (expected.currency && product.recipientCurrencyCode !== expected.currency) {
-      issues.push(
-        `Devise attendue ${expected.currency}, produit en ${product.recipientCurrencyCode}.`,
-      );
-    }
-    if (expected.countryCode && product.country?.isoName !== expected.countryCode) {
-      issues.push(
-        `Pays attendu ${expected.countryCode}, produit ${product.country?.isoName ?? "?"}.`,
-      );
-    }
-    if (expected.faceValue != null) {
-      if (product.denominationType === "FIXED") {
-        const denoms = product.fixedRecipientDenominations ?? [];
-        if (!denoms.includes(expected.faceValue)) {
-          issues.push(
-            `La valeur ${expected.faceValue} n’est pas proposée (disponibles : ${denoms.join(", ") || "aucune"}).`,
-          );
-        }
-      } else {
-        const min = product.minRecipientDenomination;
-        const max = product.maxRecipientDenomination;
-        if ((min != null && expected.faceValue < min) || (max != null && expected.faceValue > max)) {
-          issues.push(`La valeur ${expected.faceValue} est hors de la plage ${min ?? "?"}–${max ?? "?"}.`);
-        }
-      }
-    }
+    const { ok, issues } = validateReloadlyDenomination(product, expected);
 
     return {
-      ok: issues.length === 0,
+      ok,
       productId,
       productName: product.productName,
       country: product.country?.isoName ?? null,
@@ -224,4 +199,33 @@ export async function testReloadlyAvailabilityAction(
       error: safeReloadlyError(error),
     };
   }
+}
+
+/**
+ * Pre-delivery mismatch check for the admin order page: for each Reloadly-
+ * eligible line item, verify the variant's face value/currency/country against
+ * the mapped Reloadly product. Returns a per-orderItem result. A Reloadly
+ * outage never surfaces a false warning (fails open: ok=true, logged only).
+ */
+export async function getReloadlyDeliveryChecksAction(
+  orderId: string,
+): Promise<Record<string, { ok: boolean; message: string | null }>> {
+  await requireAdminCustomer();
+  const targets = await getReloadlyDeliveryTargets(orderId);
+  const result: Record<string, { ok: boolean; message: string | null }> = {};
+  for (const t of targets) {
+    try {
+      const product = await getGiftCardProduct(t.reloadlyProductId);
+      const { ok, issues } = validateReloadlyDenomination(product, {
+        faceValue: t.faceValue,
+        currency: t.faceCurrency,
+        countryCode: t.countryCode,
+      });
+      result[t.orderItemId] = { ok, message: ok ? null : issues.join(" ") };
+    } catch (error) {
+      console.error("[reloadlyDeliveryChecks]", error instanceof Error ? error.message : error);
+      result[t.orderItemId] = { ok: true, message: null };
+    }
+  }
+  return result;
 }

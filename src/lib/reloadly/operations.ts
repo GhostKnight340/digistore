@@ -66,6 +66,48 @@ export async function getGiftCardProduct(
   );
 }
 
+/**
+ * Pure, French-message validation that a Ghost variant fits a Reloadly product:
+ * currency, country, and (crucially) that the face value is an actually-offered
+ * denomination. Shared by the delivery pre-flight check, the admin availability
+ * test, and the order-page mismatch warning so they all speak the same language.
+ */
+export function validateReloadlyDenomination(
+  product: ReloadlyGiftCardProduct,
+  expected: { faceValue: number | null; currency?: string | null; countryCode?: string | null },
+): { ok: boolean; issues: string[] } {
+  const issues: string[] = [];
+  const cur = product.recipientCurrencyCode;
+
+  if (expected.currency && cur !== expected.currency) {
+    issues.push(`Devise attendue ${expected.currency}, produit Reloadly en ${cur}.`);
+  }
+  if (expected.countryCode && product.country?.isoName !== expected.countryCode) {
+    issues.push(`Pays attendu ${expected.countryCode}, produit Reloadly ${product.country?.isoName ?? "?"}.`);
+  }
+  if (expected.faceValue != null) {
+    if (product.denominationType === "FIXED") {
+      const denoms = product.fixedRecipientDenominations ?? [];
+      if (!denoms.includes(expected.faceValue)) {
+        issues.push(
+          `${expected.faceValue} ${cur} non proposé par Reloadly pour ce produit — disponibles : ${
+            denoms.length ? `${denoms.join(", ")} ${cur}` : "aucune"
+          }.`,
+        );
+      }
+    } else {
+      const min = product.minRecipientDenomination;
+      const max = product.maxRecipientDenomination;
+      if ((min != null && expected.faceValue < min) || (max != null && expected.faceValue > max)) {
+        issues.push(
+          `${expected.faceValue} ${cur} hors de la plage proposée par Reloadly (${min ?? "?"}–${max ?? "?"} ${cur}).`,
+        );
+      }
+    }
+  }
+  return { ok: issues.length === 0, issues };
+}
+
 export type ReloadlyAccountBalance = {
   balance: number;
   currencyCode: string;

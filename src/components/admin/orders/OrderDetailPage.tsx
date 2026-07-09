@@ -220,6 +220,32 @@ export default function OrderDetailPage({
     order.status !== "payment_issue" &&
     order.status !== "cancelled";
   const canDeliver = order.status === "payment_confirmed";
+
+  // Pre-delivery Reloadly denomination check: warn on the order page if a
+  // mapped Reloadly product doesn't offer the variant's face value, so the
+  // admin can fix the mapping/price before attempting delivery.
+  const hasReloadlyItem = useMemo(
+    () =>
+      order.items.some(
+        (i) => i.variantStockControl === "reloadly" && i.variantReloadlyProductId != null,
+      ),
+    [order.items],
+  );
+  useEffect(() => {
+    if (!hasReloadlyItem || delivered) return;
+    let cancelled = false;
+    getReloadlyDeliveryChecksAction(order.id)
+      .then((checks) => {
+        if (!cancelled) setReloadlyChecks(checks);
+      })
+      .catch(() => {
+        /* fail open — no warning if the check can't run */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasReloadlyItem, delivered, order.id]);
+
   const submittedAt = eventDate(order, "payment_submitted");
   const confirmedAt = eventDate(order, "payment_confirmed");
   const issueReason =
@@ -623,6 +649,7 @@ export default function OrderDetailPage({
             chosenIds={chosenIds}
             busy={busy}
             manualMode={manualMode}
+            reloadlyChecks={reloadlyChecks}
             readyCodes={readyCodes}
             totalCodes={totalCodes}
             deliverReady={deliverReady}

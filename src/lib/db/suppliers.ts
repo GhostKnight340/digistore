@@ -73,6 +73,45 @@ export async function getReloadlyMappings(): Promise<ReloadlyMappingDTO[]> {
   }));
 }
 
+/** Reloadly-eligible line items on an order (for the pre-delivery mismatch check). */
+export async function getReloadlyDeliveryTargets(orderId: string): Promise<
+  {
+    orderItemId: string;
+    reloadlyProductId: number;
+    countryCode: string | null;
+    faceValue: number | null;
+    faceCurrency: string;
+  }[]
+> {
+  await ensureDatabaseReady();
+  const items = await prisma.orderItem.findMany({
+    where: {
+      orderId,
+      variant: { stockControl: "reloadly", reloadlyProductId: { not: null } },
+    },
+    select: {
+      id: true,
+      variant: {
+        select: {
+          reloadlyProductId: true,
+          reloadlyCountryCode: true,
+          faceValue: true,
+          faceCurrency: true,
+        },
+      },
+    },
+  });
+  return items
+    .filter((it) => it.variant?.reloadlyProductId != null)
+    .map((it) => ({
+      orderItemId: it.id,
+      reloadlyProductId: it.variant!.reloadlyProductId!,
+      countryCode: it.variant!.reloadlyCountryCode,
+      faceValue: it.variant!.faceValue,
+      faceCurrency: it.variant!.faceCurrency,
+    }));
+}
+
 /** Reloadly product ids currently referenced by any variant (catalog cross-ref). */
 export async function getMappedReloadlyProductIds(): Promise<number[]> {
   await ensureDatabaseReady();
