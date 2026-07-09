@@ -188,8 +188,10 @@ export async function checkDiscordActivationAction(): Promise<
 }
 
 /**
- * Global default: whether future eligible orders also go to Discord DM. Saved
- * on the customer; existing orders keep whatever was chosen at order time.
+ * Global default: whether eligible orders also go to Discord DM. Saved on the
+ * customer and applied as the live default to every order the customer has not
+ * explicitly overridden (including still-pending ones); orders with an explicit
+ * per-order choice keep it.
  */
 export async function setDiscordDeliveryPreferenceAction(
   enabled: boolean,
@@ -229,9 +231,9 @@ export type OrderDiscordContext = {
 
 /**
  * Read the Discord delivery context for the payment page: the viewer's Discord
- * connection state and the order's current per-order preference. On the first
- * eligible view (activated owner, choice not yet set) the order preference is
- * seeded once from the customer's global default, then becomes independent.
+ * connection state and the order's current per-order preference. When the owner
+ * has not explicitly toggled the per-order checkbox, the shown default follows
+ * the customer's live global preference (never persisted on a mere view).
  */
 export async function getOrderDiscordContextAction(
   orderId: string,
@@ -262,18 +264,15 @@ export async function getOrderDiscordContextAction(
   let requested = order.discordDeliveryRequested;
   let deliveryStatus = order.discordDeliveryStatus;
 
+  // Until the customer explicitly toggles the per-order checkbox, the order
+  // follows their live global default — so enabling it later applies to pending
+  // orders too. Resolved at read time; a mere page view never persists a choice
+  // (only setOrderDiscordDeliveryAction sets discordDeliveryPreferenceSet).
   if (state === "activated" && owner && !order.discordDeliveryPreferenceSet) {
-    // Seed once from the global default; mark as set so it never re-seeds.
     requested = current!.discordOrderDeliveryEnabled;
-    deliveryStatus = requested ? "PENDING" : "NOT_REQUESTED";
-    await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        discordDeliveryRequested: requested,
-        discordDeliveryPreferenceSet: true,
-        discordDeliveryStatus: deliveryStatus,
-      },
-    });
+    if (deliveryStatus !== "SENT" && deliveryStatus !== "FAILED") {
+      deliveryStatus = requested ? "PENDING" : "NOT_REQUESTED";
+    }
   }
 
   return {

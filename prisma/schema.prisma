@@ -176,15 +176,18 @@ model Order {
 
   // Optional per-order Discord DM delivery of the fulfilled code(s). This is an
   // ADDITIVE convenience channel: it never gates whether the order is
-  // considered delivered. `discordDeliveryRequested` is chosen on the order and
-  // is independent of the customer's later global-preference changes.
+  // considered delivered.
   // discordDeliveryStatus: "NOT_REQUESTED" | "PENDING" | "SENT" | "FAILED".
   // `discordDeliveryError` holds a safe category only — never a raw payload/code.
+  //
+  // `discordDeliveryRequested` is authoritative ONLY once the customer has
+  // explicitly toggled the per-order checkbox (`discordDeliveryPreferenceSet`).
+  // Until then the order follows the customer's live global preference
+  // (`discordOrderDeliveryEnabled`) — so enabling that default later applies to
+  // still-pending orders too. Both the payment page and the fulfillment auto-send
+  // resolve this effective value; a mere page view never persists it.
   discordDeliveryRequested  Boolean   @default(false)
-  // Whether the customer has explicitly chosen a per-order value yet. Lets the
-  // payment page seed the checkbox from the customer's global default exactly
-  // once without a later global-preference change (or a re-render) reverting an
-  // explicit per-order choice.
+  // True only after an explicit per-order toggle. False = follow global default.
   discordDeliveryPreferenceSet Boolean @default(false)
   discordDeliveryStatus     String    @default("NOT_REQUESTED")
   discordDeliveryAttemptedAt DateTime?

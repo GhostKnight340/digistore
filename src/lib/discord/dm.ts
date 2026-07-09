@@ -118,9 +118,14 @@ export async function sendDeliveredOrderDm(
         status: true,
         createdAt: true,
         discordDeliveryRequested: true,
+        discordDeliveryPreferenceSet: true,
         discordDeliveryStatus: true,
         customer: {
-          select: { discordDmActivated: true, discordDmUserId: true },
+          select: {
+            discordDmActivated: true,
+            discordDmUserId: true,
+            discordOrderDeliveryEnabled: true,
+          },
         },
         deliveredCodes: {
           select: {
@@ -147,7 +152,12 @@ export async function sendDeliveredOrderDm(
     // sent yet; a manual send skips those two gates (it IS the opt-in, and may
     // be an intentional resend).
     if (trigger === "auto") {
-      if (!order.discordDeliveryRequested) return { ok: false, status: "SKIPPED", reason: "not_requested" };
+      // Explicit per-order choice wins; otherwise follow the customer's live
+      // global preference (mirrors getOrderDiscordContextAction).
+      const effectiveRequested = order.discordDeliveryPreferenceSet
+        ? order.discordDeliveryRequested
+        : (order.customer?.discordOrderDeliveryEnabled ?? false);
+      if (!effectiveRequested) return { ok: false, status: "SKIPPED", reason: "not_requested" };
       if (order.discordDeliveryStatus === "SENT") return { ok: false, status: "SKIPPED", reason: "already_sent" };
     }
     const dmUserId = order.customer?.discordDmUserId;
