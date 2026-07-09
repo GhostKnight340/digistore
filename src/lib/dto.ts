@@ -18,10 +18,29 @@ export interface OrderItemDTO {
   variantReloadlyCountryCode?: string | null;
 }
 
+/**
+ * A single normalized provider delivery field. Providers like Reloadly return
+ * richer payloads than one code — a card number/code, a PIN, and sometimes a
+ * redemption URL — so each is kept separate and labelled on the delivery page.
+ * Only the fields that actually exist for that product are set.
+ */
+export interface DeliveredFieldDTO {
+  code?: string;
+  pin?: string;
+  url?: string;
+  instructions?: string;
+}
+
 export interface DeliveredCodeDTO {
   productId: string;
   orderItemId?: string;
+  /** Compact single-value representation (local/manual code, or primary provider value). */
   code: string;
+  /**
+   * Structured provider fields when the delivery payload is richer than a
+   * single code (e.g. Reloadly). Absent for plain local/manual single codes.
+   */
+  fields?: DeliveredFieldDTO[];
 }
 
 export interface PaymentEventDTO {

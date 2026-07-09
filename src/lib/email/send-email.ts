@@ -20,6 +20,12 @@ type SendEmailInput = {
   customerId?: string | null;
   variables?: EmailMetadata;
   subject?: string;
+  /**
+   * Editable message body. When provided, BOTH the HTML shell body and the
+   * plain-text are rendered from it (single source of truth) — do not also pass
+   * `html`/`text` for the same email.
+   */
+  body?: string;
   html?: string;
   text?: string;
   metadata?: EmailMetadata;
@@ -73,10 +79,23 @@ function isBrandedHtml(html: string) {
 export async function renderTransactionalEmail(
   templateKey: EmailTemplateKey,
   variables: EmailMetadata = {},
-  overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "html" | "text">> = {},
+  overrides: Partial<Pick<RenderedEmailTemplate, "subject" | "html" | "text">> & {
+    body?: string;
+  } = {},
 ): Promise<RenderedEmailTemplate> {
   const settings = await getStoreSettings();
-  const rendered = renderEmailTemplate(settings, templateKey, variables);
+  // When a subject/body override is supplied (e.g. the admin review editor),
+  // feed it through renderEmailTemplate so the HTML shell body AND the
+  // plain-text derive from the SAME source and stay in sync with the preview.
+  const templateOverride =
+    overrides.subject !== undefined || overrides.body !== undefined
+      ? {
+          subject:
+            overrides.subject ?? settings.emailTemplates[templateKey]?.subject ?? templateKey,
+          body: overrides.body ?? settings.emailTemplates[templateKey]?.body ?? "",
+        }
+      : undefined;
+  const rendered = renderEmailTemplate(settings, templateKey, variables, templateOverride);
   const text = overrides.text ?? rendered.text;
   const overrideHtml = overrides.html?.trim();
   const html =
@@ -87,7 +106,8 @@ export async function renderTransactionalEmail(
     throw new Error(`Auth email template ${templateKey} did not render branded HTML.`);
   }
   return {
-    subject: overrides.subject ?? rendered.subject,
+    // rendered.subject already interpolates the (possibly overridden) subject.
+    subject: rendered.subject,
     text,
     html,
   };
@@ -99,6 +119,7 @@ export async function sendTransactionalEmail(
   await ensureDatabaseReady();
   const rendered = await renderTransactionalEmail(input.templateKey, input.variables, {
     subject: input.subject,
+    body: input.body,
     html: input.html,
     text: input.text,
   });
@@ -150,8 +171,6 @@ export async function sendTransactionalEmail(
     const subject = rendered.subject;
     const html = rendered.html;
     const text = rendered.text;
-
-    console.log(html);
 
     const { data, error: resendError } = await resend.emails.send({
       from,

@@ -209,11 +209,16 @@ export const defaultStoreSettings: StoreSettings = {
     },
     new_proof_requested: {
       subject: "Nouveau justificatif demandé pour {{order_number}}",
-      body: "Bonjour {{customer_name}},\n\nNous avons besoin d'un nouveau justificatif pour {{order_number}}.\n\nRaison : {{reason}}\n\nAjoutez-le ici : {{payment_url}}.",
+      // Body only — the shell adds the greeting once, an optional Motif block
+      // (from the reason), and the "Ajouter un justificatif" CTA button.
+      body: "Nous avons besoin d'un nouveau justificatif de paiement pour votre commande {{order_number}}.",
     },
     payment_rejected: {
       subject: "Paiement refusé pour {{order_number}}",
-      body: "Bonjour {{customer_name}},\n\nLe paiement de votre commande {{order_number}} n'a pas pu être validé.\n\nRaison : {{reason}}\n\nContactez-nous à {{support_email}}.",
+      // Body only — the shell adds the greeting once, an optional Motif block
+      // (from the reason) and the "Voir le paiement" CTA. Support contact lives
+      // in the footer.
+      body: "Le paiement de votre commande {{order_number}} n'a pas pu être validé.",
     },
     payment_confirmed: {
       subject: "Votre paiement pour {{order_number}} est confirmé",
@@ -225,7 +230,9 @@ export const defaultStoreSettings: StoreSettings = {
     },
     refund_update: {
       subject: "Mise à jour remboursement {{order_number}}",
-      body: "Bonjour {{customer_name}},\n\nMise à jour concernant votre remboursement : {{reason}}\n\nSupport : {{support_email}}",
+      // Body only — the shell adds the greeting once, an optional Motif block
+      // (from the reason) and the "Suivre ma commande" CTA.
+      body: "Voici une mise à jour concernant le remboursement de votre commande {{order_number}}.",
     },
   },
   legalPages: {

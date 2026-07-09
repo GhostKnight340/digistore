@@ -21,6 +21,7 @@ import type {
   PaymentMethodDTO,
   PaymentMethodType,
   CustomerOrderDTO,
+  DeliveredCodeDTO,
 } from "@/lib/dto";
 
 const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
@@ -1522,10 +1523,10 @@ function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
 
       {order.items.map((item) => {
         const product = getProduct(item.productId);
-        const codes = order.deliveredCodes
-          .filter((d) => d.orderItemId === item.id || (!d.orderItemId && d.productId === item.productId))
-          .map((d) => d.code)
-          .filter(Boolean);
+        const delivered = order.deliveredCodes.filter(
+          (d) => d.orderItemId === item.id || (!d.orderItemId && d.productId === item.productId),
+        );
+        const count = delivered.length;
         return (
           <article
             key={item.id}
@@ -1547,21 +1548,62 @@ function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
             </div>
             <div className="border-t border-white/[0.06] bg-black/20 p-5">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#646A77]">
-                Code{codes.length > 1 ? "s" : ""} livré{codes.length > 1 ? "s" : ""}
+                Code{count > 1 ? "s" : ""} livré{count > 1 ? "s" : ""}
               </p>
               <div className="space-y-3">
-                {codes.length === 0 ? (
+                {count === 0 ? (
                   <p className="rounded-xl border border-white/[0.06] bg-[#0B0C10] px-4 py-3 text-sm text-[#9A9FAB]">
                     Aucun code n’a encore été attribué à cette commande.
                   </p>
                 ) : (
-                  codes.map((code, i) => <CopyCode key={`${code}-${i}`} code={code} index={i} />)
+                  delivered.map((d, i) => (
+                    <DeliveredCodeCard
+                      key={`${item.id}-${i}`}
+                      delivered={d}
+                      index={count > 1 ? i : undefined}
+                    />
+                  ))
                 )}
               </div>
             </div>
           </article>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Renders one delivered unit. Providers like Reloadly deliver structured fields
+ * (a code, a PIN, and/or a redemption link) — each is shown as its own labelled,
+ * reveal-on-demand field. Plain local/manual deliveries fall back to a single
+ * code. Only fields that actually exist are rendered.
+ */
+function DeliveredCodeCard({
+  delivered,
+  index,
+}: {
+  delivered: DeliveredCodeDTO;
+  index?: number;
+}) {
+  const fields = delivered.fields;
+  if (!fields || fields.length === 0) {
+    return <CopyCode code={delivered.code} index={index} />;
+  }
+  return (
+    <div className="space-y-3">
+      {fields.map((field, i) => (
+        <div key={i} className="space-y-3">
+          {field.url && <CopyCode code={field.url} label="Lien d’utilisation" />}
+          {field.code && <CopyCode code={field.code} label="Code" />}
+          {field.pin && <CopyCode code={field.pin} label="PIN" />}
+          {field.instructions && (
+            <p className="rounded-xl border border-white/[0.06] bg-[#0B0C10] px-4 py-3 text-sm leading-relaxed text-[#9A9FAB]">
+              {field.instructions}
+            </p>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

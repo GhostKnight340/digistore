@@ -44,9 +44,16 @@ export async function findOrderAction(
 ): Promise<{ found: boolean; id?: string; redirectTo?: string }> {
   const order = await findOrderByEmailAndId(orderNumber.trim(), email.trim().toLowerCase());
   if (!order) return { found: false };
+  // Delivered orders: route via the secret delivery token so codes are revealed
+  // (the email match already authenticated the guest). Falls back to the public
+  // path segment for non-delivered orders or legacy rows without a token.
+  const segment =
+    order.status === "delivered" && order.deliveryToken
+      ? order.deliveryToken
+      : order.publicOrderPathSegment;
   return {
     found: true,
     id: order.id,
-    redirectTo: customerOrderRedirectPath(order.status, order.publicOrderPathSegment),
+    redirectTo: customerOrderRedirectPath(order.status, segment),
   };
 }

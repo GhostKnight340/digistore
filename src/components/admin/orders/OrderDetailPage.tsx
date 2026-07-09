@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -24,9 +25,11 @@ import {
 import {
   approvePaymentAction,
   getPaymentEmailPreviewAction,
+  renderPaymentReviewEmailAction,
   sendPaymentReviewEmailAction,
   getPaymentProofAction,
 } from "@/app/actions/payments";
+import { getReloadlyDeliveryChecksAction } from "@/app/actions/suppliers";
 import type {
   AdminCodeDTO,
   AdminOrderDTO,
@@ -173,6 +176,9 @@ export default function OrderDetailPage({
 }) {
   const { settings } = useStoreSettings();
   const [order, setOrder] = useState(initialOrder);
+  const [reloadlyChecks, setReloadlyChecks] = useState<
+    Record<string, { ok: boolean; message: string | null }>
+  >({});
   const [proof, setProof] = useState<AdminPaymentProofDTO | null | "loading">("loading");
   const [entries, setEntries] = useState<Record<string, AssignmentEntry[]>>({});
   const [available, setAvailable] = useState<Record<string, AdminCodeDTO[]>>({});
@@ -188,9 +194,14 @@ export default function OrderDetailPage({
     intent: "reject" | "request_proof" | "refund_update";
     title: string;
     subject: string;
-    text: string;
+    message: string;
     reason: string;
   } | null>(null);
+  // Live server-rendered preview — identical rendering path to the sent email.
+  const [reviewPreview, setReviewPreview] = useState<{ text: string; loading: boolean }>({
+    text: "",
+    loading: false,
+  });
   // Inventory OFF also forces manual/provider fulfillment (no local code pool).
   const manualMode = settings.inventoryMode === "manual" || !isInventoryEnabled(settings);
 
@@ -345,9 +356,10 @@ export default function OrderDetailPage({
         intent,
         title,
         subject: preview.subject,
-        text: preview.text,
-        reason: "",
+        message: preview.message,
+        reason: preview.reason,
       });
+      setReviewPreview({ text: preview.text, loading: false });
     } catch (previewError) {
       setError(previewError instanceof Error ? previewError.message : "Aperçu email impossible.");
     } finally {
@@ -358,15 +370,42 @@ export default function OrderDetailPage({
   async function sendReviewEmail() {
     if (!reviewEmail) return;
     await runAction("Email envoyé et statut mis à jour.", () =>
-      sendPaymentReviewEmailAction(
-        order.id,
-        reviewEmail.intent,
-        { subject: reviewEmail.subject, text: reviewEmail.text },
-        reviewEmail.reason,
-      ),
+      sendPaymentReviewEmailAction(order.id, reviewEmail.intent, {
+        subject: reviewEmail.subject,
+        message: reviewEmail.message,
+        reason: reviewEmail.reason,
+      }),
     );
     setReviewEmail(null);
   }
+
+  // Keep the modal preview truthful: re-render server-side (same path as the
+  // sent email) whenever the admin edits the subject, message, or motif.
+  const reviewIntent = reviewEmail?.intent;
+  const reviewSubject = reviewEmail?.subject;
+  const reviewMessage = reviewEmail?.message;
+  const reviewReason = reviewEmail?.reason;
+  useEffect(() => {
+    if (!reviewIntent) return;
+    let cancelled = false;
+    setReviewPreview((current) => ({ ...current, loading: true }));
+    const timer = setTimeout(async () => {
+      try {
+        const rendered = await renderPaymentReviewEmailAction(order.id, reviewIntent, {
+          subject: reviewSubject ?? "",
+          message: reviewMessage ?? "",
+          reason: reviewReason ?? "",
+        });
+        if (!cancelled) setReviewPreview({ text: rendered.text, loading: false });
+      } catch {
+        if (!cancelled) setReviewPreview((current) => ({ ...current, loading: false }));
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [order.id, reviewIntent, reviewSubject, reviewMessage, reviewReason]);
 
   async function handleDeliver() {
     if (manualMode && !manualCountsValid) {
@@ -766,31 +805,45 @@ export default function OrderDetailPage({
                 style={inputStyle}
               />
             </Field>
-            <Field label="Raison interne / client">
+            <Field
+              label={
+                reviewEmail.intent === "reject"
+                  ? "Motif du refus"
+                  : reviewEmail.intent === "refund_update"
+                    ? "Motif du remboursement"
+                    : "Motif de la demande"
+              }
+            >
               <input
                 className="s4-input"
                 value={reviewEmail.reason}
                 onChange={(event) =>
                   setReviewEmail((current) => (current ? { ...current, reason: event.target.value } : current))
                 }
-                placeholder="Optionnel"
+                placeholder={
+                  reviewEmail.intent === "reject"
+                    ? "Ex. : Le justificatif ne correspond pas au montant."
+                    : reviewEmail.intent === "refund_update"
+                      ? "Ex. : Remboursement traité, sous 3 à 5 jours ouvrés."
+                      : "Ex. : Le justificatif est illisible ou incomplet."
+                }
                 style={inputStyle}
               />
             </Field>
             <Field label="Message">
               <textarea
                 className="s4-input"
-                value={reviewEmail.text}
+                value={reviewEmail.message}
                 onChange={(event) =>
-                  setReviewEmail((current) => (current ? { ...current, text: event.target.value } : current))
+                  setReviewEmail((current) => (current ? { ...current, message: event.target.value } : current))
                 }
-                rows={9}
+                rows={6}
                 style={{ ...inputStyle, height: "auto", padding: "10px 13px", resize: "vertical", lineHeight: 1.5 }}
               />
             </Field>
             <div style={{ ...cardStyle, background: C.surfaceInput, padding: 16 }}>
               <p style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: C.faint, margin: 0 }}>
-                Aperçu
+                Aperçu {reviewPreview.loading ? "· mise à jour…" : "(email réel)"}
               </p>
               <h3 style={{ fontSize: 14.5, fontWeight: 600, color: C.text, margin: "8px 0 0" }}>
                 {reviewEmail.subject}
@@ -805,13 +858,13 @@ export default function OrderDetailPage({
                   fontFamily: "inherit",
                 }}
               >
-                {reviewEmail.text}
+                {reviewPreview.text}
               </pre>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <SecondaryButton onClick={() => setReviewEmail(null)}>Annuler</SecondaryButton>
               <PrimaryButton
-                disabled={busy || !reviewEmail.subject.trim() || !reviewEmail.text.trim()}
+                disabled={busy || !reviewEmail.subject.trim() || !reviewEmail.message.trim()}
                 onClick={sendReviewEmail}
               >
                 Envoyer et appliquer
@@ -1437,6 +1490,7 @@ function DeliverySection({
   readyCodes,
   totalCodes,
   deliverReady,
+  reloadlyChecks,
   onSetEntry,
   onDeliver,
 }: {
@@ -1451,6 +1505,8 @@ function DeliverySection({
   readyCodes: number;
   totalCodes: number;
   deliverReady: boolean;
+  /** Per-orderItem Reloadly denomination check (mismatch warning before delivery). */
+  reloadlyChecks: Record<string, { ok: boolean; message: string | null }>;
   onSetEntry: (itemId: string, index: number, entry: AssignmentEntry) => void;
   onDeliver: () => void;
 }) {
@@ -1517,9 +1573,11 @@ function DeliverySection({
             const reloadlyAvailable =
               item.variantStockControl === "reloadly" && item.variantReloadlyProductId != null;
             const reloadlyChosen = Boolean(entry.reloadlyProductId);
+            const mismatch = reloadlyAvailable ? reloadlyChecks[item.id] : undefined;
+            const showMismatch = Boolean(mismatch && mismatch.ok === false && mismatch.message);
             return (
+              <Fragment key={`${item.id}-${index}`}>
               <CodeRow
-                key={`${item.id}-${index}`}
                 label={item.name}
                 border={filled ? C.successBorder : C.accentBorder}
               >
@@ -1624,6 +1682,24 @@ function DeliverySection({
                   {filled ? "✓ prêt" : `#${index + 1}`}
                 </span>
               </CodeRow>
+              {showMismatch && (
+                <div
+                  style={{
+                    margin: "-2px 0 8px",
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "rgba(232,168,56,0.08)",
+                    border: "1px solid rgba(232,168,56,0.28)",
+                    color: "#F0C466",
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  ⚠ {mismatch!.message} Corrigez la correspondance Reloadly ou la valeur de la
+                  variante avant la livraison.
+                </div>
+              )}
+              </Fragment>
             );
           });
         })}

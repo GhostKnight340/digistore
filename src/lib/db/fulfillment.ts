@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomBytes } from "crypto";
+import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
@@ -13,11 +15,13 @@ import {
   notifyFulfillmentCompleted,
   notifyStockAlert,
 } from "@/lib/discord/notify";
-import type { ActionResult, AssignmentEntry, ItemAssignment } from "@/lib/dto";
+import type { ActionResult, AssignmentEntry, DeliveredFieldDTO, ItemAssignment } from "@/lib/dto";
 import {
   placeGiftCardOrder,
   getGiftCardOrderStatus,
   getGiftCardOrderCards,
+  getGiftCardProduct,
+  validateReloadlyDenomination,
   type ReloadlyGiftCardOrderCard,
 } from "@/lib/reloadly/operations";
 
@@ -133,6 +137,7 @@ export async function deliverOrder(
                   reloadlyProductId: true,
                   reloadlyCountryCode: true,
                   faceValue: true,
+                  faceCurrency: true,
                 },
               },
             },
@@ -193,6 +198,7 @@ export async function deliverOrder(
           productId: variant.reloadlyProductId,
           countryCode: variant.reloadlyCountryCode,
           unitPrice: variant.faceValue,
+          currency: variant.faceCurrency,
           customIdentifier: `${orderId}-${item.id}-${index}`,
           recipientEmail: order.customerEmail,
         });
@@ -210,8 +216,12 @@ export async function deliverOrder(
     }
   }
 
+  // Unguessable secret for the delivery-page link. Generated once here, at
+  // delivery, and embedded in the "Voir ma livraison" email link (never the
+  // enumerable public order number). See getCustomerOrder() authorization.
+  const deliveryToken = randomBytes(24).toString("base64url");
+
   try {
-    const deliveredValues: string[] = [];
     const consumedByVariant = new Map<
       string,
       { productId: string; variantId: string | null; count: number }
@@ -227,6 +237,7 @@ export async function deliverOrder(
           let source: string | undefined;
           let reloadlyTransactionId: number | null = null;
           let reloadlyOrderId: number | null = null;
+          let deliveryPayload: DeliveredFieldDTO[] | null = null;
 
           if (entry.digitalCodeId) {
             const code = await tx.digitalCode.findUnique({
@@ -255,7 +266,6 @@ export async function deliverOrder(
               throw new Error("Le code sélectionné n’est plus disponible.");
             }
             digitalCodeId = entry.digitalCodeId;
-            deliveredValues.push(code.code);
 
             const variantKey = `${code.productId}:${code.variantId ?? ""}`;
             const existing = consumedByVariant.get(variantKey);
@@ -273,14 +283,13 @@ export async function deliverOrder(
             if (!resolved) {
               throw new Error("Code Reloadly non résolu.");
             }
-            manualCode = resolved.code;
+            manualCode = resolved.primary;
             source = "reloadly";
             reloadlyTransactionId = resolved.transactionId;
             reloadlyOrderId = resolved.reloadlyOrderId;
-            deliveredValues.push(resolved.code);
+            deliveryPayload = resolved.fields;
           } else {
             manualCode = entry.manualCode!.trim();
-            deliveredValues.push(manualCode);
           }
 
           await tx.deliveredCode.create({
@@ -293,6 +302,9 @@ export async function deliverOrder(
               ...(source ? { source } : {}),
               reloadlyTransactionId,
               reloadlyOrderId,
+              ...(deliveryPayload
+                ? { deliveryPayload: deliveryPayload as unknown as Prisma.InputJsonValue }
+                : {}),
             },
           });
         }
@@ -300,7 +312,7 @@ export async function deliverOrder(
 
       await tx.order.update({
         where: { id: orderId },
-        data: { status: "delivered" },
+        data: { status: "delivered", deliveryToken },
       });
       await tx.paymentEvent.create({
         data: {
@@ -325,9 +337,10 @@ export async function deliverOrder(
         variables: {
           customer_name: order.customerName,
           order_number: reference.number,
-          delivery_url: absoluteAppUrl(`/delivery/${reference.pathSegment}`),
+          // Token link — the enumerable public order number is never sufficient
+          // to reveal codes; the secret token (or logged-in ownership) is.
+          delivery_url: absoluteAppUrl(`/delivery/${deliveryToken}`),
           total: `${order.totalMad} MAD`,
-          codes: deliveredValues.join("\n"),
         },
       });
     } catch (emailError) {
@@ -377,7 +390,10 @@ function filledEntriesForItem(
 }
 
 type ResolvedReloadlyEntry = {
-  code: string;
+  /** Structured, per-card fields (code / pin / url) — never a malformed join. */
+  fields: DeliveredFieldDTO[];
+  /** Compact single-value representation kept on DeliveredCode.manualCode for the admin record. */
+  primary: string;
   transactionId: number;
   reloadlyOrderId: number | null;
 };
@@ -386,9 +402,38 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function formatReloadlyCards(cards: ReloadlyGiftCardOrderCard[]): string {
+function looksLikeUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
+/**
+ * Normalizes Reloadly cards into labelled fields by meaning rather than
+ * concatenating unrelated values into a malformed string like
+ * "https://reloadly.com / 86125test". A URL-shaped cardNumber becomes a
+ * redemption link (`url`); otherwise it is the redeem `code`. `pinCode`, when
+ * present, is a separate PIN. Only fields that exist are set — payload shape is
+ * not assumed to be uniform across products.
+ */
+function normalizeReloadlyCards(cards: ReloadlyGiftCardOrderCard[]): DeliveredFieldDTO[] {
   return cards
-    .map((card) => [card.cardNumber, card.pinCode].filter(Boolean).join(" / "))
+    .map((card) => {
+      const field: DeliveredFieldDTO = {};
+      const cardNumber = card.cardNumber?.trim();
+      const pinCode = card.pinCode?.trim();
+      if (cardNumber) {
+        if (looksLikeUrl(cardNumber)) field.url = cardNumber;
+        else field.code = cardNumber;
+      }
+      if (pinCode) field.pin = pinCode;
+      return field;
+    })
+    .filter((field) => field.code || field.pin || field.url);
+}
+
+/** Compact human-readable value for the admin record (never shown in emails). */
+function primaryDeliveryValue(fields: DeliveredFieldDTO[]): string {
+  return fields
+    .map((field) => field.url ?? field.code ?? field.pin ?? "")
     .filter(Boolean)
     .join("\n");
 }
@@ -403,9 +448,24 @@ async function resolveReloadlyEntry(input: {
   productId: number;
   countryCode: string;
   unitPrice: number;
+  currency: string;
   customIdentifier: string;
   recipientEmail: string;
 }): Promise<ResolvedReloadlyEntry> {
+  // Pre-flight: confirm the face value is an actually-offered denomination
+  // BEFORE spending from the wallet. This turns Reloadly's opaque
+  // "400 Invalid price" into a clear, actionable French message and avoids a
+  // wasted order attempt.
+  const product = await getGiftCardProduct(input.productId);
+  const { ok, issues } = validateReloadlyDenomination(product, {
+    faceValue: input.unitPrice,
+    currency: input.currency,
+    countryCode: input.countryCode,
+  });
+  if (!ok) {
+    throw new Error(issues.join(" "));
+  }
+
   const order = await placeGiftCardOrder({
     productId: input.productId,
     countryCode: input.countryCode,
@@ -431,12 +491,13 @@ async function resolveReloadlyEntry(input: {
   }
 
   const cards = await getGiftCardOrderCards(order.transactionId);
-  const code = formatReloadlyCards(cards);
-  if (!code) {
+  const fields = normalizeReloadlyCards(cards);
+  const primary = primaryDeliveryValue(fields);
+  if (fields.length === 0 || !primary) {
     throw new Error("Reloadly n’a retourné aucun code pour cette commande.");
   }
 
-  return { code, transactionId: order.transactionId, reloadlyOrderId: null };
+  return { fields, primary, transactionId: order.transactionId, reloadlyOrderId: null };
 }
 
 /**

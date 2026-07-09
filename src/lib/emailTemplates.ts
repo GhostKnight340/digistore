@@ -57,35 +57,6 @@ function brandedButton(label: string, href: string) {
     </table>`;
 }
 
-function codeListHtml(codesValue: string) {
-  const codes = codesValue
-    .split(/\r?\n/)
-    .map((code) => code.trim())
-    .filter(Boolean);
-  if (codes.length === 0) return "";
-
-  const rows = codes
-    .map(
-      (code, index) => `
-        <tr>
-          <td style="padding: ${index === 0 ? "0" : "10px"} 0 0;">
-            <p style="margin: 0 0 6px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;">
-              Votre code${codes.length > 1 ? ` ${index + 1}` : ""}
-            </p>
-            <div style="border: 1px solid #2f3954; border-radius: 12px; background: #0a0d14; padding: 13px 14px; color: #ffffff; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 700; letter-spacing: .05em; word-break: break-all;">
-              ${escapeHtml(code)}
-            </div>
-          </td>
-        </tr>`,
-    )
-    .join("");
-
-  return `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0 0;">
-      ${rows}
-    </table>`;
-}
-
 function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentYear: string) {
   const socialLinks = getFooterSocialLinks(settings);
   const paymentBadges = getEnabledFooterPaymentBadges(settings);
@@ -150,6 +121,51 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
     </table>`;
 }
 
+/**
+ * Shared configuration for the admin "review" emails (reject / request-proof /
+ * refund). They all use the same clean shell: greeting owned by the shell once,
+ * the editable message as the body, an optional labelled Motif block from the
+ * reason, and a CTA button — never a raw URL or an inline "Raison :" in the body.
+ * The plain-text (below) mirrors this exactly, turning the button into a link.
+ */
+const REVIEW_TEMPLATE_META: Partial<
+  Record<EmailTemplateKey, { motifLabel: string; ctaText: string; ctaUrlVar: string }>
+> = {
+  new_proof_requested: {
+    motifLabel: "Motif de la demande",
+    ctaText: "Ajoutez un nouveau justificatif de paiement ici :",
+    ctaUrlVar: "payment_url",
+  },
+  payment_rejected: {
+    motifLabel: "Motif du refus",
+    ctaText: "Consultez le détail du paiement ici :",
+    ctaUrlVar: "payment_url",
+  },
+  refund_update: {
+    motifLabel: "Motif du remboursement",
+    ctaText: "Suivez votre commande ici :",
+    ctaUrlVar: "order_url",
+  },
+};
+
+/** Optional labelled reason block. Rendered only when a reason exists. */
+function motifBlockHtml(reason: string, label: string) {
+  if (!reason) return "";
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0 0;">
+      <tr>
+        <td style="border: 1px solid #2f3954; border-radius: 12px; background: #0a0d14; padding: 14px 16px;">
+          <p style="margin: 0 0 6px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;">
+            ${escapeHtml(label)}
+          </p>
+          <p style="margin: 0; color: #d9e2ff; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6;">
+            ${escapeHtml(reason).replace(/\r?\n/g, "<br />")}
+          </p>
+        </td>
+      </tr>
+    </table>`;
+}
+
 function brandedEmailHtml(
   key: EmailTemplateKey,
   subject: string,
@@ -166,7 +182,7 @@ function brandedEmailHtml(
   const orderUrl = variableString(variables, "order_url");
   const paymentUrl = variableString(variables, "payment_url");
   const deliveryUrl = variableString(variables, "delivery_url");
-  const codes = variableString(variables, "codes");
+  const reason = variableString(variables, "reason").trim();
   const logoUrl = emailLogoUrl();
 
   const config: Record<
@@ -258,9 +274,10 @@ function brandedEmailHtml(
       intro: `Votre commande ${variableString(
         variables,
         "order_number",
-      )} est disponible. Vos codes sont prêts ci-dessous et restent accessibles depuis votre page de livraison.`,
+      )} est disponible. Pour protéger vos codes, ils ne sont pas affichés directement dans cet e-mail. Consultez votre page de livraison sécurisée pour accéder à votre commande.`,
       ctaLabel: "Voir ma livraison",
       ctaUrl: deliveryUrl || orderUrl,
+      notice: "Vos codes restent accessibles depuis votre espace client.",
     },
     refund_update: {
       title: subject,
@@ -310,9 +327,9 @@ function brandedEmailHtml(
                   Bonjour ${escapeHtml(customerName)},
                 </p>
                 <p style="margin: 10px 0 0; color: #c4cce0; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7;">
-                  ${escapeHtml(selected.intro)}
+                  ${escapeHtml(selected.intro).replace(/\r?\n/g, "<br />")}
                 </p>
-                ${key === "order_delivered" ? codeListHtml(codes) : ""}
+                ${REVIEW_TEMPLATE_META[key] ? motifBlockHtml(reason, REVIEW_TEMPLATE_META[key]!.motifLabel) : ""}
                 ${brandedButton(selected.ctaLabel ?? "Ouvrir ghost.ma", selected.ctaUrl ?? "")}
                 ${
                   fallbackUrl && selected.fallbackLabel
@@ -370,10 +387,15 @@ export function renderEmailTemplate(
       ? "Votre mot de passe ghost.ma a été modifié"
       : render(template.subject);
   const renderedBody = render(template.body);
+  const customerName = variableString(baseVariables, "customer_name") || "client";
+  // The HTML shell owns the greeting, heading, CTA and footer; the body it
+  // renders (intro) is always `renderedBody` — the editable message only. The
+  // plain-text below is composed separately for templates that need buttons
+  // (unavailable in text) turned into links, but never re-derives the body.
   const text =
     key === "password_changed"
       ? [
-          `Bonjour ${variableString(baseVariables, "customer_name") || "client"},`,
+          `Bonjour ${customerName},`,
           "",
           "Le mot de passe de votre compte ghost.ma vient d’être modifié.",
           "",
@@ -381,22 +403,39 @@ export function renderEmailTemplate(
         ].join("\n")
       : key === "order_delivered"
       ? [
-          `Bonjour ${variableString(baseVariables, "customer_name") || "client"},`,
+          `Bonjour ${customerName},`,
           "",
           `Votre commande ${variableString(baseVariables, "order_number")} est disponible.`,
           "",
-          "Vos codes :",
-          variableString(baseVariables, "codes"),
+          "Pour protéger vos codes, ils ne sont pas affichés dans cet e-mail.",
+          "Consultez votre page de livraison sécurisée pour accéder à votre commande :",
+          variableString(baseVariables, "delivery_url"),
           "",
-          `Livraison : ${variableString(baseVariables, "delivery_url")}`,
+          "Vos codes restent accessibles depuis votre espace client.",
           "",
           "Merci pour votre achat.",
         ].join("\n")
+      : REVIEW_TEMPLATE_META[key]
+      ? (() => {
+          const meta = REVIEW_TEMPLATE_META[key]!;
+          const reasonText = variableString(baseVariables, "reason").trim();
+          return [
+            `Bonjour ${customerName},`,
+            "",
+            renderedBody,
+            ...(reasonText ? ["", `${meta.motifLabel} :`, reasonText] : []),
+            "",
+            meta.ctaText,
+            variableString(baseVariables, meta.ctaUrlVar),
+          ].join("\n");
+        })()
       : renderedBody;
   return {
     subject,
     text,
-    html: brandedEmailHtml(key, subject, text, baseVariables, settings),
+    // Always pass the message body (never the composed plain-text) so the shell
+    // greeting is added exactly once.
+    html: brandedEmailHtml(key, subject, renderedBody, baseVariables, settings),
   };
 }
 
@@ -482,7 +521,6 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
     { key: "order_number", sample: "#000128" },
     { key: "delivery_url", sample: "https://ghost.ma/delivery/example" },
     { key: "order_url", sample: "https://ghost.ma/order/example" },
-    { key: "codes", sample: "AAAA-BBBB-CCCC" },
   ],
   refund_update: [
     { key: "customer_name", sample: "Amine" },

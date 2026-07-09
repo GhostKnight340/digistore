@@ -145,6 +145,13 @@ model Order {
   // only so the schema matches reality; not wired into any query.
   orderNumber   Int      @unique @default(autoincrement())
 
+  // Unguessable secret embedded in the "Voir ma livraison" email link. The
+  // public order number is a sequential, enumerable value, so it is NOT
+  // sufficient to reveal delivered codes; possession of this token (or being
+  // the logged-in order owner) is what authorizes code disclosure on the
+  // delivery page. Populated on delivery; see src/lib/db/fulfillment.ts.
+  deliveryToken String?  @unique
+
   // Automated payment provider reconciliation (e.g. PayPal). Null for manual
   // methods (bank transfer, crypto, cash). Amount/currency are the values
   // locked in when the provider order was created, so capture/webhook
@@ -255,6 +262,14 @@ model DeliveredCode {
   source                String   @default("local")
   reloadlyTransactionId Int?
   reloadlyOrderId       Int?
+  // Normalized, provider-specific delivery fields for sources whose payload is
+  // richer than a single code (e.g. Reloadly returns cardNumber/pinCode and
+  // some products deliver a redemption URL). Shape: an array of
+  // { code?, pin?, url?, instructions? } — only the fields that exist for that
+  // product are set. Null for plain local/manual single-code deliveries, which
+  // continue to use digitalCode.code / manualCode. The customer delivery page
+  // renders these as separate labelled fields instead of one opaque string.
+  deliveryPayload       Json?
   deliveredAt   DateTime @default(now())
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)

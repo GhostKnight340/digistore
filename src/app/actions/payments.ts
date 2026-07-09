@@ -107,54 +107,105 @@ export async function markPaymentIssueAction(orderId: string): Promise<ActionRes
   return markPaymentIssue(orderId);
 }
 
+type ReviewIntent = "reject" | "request_proof" | "refund_update";
+type ReviewEmailInput = { subject: string; message: string; reason: string };
+
+function reviewTemplateKey(intent: ReviewIntent): EmailTemplateKey {
+  return intent === "reject"
+    ? "payment_rejected"
+    : intent === "refund_update"
+      ? "refund_update"
+      : "new_proof_requested";
+}
+
+/**
+ * Customer-facing reason shown in the email. For request-proof we NEVER invent a
+ * default — an empty motif is simply omitted. Reject/refund keep their existing
+ * default sentence so their behavior is unchanged.
+ */
+function effectiveReviewReason(intent: ReviewIntent, reason: string): string {
+  const trimmed = reason.trim();
+  if (trimmed) return trimmed;
+  if (intent === "reject") return "Paiement refusé par l'admin.";
+  if (intent === "refund_update") return "Mise à jour remboursement.";
+  return "";
+}
+
+/** Internal timeline note (never shown to the customer). */
+function reviewTimelineNote(intent: ReviewIntent, reason: string): string {
+  const trimmed = reason.trim();
+  if (trimmed) return trimmed;
+  if (intent === "reject") return "Paiement refusé par l'admin.";
+  if (intent === "refund_update") return "Mise à jour remboursement.";
+  return "Nouveau justificatif demandé par l'admin.";
+}
+
+/** Initial defaults + preview for the review-email modal. */
 export async function getPaymentEmailPreviewAction(
   orderId: string,
-  intent: "reject" | "request_proof" | "refund_update",
+  intent: ReviewIntent,
+): Promise<{ subject: string; message: string; reason: string; text: string; html: string }> {
+  await requireAdminCustomer();
+  const key = reviewTemplateKey(intent);
+  const rendered = await renderPaymentStatusEmailPreview(
+    orderId,
+    key,
+    effectiveReviewReason(intent, ""),
+  );
+  return {
+    subject: rendered.subject,
+    message: rendered.message,
+    reason: "",
+    text: rendered.text,
+    html: rendered.html,
+  };
+}
+
+/**
+ * Live preview for the modal. Uses the exact same rendering path as the sent
+ * email, so what the admin sees is what the customer receives.
+ */
+export async function renderPaymentReviewEmailAction(
+  orderId: string,
+  intent: ReviewIntent,
+  input: ReviewEmailInput,
 ): Promise<{ subject: string; text: string; html: string }> {
   await requireAdminCustomer();
-  const key: EmailTemplateKey =
-    intent === "reject"
-      ? "payment_rejected"
-      : intent === "refund_update"
-        ? "refund_update"
-        : "new_proof_requested";
-  return renderPaymentStatusEmailPreview(orderId, key, "");
+  const key = reviewTemplateKey(intent);
+  const rendered = await renderPaymentStatusEmailPreview(
+    orderId,
+    key,
+    effectiveReviewReason(intent, input.reason),
+    { subject: input.subject, message: input.message },
+  );
+  return { subject: rendered.subject, text: rendered.text, html: rendered.html };
 }
 
 export async function sendPaymentReviewEmailAction(
   orderId: string,
-  intent: "reject" | "request_proof" | "refund_update",
-  email: { subject: string; text: string; html?: string },
-  reason?: string,
+  intent: ReviewIntent,
+  input: ReviewEmailInput,
 ): Promise<ActionResult> {
   await requireAdminCustomer();
-  if (intent === "reject") {
-    return applyPaymentStatusWithEmail(
-      orderId,
-      "rejected",
-      reason || "Paiement refusé par l'admin.",
-      "payment_rejected",
-      "payment_rejected",
-      email,
-    );
-  }
-  if (intent === "refund_update") {
-    return applyPaymentStatusWithEmail(
-      orderId,
-      "refunded",
-      reason || "Mise à jour remboursement.",
-      "refund_update",
-      "refund_update",
-      email,
-    );
-  }
+  const toStatus =
+    intent === "reject" ? "rejected" : intent === "refund_update" ? "refunded" : "payment_issue";
+  const emailType =
+    intent === "reject"
+      ? "payment_rejected"
+      : intent === "refund_update"
+        ? "refund_update"
+        : "payment_issue";
   return applyPaymentStatusWithEmail(
     orderId,
-    "payment_issue",
-    reason || "Nouveau justificatif demandé par l'admin.",
-    "payment_issue",
-    "new_proof_requested",
-    email,
+    toStatus,
+    reviewTimelineNote(intent, input.reason),
+    emailType,
+    reviewTemplateKey(intent),
+    {
+      subject: input.subject,
+      message: input.message,
+      reason: effectiveReviewReason(intent, input.reason),
+    },
   );
 }
 

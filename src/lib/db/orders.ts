@@ -14,7 +14,7 @@ import {
 import { getAdminPaymentMethods } from "./paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import type { OrderStatus } from "@/lib/types";
-import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO, PaymentMethodDTO } from "@/lib/dto";
+import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO, DeliveredFieldDTO, PaymentMethodDTO } from "@/lib/dto";
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
@@ -91,12 +91,42 @@ function orderItemName(item: {
     : item.variant.name;
 }
 
+/**
+ * Parses the stored provider delivery payload (JSON) into typed fields, keeping
+ * only recognized string values. Returns undefined for plain local/manual
+ * single-code deliveries (no structured payload).
+ */
+function parseDeliveryFields(value: unknown): DeliveredFieldDTO[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const fields = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      const field: DeliveredFieldDTO = {};
+      if (typeof record.code === "string" && record.code) field.code = record.code;
+      if (typeof record.pin === "string" && record.pin) field.pin = record.pin;
+      if (typeof record.url === "string" && record.url) field.url = record.url;
+      if (typeof record.instructions === "string" && record.instructions) {
+        field.instructions = record.instructions;
+      }
+      return field.code || field.pin || field.url || field.instructions ? field : null;
+    })
+    .filter((field): field is DeliveredFieldDTO => field !== null);
+  return fields.length > 0 ? fields : undefined;
+}
+
 function buildCustomerDTO(
   data: OrderRecord,
   publicOrder: { number: string; pathSegment: string },
-  options: { includeUndeliveredCodes?: boolean } = {},
+  options: { authorizedForCodes?: boolean; includeUndeliveredCodes?: boolean } = {},
 ): CustomerOrderDTO {
-  const canExposeCodes = data.status === "delivered" || options.includeUndeliveredCodes;
+  // Delivered codes are secrets: expose them only when the caller is authorized
+  // (a valid delivery token or the logged-in order owner — resolved upstream in
+  // getCustomerOrder), or for the admin detail view (includeUndeliveredCodes).
+  // Knowing the enumerable public order number alone is never sufficient.
+  const canExposeCodes =
+    options.includeUndeliveredCodes === true ||
+    (options.authorizedForCodes === true && data.status === "delivered");
   return {
     id: data.id,
     publicOrderNumber: publicOrder.number,
@@ -118,11 +148,15 @@ function buildCustomerDTO(
       variantReloadlyCountryCode: item.variant?.reloadlyCountryCode ?? null,
     })),
     deliveredCodes: canExposeCodes
-      ? data.deliveredCodes.map((delivered) => ({
-          productId: delivered.product.slug,
-          orderItemId: delivered.orderItemId,
-          code: delivered.digitalCode?.code ?? delivered.manualCode ?? "",
-        }))
+      ? data.deliveredCodes.map((delivered) => {
+          const fields = parseDeliveryFields(delivered.deliveryPayload);
+          return {
+            productId: delivered.product.slug,
+            orderItemId: delivered.orderItemId,
+            code: delivered.digitalCode?.code ?? delivered.manualCode ?? "",
+            ...(fields ? { fields } : {}),
+          };
+        })
       : [],
     proofUploaded: !!data.paymentProof,
     paymentEvents: data.paymentEvents.map((event) => ({
@@ -146,11 +180,13 @@ function loadOrder(id: string) {
     select: {
       id: true,
       status: true,
+      customerId: true,
       customerName: true,
       customerEmail: true,
       paymentMethod: true,
       totalMad: true,
       createdAt: true,
+      deliveryToken: true,
       paymentProvider: true,
       paymentProviderOrderId: true,
       paymentProviderStatus: true,
@@ -179,6 +215,7 @@ function loadOrder(id: string) {
         select: {
           orderItemId: true,
           manualCode: true,
+          deliveryPayload: true,
           product: { select: { slug: true } },
           digitalCode: { select: { code: true } },
         },
@@ -299,18 +336,61 @@ function buildAdminSummaryDTO(
   };
 }
 
+/**
+ * Loads a customer-facing order by either its secret delivery token (from the
+ * "Voir ma livraison" email link) or its public order number / internal id.
+ *
+ * Delivered codes are secrets, so they are only included when the caller is
+ * authorized: possession of the unguessable delivery token, OR being the
+ * logged-in owner of the order. The enumerable public order number by itself
+ * loads the non-secret order view (status, amount, payment info) but never the
+ * codes — this closes the previous hole where guessing `/delivery/000017`
+ * exposed another customer's codes.
+ */
 export async function getCustomerOrder(
-  id: string,
+  idOrToken: string,
 ): Promise<CustomerOrderDTO | null> {
   await ensureDatabaseReady();
-  const internalId = await resolveOrderReference(id);
-  if (!internalId) return null;
 
-  const data = await loadOrder(internalId);
+  const token = idOrToken.trim();
+  let authorizedForCodes = false;
+  let data: OrderRecord | null = null;
+
+  // 1) Delivery-token path — the token itself is the authorization.
+  if (token) {
+    const tokenMatch = await prisma.order.findUnique({
+      where: { deliveryToken: token },
+      select: { id: true },
+    });
+    if (tokenMatch) {
+      data = await loadOrder(tokenMatch.id);
+      authorizedForCodes = true;
+    }
+  }
+
+  // 2) Public order number / internal id path — codes only for the logged-in owner.
+  if (!data) {
+    const internalId = await resolveOrderReference(idOrToken);
+    if (!internalId) return null;
+    data = await loadOrder(internalId);
+    if (!data) return null;
+    authorizedForCodes = await isOrderOwner(data);
+  }
   if (!data) return null;
 
   const reference = await publicOrderReference(data);
-  return buildCustomerDTO(data, reference);
+  return buildCustomerDTO(data, reference, { authorizedForCodes });
+}
+
+/** True when the current session customer owns the given order. */
+async function isOrderOwner(order: {
+  customerId: string | null;
+  customerEmail: string;
+}): Promise<boolean> {
+  const customer = await getCurrentCustomer();
+  if (!customer) return false;
+  if (order.customerId && order.customerId === customer.id) return true;
+  return order.customerEmail.toLowerCase() === customer.email.toLowerCase();
 }
 
 export async function getOrderSummaries(
@@ -922,7 +1002,12 @@ export async function createOrder(
 export async function findOrderByEmailAndId(
   id: string,
   email: string,
-): Promise<{ id: string; status: string; publicOrderPathSegment: string } | null> {
+): Promise<{
+  id: string;
+  status: string;
+  publicOrderPathSegment: string;
+  deliveryToken: string | null;
+} | null> {
   await ensureDatabaseReady();
   const normalizedEmail = email.trim().toLowerCase();
   const publicOrderNumber = parsePublicOrderNumber(id);
@@ -932,7 +1017,7 @@ export async function findOrderByEmailAndId(
       skip: publicOrderNumber - 1,
       take: 1,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, status: true, customerEmail: true },
+      select: { id: true, status: true, customerEmail: true, deliveryToken: true },
     });
 
     if (order?.customerEmail.toLowerCase() === normalizedEmail) {
@@ -940,15 +1025,21 @@ export async function findOrderByEmailAndId(
         id: order.id,
         status: order.status,
         publicOrderPathSegment: formatPublicOrderPathSegment(publicOrderNumber),
+        deliveryToken: order.deliveryToken,
       };
     }
   }
 
   const order = await prisma.order.findFirst({
     where: { id: id.trim(), customerEmail: { equals: normalizedEmail, mode: "insensitive" } },
-    select: { id: true, status: true, createdAt: true },
+    select: { id: true, status: true, createdAt: true, deliveryToken: true },
   });
   if (!order) return null;
   const reference = await publicOrderReference(order);
-  return { ...order, publicOrderPathSegment: reference.pathSegment };
+  return {
+    id: order.id,
+    status: order.status,
+    publicOrderPathSegment: reference.pathSegment,
+    deliveryToken: order.deliveryToken,
+  };
 }

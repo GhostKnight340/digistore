@@ -9,6 +9,7 @@ import {
 } from "@/lib/email/send-email";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import { publicOrderReference } from "@/lib/db/orders";
+import { getStoreSettings } from "@/lib/db/catalog";
 import { getAdminPaymentMethods, getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import {
@@ -293,14 +294,41 @@ async function setPaymentStatus(
   }
 }
 
+/**
+ * Clean, greeting-free default body for the editable review message. The email
+ * shell owns the greeting/CTA and adds an optional Motif block from `reason`, so
+ * the message here is body-only and must not repeat any of those. Templates not
+ * listed fall back to their stored template body (unchanged behavior).
+ */
+const DEFAULT_REVIEW_MESSAGE: Partial<Record<EmailTemplateKey, string>> = {
+  new_proof_requested:
+    "Nous avons besoin d'un nouveau justificatif de paiement pour votre commande {{order_number}}.",
+  payment_rejected: "Le paiement de votre commande {{order_number}} n'a pas pu être validé.",
+  refund_update:
+    "Voici une mise à jour concernant le remboursement de votre commande {{order_number}}.",
+};
+
+function interpolateVars(value: string, variables: Record<string, unknown>): string {
+  return value.replace(/\{\{([a-z_]+)\}\}/g, (_, name: string) => String(variables[name] ?? ""));
+}
+
+/**
+ * Single source of truth for admin review emails (reject / request-proof /
+ * refund). The admin editor, the live modal preview, and the actually-sent
+ * email all go through this so they are always identical. Returns the rendered
+ * {subject,text,html} plus the editable `message` (body-only, interpolated) to
+ * seed the editor.
+ */
 export async function renderPaymentStatusEmailPreview(
   orderId: string,
   templateKey: EmailTemplateKey,
   reason = "",
+  input: { subject?: string; message?: string } = {},
 ) {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new Error("Commande introuvable.");
+  const settings = await getStoreSettings();
   const reference = await publicOrderReference(order);
   const variables = {
     customer_name: order.customerName,
@@ -310,17 +338,32 @@ export async function renderPaymentStatusEmailPreview(
     total: `${order.totalMad} MAD`,
     reason,
   };
-  const rendered = await renderTransactionalEmail(templateKey, variables);
-  return { ...rendered, variables };
+  const rawBody =
+    input.message ??
+    DEFAULT_REVIEW_MESSAGE[templateKey] ??
+    settings.emailTemplates[templateKey]?.body ??
+    "";
+  const rawSubject = input.subject ?? settings.emailTemplates[templateKey]?.subject ?? templateKey;
+  const rendered = await renderTransactionalEmail(templateKey, variables, {
+    subject: rawSubject,
+    body: rawBody,
+  });
+  return { ...rendered, variables, message: interpolateVars(rawBody, variables) };
 }
 
+/**
+ * Applies a status change and sends the admin-edited review email. Renders from
+ * the same {subject, message, reason} the modal previews (via the shared body
+ * override), so preview == sent. `note` is the internal timeline note and is
+ * kept separate from the customer-facing `reason`.
+ */
 export async function applyPaymentStatusWithEmail(
   orderId: string,
   toStatus: string,
   note: string,
   emailType: string,
   templateKey: EmailTemplateKey,
-  email: { subject: string; text: string; html?: string },
+  email: { subject: string; message: string; reason: string },
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -350,8 +393,7 @@ export async function applyPaymentStatusWithEmail(
         templateKey,
         type: emailType,
         subject: email.subject,
-        text: email.text,
-        html: email.html,
+        body: email.message,
         manuallyEdited: true,
         variables: {
           customer_name: order.customerName,
@@ -359,7 +401,7 @@ export async function applyPaymentStatusWithEmail(
           order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
           payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
           total: `${order.totalMad} MAD`,
-          reason: note,
+          reason: email.reason,
         },
       });
     } catch (emailError) {

@@ -14,13 +14,19 @@ function maskCode(code: string): string {
 export default function CopyCode({
   code,
   index,
+  label,
 }: {
   code: string;
   index?: number;
+  /** Field label (e.g. "Code", "PIN", "Lien d'utilisation"). Defaults to "Code disponible". */
+  label?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   const maskedCode = useMemo(() => maskCode(code), [code]);
+  const heading = label
+    ? `${label}${typeof index === "number" ? ` #${index + 1}` : ""}`
+    : `Code disponible${typeof index === "number" ? ` #${index + 1}` : ""}`;
 
   async function copy() {
     if (!revealed) return;
@@ -38,7 +44,7 @@ export default function CopyCode({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wide text-faint">
-            Code disponible{typeof index === "number" ? ` #${index + 1}` : ""}
+            {heading}
           </p>
           <code className="mt-2 flex min-h-[3rem] items-center break-all rounded-xl border border-white/10 bg-black/40 px-4 py-3 font-mono text-[1rem] font-semibold tracking-wider text-white">
             {revealed ? code : maskedCode}
@@ -52,7 +58,7 @@ export default function CopyCode({
               onClick={() => setRevealed(true)}
               className="btn-ghost h-10 px-4 text-xs"
             >
-              Afficher le code
+              Afficher
             </button>
           ) : (
             <button
@@ -60,7 +66,7 @@ export default function CopyCode({
               onClick={copy}
               className="btn-primary h-10 px-4 text-xs"
             >
-              {copied ? "Code copié" : "Copier le code"}
+              {copied ? "Copié" : "Copier"}
             </button>
           )}
         </div>
