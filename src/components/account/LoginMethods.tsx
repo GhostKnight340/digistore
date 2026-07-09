@@ -63,7 +63,7 @@ export default function LoginMethods(props: LoginMethodsProps) {
   }
 
   return (
-    <div className="card mt-6 p-6">
+    <div className="card p-6">
       <h2 className="text-lg font-bold text-white">Méthodes de connexion</h2>
       <p className="mt-1 text-sm text-muted">Gérez comment vous vous connectez à votre compte.</p>
 

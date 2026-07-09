@@ -89,7 +89,7 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
   if (!props.discordId) return null;
 
   return (
-    <div className="card mt-6 p-6">
+    <div className="card p-6">
       <div className="flex items-center gap-3">
         <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#5865F2]/15">
           <DiscordGlyph />

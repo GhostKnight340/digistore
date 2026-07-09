@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdminCustomer } from "@/lib/auth";
 import {
   getAdminCustomers,
+  deleteCustomerAccount,
   getAdminOrderDetail,
   getAdminOrdersPage,
   getAdminNavCounts,
@@ -196,6 +197,15 @@ export async function getAdminOrderDetailAction(orderId: string): Promise<AdminO
 export async function getAdminCustomersAction(): Promise<CustomerDTO[]> {
   await assertAdminAccess();
   return getAdminCustomers();
+}
+
+export async function deleteCustomerAccountAction(
+  customerId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const admin = await requireAdminCustomer();
+  const result = await deleteCustomerAccount(customerId, admin.id);
+  if (result.ok) revalidatePath("/admin");
+  return result;
 }
 
 export async function getOrderEmailLogsAction(orderId: string): Promise<EmailLogDTO[]> {

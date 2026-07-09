@@ -19,7 +19,7 @@ export default function AccountProfileForm({
   phone: string | null;
 }) {
   return (
-    <div className="card mt-6 p-6">
+    <div className="card p-6">
       <h2 className="text-lg font-bold text-white">Informations personnelles</h2>
 
       <EditableField

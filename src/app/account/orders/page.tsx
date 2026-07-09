@@ -1,6 +1,12 @@
 import Link from "next/link";
 import AccountNav from "@/components/account/AccountNav";
-import { getAccountOrders, requireCustomer } from "@/lib/auth";
+import PageHeader from "@/components/account/PageHeader";
+import { BagIcon, ArrowRightIcon } from "@/components/account/icons";
+import {
+  getAccountOrders,
+  requireCustomer,
+  isProfileIncomplete,
+} from "@/lib/auth";
 import { formatMAD } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
@@ -14,8 +20,6 @@ function formatFrenchDate(value: Date) {
     day: "2-digit",
     month: "long",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   }).format(value);
 }
 
@@ -39,68 +43,71 @@ function itemSummary(order: AccountOrder) {
 export default async function AccountOrdersPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
+  const incomplete = isProfileIncomplete(customer);
 
   return (
     <div className="container-page py-10">
-      <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-        <AccountNav name={customer.name} email={customer.email} />
-        <section>
-          <h1 className="text-3xl font-bold text-white">Mes commandes</h1>
-          <div className="card mt-8 overflow-hidden">
+      <div className="grid gap-[26px] lg:grid-cols-[264px_1fr]">
+        <AccountNav
+          name={customer.name}
+          email={incomplete ? "" : customer.email}
+          active="orders"
+          verified={!incomplete && customer.emailVerified}
+          ordersCount={orders.length}
+        />
+        <section className="space-y-5">
+          <PageHeader
+            title="Mes commandes"
+            subtitle="Historique complet de vos achats numériques."
+          />
+
+          <div className="rounded-[18px] border border-border bg-card p-[22px] shadow-soft sm:p-[26px]">
             {orders.length === 0 ? (
-              <div className="px-6 py-12 text-center">
-                <h2 className="text-lg font-semibold text-white">Aucune commande</h2>
-                <p className="mx-auto mt-2 max-w-md text-sm text-muted">
+              <div className="flex flex-col items-center px-6 py-10 text-center">
+                <span className="grid h-16 w-16 place-items-center rounded-2xl bg-accent-soft text-accent-strong">
+                  <BagIcon className="h-7 w-7" />
+                </span>
+                <p className="mt-4 text-[15px] font-semibold text-white">
+                  Aucune commande pour le moment
+                </p>
+                <p className="mt-1 max-w-sm text-[13px] text-muted">
                   Vos prochaines commandes apparaîtront ici avec leur statut de suivi.
                 </p>
-                <Link
-                  href="/"
-                  className="mt-5 inline-flex items-center justify-center rounded-md border border-accent/50 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/10"
-                >
-                  Parcourir la boutique
+                <Link href="/" className="btn-primary mt-5 text-sm">
+                  Parcourir le catalogue
+                  <ArrowRightIcon className="h-4 w-4" />
                 </Link>
               </div>
             ) : (
-              <div className="divide-y divide-border/60">
-                <div className="hidden grid-cols-[1.15fr_1.25fr_1fr_0.8fr_0.95fr] items-center gap-4 border-b border-border px-5 py-3 text-xs font-medium uppercase tracking-wide text-muted md:grid">
-                  <span>Commande</span>
-                  <span>Articles</span>
-                  <span>Statut</span>
-                  <span>Date</span>
-                  <span className="text-right">Total</span>
-                </div>
+              <div className="space-y-2.5">
                 {orders.map((order) => (
                   <Link
                     key={order.id}
                     href={`/order/${order.publicOrderPathSegment}`}
-                    className="grid gap-3 px-5 py-4 text-sm transition hover:bg-surface/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent md:grid-cols-[1.15fr_1.25fr_1fr_0.8fr_0.95fr] md:items-center md:gap-4"
+                    className="flex items-center gap-3.5 rounded-[13px] border border-border bg-base px-4 py-3 transition-colors hover:border-border-strong"
                   >
-                    <div>
-                      <p className="font-semibold text-white">{getPublicOrderLabel(order)}</p>
-                      <p className="mt-1 text-xs text-muted md:hidden">
-                        {formatFrenchDate(order.createdAt)}
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[11px] border border-border bg-surface text-faint">
+                      <BagIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-white">
+                        {itemSummary(order)}
+                      </p>
+                      <p className="mt-0.5 truncate font-mono text-[12px] text-faint">
+                        {getPublicOrderLabel(order)} · {formatFrenchDate(order.createdAt)} ·{" "}
+                        {itemCountLabel(order)}
                       </p>
                     </div>
-                    <div>
-                      <p className="font-medium text-white">{itemSummary(order)}</p>
-                      <p className="mt-1 text-xs text-muted">{itemCountLabel(order)}</p>
-                    </div>
-                    <div>
+                    <div className="flex flex-col items-end gap-1">
                       <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${orderStatusBadgeClass(
+                        className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold ${orderStatusBadgeClass(
                           order.status,
                         )}`}
                       >
                         {orderStatusShort(order.status)}
                       </span>
-                    </div>
-                    <p className="hidden text-sm text-muted md:block">
-                      {formatFrenchDate(order.createdAt)}
-                    </p>
-                    <div className="flex items-center justify-between gap-3 md:block md:text-right">
-                      <p className="font-semibold text-white">{formatMAD(order.totalMad)}</p>
-                      <span className="text-xs font-semibold text-accent md:mt-1 md:block">
-                        Voir la commande
+                      <span className="font-mono text-sm font-semibold text-white">
+                        {formatMAD(order.totalMad)}
                       </span>
                     </div>
                   </Link>

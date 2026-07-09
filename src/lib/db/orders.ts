@@ -770,7 +770,16 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
       "customer.findMany.registered",
       () =>
         prisma.customer.findMany({
-          where: { OR: [{ passwordHash: { not: null } }, { googleId: { not: null } }] },
+          // Any account with a usable credential is a real account — including
+          // Discord-only accounts (no password / Google), which otherwise never
+          // appear here since they may have no orders yet.
+          where: {
+            OR: [
+              { passwordHash: { not: null } },
+              { googleId: { not: null } },
+              { discordId: { not: null } },
+            ],
+          },
           take,
           orderBy: { createdAt: "desc" },
           select: {
@@ -779,6 +788,8 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
             email: true,
             phone: true,
             googleId: true,
+            discordId: true,
+            discordUsername: true,
             emailVerified: true,
             lastLoginAt: true,
             createdAt: true,
@@ -801,6 +812,8 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
           email: true,
           phone: true,
           googleId: true,
+          discordId: true,
+          discordUsername: true,
           passwordHash: true,
           emailVerified: true,
           lastLoginAt: true,
@@ -813,6 +826,10 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
   const groupByEmail = new Map(groups.map((group) => [group.customerEmail, group]));
   const emptyDate = new Date(0).toISOString();
 
+  // Internal Discord onboarding placeholder (see lib/auth.ts) — surfaced in the
+  // admin list as "profile incomplete" rather than the raw fake address.
+  const isPlaceholder = (email: string) => email.toLowerCase().endsWith("@users.noreply.ghost.ma");
+
   const rows: CustomerDTO[] = groups.map((group) => {
     const customer = customerByEmail.get(group.customerEmail);
     return {
@@ -820,13 +837,18 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
       name: customer?.name ?? group.customerEmail,
       email: group.customerEmail,
       phone: customer?.phone ?? null,
-      kind: customer?.passwordHash || customer?.googleId ? "registered" : "guest",
+      kind:
+        customer?.passwordHash || customer?.googleId || customer?.discordId
+          ? "registered"
+          : "guest",
       emailVerified: customer?.emailVerified ?? false,
       orderCount: group._count._all,
       totalSpent: group._sum.totalMad ?? 0,
       lastOrderAt: group._max.createdAt?.toISOString() ?? emptyDate,
       lastLoginAt: customer?.lastLoginAt?.toISOString() ?? null,
       createdAt: customer?.createdAt?.toISOString() ?? null,
+      discordUsername: customer?.discordUsername ?? null,
+      profileIncomplete: isPlaceholder(group.customerEmail),
     };
   });
 
@@ -844,6 +866,8 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
       lastOrderAt: emptyDate,
       lastLoginAt: customer.lastLoginAt?.toISOString() ?? null,
       createdAt: customer.createdAt.toISOString(),
+      discordUsername: customer.discordUsername,
+      profileIncomplete: isPlaceholder(customer.email),
     });
   }
 
@@ -854,6 +878,33 @@ export async function getAdminCustomers(take = 100): Promise<CustomerDTO[]> {
       return bDate.localeCompare(aDate);
     })
     .slice(0, take);
+}
+
+/**
+ * Deletes a customer account. Orders are preserved: the Order→Customer relation
+ * is `onDelete: SetNull`, so past orders keep their snapshot name/email and stay
+ * in the history as guest rows. Guarded against deleting yourself or another
+ * admin.
+ */
+export async function deleteCustomerAccount(
+  customerId: string,
+  actingAdminId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await ensureDatabaseReady();
+  if (!customerId) return { ok: false, error: "Compte introuvable." };
+  if (customerId === actingAdminId) {
+    return { ok: false, error: "Vous ne pouvez pas supprimer votre propre compte." };
+  }
+  const target = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { id: true, role: true },
+  });
+  if (!target) return { ok: false, error: "Compte introuvable." };
+  if (target.role === "ADMIN") {
+    return { ok: false, error: "Impossible de supprimer un compte administrateur." };
+  }
+  await prisma.customer.delete({ where: { id: customerId } });
+  return { ok: true };
 }
 
 interface CreateOrderInput {

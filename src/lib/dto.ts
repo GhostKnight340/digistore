@@ -350,6 +350,10 @@ export interface CustomerDTO {
   lastOrderAt: string;
   lastLoginAt: string | null;
   createdAt: string | null;
+  /** Linked Discord username, if any. */
+  discordUsername: string | null;
+  /** Discord account that has not yet added a real email (placeholder email). */
+  profileIncomplete: boolean;
 }
 
 export interface AdminOverviewDTO {
