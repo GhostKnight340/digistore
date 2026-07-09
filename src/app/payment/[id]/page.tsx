@@ -598,6 +598,11 @@ function PaymentExperience({
               </div>
             </div>
 
+            {/* Optional Discord DM delivery (additive; never blocks payment). */}
+            {!isCancelled && !isRejected && !isDelivered && (
+              <OrderDiscordDelivery orderId={order.id} orderPathSegment={order.publicOrderPathSegment} />
+            )}
+
             {/* After your payment */}
             <div className="rounded-2xl border border-white/[0.07] bg-[#0F1015] px-[18px] py-4">
               <div className="mb-2.5 flex items-center gap-2">
@@ -609,11 +614,6 @@ function PaymentExperience({
                 le statut de votre commande depuis cette page et votre espace client.
               </p>
             </div>
-
-            {/* Optional Discord DM delivery (additive; never blocks payment). */}
-            {!isCancelled && !isRejected && !isDelivered && (
-              <OrderDiscordDelivery orderId={order.id} orderPathSegment={order.publicOrderPathSegment} />
-            )}
 
             {/* Change method */}
             {isPending && methods.length > 1 && (
