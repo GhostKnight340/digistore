@@ -99,7 +99,12 @@ export async function GET(request: Request) {
     return errorRedirect(request.url, "discord_provider", mode);
   }
 
-  await ensureDatabaseReady();
+  try {
+    await ensureDatabaseReady();
+  } catch (error) {
+    console.error("[auth:discord:db]", error);
+    return errorRedirect(request.url, "discord_provider", mode);
+  }
   const discordId = profile.id;
   const discordUsername = profile.username ?? null;
   const discordGlobalName = profile.global_name ?? null;
@@ -119,14 +124,13 @@ export async function GET(request: Request) {
     const current = await getCurrentCustomer();
     if (!current) return errorRedirect(request.url, "discord_login_required", mode);
 
-    const owner = await prisma.customer.findUnique({ where: { discordId } });
-    if (owner && owner.id !== current.id) {
-      // This Discord identity already belongs to a different account. Never
-      // merge — surface a clear error instead.
-      return errorRedirect(request.url, "discord_already_linked", mode);
-    }
-
     try {
+      const owner = await prisma.customer.findUnique({ where: { discordId } });
+      if (owner && owner.id !== current.id) {
+        // This Discord identity already belongs to a different account. Never
+        // merge — surface a clear error instead.
+        return errorRedirect(request.url, "discord_already_linked", mode);
+      }
       await prisma.customer.update({
         where: { id: current.id },
         data: {
@@ -142,10 +146,9 @@ export async function GET(request: Request) {
   }
 
   // --- Login / register: identity is the Discord id, never a shared email ----
-  const existing = await prisma.customer.findUnique({ where: { discordId } });
-  const isNewAccount = !existing;
-
   try {
+    const existing = await prisma.customer.findUnique({ where: { discordId } });
+    const isNewAccount = !existing;
     let customerId: string;
     if (existing) {
       await prisma.customer.update({
