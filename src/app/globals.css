@@ -29,6 +29,49 @@ body {
   overflow-x: hidden;
 }
 
+/*
+ * Homepage ambient glow: a soft, diffused blue radial wash anchored to the
+ * upper hero area. Fixed to the viewport so it stays behind content while
+ * scrolling, pointer-events-none so it never intercepts clicks, and pinned
+ * with inset:0 (no width/height) so it can never introduce horizontal overflow.
+ */
+.home-hero-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    /* Primary: strongest behind/above the hero headline, top-left / center-left. */
+    radial-gradient(
+      1100px 620px at 26% 6%,
+      rgba(62, 123, 250, 0.24),
+      transparent 62%
+    ),
+    /* Secondary: weaker ambient presence toward the upper-right. */
+    radial-gradient(
+      760px 460px at 88% 2%,
+      rgba(62, 123, 250, 0.12),
+      transparent 60%
+    );
+}
+
+@media (max-width: 640px) {
+  /* Tighter, gentler wash on small screens so it reads as depth, not a band. */
+  .home-hero-glow {
+    background-image:
+      radial-gradient(
+        620px 420px at 30% 2%,
+        rgba(62, 123, 250, 0.2),
+        transparent 64%
+      ),
+      radial-gradient(
+        460px 320px at 92% 0%,
+        rgba(62, 123, 250, 0.09),
+        transparent 62%
+      );
+  }
+}
+
 ::selection {
   background: rgba(62, 123, 250, 0.18);
   color: #fff;

@@ -30,6 +30,8 @@ export default async function HomePage() {
 
   return (
     <div className="container-page pb-14 sm:pb-0">
+      {/* Ambient blue hero glow — decorative, sits behind all content and ignores pointer events. */}
+      <div aria-hidden className="home-hero-glow" />
       {settings.homepage.showHero && (
         <section className="relative py-8 sm:py-14 lg:py-16">
           <div className="relative min-w-0">
