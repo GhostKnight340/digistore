@@ -46,9 +46,6 @@ export default function CheckoutClient({
   // checkout; the customer picks the specific bank later on the payment page.
   const methods = useMemo(() => buildCheckoutMethods(config?.methods ?? []), [config]);
 
-  const [methodId, setMethodId] = useState<string>(
-    () => buildCheckoutMethods(initialConfig?.methods ?? [])[0]?.id ?? "",
-  );
   const isLoggedIn = Boolean(initialCustomer);
   const [email, setEmail] = useState(initialCustomer?.email ?? "");
   const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
@@ -67,18 +64,21 @@ export default function CheckoutClient({
   useEffect(() => {
     if (initialConfig) return;
     getPaymentConfigAction()
-      .then((cfg) => {
-        setConfig(cfg);
-        setMethodId((current) => current || buildCheckoutMethods(cfg.methods)[0]?.id || "");
-      })
+      .then(setConfig)
       .catch((err: unknown) => {
         console.error("[checkout] Failed to load payment config:", err);
         setConfigError(true);
       });
   }, [initialConfig]);
 
+  // Informational only — the customer picks the actual method on the payment
+  // page. Card methods flagged "coming soon" are not offered there, so they
+  // are not announced here either.
   const paymentOptions = useMemo(
-    () => methods.map((method) => ({ method, display: paymentMethodDisplay(method) })),
+    () =>
+      methods
+        .filter((method) => !(method.type === "card" && method.details.comingSoon))
+        .map((method) => ({ method, display: paymentMethodDisplay(method) })),
     [methods],
   );
 
@@ -87,7 +87,7 @@ export default function CheckoutClient({
   const needsRegion = restrictedItems.length > 0;
   const canPlace = phoneValid && (!needsRegion || regionConfirmed);
   const ctaLabel = canPlace
-    ? "Créer la commande"
+    ? "Passer la commande"
     : !phoneValid
       ? "Ajoutez votre téléphone"
       : "Confirmez la région";
@@ -144,10 +144,6 @@ export default function CheckoutClient({
       setError("Veuillez saisir un numéro de téléphone valide.");
       return;
     }
-    if (!methodId) {
-      setError("Veuillez choisir un mode de paiement.");
-      return;
-    }
     if (needsRegion && !regionConfirmed) {
       setError("Veuillez confirmer que votre compte correspond à la région requise.");
       return;
@@ -159,7 +155,6 @@ export default function CheckoutClient({
         customerName: fullName.trim(),
         customerEmail: email.trim(),
         customerPhone: `+212 ${phoneLocal.trim()}`,
-        paymentMethod: methodId,
         items: cart.map((i) => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -191,7 +186,7 @@ export default function CheckoutClient({
             Paiement
           </h1>
           <p className="mt-1.5 text-sm text-muted">
-            Choisissez votre mode de paiement et finalisez votre commande.
+            Vérifiez vos informations et finalisez votre commande.
           </p>
         </div>
 
@@ -320,10 +315,12 @@ export default function CheckoutClient({
 
           <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
             <div className="border-b border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
-              <h2 className="text-base font-semibold text-white">Mode de paiement</h2>
+              <h2 className="text-base font-semibold text-white">
+                Modes de paiement disponibles
+              </h2>
               <p className="mt-1 text-[13px] text-muted">
-                Sélectionnez une option — les instructions détaillées s&apos;afficheront après la
-                création de la commande.
+                Vous choisirez votre méthode et recevrez les instructions complètes à
+                l&apos;étape suivante.
               </p>
             </div>
 
@@ -335,52 +332,32 @@ export default function CheckoutClient({
               ) : paymentOptions.length === 0 ? (
                 <p className="text-sm text-muted">Aucun mode de paiement disponible pour le moment.</p>
               ) : (
-                <div className="grid gap-[13px] sm:grid-cols-2">
-                  {paymentOptions.map((option) => {
-                    const active = methodId === option.method.id;
-                    return (
-                      <button
-                        type="button"
-                        key={option.method.id}
-                        onClick={() => setMethodId(option.method.id)}
-                        className={`group relative flex items-center gap-[13px] rounded-[13px] border bg-[#0B0C10] p-[15px] text-left transition-all duration-150 ${
-                          active
-                            ? "border-[1.5px] border-accent bg-accent/[0.09] shadow-[0_0_0_3px_rgba(62,123,250,0.14),0_8px_22px_rgba(62,123,250,0.12)]"
-                            : "border-white/[0.09] hover:border-accent/40"
-                        }`}
-                      >
-                        <PaymentBrandMark
-                          display={option.display}
-                          active={active}
-                          className="h-[42px] w-[42px] shrink-0 rounded-[11px]"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="text-[14.5px] font-semibold text-white">
-                              {option.display.displayName}
-                            </span>
-                          </span>
-                          <span className="mt-0.5 block text-[12.5px] text-muted">
-                            {option.display.subtitle}
-                          </span>
+                <ul className="divide-y divide-white/[0.05] overflow-hidden rounded-[13px] border border-white/[0.08] bg-[#0B0C10]">
+                  {paymentOptions.map((option) => (
+                    <li
+                      key={option.method.id}
+                      className="flex items-center gap-[13px] px-[15px] py-[13px]"
+                    >
+                      <PaymentBrandMark
+                        display={option.display}
+                        className="h-[38px] w-[38px] shrink-0 rounded-[10px]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[14px] font-semibold text-white">
+                          {option.display.displayName}
                         </span>
-                        <span
-                          className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full transition-all duration-150 ${
-                            active
-                              ? "border-[1.5px] border-accent bg-accent shadow-[0_3px_8px_rgba(62,123,250,0.4)]"
-                              : "border-[1.6px] border-white/20 bg-transparent"
-                          }`}
-                        >
-                          {active && (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} className="h-3 w-3" aria-hidden>
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
+                        <span className="mt-0.5 block truncate text-[12.5px] text-muted">
+                          {option.display.subtitle}
                         </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                      </span>
+                      <span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-[#5BC98C]/12">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#5BC98C" strokeWidth={2.6} className="h-[11px] w-[11px]" aria-hidden>
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -390,8 +367,8 @@ export default function CheckoutClient({
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
               <span className="text-[12.5px] text-[#9FB8FF]">
-                Les instructions complètes de paiement s&apos;afficheront sur une page dédiée après
-                la création de la commande.
+                Aucun paiement n&apos;est débité maintenant — vous choisirez votre méthode et
+                verrez les instructions à l&apos;étape suivante.
               </span>
             </div>
           </section>

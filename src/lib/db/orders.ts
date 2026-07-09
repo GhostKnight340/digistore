@@ -828,7 +828,8 @@ interface CreateOrderInput {
   customerName: string;
   customerEmail: string;
   customerPhone?: string;
-  paymentMethod: string;
+  /** Optional: unset until the customer picks a method on the payment page. */
+  paymentMethod?: string;
   items: { productId: string; quantity: number }[];
 }
 
@@ -932,7 +933,7 @@ export async function createOrder(
           customerId: customer.id,
           customerName,
           customerEmail,
-          paymentMethod: input.paymentMethod,
+          paymentMethod: input.paymentMethod ?? "",
           status: "pending_payment",
           totalMad,
           items: {

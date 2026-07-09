@@ -69,7 +69,7 @@ export function bankTransferCheckoutMethod(
   // customer picks the actual bank on the payment page.
   const subtitle =
     banks.length > 1
-      ? "Choisissez votre banque à l'étape suivante"
+      ? "Plusieurs banques disponibles"
       : "RIB / IBAN · virement manuel";
   return {
     id: BANK_TRANSFER_METHOD_ID,
