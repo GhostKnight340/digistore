@@ -14,7 +14,8 @@ export async function createOrderAction(input: {
   customerName: string;
   customerEmail: string;
   customerPhone?: string;
-  paymentMethod: string;
+  /** Optional: the customer picks the actual method on the payment page. */
+  paymentMethod?: string;
   items: { productId: string; quantity: number }[];
 }): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
   return createOrder(input);
