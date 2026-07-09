@@ -54,8 +54,29 @@ export function isDelivered(status: string): boolean {
   return status === "delivered";
 }
 
+/**
+ * Pre-payment states where no proof has been submitted and no payment captured.
+ * This is the single source of truth shared by the UI and the server-side
+ * cancellation guard — do not introduce a parallel status list.
+ */
+export const PENDING_PAYMENT_STATUSES = [
+  "pending_payment",
+  "pending",
+  "awaiting_payment",
+] as const;
+
 export function isPendingPayment(status: string): boolean {
-  return status === "pending_payment" || status === "pending" || status === "awaiting_payment";
+  return (PENDING_PAYMENT_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * Whether a customer may self-cancel an order. Only the pre-payment states are
+ * safe: once a proof is submitted (payment_submitted) or the payment is
+ * confirmed/delivered/refunded, the customer must contact support so a payment
+ * already sent is never hidden by a self-service cancellation.
+ */
+export function canCustomerCancel(status: string): boolean {
+  return isPendingPayment(status);
 }
 
 export function isPaymentSubmitted(status: string): boolean {

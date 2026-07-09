@@ -3,11 +3,12 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { formatMAD } from "@/lib/format";
-import { orderStatusLabel } from "@/lib/orderStatus";
+import { orderStatusLabel, canCustomerCancel } from "@/lib/orderStatus";
 import {
   getPaymentPageDataAction,
   submitPaymentAction,
   changePaymentMethodAction,
+  cancelOrderAction,
 } from "@/app/actions/payments";
 import CopyCode from "@/components/CopyCode";
 import ProductArt from "@/components/ProductArt";
@@ -149,6 +150,8 @@ function PaymentExperience({
   const [modalChecked, setModalChecked] = useState(false);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const status = order.status;
@@ -157,6 +160,7 @@ function PaymentExperience({
   const isConfirmed = status === "payment_confirmed";
   const isDelivered = status === "delivered";
   const isRejected = status === "rejected" || status === "payment_issue";
+  const isCancelled = status === "cancelled";
 
   const details = activeMethod?.details ?? {};
   const comingSoon = activeMethod?.type === "card" && Boolean(details.comingSoon);
@@ -235,23 +239,45 @@ function PaymentExperience({
     }
   }
 
+  async function handleCancel() {
+    if (cancelling) return;
+    setCancelling(true);
+    setError("");
+    try {
+      const res = await cancelOrderAction(order.id);
+      if (!res.ok) setError(res.error ?? "Annulation impossible.");
+      else {
+        setCancelOpen(false);
+        refresh();
+      }
+    } catch {
+      setError("Annulation impossible. Veuillez réessayer.");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   // Header status badge — amber while pending, blue once submitted.
   const submitted = isSubmitted || isConfirmed || isDelivered;
-  const badge = submitted
-    ? { label: isPending ? "En attente" : orderStatusLabel(status), color: "#8DB4FF", bg: "rgba(62,123,250,0.12)", bd: "rgba(62,123,250,0.28)", dot: "#3E7BFA" }
-    : isRejected
-      ? { label: orderStatusLabel(status), color: "#E8A6A6", bg: "rgba(224,92,92,0.12)", bd: "rgba(224,92,92,0.28)", dot: "#E05C5C" }
-      : { label: "En attente de paiement", color: "#F0C466", bg: "rgba(232,168,56,0.12)", bd: "rgba(232,168,56,0.26)", dot: "#E8A838" };
+  const badge = isCancelled
+    ? { label: "Annulée", color: "#E8A6A6", bg: "rgba(224,92,92,0.12)", bd: "rgba(224,92,92,0.28)", dot: "#E05C5C" }
+    : submitted
+      ? { label: isPending ? "En attente" : orderStatusLabel(status), color: "#8DB4FF", bg: "rgba(62,123,250,0.12)", bd: "rgba(62,123,250,0.28)", dot: "#3E7BFA" }
+      : isRejected
+        ? { label: orderStatusLabel(status), color: "#E8A6A6", bg: "rgba(224,92,92,0.12)", bd: "rgba(224,92,92,0.28)", dot: "#E05C5C" }
+        : { label: "En attente de paiement", color: "#F0C466", bg: "rgba(232,168,56,0.12)", bd: "rgba(232,168,56,0.26)", dot: "#E8A838" };
 
-  const headerInstruction = isRejected
-    ? "Nous n’avons pas pu valider votre paiement. Consultez le détail ci-dessous."
-    : isConfirmed || isDelivered
-      ? "Votre paiement a été confirmé. Votre commande est en cours de préparation."
-      : isSubmitted
-        ? "Votre justificatif est en cours de vérification."
-        : activeMethod?.type === "bank"
-          ? `Effectuez un virement de ${formatMAD(total)} vers le compte ci-dessous, puis ajoutez votre justificatif.`
-          : "Réglez le montant ci-dessous pour valider votre commande.";
+  const headerInstruction = isCancelled
+    ? "Cette commande a été annulée. Aucun paiement n’est requis."
+    : isRejected
+      ? "Nous n’avons pas pu valider votre paiement. Consultez le détail ci-dessous."
+      : isConfirmed || isDelivered
+        ? "Votre paiement a été confirmé. Votre commande est en cours de préparation."
+        : isSubmitted
+          ? "Votre justificatif est en cours de vérification."
+          : activeMethod?.type === "bank"
+            ? `Effectuez un virement de ${formatMAD(total)} vers le compte ci-dessous, puis ajoutez votre justificatif.`
+            : "Réglez le montant ci-dessous pour valider votre commande.";
 
   const product = order.items[0] ? getProduct(order.items[0].productId) : undefined;
 
@@ -269,7 +295,11 @@ function PaymentExperience({
               {badge.label}
             </span>
             <h1 className="mt-3 text-[26px] font-semibold leading-tight tracking-[-0.025em] text-white min-[900px]:text-[29px]">
-              {isRejected ? "Vérifions votre paiement" : "Finalisez votre paiement"}
+              {isCancelled
+                ? "Commande annulée"
+                : isRejected
+                  ? "Vérifions votre paiement"
+                  : "Finalisez votre paiement"}
             </h1>
             <p className="mt-1.5 max-w-[440px] text-sm leading-relaxed text-[#9A9FAB]">
               {headerInstruction}
@@ -470,6 +500,9 @@ function PaymentExperience({
             {/* Delivered */}
             {isDelivered && <DeliveredSection order={order} />}
 
+            {/* Cancelled */}
+            {isCancelled && <TerminalCancelled whatsapp={whatsapp} orderReference={publicOrderNumber} />}
+
             {error && (
               <div className="rounded-xl border border-[rgba(224,92,92,0.3)] bg-[rgba(224,92,92,0.08)] px-4 py-3 text-sm text-[#E8A6A6]">
                 {error}
@@ -616,6 +649,20 @@ function PaymentExperience({
                 <div className="text-xs text-[#9FB8FF]">Contacter le support</div>
               </div>
             </a>
+
+            {/* Cancel order — low-emphasis destructive action, never competes
+                with the primary payment CTA. Shown only while the order is
+                still customer-cancellable (server re-validates eligibility). */}
+            {canCustomerCancel(status) && (
+              <button
+                type="button"
+                onClick={() => setCancelOpen(true)}
+                className="mx-auto flex items-center gap-1.5 py-1 text-[13px] font-medium text-[#7A808C] transition-colors hover:text-[#E88B8B]"
+              >
+                <CloseIcon className="h-3.5 w-3.5" />
+                Annuler la commande
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -691,6 +738,47 @@ function PaymentExperience({
                 }`}
               >
                 Confirmer et changer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel-order confirmation modal */}
+      {cancelOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(4,5,7,0.72)] p-6 backdrop-blur-[4px]">
+          <div className="w-full max-w-[440px] overflow-hidden rounded-[18px] border border-white/10 bg-[#12141B] shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
+            <div className="px-[26px] pb-5 pt-6">
+              <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(224,92,92,0.28)] bg-[rgba(224,92,92,0.13)]">
+                <AlertIcon className="h-5 w-5 text-[#E88B8B]" />
+              </span>
+              <h2 className="text-lg font-semibold text-white">Annuler la commande ?</h2>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-[#9A9FAB]">
+                Êtes-vous sûr de vouloir annuler cette commande ?
+              </p>
+              <div className="mt-[18px] flex items-start gap-2.5 rounded-xl border border-[rgba(232,168,56,0.28)] bg-[rgba(232,168,56,0.09)] px-3.5 py-3">
+                <AlertIcon className="mt-px h-4 w-4 shrink-0 text-[#E8A838]" />
+                <span className="text-[12.5px] leading-snug text-[#F0C466]">
+                  Si vous avez déjà envoyé le paiement, contactez le support au lieu d’annuler.
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-3 px-[26px] pb-[22px] pt-4">
+              <button
+                type="button"
+                onClick={() => setCancelOpen(false)}
+                disabled={cancelling}
+                className="h-[46px] flex-1 rounded-xl border border-white/[0.12] bg-transparent text-sm font-semibold text-[#C4C9D4] transition hover:bg-white/[0.04] disabled:opacity-60"
+              >
+                Retour
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="h-[46px] flex-1 rounded-xl bg-[linear-gradient(145deg,#E05C5C,#C23B3B)] text-sm font-semibold text-white shadow-[0_8px_22px_rgba(224,92,92,0.3)] transition disabled:opacity-70"
+              >
+                {cancelling ? "Annulation…" : "Oui, annuler"}
               </button>
             </div>
           </div>
@@ -1498,6 +1586,46 @@ function TerminalRejected({
           className="flex h-[46px] flex-1 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-[13.5px] font-semibold text-white"
         >
           Renvoyer un justificatif
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function TerminalCancelled({
+  whatsapp,
+  orderReference,
+}: {
+  whatsapp: string;
+  orderReference: string;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[rgba(224,92,92,0.28)] bg-[#0F1015]">
+      <div className="p-[26px] text-center">
+        <span className="mb-4 inline-flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[rgba(224,92,92,0.36)] bg-[rgba(224,92,92,0.14)]">
+          <AlertCircleIcon className="h-7 w-7 text-[#E88B8B]" />
+        </span>
+        <h2 className="text-[19px] font-semibold text-white">Commande annulée.</h2>
+        <p className="mx-auto mt-1.5 max-w-[360px] text-[13.5px] text-[#9A9FAB]">
+          Votre commande {orderReference} a été annulée. Aucun paiement ne sera prélevé.
+        </p>
+      </div>
+      <div className="flex flex-col gap-3 px-[22px] pb-[22px] min-[520px]:flex-row">
+        <Link
+          href="/products"
+          className="flex h-[46px] flex-1 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-[13.5px] font-semibold text-white"
+        >
+          Parcourir le catalogue
+        </Link>
+        <a
+          href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(
+            `Bonjour, j'ai une question concernant ma commande annulée ${orderReference}`,
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-[46px] flex-1 items-center justify-center rounded-xl border border-white/[0.12] bg-transparent text-[13.5px] font-semibold text-[#C4C9D4] hover:bg-white/[0.04]"
+        >
+          Contacter le support
         </a>
       </div>
     </div>

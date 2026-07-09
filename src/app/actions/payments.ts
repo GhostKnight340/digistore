@@ -3,6 +3,7 @@
 import {
   submitPayment,
   changeOrderPaymentMethod,
+  cancelOrder,
   approvePayment,
   rejectPayment,
   markPaymentIssue,
@@ -88,6 +89,12 @@ export async function changePaymentMethodAction(
 ): Promise<ActionResult> {
   if (!orderId || !methodId) return { ok: false, error: "Paramètres manquants." };
   return changeOrderPaymentMethod(orderId, methodId);
+}
+
+/** Customer: cancel a still-unpaid order. Eligibility is enforced server-side. */
+export async function cancelOrderAction(orderId: string): Promise<ActionResult> {
+  if (!orderId) return { ok: false, error: "Paramètres manquants." };
+  return cancelOrder(orderId);
 }
 
 // ─── Admin payment review actions ─────────────────────────────────────────────

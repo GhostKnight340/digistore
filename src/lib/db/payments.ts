@@ -12,6 +12,7 @@ import { publicOrderReference } from "@/lib/db/orders";
 import { getStoreSettings } from "@/lib/db/catalog";
 import { getAdminPaymentMethods, getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
+import { canCustomerCancel, PENDING_PAYMENT_STATUSES } from "@/lib/orderStatus";
 import {
   notifyPaymentStatusChange,
   notifyFulfillmentNeeded,
@@ -180,6 +181,88 @@ export async function changeOrderPaymentMethod(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Modification impossible.",
+    };
+  }
+}
+
+/**
+ * Customer: cancel a still-unpaid order from the payment page. Allowed only
+ * while the order is in a pre-payment state (see canCustomerCancel) — the same
+ * access rule as changeOrderPaymentMethod. Once a proof has been submitted
+ * (payment_submitted) or the payment is confirmed/delivered, the customer must
+ * contact support instead, so a payment already sent can never be hidden by a
+ * self-service cancellation. Records a `customer_cancellation` payment event
+ * (the event type encodes the actor). Idempotent: cancelling an already
+ * cancelled order succeeds without side effects. Never deletes the order, its
+ * payment proof, or any payment-event history.
+ */
+export async function cancelOrder(orderId: string): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) return { ok: false, error: "Commande introuvable." };
+
+  // Idempotent: a duplicate request on an already-cancelled order is a success.
+  if (order.status === "cancelled") return { ok: true };
+
+  if (!canCustomerCancel(order.status)) {
+    return {
+      ok: false,
+      error:
+        "Cette commande ne peut plus être annulée. Si vous avez déjà payé, contactez le support.",
+    };
+  }
+
+  const fromStatus = order.status;
+  try {
+    const applied = await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: { in: [...PENDING_PAYMENT_STATUSES] } },
+        data: { status: "cancelled" },
+      });
+      if (updated.count !== 1) return false;
+      await tx.paymentEvent.create({
+        data: {
+          orderId,
+          type: "customer_cancellation",
+          fromStatus,
+          toStatus: "cancelled",
+          note: "Commande annulée par le client.",
+        },
+      });
+      return true;
+    });
+
+    if (!applied) {
+      // Status changed between our read and write. Idempotent if it happened to
+      // land on cancelled (concurrent duplicate request); otherwise it moved
+      // out of a cancellable state (e.g. proof just submitted) — refuse.
+      const latest = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { status: true },
+      });
+      if (latest?.status === "cancelled") return { ok: true };
+      return {
+        ok: false,
+        error: "Cette commande ne peut plus être annulée.",
+      };
+    }
+
+    const reference = await publicOrderReference(order);
+    void notifyPaymentStatusChange({
+      order,
+      publicOrderNumber: reference.number,
+      fromStatus,
+      toStatus: "cancelled",
+      note: "Annulée par le client.",
+      adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
+    });
+
+    return { ok: true };
+  } catch (error) {
+    console.error("[cancelOrder]", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Annulation impossible.",
     };
   }
 }
