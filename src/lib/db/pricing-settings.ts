@@ -23,6 +23,7 @@ export const defaultPricingSettings: PricingSettings = {
   defaultMarginPct: 15,
   roundingIncrement: 5,
   roundingMode: "up",
+  costStaleDays: 7,
 };
 
 const ROUNDING_INCREMENTS: RoundingIncrement[] = [1, 5, 10];
@@ -45,12 +46,18 @@ export function mergePricingSettings(value: unknown): PricingSettings {
     ? (raw.roundingMode as RoundingMode)
     : defaultPricingSettings.roundingMode;
   const margin = Number(raw.defaultMarginPct);
+  const staleDays = Number(raw.costStaleDays);
 
   return {
     fxRatesToMad: Object.keys(fx).length > 0 ? fx : { ...defaultPricingSettings.fxRatesToMad },
     defaultMarginPct: Number.isFinite(margin) ? margin : defaultPricingSettings.defaultMarginPct,
     roundingIncrement: increment,
     roundingMode: mode,
+    // Clamp to a sane range; a non-positive/NaN value falls back to the default.
+    costStaleDays:
+      Number.isFinite(staleDays) && staleDays > 0
+        ? Math.min(Math.round(staleDays), 3650)
+        : defaultPricingSettings.costStaleDays,
   };
 }
 

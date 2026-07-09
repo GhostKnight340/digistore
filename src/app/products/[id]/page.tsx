@@ -10,6 +10,8 @@ import ProductCard from "@/components/ProductCard";
 import AddToCartForm from "@/components/AddToCartForm";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import RegionPanel from "@/components/RegionPanel";
+import RegionFlag from "@/components/RegionFlag";
+import { getRegion } from "@/lib/regions";
 
 export async function generateStaticParams() {
   const slugs = await getParentProductSlugs().catch(() => []);
@@ -27,16 +29,41 @@ export default async function ProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ variant?: string }>;
+  searchParams: Promise<{ variant?: string; region?: string }>;
 }) {
   const { id } = await params;
-  const { variant: rawVariant } = await searchParams;
+  const { variant: rawVariant, region: rawRegion } = await searchParams;
   const product = await getProductBySlug(id);
   if (!product) notFound();
+
+  const variants = product.variants ?? [];
+  // Distinct variant regions, in variant order. Multi-region → show a selector.
+  const regions = [...new Set(variants.map((v) => v.region))].filter(Boolean);
+  const multiRegion = regions.length > 1;
+
+  // Resolve the active region: explicit ?region=, else the requested variant's
+  // region, else the first available region (or the parent product's region).
+  const selectedRegion =
+    (rawRegion && regions.includes(rawRegion) && rawRegion) ||
+    variants.find((v) => v.id === rawVariant)?.region ||
+    regions[0] ||
+    product.region;
+
+  // Only denominations available in the selected region.
+  const regionVariants = multiRegion
+    ? variants.filter((v) => v.region === selectedRegion)
+    : variants;
+
+  // Selected value: the requested one if it's in this region, else reset to the
+  // first value available in the selected region.
   const selectedVariant =
-    product.variants?.find((item) => item.id === rawVariant) ??
-    product.variants?.find((item) => item.id === product.selectedVariantId) ??
-    product.variants?.[0];
+    regionVariants.find((item) => item.id === rawVariant) ??
+    regionVariants.find((item) => item.id === product.selectedVariantId) ??
+    regionVariants[0];
+
+  const displayRegion = selectedVariant?.region ?? product.region;
+  const variantHref = (variantId: string) =>
+    `/products/${product.id}?region=${encodeURIComponent(selectedRegion)}&variant=${encodeURIComponent(variantId)}`;
 
   const related = (await getProductsByCategorySlug(product.category))
     .filter((item) => item.parentId !== product.id)
@@ -65,7 +92,7 @@ export default async function ProductDetailPage({
               label={product.categoryName}
               className="aspect-[4/3] w-full rounded-[18px] border border-border shadow-card"
             />
-            <RegionBadge code={product.region} variant="overlay" className="absolute left-3.5 top-3.5" />
+            <RegionBadge code={displayRegion} variant="overlay" className="absolute left-3.5 top-3.5" />
           </div>
 
           <section className="mt-10">
@@ -100,11 +127,11 @@ export default async function ProductDetailPage({
 
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em] text-text">
             {product.name}
-            {regionTitleSuffix(product.region).label && (
+            {regionTitleSuffix(displayRegion).label && (
               <>
                 {" "}
-                <span className={regionTitleSuffix(product.region).className}>
-                  {regionTitleSuffix(product.region).label}
+                <span className={regionTitleSuffix(displayRegion).className}>
+                  {regionTitleSuffix(displayRegion).label}
                 </span>
               </>
             )}
@@ -118,18 +145,50 @@ export default async function ProductDetailPage({
           </div>
 
           <div className="mt-5">
-            <RegionPanel code={product.region} />
+            <RegionPanel code={displayRegion} />
           </div>
 
           <div className="mt-7 rounded-2xl border border-border bg-surface p-4 sm:p-6">
-            {product.variants && product.variants.length > 0 && (
+            {multiRegion && (
+              <div className="mb-5">
+                <p className="mb-2 text-sm font-medium text-faint">Région</p>
+                <div className="flex flex-wrap gap-2">
+                  {regions.map((code) => {
+                    const r = getRegion(code);
+                    const active = code === selectedRegion;
+                    return (
+                      <Link
+                        key={code}
+                        href={`/products/${product.id}?region=${encodeURIComponent(code)}`}
+                        aria-current={active ? "true" : undefined}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${
+                          active
+                            ? "border-accent bg-accent/10 text-white"
+                            : "border-border text-muted hover:border-border-strong hover:text-white"
+                        }`}
+                      >
+                        <span className="h-3 w-[17px] shrink-0 overflow-hidden rounded-[2px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]">
+                          <RegionFlag code={r.code} />
+                        </span>
+                        <span className="font-medium">{r.name}</span>
+                        <span className="font-mono text-xs text-faint">{r.code}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-amber-400/90">
+                  La carte fonctionne uniquement avec un compte de la région sélectionnée.
+                </p>
+              </div>
+            )}
+            {regionVariants.length > 0 && (
               <div className="mb-5">
                 <p className="mb-2 text-sm font-medium text-faint">Montant</p>
                 <div className="grid gap-2 min-[420px]:grid-cols-2">
-                  {product.variants.map((item) => (
+                  {regionVariants.map((item) => (
                     <Link
                       key={item.id}
-                      href={`/products/${product.id}?variant=${encodeURIComponent(item.id)}`}
+                      href={variantHref(item.id)}
                       className={`rounded-xl border px-3 py-2 text-sm transition ${
                         item.id === selectedVariant?.id
                           ? "border-accent bg-accent/10 text-white"

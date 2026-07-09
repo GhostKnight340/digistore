@@ -359,6 +359,19 @@ function SettingsCard({
             <option value="up">Toujours au-dessus</option>
           </select>
         </div>
+        <div>
+          <label className="text-xs text-muted">Coût obsolète après (jours)</label>
+          <input
+            type="number"
+            min={1}
+            step="1"
+            value={draft.costStaleDays}
+            onChange={(e) =>
+              setDraft({ ...draft, costStaleDays: Math.max(1, Math.round(Number(e.target.value) || 0)) })
+            }
+            className="mt-1 w-full rounded-lg border border-border-strong bg-surface2 px-3 py-2 text-sm text-white"
+          />
+        </div>
       </div>
 
       <div className="mt-4">

@@ -10,6 +10,8 @@ export interface OrderItemDTO {
   name: string;
   quantity: number;
   unitPriceMad: number;
+  /** Resolved region of the ordered variant (variant.region ?? product.region). */
+  variantRegion?: string;
   // Present only when the item's variant is Reloadly-sourced
   // (variant.stockControl === "reloadly"); lets the delivery UI offer an
   // "auto-fulfill via Reloadly" option instead of local/manual code entry.
@@ -675,6 +677,7 @@ export interface PricingSettingsDTO {
   defaultMarginPct: number;
   roundingIncrement: 1 | 5 | 10;
   roundingMode: "nearest" | "up";
+  costStaleDays: number;
 }
 
 export interface PricingLastSyncDTO {
@@ -784,6 +787,8 @@ export interface ReloadlyImportDetailDTO {
   redeemInstructionVerbose: string | null;
   userIdRequired: boolean;
   costSyncedAt: string | null;
+  /** Configurable staleness threshold (days) from pricing settings. */
+  costStaleDays: number;
   /** Suggested Ghost-side defaults, all admin-editable. */
   suggestedRegionCode: string;
   suggestedCategoryId: string | null;

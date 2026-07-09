@@ -90,6 +90,11 @@ model ProductVariant {
   priceMad                    Int
   faceValue                   Float?
   faceCurrency                String   @default("MAD")
+  // Optional per-variant region (a Ghost region code, e.g. "EU"/"US"). Null →
+  // inherits the parent Product.region. Lets one parent product hold variants
+  // for multiple regions; the storefront shows a "Région" selector only when a
+  // product has more than one distinct variant region.
+  region                      String?
   // stockControl: "manual" | "api" | "reloadly"
   stockControl                String   @default("manual")
   stockMode                   String   @default("automatic")

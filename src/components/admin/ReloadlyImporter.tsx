@@ -34,7 +34,6 @@ const MAPPING_META: Record<ReloadlyImportMappingStatus, { label: string; cls: st
 
 const inputCls =
   "w-full rounded-lg border border-border-strong bg-surface2 px-3 py-2 text-sm text-white";
-const STALE_COST_DAYS = 7;
 
 type RowState = {
   faceValue: number;
@@ -755,9 +754,10 @@ function ProductPrepCard({
   };
   const isNewParent = prep.groupChoice === "new-own" || prep.groupChoice.startsWith("share:");
   const isLead = prep.groupChoice === "new-own";
+  const staleDays = d.costStaleDays;
   const stale =
     !d.costSyncedAt ||
-    Date.now() - new Date(d.costSyncedAt).getTime() > STALE_COST_DAYS * 24 * 3600 * 1000;
+    Date.now() - new Date(d.costSyncedAt).getTime() > staleDays * 24 * 3600 * 1000;
 
   const otherNewOwn = preps.filter(
     (p) => p.detail.productId !== d.productId && p.groupChoice === "new-own",
@@ -788,7 +788,7 @@ function ProductPrepCard({
             remise {d.discountPercentage}% · frais {d.senderFee}+{d.senderFeePercentage}% ·{" "}
             <span className={stale ? "text-amber-400" : "text-muted"}>
               {d.costSyncedAt ? `Synchronisé ${timeAgoFr(d.costSyncedAt)}` : "Jamais synchronisé"}
-              {stale ? " (obsolète, > 7 j)" : ""}
+              {stale ? ` (obsolète, > ${staleDays} j)` : ""}
             </span>
           </p>
         </div>
@@ -1185,7 +1185,7 @@ function PricingReview({ preps }: { preps: ProductPrep[] }) {
               const stale =
                 !prep.detail.costSyncedAt ||
                 Date.now() - new Date(prep.detail.costSyncedAt).getTime() >
-                  STALE_COST_DAYS * 24 * 3600 * 1000;
+                  prep.detail.costStaleDays * 24 * 3600 * 1000;
               const alerts: string[] = [];
               if (p?.costInMad == null) alerts.push("Coût manquant");
               if (profit != null && profit < 0) alerts.push("Profit négatif");

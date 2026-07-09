@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { formatMAD, formatDate } from "@/lib/format";
+import RegionBadge from "@/components/RegionBadge";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
 import { isDelivered, orderStatusLabel, orderStatusShort } from "@/lib/orderStatus";
@@ -1323,7 +1324,12 @@ function ItemsCard({ order }: { order: AdminOrderDTO }) {
               }}
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text }}>{item.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13.5, fontWeight: 500, color: C.text }}>{item.name}</span>
+                {item.variantRegion ? (
+                  <RegionBadge code={item.variantRegion} variant="chip" size="micro" />
+                ) : null}
+              </div>
               <div style={{ fontSize: 11.5, color: C.faint, fontFamily: MONO }}>
                 {item.productId} × {item.quantity}
               </div>

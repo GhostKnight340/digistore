@@ -143,6 +143,7 @@ function buildCustomerDTO(
       name: orderItemName(item),
       quantity: item.quantity,
       unitPriceMad: item.unitPriceMad,
+      variantRegion: item.variant?.region || item.product.region || "",
       variantStockControl: item.variant?.stockControl,
       variantReloadlyProductId: item.variant?.reloadlyProductId ?? null,
       variantReloadlyCountryCode: item.variant?.reloadlyCountryCode ?? null,
@@ -197,13 +198,14 @@ function loadOrder(id: string) {
           variantId: true,
           quantity: true,
           unitPriceMad: true,
-          product: { select: { slug: true, name: true } },
+          product: { select: { slug: true, name: true, region: true } },
           variant: {
             select: {
               id: true,
               name: true,
               faceValue: true,
               faceCurrency: true,
+              region: true,
               stockControl: true,
               reloadlyProductId: true,
               reloadlyCountryCode: true,

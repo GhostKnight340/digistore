@@ -366,6 +366,7 @@ export async function getReloadlyImportDetail(
         .additionalRequirements?.userIdRequired,
     ),
     costSyncedAt: cost?.syncedAt ? cost.syncedAt.toISOString() : null,
+    costStaleDays: settings.costStaleDays,
     suggestedRegionCode: reloadlyCountryToRegion(product.country?.isoName),
     suggestedCategoryId,
     suggestedSlug: slugify(product.productName),
@@ -703,6 +704,10 @@ async function importGroup(
           priceMad,
           faceValue: v.faceValue,
           faceCurrency: v.faceCurrency,
+          // Per-variant region from the Reloadly country, so a parent grouping
+          // several regional sources renders a region selector on the storefront.
+          // Null when it collapses to the parent's own region (single-region import).
+          region: isReloadly ? reloadlyCountryToRegion(source.reloadlyCountryCode) || null : null,
           stockControl: isReloadly ? "reloadly" : "manual",
           stockMode: "automatic",
           reloadlyProductId: isReloadly ? source.reloadlyProductId : null,

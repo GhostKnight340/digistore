@@ -24,6 +24,8 @@ export type PricingSettings = {
   defaultMarginPct: number;
   roundingIncrement: RoundingIncrement;
   roundingMode: RoundingMode;
+  /** A synced provider cost is flagged "obsolète" once older than this many days. */
+  costStaleDays: number;
 };
 
 /** Where the applied margin came from — surfaced in the admin breakdown. */

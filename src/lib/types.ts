@@ -58,6 +58,8 @@ export interface ProductVariantOption {
   price: number;
   faceValue: number | null;
   faceCurrency: string;
+  /** Resolved region (variant.region ?? parent product region). */
+  region: string;
   active: boolean;
   featured: boolean;
   stockMode: StockMode;

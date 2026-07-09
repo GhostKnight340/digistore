@@ -93,6 +93,8 @@ function toVariantOption(
     price: variant.priceMad,
     faceValue: variant.faceValue,
     faceCurrency: variant.faceCurrency,
+    // Per-variant region falls back to the parent product's region.
+    region: variant.region || row.region,
     active: variant.active,
     featured: variant.featured,
     stockMode: normalizeStockMode(variant.stockMode),
@@ -115,7 +117,8 @@ function toVariantProduct(
     name: title,
     category: row.category,
     categoryName: row.categoryRecord?.name ?? row.category,
-    region: row.region,
+    // Cart/order rows resolve to the variant's region (falls back to parent).
+    region: variant.region || row.region,
     price: variant.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,
