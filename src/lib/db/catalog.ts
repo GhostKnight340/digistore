@@ -12,7 +12,14 @@ import {
 
 /** Subset of settings the stock helpers need. */
 type StockOpts = Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">;
-import type { Category, Product, ProductVariantOption, StockMode, StockStatus } from "@/lib/types";
+import type {
+  Category,
+  Product,
+  ProductSearchResult,
+  ProductVariantOption,
+  StockMode,
+  StockStatus,
+} from "@/lib/types";
 
 type ProductWithCategory = Awaited<ReturnType<typeof getActiveProductRows>>[number];
 
@@ -315,6 +322,60 @@ export async function getCatalogPage(options: {
     page,
     pageSize,
   };
+}
+
+/**
+ * Header autocomplete search. Reuses the catalogue visibility rules
+ * (`getActiveProductRows` + `isVariantPublic`) so it can never surface a hidden,
+ * inactive, or empty product, then collapses each parent to a single compact
+ * row with an "à partir de" starting price. Deliberately parent-level (not the
+ * per-variant flattening the catalogue grid uses) so variants of one product
+ * don't produce duplicate dropdown rows.
+ */
+export async function searchProductsPreview(
+  rawQuery: string,
+  limit = 6,
+): Promise<{ results: ProductSearchResult[]; hasMore: boolean }> {
+  const query = rawQuery.trim();
+  if (query.length < 2) return { results: [], hasMore: false };
+
+  await ensureDatabaseReady();
+  const settings = await getStoreSettings();
+  // Fetch a little wider than `limit`: some rows drop out once inventory/active
+  // visibility is applied, and the surplus tells us whether to offer "voir tous
+  // les résultats".
+  const rows = await getActiveProductRows({ query, take: 25 });
+
+  const matches: ProductSearchResult[] = [];
+  for (const row of rows) {
+    const publicVariants = row.variants.filter((variant) =>
+      isVariantPublic(row, variant, settings),
+    );
+    if (publicVariants.length === 0) continue;
+    const startingPrice = publicVariants.reduce(
+      (min, variant) => (variant.priceMad < min ? variant.priceMad : min),
+      publicVariants[0].priceMad,
+    );
+    const rawImage = row.imageUrl ?? row.media[0]?.url ?? null;
+    matches.push({
+      id: row.slug,
+      href: `/products/${row.slug}`,
+      name: row.name,
+      category: row.category,
+      categoryName: row.categoryRecord?.name ?? row.category,
+      region: row.region,
+      price: startingPrice,
+      // Heavy base64 `data:` URIs are served via a cacheable image endpoint so
+      // they don't bloat this JSON on every keystroke; light URLs pass through.
+      imageUrl: rawImage
+        ? rawImage.startsWith("data:")
+          ? `/api/product-image/${encodeURIComponent(row.slug)}`
+          : rawImage
+        : null,
+    });
+  }
+
+  return { results: matches.slice(0, limit), hasMore: matches.length > limit };
 }
 
 export async function getProductCatalog(): Promise<Product[]> {

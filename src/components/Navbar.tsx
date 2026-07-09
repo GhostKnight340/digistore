@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { logoutCustomerAction } from "@/app/actions/auth";
 import { useStore } from "@/context/StoreContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
+import HeaderSearch from "./HeaderSearch";
 
 const links = [
   { href: "/products", label: "Catalogue" },
@@ -54,32 +55,7 @@ export default function Navbar({
         </Link>
 
         {/* Search */}
-        <form
-          action="/products"
-          className="relative hidden h-10 max-w-[440px] flex-1 items-center md:flex"
-          role="search"
-        >
-          <input
-            name="q"
-            placeholder={"Rechercher un produit num\u00e9rique..."}
-            className="h-full w-full rounded-[10px] border border-border bg-surface px-10 pr-14 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
-            aria-label="Rechercher des produits"
-          />
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
-            aria-hidden
-          >
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.6" y2="16.6" />
-          </svg>
-          <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-border px-1.5 py-0.5 font-mono text-[11px] text-faint lg:block">
-            Ctrl K
-          </span>
-        </form>
+        <HeaderSearch variant="desktop" />
 
         {/* Links */}
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
@@ -185,35 +161,11 @@ export default function Navbar({
           </button>
         </div>
 
-        <div
-          className={`w-full overflow-hidden transition-all duration-200 ease-out md:hidden ${
-            searchOpen ? "max-h-14 opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <form
-            action="/products"
-            className="relative flex h-11 w-full items-center pt-1"
-            role="search"
-          >
-            <input
-              name="q"
-              placeholder="Rechercher..."
-              className="h-10 w-full rounded-[10px] border border-border bg-surface px-10 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
-              aria-label="Rechercher des produits"
-            />
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className="pointer-events-none absolute left-3.5 top-[calc(50%+2px)] h-4 w-4 -translate-y-1/2 text-faint"
-              aria-hidden
-            >
-              <circle cx="11" cy="11" r="7" />
-              <line x1="21" y1="21" x2="16.6" y2="16.6" />
-            </svg>
-          </form>
-        </div>
+        {searchOpen && (
+          <div className="w-full pt-1 md:hidden">
+            <HeaderSearch variant="mobile" autoFocus />
+          </div>
+        )}
 
         {menuOpen && (
           <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-card md:hidden">

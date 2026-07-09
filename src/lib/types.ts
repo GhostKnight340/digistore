@@ -37,6 +37,20 @@ export interface Product {
   selectedVariantId?: string;
 }
 
+/** Compact parent-product row returned by the header autocomplete search. */
+export interface ProductSearchResult {
+  /** Parent product slug — also the product-page path segment. */
+  id: string;
+  href: string;
+  name: string;
+  category: string;
+  categoryName: string;
+  region: string;
+  /** Lowest price (in MAD) across the product's public variants. */
+  price: number;
+  imageUrl?: string | null;
+}
+
 export interface ProductVariantOption {
   id: string;
   name: string;
