@@ -34,7 +34,12 @@ export default function CheckoutClient({
   initialCustomer = null,
 }: {
   initialConfig?: PaymentConfigDTO | null;
-  initialCustomer?: { name: string; email: string; phone?: string | null } | null;
+  initialCustomer?: {
+    name: string;
+    email: string;
+    phone?: string | null;
+    emailVerified?: boolean;
+  } | null;
 }) {
   const { cart, ready, cartTotal, clearCart } = useStore();
   const { getProduct } = useProductCatalog();
@@ -47,6 +52,9 @@ export default function CheckoutClient({
   const methods = useMemo(() => announcedPaymentMethods(config?.methods ?? []), [config]);
 
   const isLoggedIn = Boolean(initialCustomer);
+  // Only a real, email-verified account earns the "Compte vérifié" badge —
+  // never merely being logged in. Ghost.ma has no phone verification.
+  const accountVerified = Boolean(initialCustomer?.emailVerified);
   const [email, setEmail] = useState(initialCustomer?.email ?? "");
   const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
   const [phoneLocal, setPhoneLocal] = useState(() => stripCountryPrefix(initialCustomer?.phone ?? ""));
@@ -203,7 +211,7 @@ export default function CheckoutClient({
           <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
             <div className="flex items-center gap-[11px] border-b border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
               <h2 className="text-base font-semibold text-white">Vos informations</h2>
-              {isLoggedIn && (
+              {accountVerified && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-[#5BC98C]/25 bg-[#5BC98C]/10 px-2.5 py-1 text-[11.5px] font-medium text-[#5BC98C]">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="h-[11px] w-[11px]" aria-hidden>
                     <path d="M20 6 9 17l-5-5" />
