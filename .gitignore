@@ -19,3 +19,6 @@ prisma/dev.db-journal
 *.db-wal
 *.db-shm
 .env*
+
+# ...but keep committed example env files (no real secrets)
+!.env.discord-worker.example

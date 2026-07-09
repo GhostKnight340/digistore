@@ -17,7 +17,9 @@
  *   DISCORD_DM_WORKER_SECRET - shared HMAC secret (must match the web app)
  *   INTERNAL_API_BASE_URL    - e.g. https://ghost.ma  (no trailing slash)
  *
- * Run: npm run discord:dm-worker
+ * Run: npm run discord:dm-worker   (or, on a host, npm run start:worker)
+ *
+ * Deployment guide (Cybrancee Node.js app hosting): docs/cybrancee-discord-worker.md
  */
 import "dotenv/config";
 import { createHmac } from "node:crypto";
@@ -111,6 +113,9 @@ async function handleMessage(message: Message) {
     discordAvatar: message.author.avatar ?? null,
   });
 
+  // Coarse, code-free result line so host logs show the flow is working.
+  console.log(`[dm-worker] activation attempt → ${status}`);
+
   try {
     await message.reply(REPLIES[status]);
   } catch (error) {
@@ -125,7 +130,8 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, (ready) => {
-  console.log(`[dm-worker] Logged in as ${ready.user.tag}. Listening for DMs.`);
+  console.log(`[dm-worker] Discord login success — logged in as ${ready.user.tag}`);
+  console.log(`[dm-worker] Ready to receive DMs. Send a "GHOST-XXXXXX" code to the bot to test.`);
 });
 
 client.on(Events.MessageCreate, (message) => {
@@ -136,4 +142,39 @@ client.on(Events.Error, (error) => {
   console.error("[dm-worker] client error:", error.message);
 });
 
-void client.login(BOT_TOKEN);
+// --- Graceful shutdown -------------------------------------------------------
+// Cybrancee (and any process manager) sends SIGTERM/SIGINT to stop the app.
+// Destroy the Gateway connection cleanly so the bot goes offline promptly and
+// we don't leave a half-open WebSocket behind.
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[dm-worker] received ${signal} — shutting down…`);
+  try {
+    await client.destroy();
+    console.log("[dm-worker] Discord client destroyed. Goodbye.");
+  } catch (error) {
+    console.error(
+      "[dm-worker] error during shutdown:",
+      error instanceof Error ? error.message : error,
+    );
+  } finally {
+    process.exit(0);
+  }
+}
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+// --- Startup -----------------------------------------------------------------
+console.log("[dm-worker] starting…");
+console.log(`[dm-worker] activation endpoint configured: ${API_BASE_URL}/api/discord/activate`);
+console.log("[dm-worker] connecting to Discord Gateway…");
+void client.login(BOT_TOKEN).catch((error) => {
+  // Most common cause: an invalid/rotated DISCORD_BOT_TOKEN. Never log the token.
+  console.error(
+    "[dm-worker] Discord login FAILED:",
+    error instanceof Error ? error.message : error,
+  );
+  process.exit(1);
+});

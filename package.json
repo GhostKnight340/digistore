@@ -13,6 +13,7 @@
     "db:studio": "prisma studio",
     "discord:setup": "tsx scripts/discord-setup.ts",
     "discord:dm-worker": "tsx scripts/discord-dm-worker.ts",
+    "start:worker": "tsx scripts/discord-dm-worker.ts",
     "reloadly:smoke-test": "tsx --conditions=react-server -r dotenv/config scripts/reloadly-smoke-test.ts",
     "postinstall": "prisma generate"
   },
@@ -22,24 +23,24 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "discord.js": "^14.26.4",
+    "dotenv": "^16.6.1",
     "next": "^15.1.6",
     "prisma": "^6.19.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "resend": "^6.16.0",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "tsx": "^4.22.4"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
-    "dotenv": "^16.6.1",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.9",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }
