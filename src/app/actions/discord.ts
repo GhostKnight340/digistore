@@ -15,6 +15,12 @@ import {
   type AuthActionResult,
 } from "@/lib/auth";
 import { generateActivationCode } from "@/lib/discord/activation";
+import { sendDeliveredOrderDm } from "@/lib/discord/dm";
+
+// Per-order manual-send throttle: min interval between customer-triggered sends,
+// plus an in-flight guard to drop rapid duplicate submissions.
+const MANUAL_SEND_MIN_INTERVAL_MS = 30_000;
+const manualSendState = new Map<string, { lastAt: number; inFlight: boolean }>();
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -211,6 +217,14 @@ export type OrderDiscordContext = {
   owner: boolean;
   /** Current per-order request flag (authoritative for delivery). */
   requested: boolean;
+  /** Persisted DM-activation state (no live Discord probe). */
+  activated: boolean;
+  /** Verified Discord username to show, if any. */
+  discordUsername: string | null;
+  /** Order-level send status: NOT_REQUESTED | PENDING | SENT | FAILED. */
+  deliveryStatus: string;
+  /** Whether this order is actually delivered/fulfilled. */
+  delivered: boolean;
 };
 
 /**
@@ -228,8 +242,10 @@ export async function getOrderDiscordContextAction(
     where: { id: orderId },
     select: {
       customerId: true,
+      status: true,
       discordDeliveryRequested: true,
       discordDeliveryPreferenceSet: true,
+      discordDeliveryStatus: true,
     },
   });
   if (!order) return null;
@@ -244,21 +260,31 @@ export async function getOrderDiscordContextAction(
         : "activated";
 
   let requested = order.discordDeliveryRequested;
+  let deliveryStatus = order.discordDeliveryStatus;
 
   if (state === "activated" && owner && !order.discordDeliveryPreferenceSet) {
     // Seed once from the global default; mark as set so it never re-seeds.
     requested = current!.discordOrderDeliveryEnabled;
+    deliveryStatus = requested ? "PENDING" : "NOT_REQUESTED";
     await prisma.order.update({
       where: { id: orderId },
       data: {
         discordDeliveryRequested: requested,
         discordDeliveryPreferenceSet: true,
-        discordDeliveryStatus: requested ? "PENDING" : "NOT_REQUESTED",
+        discordDeliveryStatus: deliveryStatus,
       },
     });
   }
 
-  return { state, owner, requested };
+  return {
+    state,
+    owner,
+    requested,
+    activated: Boolean(current?.discordDmActivated),
+    discordUsername: current?.discordUsername ?? null,
+    deliveryStatus,
+    delivered: order.status === "delivered",
+  };
 }
 
 /**
@@ -295,6 +321,67 @@ export async function setOrderDiscordDeliveryAction(
     },
   });
   return { ok: true };
+}
+
+/**
+ * Customer-triggered "Envoyer aussi sur Discord" for an already-delivered order
+ * (Flows B/C). The destination is always the stored verified DM user id — never
+ * anything from the client. Enforces ownership + delivered + DM-activation, is
+ * rate-limited, and reuses the existing send/status/audit pipeline. Never
+ * changes fulfillment status.
+ */
+export async function sendOrderToDiscordAction(
+  orderId: string,
+): Promise<AuthActionResult & { status?: string }> {
+  await ensureDatabaseReady();
+  const current = await getCurrentCustomer();
+  if (!current) return { ok: false, error: "Veuillez vous connecter." };
+  if (!current.discordDmActivated || !current.discordDmUserId) {
+    return { ok: false, error: "Activez d’abord les messages Discord." };
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { customerId: true, status: true },
+  });
+  if (!order || order.customerId !== current.id) {
+    return { ok: false, error: "Commande introuvable." };
+  }
+  if (order.status !== "delivered") {
+    return { ok: false, error: "Cette commande n’est pas encore livrée." };
+  }
+
+  // Throttle + drop rapid duplicate submissions.
+  const now = Date.now();
+  const gate = manualSendState.get(orderId);
+  if (gate?.inFlight) {
+    return { ok: false, error: "Envoi en cours, veuillez patienter." };
+  }
+  if (gate && now - gate.lastAt < MANUAL_SEND_MIN_INTERVAL_MS) {
+    return { ok: false, error: "Veuillez patienter avant de renvoyer." };
+  }
+  manualSendState.set(orderId, { lastAt: now, inFlight: true });
+
+  try {
+    const outcome = await sendDeliveredOrderDm(orderId, { trigger: "manual" });
+    manualSendState.set(orderId, { lastAt: Date.now(), inFlight: false });
+    // The payment route key is a path segment/token, not the internal id, so
+    // revalidate the dynamic route; the client also router.refresh()es.
+    revalidatePath("/payment/[id]", "page");
+    if (outcome.ok) {
+      return { ok: true, status: "SENT", message: "Envoyé sur Discord." };
+    }
+    // Order stays delivered; surface a safe, non-technical message.
+    return {
+      ok: false,
+      status: outcome.status,
+      error:
+        "L’envoi Discord n’a pas abouti. Vérifiez que le bot Ghost.ma peut vous écrire, puis réessayez.",
+    };
+  } catch {
+    manualSendState.set(orderId, { lastAt: Date.now(), inFlight: false });
+    return { ok: false, error: "L’envoi Discord n’a pas abouti. Réessayez plus tard." };
+  }
 }
 
 /** Turn off DM delivery and clear the verified DM identity. */

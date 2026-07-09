@@ -4,6 +4,7 @@ import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
 import { buildPlaceholderEmail, getCurrentCustomer, setCustomerSession } from "@/lib/auth";
 import { getDiscordClientId, getDiscordClientSecret } from "@/lib/discord/config";
 import { notifyAccountCreated } from "@/lib/discord/notify";
+import { safeNextPath } from "@/lib/safeRedirect";
 
 const DISCORD_STATE_COOKIE = "ghost_discord_oauth_state";
 
@@ -57,7 +58,10 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const stored = cookieStore.get(DISCORD_STATE_COOKIE)?.value;
   cookieStore.delete(DISCORD_STATE_COOKIE);
-  const [storedState, mode = "login"] = stored?.split(":") ?? [];
+  const [storedState, mode = "login", nextEncoded = ""] = stored?.split(":") ?? [];
+  const nextPath = nextEncoded
+    ? safeNextPath(Buffer.from(nextEncoded, "base64url").toString("utf8"))
+    : null;
 
   if (providerError) return errorRedirect(request.url, "discord_cancelled", mode);
   if (!code || !state) return errorRedirect(request.url, "discord_cancelled", mode);
@@ -138,7 +142,12 @@ export async function GET(request: Request) {
           image: current.image ?? discordAvatar,
         },
       });
-      return NextResponse.redirect(new URL("/account?discord=linked", base));
+      // Return to the originating order/page when a safe next path was carried,
+      // otherwise the account page. `discord=linked` drives the success banner.
+      const dest = nextPath
+        ? `${nextPath}${nextPath.includes("?") ? "&" : "?"}discord=linked`
+        : "/account?discord=linked";
+      return NextResponse.redirect(new URL(dest, base));
     } catch (error) {
       console.error("[auth:discord:link]", error);
       return errorRedirect(request.url, "discord_account_conflict", mode);

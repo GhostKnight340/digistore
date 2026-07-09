@@ -117,14 +117,17 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
         <div className="mt-4">
           <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
             <Avatar url={props.discordAvatar} fallback={connectedName} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-medium text-white">Discord connecté</p>
               <p className="truncate text-sm text-muted">{connectedName}</p>
             </div>
+            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+              Messages privés non activés
+            </span>
           </div>
           <p className="mt-4 text-sm text-muted">
-            Pour recevoir vos commandes en message privé, activez les messages Discord en
-            envoyant un code unique au bot Ghost.ma.
+            Activez les messages Discord pour recevoir vos commandes directement en message
+            privé (envoyez un code unique au bot Ghost.ma).
           </p>
           <button
             type="button"
@@ -142,18 +145,24 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
           <div className="flex items-center gap-3 rounded-xl border border-green-500/25 bg-green-500/[0.06] px-4 py-3">
             <Avatar url={props.discordDmAvatar ?? props.discordAvatar} fallback={dmName} />
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 font-medium text-white">
-                Discord activé
+              <p className="flex flex-wrap items-center gap-2 font-medium text-white">
+                Discord connecté
                 <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold text-green-400">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} className="h-3 w-3" aria-hidden>
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  Vérifié
+                  DM activés
                 </span>
               </p>
-              <p className="truncate text-sm text-muted">{dmName}</p>
+              <p className="truncate text-sm text-muted">
+                {props.discordUsername ? `@${props.discordUsername}` : dmName}
+              </p>
             </div>
           </div>
+
+          <p className="text-sm text-muted">
+            Le bot Ghost.ma peut vous envoyer vos commandes directement en message privé.
+          </p>
 
           <div>
             <Checkbox
@@ -162,7 +171,7 @@ export default function DiscordConnection(props: DiscordConnectionProps) {
               label={<span className="text-text">Recevoir aussi mes commandes par Discord</span>}
             />
             <p className="mt-1 pl-[26px] text-xs text-muted">
-              Préférence par défaut pour vos prochaines commandes éligibles.
+              Cette préférence sera proposée par défaut pour vos prochaines commandes.
             </p>
           </div>
 

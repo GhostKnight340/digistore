@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { getDiscordClientId } from "@/lib/discord/config";
+import { safeNextPath } from "@/lib/safeRedirect";
 
 const DISCORD_STATE_COOKIE = "ghost_discord_oauth_state";
 
@@ -36,10 +37,13 @@ export async function GET(request: Request) {
   const requested = url.searchParams.get("mode");
   const mode: OAuthMode =
     requested === "register" ? "register" : requested === "link" ? "link" : "login";
+  // Optional post-link return path — only a same-origin relative path is kept.
+  const nextPath = safeNextPath(url.searchParams.get("next"));
+  const nextEncoded = nextPath ? Buffer.from(nextPath).toString("base64url") : "";
   const state = randomBytes(24).toString("base64url");
   const base = await siteUrl(request.url);
 
-  (await cookies()).set(DISCORD_STATE_COOKIE, `${state}:${mode}`, {
+  (await cookies()).set(DISCORD_STATE_COOKIE, `${state}:${mode}:${nextEncoded}`, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

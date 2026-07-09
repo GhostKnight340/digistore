@@ -15,6 +15,8 @@ import ProductArt from "@/components/ProductArt";
 import PayPalButton from "@/components/PayPalButton";
 import RegionBadge from "@/components/RegionBadge";
 import OrderDiscordDelivery from "@/components/payment/OrderDiscordDelivery";
+import DeliveredOrderDiscord from "@/components/payment/DeliveredOrderDiscord";
+import { urlHasSensitiveToken } from "@/lib/deliveryFields";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
@@ -610,7 +612,7 @@ function PaymentExperience({
 
             {/* Optional Discord DM delivery (additive; never blocks payment). */}
             {!isCancelled && !isRejected && !isDelivered && (
-              <OrderDiscordDelivery orderId={order.id} />
+              <OrderDiscordDelivery orderId={order.id} orderPathSegment={order.publicOrderPathSegment} />
             )}
 
             {/* Change method */}
@@ -1655,6 +1657,8 @@ function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
         </p>
       </div>
 
+      <DeliveredOrderDiscord orderId={order.id} orderPathSegment={order.publicOrderPathSegment} />
+
       {order.items.map((item) => {
         const product = getProduct(item.productId);
         const delivered = order.deliveredCodes.filter(
@@ -1708,10 +1712,14 @@ function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
 }
 
 /**
- * Renders one delivered unit. Providers like Reloadly deliver structured fields
- * (a code, a PIN, and/or a redemption link) — each is shown as its own labelled,
- * reveal-on-demand field. Plain local/manual deliveries fall back to a single
- * code. Only fields that actually exist are rendered.
+ * Renders one delivered unit by MEANING, not by looping arbitrary fields into
+ * identical secret cards. Providers like Reloadly may return a redemption code,
+ * an optional PIN, a redemption URL, and/or instructions. The code (and PIN,
+ * when present) are secret and masked/reveal-on-demand; the PIN is grouped under
+ * the code rather than shown as a separate delivered code. A normal public
+ * redemption URL is a plain "Ouvrir le lien" (no secret warning) unless it
+ * embeds a sensitive token. Plain local/manual deliveries fall back to a single
+ * code.
  */
 function DeliveredCodeCard({
   delivered,
@@ -1726,18 +1734,60 @@ function DeliveredCodeCard({
   }
   return (
     <div className="space-y-3">
-      {fields.map((field, i) => (
-        <div key={i} className="space-y-3">
-          {field.url && <CopyCode code={field.url} label="Lien d’utilisation" />}
-          {field.code && <CopyCode code={field.code} label="Code" />}
-          {field.pin && <CopyCode code={field.pin} label="PIN" />}
-          {field.instructions && (
-            <p className="rounded-xl border border-white/[0.06] bg-[#0B0C10] px-4 py-3 text-sm leading-relaxed text-[#9A9FAB]">
-              {field.instructions}
-            </p>
-          )}
-        </div>
-      ))}
+      {fields.map((field, i) => {
+        const hasSecret = Boolean(field.code || field.pin);
+        return (
+          <div key={i} className="space-y-2.5">
+            {/* Group the primary code + its PIN as one credential block. */}
+            {hasSecret && (
+              <div className="space-y-2">
+                {field.code && <CopyCode code={field.code} label="Code livré" index={index} />}
+                {field.pin && <CopyCode code={field.pin} label="PIN" />}
+              </div>
+            )}
+            {field.url &&
+              (urlHasSensitiveToken(field.url) ? (
+                <CopyCode code={field.url} label="Lien d’utilisation" />
+              ) : (
+                <DeliveredLink url={field.url} />
+              ))}
+            {field.instructions && (
+              <div className="rounded-xl border border-white/[0.06] bg-[#0B0C10] px-4 py-3">
+                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#646A77]">
+                  Instructions d’utilisation
+                </p>
+                <p className="text-sm leading-relaxed text-[#C4C9D4]">{field.instructions}</p>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A normal public redemption URL: shown in plain text with an "Ouvrir le lien"
+ * button — never masked and never wrapped in the "Code sécurisé" warning used
+ * for real secrets.
+ */
+function DeliveredLink({ url }: { url: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#0B0C10] p-4">
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[#646A77]">
+        Lien d’utilisation
+      </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="min-w-0 break-all font-mono text-[13px] text-[#C4C9D4]">{url}</span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-primary inline-flex h-10 shrink-0 items-center px-4 text-xs"
+        >
+          Ouvrir le lien
+        </a>
+      </div>
     </div>
   );
 }

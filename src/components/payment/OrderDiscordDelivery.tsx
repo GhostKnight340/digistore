@@ -21,10 +21,17 @@ function DiscordGlyph({ className = "h-4 w-4" }: { className?: string }) {
  * different affordance per connection state; only an activated owner sees the
  * actual checkbox. Discord is purely additive and never blocks payment.
  */
-export default function OrderDiscordDelivery({ orderId }: { orderId: string }) {
+export default function OrderDiscordDelivery({
+  orderId,
+  orderPathSegment,
+}: {
+  orderId: string;
+  orderPathSegment: string;
+}) {
   const [state, setState] = useState<OrderDiscordState | null>(null);
   const [owner, setOwner] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -35,6 +42,7 @@ export default function OrderDiscordDelivery({ orderId }: { orderId: string }) {
         setState(ctx.state);
         setOwner(ctx.owner);
         setChecked(ctx.requested);
+        setUsername(ctx.discordUsername);
       })
       .catch(() => {
         /* Discord is optional — silently skip on failure. */
@@ -45,6 +53,8 @@ export default function OrderDiscordDelivery({ orderId }: { orderId: string }) {
   }, [orderId]);
 
   if (!state) return null;
+
+  const connectHref = `/auth/discord?mode=link&next=${encodeURIComponent(`/payment/${orderPathSegment}`)}`;
 
   async function onToggle(next: boolean) {
     setChecked(next);
@@ -57,14 +67,21 @@ export default function OrderDiscordDelivery({ orderId }: { orderId: string }) {
   const shell =
     "rounded-2xl border border-[rgba(88,101,242,0.22)] bg-[rgba(88,101,242,0.06)] px-[18px] py-4";
 
-  // Activated owner: the real preference checkbox.
+  // Activated owner: DM ready + the per-order preference checkbox.
   if (state === "activated" && owner) {
     return (
       <div className={shell}>
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <DiscordGlyph />
-          <h2 className="text-sm font-semibold text-white">Livraison Discord</h2>
+          <h2 className="text-sm font-semibold text-white">Discord prêt</h2>
+          <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-green-400">
+            ✓ DM activés
+          </span>
+          {username && <span className="text-[11.5px] text-[#9FB8FF]">@{username}</span>}
         </div>
+        <p className="mb-3 text-xs leading-relaxed text-[#9A9FAB]">
+          Le bot Ghost.ma peut vous envoyer cette commande directement en message privé.
+        </p>
         <Checkbox
           checked={checked}
           disabled={saving}
@@ -76,8 +93,7 @@ export default function OrderDiscordDelivery({ orderId }: { orderId: string }) {
           }
         />
         <p className="mt-2 pl-[26px] text-xs leading-relaxed text-[#9A9FAB]">
-          Votre code sera également envoyé en message privé sur Discord après validation du
-          paiement et livraison de la commande.
+          Votre code sera également envoyé en message privé après livraison de la commande.
         </p>
       </div>
     );
@@ -89,10 +105,10 @@ export default function OrderDiscordDelivery({ orderId }: { orderId: string }) {
       <div className={shell}>
         <div className="mb-1 flex items-center gap-2">
           <DiscordGlyph />
-          <h2 className="text-sm font-semibold text-white">Recevez votre code sur Discord</h2>
+          <h2 className="text-sm font-semibold text-white">Discord connecté</h2>
         </div>
         <p className="text-xs leading-relaxed text-[#9A9FAB]">
-          Activez les messages Discord pour utiliser cette option.
+          Activez les messages privés pour recevoir votre commande directement sur Discord.
         </p>
         <a href="/account" className="btn-ghost mt-3 inline-flex text-[13px]">
           Activer Discord
@@ -107,12 +123,12 @@ export default function OrderDiscordDelivery({ orderId }: { orderId: string }) {
       <div className={shell}>
         <div className="mb-1 flex items-center gap-2">
           <DiscordGlyph />
-          <h2 className="text-sm font-semibold text-white">Recevez votre code sur Discord</h2>
+          <h2 className="text-sm font-semibold text-white">Recevoir cette commande sur Discord</h2>
         </div>
         <p className="text-xs leading-relaxed text-[#9A9FAB]">
-          Connectez Discord pour activer cette option.
+          Connectez votre compte Discord pour utiliser cette option.
         </p>
-        <a href="/auth/discord?mode=link" className="btn-ghost mt-3 inline-flex text-[13px]">
+        <a href={connectHref} className="btn-ghost mt-3 inline-flex text-[13px]">
           Connecter Discord
         </a>
       </div>
