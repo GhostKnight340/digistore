@@ -122,6 +122,20 @@ export function buildCheckoutMethods(
   return result;
 }
 
+/**
+ * The methods announced to customers before the payment page: the collapsed
+ * checkout list minus card methods still flagged "coming soon" (they are not
+ * offered on the payment page, so they are not advertised earlier either).
+ * Shared by the checkout info list and the cart preview so they never drift.
+ */
+export function announcedPaymentMethods(
+  methods: PaymentMethodDTO[],
+): PaymentMethodDTO[] {
+  return buildCheckoutMethods(methods).filter(
+    (method) => !(method.type === "card" && method.details.comingSoon),
+  );
+}
+
 /** Required-for-active fields per type, from the design's field list. */
 export function validatePaymentMethod(method: {
   type: PaymentMethodType;
