@@ -8,10 +8,15 @@ import {
   getReloadlyImportDetail,
   previewReloadlyDenominations,
   importReloadlyProduct,
+  importReloadlyBatch,
+  listGhostParentOptions,
 } from "@/lib/db/catalog-import";
 import { getCategoryOptions } from "@/lib/db/categories";
 import type {
   AdminCategoryDTO,
+  GhostParentOptionDTO,
+  ImportReloadlyBatchInput,
+  ImportReloadlyBatchResultDTO,
   ImportReloadlyProductInput,
   ImportReloadlyResultDTO,
   ReloadlyDenominationPreviewDTO,
@@ -81,6 +86,26 @@ export async function importReloadlyProductAction(
     revalidatePath("/products");
     revalidatePath(`/products/${result.productSlug}`);
     revalidatePath("/admin");
+  }
+  return result;
+}
+
+/** Existing Ghost parent products, for the "add to existing product" grouping (§5). */
+export async function getGhostParentOptionsAction(): Promise<GhostParentOptionDTO[]> {
+  await requireAdminCustomer();
+  return listGhostParentOptions();
+}
+
+/** Bulk import with grouping, draft/publish, competitor fields (§1–§9). */
+export async function importReloadlyBatchAction(
+  input: ImportReloadlyBatchInput,
+): Promise<ImportReloadlyBatchResultDTO> {
+  await requireAdminCustomer();
+  const result = await importReloadlyBatch(input);
+  if (result.ok) {
+    revalidatePath("/products");
+    revalidatePath("/admin");
+    for (const p of result.products) revalidatePath(`/products/${p.slug}`);
   }
   return result;
 }

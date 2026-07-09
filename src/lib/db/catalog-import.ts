@@ -12,12 +12,19 @@ import {
 } from "@/lib/reloadly/operations";
 import { computeProviderCost } from "@/lib/pricing/cost";
 import { resolveMargin, computeSuggestedPrice } from "@/lib/pricing/suggested-price";
+import { variantIdentityKey, variantSku } from "@/lib/pricing/variant-identity";
 import { getPricingSettings } from "./pricing-settings";
+import { getProductList } from "./products";
 import type { PricingSettings } from "@/lib/pricing/types";
 import { isRegionCode, reloadlyCountryToRegion } from "@/lib/regions";
 import type {
+  GhostParentOptionDTO,
+  ImportGroupInput,
+  ImportReloadlyBatchInput,
+  ImportReloadlyBatchResultDTO,
   ImportReloadlyProductInput,
   ImportReloadlyResultDTO,
+  ImportedProductSummaryDTO,
   ReloadlyDenominationPreviewDTO,
   ReloadlyImportDetailDTO,
   ReloadlyImportMappingStatus,
@@ -39,8 +46,22 @@ function slugify(value: string): string {
     .slice(0, 80);
 }
 
-function variantSku(slug: string, faceValue: number, faceCurrency: string): string {
-  return slugify(`${slug}-${faceValue}-${faceCurrency}`).slice(0, 170);
+/** A temporary Reloadly provider logo, not final Ghost.ma product art (§2). */
+export function isProviderPlaceholderImage(url: string | null | undefined): boolean {
+  return !!url && /cdn\.reloadly\.com/i.test(url);
+}
+
+/** Existing Ghost parent products the importer can group new variants into (§5). */
+export async function listGhostParentOptions(): Promise<GhostParentOptionDTO[]> {
+  const list = await getProductList();
+  return list.map((p) => ({
+    slug: p.slug,
+    name: p.name,
+    category: p.category,
+    region: p.region,
+    active: p.active,
+    variantCount: p.variantCount,
+  }));
 }
 
 // ─── Mapping status ──────────────────────────────────────────────────────────
@@ -421,20 +442,334 @@ export async function previewReloadlyDenominations(input: {
 // ─── Import (create/update) ──────────────────────────────────────────────────
 
 /**
- * Creates or updates a Ghost parent product + selected variants from a Reloadly
- * product. Reloadly-only (never touches manual/local products). Places NO
- * Reloadly order. Deduplicates: an existing (product, faceValue, faceCurrency)
- * variant is skipped ("Déjà ajouté"), an existing slug is reused (variants
- * appended). Also upserts the provider-cost rows so the pricing panel reflects
- * the imported denominations immediately. NEVER auto-publishes beyond the
- * admin-provided published price on each variant.
+ * Pre-pass (NO db transaction): fetch + validate every distinct Reloadly product
+ * referenced by the batch. External HTTP must never run inside an open Postgres
+ * transaction (same rule as fulfillment).
+ */
+async function resolveBatchSources(
+  input: ImportReloadlyBatchInput,
+): Promise<
+  { ok: true; products: Map<number, ReloadlyGiftCardProduct> } | { ok: false; error: string }
+> {
+  const ids = new Set<number>();
+  for (const g of input.groups) for (const s of g.sources) ids.add(s.reloadlyProductId);
+  const products = new Map<number, ReloadlyGiftCardProduct>();
+  for (const id of ids) {
+    try {
+      products.set(id, await getGiftCardProduct(id));
+    } catch (e) {
+      return {
+        ok: false,
+        error: `Produit Reloadly #${id} introuvable : ${e instanceof Error ? e.message : ""}`,
+      };
+    }
+  }
+  return { ok: true, products };
+}
+
+function upsertCostArgs(
+  environment: string,
+  reloadlyProductId: number,
+  faceValue: number,
+  inputs: NonNullable<ReturnType<typeof buildReloadlyCostInputs>>,
+) {
+  const { providerCost } = computeProviderCost(inputs);
+  const common = {
+    productName: inputs.productName,
+    denominationType: inputs.denominationType,
+    recipientCurrency: inputs.recipientCurrency,
+    senderCurrency: inputs.senderCurrency,
+    senderBaseCost: new Prisma.Decimal(inputs.senderBase),
+    discountPercentage: new Prisma.Decimal(inputs.discountPercentage),
+    senderFee: new Prisma.Decimal(inputs.senderFee),
+    senderFeePercentage: new Prisma.Decimal(inputs.senderFeePercentage),
+    recipientToSenderExchangeRate:
+      inputs.recipientToSenderExchangeRate != null
+        ? new Prisma.Decimal(inputs.recipientToSenderExchangeRate)
+        : null,
+    computedProviderCost: providerCost,
+  };
+  return {
+    where: {
+      environment_reloadlyProductId_recipientFaceValue: {
+        environment,
+        reloadlyProductId,
+        recipientFaceValue: new Prisma.Decimal(faceValue),
+      },
+    },
+    update: { ...common, syncedAt: new Date() },
+    create: {
+      environment,
+      reloadlyProductId,
+      recipientFaceValue: new Prisma.Decimal(faceValue),
+      ...common,
+    },
+  };
+}
+
+/**
+ * Bulk importer. Creates/updates one or more Ghost parent products and their
+ * variants from selected Reloadly products, with:
+ *  - draft vs publish for NEW parents (draft ⇒ product.active=false);
+ *  - existing parents: their active state is PRESERVED, new variants added
+ *    inactive unless activateNewVariants; existing variants/media/content kept;
+ *  - grouping: multiple regional Reloadly sources → one parent (§5);
+ *  - identity-based dedup (variantIdentityKey) so regional variants coexist but
+ *    a repeated Reloadly mapping is skipped (§6);
+ *  - admin-only competitor reference price stored, never affecting pricing (§7).
+ * Places NO Reloadly order. Never touches manual/local products.
+ */
+export async function importReloadlyBatch(
+  input: ImportReloadlyBatchInput,
+): Promise<ImportReloadlyBatchResultDTO> {
+  await ensureDatabaseReady();
+  const empty: ImportReloadlyBatchResultDTO = {
+    ok: false,
+    error: null,
+    productsCreated: 0,
+    productsUpdated: 0,
+    variantsCreated: 0,
+    variantsSkipped: 0,
+    draftProducts: 0,
+    publishedProducts: 0,
+    variantsNeedingMedia: 0,
+    products: [],
+  };
+  const fail = (error: string): ImportReloadlyBatchResultDTO => ({ ...empty, error });
+
+  if (!isReloadlyConfigured()) return fail("Reloadly non configuré.");
+  if (input.groups.length === 0) return fail("Aucun produit à importer.");
+
+  const environment = getReloadlyEnvironment();
+  const resolved = await resolveBatchSources(input);
+  if (!resolved.ok) return fail(resolved.error);
+  const products = resolved.products;
+
+  try {
+    const summaries = await prisma.$transaction(async (tx) => {
+      const out: ImportedProductSummaryDTO[] = [];
+      for (const group of input.groups) {
+        out.push(await importGroup(tx, group, input.status, environment, products));
+      }
+      return out;
+    });
+
+    const productsCreated = summaries.filter((s) => s.createdProduct).length;
+    return {
+      ok: true,
+      error: null,
+      productsCreated,
+      productsUpdated: summaries.length - productsCreated,
+      variantsCreated: summaries.reduce((n, s) => n + s.createdVariants, 0),
+      variantsSkipped: summaries.reduce((n, s) => n + s.skippedVariants, 0),
+      draftProducts: summaries.filter((s) => s.isDraft).length,
+      publishedProducts: summaries.filter((s) => s.createdProduct && !s.isDraft).length,
+      variantsNeedingMedia: summaries.filter((s) => s.needsMediaReview).length,
+      products: summaries,
+    };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return fail("Un produit ou SKU en conflit existe déjà.");
+    }
+    return fail(error instanceof Error ? error.message : "Import impossible.");
+  }
+}
+
+async function importGroup(
+  tx: Prisma.TransactionClient,
+  group: ImportGroupInput,
+  status: ImportReloadlyBatchInput["status"],
+  environment: string,
+  products: Map<number, ReloadlyGiftCardProduct>,
+): Promise<ImportedProductSummaryDTO> {
+  // Resolve / create the parent product.
+  let productRow: { id: string; slug: string; name: string; active: boolean };
+  let createdProduct = false;
+  let isDraft = false;
+
+  if (group.target.mode === "existing") {
+    const existing = await tx.product.findUnique({
+      where: { slug: group.target.slug },
+      select: { id: true, slug: true, name: true, active: true },
+    });
+    if (!existing) throw new Error(`Produit Ghost.ma introuvable : ${group.target.slug}.`);
+    productRow = existing; // active state PRESERVED — never toggled here
+  } else {
+    const t = group.target;
+    const slug = slugify(t.slug);
+    if (!slug) throw new Error("Slug invalide.");
+    if (!t.name.trim()) throw new Error("Nom de produit obligatoire.");
+    const existing = await tx.product.findUnique({
+      where: { slug },
+      select: { id: true, slug: true, name: true, active: true },
+    });
+    if (existing) {
+      productRow = existing; // idempotent re-import — preserve state
+    } else {
+      const category = await ensureCategoryForProduct(t.categoryId || "gaming");
+      if (!category.ok || !category.id) throw new Error(category.error ?? "Catégorie introuvable.");
+      const active = status === "publish";
+      isDraft = !active;
+      const created = await tx.product.create({
+        data: {
+          name: t.name.trim(),
+          slug,
+          category: category.id,
+          brand: t.brand.trim() || null,
+          description: t.description,
+          instructions: t.instructions || null,
+          priceMad: 0,
+          region: isRegionCode(t.regionCode) ? t.regionCode : "",
+          deliveryType: DEFAULT_DELIVERY_TYPE,
+          imageUrl: t.imageUrl || null,
+          active,
+          featured: t.featured,
+        },
+        select: { id: true, slug: true, name: true, active: true },
+      });
+      productRow = created;
+      createdProduct = true;
+    }
+  }
+
+  // Existing variants → identity dedup.
+  const existingVariants = await tx.productVariant.findMany({
+    where: { productId: productRow.id },
+    select: {
+      faceValue: true,
+      faceCurrency: true,
+      reloadlyProductId: true,
+      reloadlyCountryCode: true,
+      sortOrder: true,
+    },
+  });
+  const existingKeys = new Set(
+    existingVariants
+      .filter((v) => v.faceValue != null)
+      .map((v) =>
+        variantIdentityKey({
+          faceValue: v.faceValue!,
+          faceCurrency: v.faceCurrency,
+          reloadlyProductId: v.reloadlyProductId,
+          reloadlyCountryCode: v.reloadlyCountryCode,
+        }),
+      ),
+  );
+  let nextSort = existingVariants.reduce((m, v) => Math.max(m, v.sortOrder), -1) + 1;
+
+  // New variants on an EXISTING parent are inactive unless explicitly activated;
+  // on a NEW parent they follow the parent (visible once the parent publishes).
+  const variantActive = group.target.mode === "existing" ? group.activateNewVariants : true;
+
+  let createdVariants = 0;
+  const skippedFaceValues: number[] = [];
+  const publishedPrices: number[] = [];
+
+  for (const source of group.sources) {
+    const product = products.get(source.reloadlyProductId);
+    if (!product) throw new Error(`Produit Reloadly #${source.reloadlyProductId} non résolu.`);
+
+    for (const v of source.variants) {
+      const isReloadly = v.stockControl === "reloadly";
+      const identity = variantIdentityKey({
+        faceValue: v.faceValue,
+        faceCurrency: v.faceCurrency,
+        reloadlyProductId: isReloadly ? source.reloadlyProductId : null,
+        reloadlyCountryCode: isReloadly ? source.reloadlyCountryCode : null,
+      });
+      if (existingKeys.has(identity)) {
+        skippedFaceValues.push(v.faceValue);
+        continue;
+      }
+
+      const inputs = isReloadly ? buildReloadlyCostInputs(product, v.faceValue) : null;
+      if (isReloadly && !inputs) {
+        skippedFaceValues.push(v.faceValue); // not a real offered denomination
+        continue;
+      }
+
+      const sku = variantSku(productRow.slug, {
+        faceValue: v.faceValue,
+        faceCurrency: v.faceCurrency,
+        reloadlyCountryCode: isReloadly ? source.reloadlyCountryCode : null,
+      });
+      const priceMad = Math.max(0, Math.round(v.publishedPriceMad));
+
+      await tx.productVariant.create({
+        data: {
+          id: sku,
+          productId: productRow.id,
+          name: `${v.faceValue} ${v.faceCurrency}`,
+          priceMad,
+          faceValue: v.faceValue,
+          faceCurrency: v.faceCurrency,
+          stockControl: isReloadly ? "reloadly" : "manual",
+          stockMode: "automatic",
+          reloadlyProductId: isReloadly ? source.reloadlyProductId : null,
+          reloadlyCountryCode: isReloadly ? source.reloadlyCountryCode : null,
+          marginPctOverride:
+            v.marginPctOverride != null ? new Prisma.Decimal(v.marginPctOverride) : null,
+          fixedSuggestedPriceMad: v.fixedSuggestedPriceMad ?? null,
+          competitorReferencePriceMad: v.competitorReferencePriceMad ?? null,
+          competitorReferenceSource: v.competitorReferenceSource?.trim() || null,
+          active: variantActive,
+          featured: false,
+          sortOrder: nextSort++,
+        },
+      });
+      existingKeys.add(identity);
+      createdVariants += 1;
+      publishedPrices.push(priceMad);
+
+      if (isReloadly && inputs) {
+        await tx.reloadlyProviderCost.upsert(
+          upsertCostArgs(environment, source.reloadlyProductId, v.faceValue, inputs),
+        );
+      }
+    }
+  }
+
+  // Refresh a NEWLY-created parent's display priceMad to its cheapest variant.
+  if (publishedPrices.length > 0 && createdProduct) {
+    await tx.product.update({
+      where: { id: productRow.id },
+      data: { priceMad: Math.min(...publishedPrices) },
+    });
+  }
+
+  // Media readiness (§2): final Ghost media = a ProductMedia row, or an imageUrl
+  // that is NOT a temporary Reloadly provider logo.
+  const productWithMedia = await tx.product.findUnique({
+    where: { id: productRow.id },
+    select: { imageUrl: true, _count: { select: { media: true } } },
+  });
+  const usingProviderPlaceholder = isProviderPlaceholderImage(productWithMedia?.imageUrl);
+  const hasFinalMedia =
+    (productWithMedia?._count.media ?? 0) > 0 ||
+    (!!productWithMedia?.imageUrl && !usingProviderPlaceholder);
+
+  return {
+    slug: productRow.slug,
+    name: productRow.name,
+    createdProduct,
+    active: group.target.mode === "existing" ? productRow.active : status === "publish",
+    isDraft: createdProduct && isDraft,
+    createdVariants,
+    skippedVariants: skippedFaceValues.length,
+    skippedFaceValues,
+    needsMediaReview: !hasFinalMedia,
+    usingProviderPlaceholder,
+  };
+}
+
+/**
+ * Back-compat single-product import. Delegates to the batch importer as one
+ * "new" group with one source. Kept so existing callers/tests keep working.
  */
 export async function importReloadlyProduct(
   input: ImportReloadlyProductInput,
 ): Promise<ImportReloadlyResultDTO> {
-  await ensureDatabaseReady();
-
-  const fail = (error: string): ImportReloadlyResultDTO => ({
+  const failLegacy = (error: string): ImportReloadlyResultDTO => ({
     ok: false,
     productSlug: null,
     productName: null,
@@ -444,187 +779,56 @@ export async function importReloadlyProduct(
     skippedFaceValues: [],
     error,
   });
+  if (!input.name.trim() || !input.slug.trim()) return failLegacy("Nom et slug obligatoires.");
+  if (input.variants.length === 0) return failLegacy("Sélectionnez au moins une dénomination.");
 
-  if (!isReloadlyConfigured()) return fail("Reloadly non configuré.");
-  if (!input.name.trim() || !input.slug.trim()) return fail("Nom et slug obligatoires.");
-  if (input.variants.length === 0) return fail("Sélectionnez au moins une dénomination.");
-
-  const environment = getReloadlyEnvironment();
-
-  // Re-fetch the product server-side — the client is never trusted for cost or
-  // denomination validity.
-  let product: ReloadlyGiftCardProduct;
-  try {
-    product = await getGiftCardProduct(input.reloadlyProductId);
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : "Produit Reloadly introuvable.");
-  }
-
-  const category = await ensureCategoryForProduct(input.categoryId || product.category?.name || "gaming");
-  if (!category.ok || !category.id) return fail(category.error ?? "Catégorie introuvable.");
-
-  const regionCode = isRegionCode(input.regionCode) ? input.regionCode : "";
-  const slug = slugify(input.slug);
-  if (!slug) return fail("Slug invalide.");
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      // Parent product: reuse by slug, else create.
-      let productRow = await tx.product.findUnique({
-        where: { slug },
-        select: { id: true, slug: true, name: true },
-      });
-      let createdProduct = false;
-
-      if (!productRow) {
-        const created = await tx.product.create({
-          data: {
-            name: input.name.trim(),
-            slug,
-            category: category.id,
-            brand: input.brand.trim() || product.brand?.brandName || null,
-            description: input.description,
-            instructions: input.instructions || product.redeemInstruction?.verbose || null,
-            priceMad: 0, // real prices live on variants; refreshed below
-            region: regionCode,
-            deliveryType: DEFAULT_DELIVERY_TYPE,
-            imageUrl: input.imageUrl || null,
-            active: input.active,
-            featured: input.featured,
+  const result = await importReloadlyBatch({
+    status: input.active ? "publish" : "draft",
+    groups: [
+      {
+        target: {
+          mode: "new",
+          name: input.name,
+          slug: input.slug,
+          categoryId: input.categoryId,
+          brand: input.brand,
+          description: input.description,
+          instructions: input.instructions,
+          regionCode: input.regionCode,
+          featured: input.featured,
+          imageUrl: input.imageUrl,
+          imageIsProviderPlaceholder: isProviderPlaceholderImage(input.imageUrl),
+        },
+        activateNewVariants: true,
+        sources: [
+          {
+            reloadlyProductId: input.reloadlyProductId,
+            reloadlyCountryCode: input.reloadlyCountryCode,
+            variants: input.variants.map((v) => ({
+              faceValue: v.faceValue,
+              faceCurrency: v.faceCurrency,
+              publishedPriceMad: v.publishedPriceMad,
+              marginPctOverride: v.marginPctOverride,
+              fixedSuggestedPriceMad: v.fixedSuggestedPriceMad,
+              stockControl: v.stockControl,
+            })),
           },
-          select: { id: true, slug: true, name: true },
-        });
-        productRow = created;
-        createdProduct = true;
-      }
+        ],
+      },
+    ],
+  });
 
-      // Existing variants on this product → dedupe by (faceValue, faceCurrency).
-      const existingVariants = await tx.productVariant.findMany({
-        where: { productId: productRow.id },
-        select: { id: true, faceValue: true, faceCurrency: true, sortOrder: true },
-      });
-      const existingKeys = new Set(
-        existingVariants.map((v) => `${v.faceValue}:${v.faceCurrency.toUpperCase()}`),
-      );
-      let nextSort = existingVariants.reduce((m, v) => Math.max(m, v.sortOrder), -1) + 1;
-
-      let createdVariants = 0;
-      const skippedFaceValues: number[] = [];
-      const publishedPrices: number[] = [];
-
-      for (const v of input.variants) {
-        const key = `${v.faceValue}:${v.faceCurrency.toUpperCase()}`;
-        if (existingKeys.has(key)) {
-          skippedFaceValues.push(v.faceValue);
-          continue;
-        }
-
-        // Validate the denomination is real (server-side, not client-trusted).
-        const inputs = buildReloadlyCostInputs(product, v.faceValue);
-        const isReloadly = v.stockControl === "reloadly";
-        if (isReloadly && !inputs) {
-          skippedFaceValues.push(v.faceValue);
-          continue;
-        }
-
-        const sku = variantSku(slug, v.faceValue, v.faceCurrency);
-        await tx.productVariant.create({
-          data: {
-            id: sku,
-            productId: productRow.id,
-            name: `${v.faceValue} ${v.faceCurrency}`,
-            priceMad: Math.max(0, Math.round(v.publishedPriceMad)),
-            faceValue: v.faceValue,
-            faceCurrency: v.faceCurrency,
-            stockControl: isReloadly ? "reloadly" : "manual",
-            stockMode: "automatic",
-            reloadlyProductId: isReloadly ? input.reloadlyProductId : null,
-            reloadlyCountryCode: isReloadly ? input.reloadlyCountryCode : null,
-            marginPctOverride:
-              v.marginPctOverride != null ? new Prisma.Decimal(v.marginPctOverride) : null,
-            fixedSuggestedPriceMad: v.fixedSuggestedPriceMad ?? null,
-            active: v.active,
-            featured: false,
-            sortOrder: nextSort++,
-          },
-        });
-        existingKeys.add(key);
-        createdVariants += 1;
-        publishedPrices.push(Math.max(0, Math.round(v.publishedPriceMad)));
-
-        // Upsert the provider-cost row so the pricing panel reflects it now.
-        if (isReloadly && inputs) {
-          const { providerCost } = computeProviderCost(inputs);
-          await tx.reloadlyProviderCost.upsert({
-            where: {
-              environment_reloadlyProductId_recipientFaceValue: {
-                environment,
-                reloadlyProductId: input.reloadlyProductId,
-                recipientFaceValue: new Prisma.Decimal(v.faceValue),
-              },
-            },
-            update: {
-              productName: inputs.productName,
-              denominationType: inputs.denominationType,
-              recipientCurrency: inputs.recipientCurrency,
-              senderCurrency: inputs.senderCurrency,
-              senderBaseCost: new Prisma.Decimal(inputs.senderBase),
-              discountPercentage: new Prisma.Decimal(inputs.discountPercentage),
-              senderFee: new Prisma.Decimal(inputs.senderFee),
-              senderFeePercentage: new Prisma.Decimal(inputs.senderFeePercentage),
-              recipientToSenderExchangeRate:
-                inputs.recipientToSenderExchangeRate != null
-                  ? new Prisma.Decimal(inputs.recipientToSenderExchangeRate)
-                  : null,
-              computedProviderCost: providerCost,
-              syncedAt: new Date(),
-            },
-            create: {
-              environment,
-              reloadlyProductId: input.reloadlyProductId,
-              productName: inputs.productName,
-              denominationType: inputs.denominationType,
-              recipientFaceValue: new Prisma.Decimal(v.faceValue),
-              recipientCurrency: inputs.recipientCurrency,
-              senderCurrency: inputs.senderCurrency,
-              senderBaseCost: new Prisma.Decimal(inputs.senderBase),
-              discountPercentage: new Prisma.Decimal(inputs.discountPercentage),
-              senderFee: new Prisma.Decimal(inputs.senderFee),
-              senderFeePercentage: new Prisma.Decimal(inputs.senderFeePercentage),
-              recipientToSenderExchangeRate:
-                inputs.recipientToSenderExchangeRate != null
-                  ? new Prisma.Decimal(inputs.recipientToSenderExchangeRate)
-                  : null,
-              computedProviderCost: providerCost,
-            },
-          });
-        }
-      }
-
-      // Keep the parent's display priceMad in sync with the cheapest new
-      // variant (only when we actually created variants).
-      if (publishedPrices.length > 0) {
-        await tx.product.update({
-          where: { id: productRow.id },
-          data: { priceMad: Math.min(...publishedPrices) },
-        });
-      }
-
-      return {
-        productSlug: productRow.slug,
-        productName: productRow.name,
-        createdProduct,
-        createdVariants,
-        skippedVariants: skippedFaceValues.length,
-        skippedFaceValues,
-      };
-    });
-
-    return { ok: true, error: null, ...result };
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return fail("Un produit ou SKU en conflit existe déjà.");
-    }
-    return fail(error instanceof Error ? error.message : "Import impossible.");
-  }
+  if (!result.ok) return failLegacy(result.error ?? "Import impossible.");
+  const p = result.products[0];
+  return {
+    ok: true,
+    error: null,
+    productSlug: p?.slug ?? null,
+    productName: p?.name ?? null,
+    createdProduct: p?.createdProduct ?? false,
+    createdVariants: p?.createdVariants ?? 0,
+    skippedVariants: p?.skippedVariants ?? 0,
+    skippedFaceValues: p?.skippedFaceValues ?? [],
+  };
 }
+

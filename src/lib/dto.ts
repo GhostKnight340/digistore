@@ -832,3 +832,92 @@ export interface ImportReloadlyResultDTO {
   skippedFaceValues: number[];
   error: string | null;
 }
+
+// ─── Bulk import / grouping / draft workflow ─────────────────────────────────
+
+export type ImportStatus = "draft" | "publish";
+export type ImportParentMode = "new" | "existing";
+
+/** A Ghost parent product an import can be grouped into (§5). */
+export interface GhostParentOptionDTO {
+  slug: string;
+  name: string;
+  category: string;
+  region: string;
+  active: boolean;
+  variantCount: number;
+}
+
+export interface ImportVariantConfigInput {
+  faceValue: number;
+  faceCurrency: string;
+  publishedPriceMad: number;
+  marginPctOverride?: number | null;
+  fixedSuggestedPriceMad?: number | null;
+  stockControl: string; // "reloadly" | "manual"
+  /** Admin-only, informational (§7). Never customer-visible / never affects pricing. */
+  competitorReferencePriceMad?: number | null;
+  competitorReferenceSource?: string | null;
+}
+
+/** One Reloadly product contributing variants to a parent group. */
+export interface ImportSourceInput {
+  reloadlyProductId: number;
+  reloadlyCountryCode: string;
+  variants: ImportVariantConfigInput[];
+}
+
+/** A parent product target — new or an existing Ghost product — plus its sources. */
+export interface ImportGroupInput {
+  target:
+    | {
+        mode: "new";
+        name: string;
+        slug: string;
+        categoryId: string;
+        brand: string;
+        description: string;
+        instructions: string;
+        regionCode: string;
+        featured: boolean;
+        imageUrl: string | null;
+        /** True when imageUrl is a temporary Reloadly provider logo (§2). */
+        imageIsProviderPlaceholder: boolean;
+      }
+    | { mode: "existing"; slug: string };
+  /** For an existing parent: activate the newly added variants (default false, §1). */
+  activateNewVariants: boolean;
+  sources: ImportSourceInput[];
+}
+
+export interface ImportReloadlyBatchInput {
+  /** Applies to NEW parents' active state. Existing parents keep their state. */
+  status: ImportStatus;
+  groups: ImportGroupInput[];
+}
+
+export interface ImportedProductSummaryDTO {
+  slug: string;
+  name: string;
+  createdProduct: boolean;
+  active: boolean;
+  isDraft: boolean;
+  createdVariants: number;
+  skippedVariants: number;
+  skippedFaceValues: number[];
+  needsMediaReview: boolean;
+  usingProviderPlaceholder: boolean;
+}
+
+export interface ImportReloadlyBatchResultDTO {
+  ok: boolean;
+  error: string | null;
+  productsCreated: number;
+  productsUpdated: number;
+  variantsCreated: number;
+  variantsSkipped: number;
+  draftProducts: number;
+  publishedProducts: number;
+  variantsNeedingMedia: number;
+  products: ImportedProductSummaryDTO[];
+}

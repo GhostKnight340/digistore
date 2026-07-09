@@ -110,12 +110,17 @@ There are **two independently deployed runtime components**.
   that touch them are effectively dynamic (`src/app/admin/layout.tsx` sets
   `export const dynamic = "force-dynamic"`).
 - **Build/migrations:** `package.json` `build` runs
-  `prisma generate && (prisma migrate deploy || echo …) && next build`. Migration
-  deploy is **best-effort** — a failure is swallowed so the build still ships.
-  Migrations need `DIRECT_URL` (a direct, non-pooled connection). There is **no**
-  runtime DDL; `ensureDatabaseReady()` (`src/lib/db/prisma.ts`) only upserts
-  catalog categories and the default `StoreSetting` row. See
-  `docs/production-env.md` and `docs/payment-methods-migration-runbook.md`.
+  `prisma generate && prisma migrate deploy && next build`. A failed
+  `prisma migrate deploy` **fails the build** (the `&&` chain stops; `next build`
+  never runs) — deliberately, so a schema problem surfaces at deploy time
+  instead of as a runtime 500 (`column does not exist` / P2022). This replaced an
+  earlier best-effort form that swallowed migration failures (`|| echo …`) and
+  shipped against a stale schema. Migrations need **`DIRECT_URL`** (a direct,
+  non-pooled connection) — now **required** for deploys, since a missing one
+  fails the build rather than silently skipping. There is **no** runtime DDL;
+  `ensureDatabaseReady()` (`src/lib/db/prisma.ts`) only upserts catalog categories
+  and the default `StoreSetting` row. See `docs/production-env.md` and
+  `docs/payment-methods-migration-runbook.md`.
 
 ### B. Discord DM worker (external always-on host)
 
@@ -514,19 +519,43 @@ Admin tool to turn Reloadly products into Ghost catalog products/variants.
   (name/country/type/status filters; multi-page scan for name search),
   `getReloadlyImportDetail` (product + per-denomination cost/suggested-price
   preview via the Phase 1 engine), `previewReloadlyDenominations` (RANGE custom
-  + bounds validation), `importReloadlyProduct` (create/update parent + variants).
-  Actions: `src/app/actions/catalog-import.ts`. UI: `src/components/admin/ReloadlyImporter.tsx`.
-- **FIXED** products expose all offered denominations; **RANGE** products let the
-  admin add only chosen denominations, validated against Reloadly min/max.
-- **Dedup:** existing slug is reused (variants appended); an existing
-  `(product, faceValue, faceCurrency)` variant is skipped ("Déjà ajouté").
-  Region is mapped from the Reloadly country (`reloadlyCountryToRegion` in
-  `src/lib/regions.ts`), unknown → "" for the admin to complete.
+  + bounds validation), `importReloadlyBatch` (multi-product/grouping import;
+  `importReloadlyProduct` is a back-compat single wrapper over it),
+  `listGhostParentOptions`. Actions: `src/app/actions/catalog-import.ts`. UI:
+  `src/components/admin/ReloadlyImporter.tsx` (search → prepare → summary).
+- **FIXED** products expose all offered denominations (Tout sélectionner /
+  désélectionner); **RANGE** products let the admin add only chosen
+  denominations, validated against Reloadly min/max.
+- **Draft vs publish:** import status is **Brouillon** (default) or **Publier
+  immédiatement**. Draft creates the product **inactive** (hidden) with prices
+  saved; publish requires an explicit confirmation dialog. Adding variants to an
+  **existing** parent never changes its active state; new variants are added
+  **inactive** unless "activer les nouvelles variantes" is checked.
+- **Grouping (§5):** multiple regional Reloadly products (e.g. Steam FR/US/UK)
+  can be grouped under one Ghost parent ("Créer un nouveau produit" / "Regrouper
+  avec" a selected product / "Ajouter à un produit existant"). Grouping is always
+  an explicit choice — never automatic on brand.
+- **Variant uniqueness identity** (`src/lib/pricing/variant-identity.ts`):
+  `(parent) + faceValue + faceCurrency + reloadlyCountryCode + reloadlyProductId`.
+  Same region+mapping ⇒ duplicate (skipped, "Déjà ajouté"); same face/currency
+  but different region ⇒ distinct (allowed). SKUs include the country so regional
+  variants never collide. Existing slug is reused (variants appended).
+- **Media readiness (§2):** a product's final media = a `ProductMedia` row or an
+  `imageUrl` that is **not** a Reloadly CDN logo (`isProviderPlaceholderImage`).
+  Publishing without final media shows a warning + requires acknowledgement;
+  a temporary provider logo is labelled "Logo fournisseur temporaire".
+- **Competitor reference price (§7):** optional admin-only
+  `ProductVariant.competitorReferencePriceMad` / `competitorReferenceSource`.
+  Informational — never customer-visible, never affects suggested/published
+  pricing. Shown in the pre-import pricing review.
 - Import upserts the matching `ReloadlyProviderCost` rows so the pricing panel
   reflects new variants immediately. Published price defaults to the suggested
-  price but is **admin-editable before import**; nothing auto-publishes beyond
-  that. Places **no** Reloadly order. Manual/local products (e.g. Valorant) are
-  untouched and still created from the normal product editor.
+  price but is **admin-editable before import**; the pricing review flags
+  negative profit / low margin / large deviation / missing cost / stale sync.
+  A post-import summary reports created/updated products, variants created/
+  skipped, drafts, published, and media-review counts. Places **no** Reloadly
+  order. Manual/local products (e.g. Valorant) are untouched. Migration
+  `20260709200000_add_competitor_reference`.
 - **Not yet:** auto-pricing/auto-publish; storefront still reads only
   `ProductVariant.priceMad`.
 
@@ -749,7 +778,7 @@ Values are never committed. Grouped by runtime; exact names from the code.
 | Variable | Purpose | Notes |
 |---|---|---|
 | `DATABASE_URL` | Postgres (Supabase) connection | **Required** (pooled) |
-| `DIRECT_URL` | Direct connection for `prisma migrate deploy` | Recommended; migrations skip if unset |
+| `DIRECT_URL` | Direct (non-pooled) connection for `prisma migrate deploy` | **Required for deploys**; a missing/invalid value now **fails the build** instead of skipping |
 | `AUTH_SECRET` (or `NEXTAUTH_SECRET` / `SESSION_SECRET`) | Session cookie HMAC | **Required in production** (throws otherwise) |
 | `NEXT_PUBLIC_SITE_URL` / `SITE_URL` / `APP_URL` | Absolute URLs in emails/OAuth redirects | Optional (falls back to request host) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth | Optional (gates Google login) |
@@ -799,9 +828,12 @@ Confirmed against the current repo:
   re-purchase earlier items (safe for the current single-supplier-item use case).
 - **File/proof storage is base64-in-Postgres** (no object storage yet); the
   `PaymentProof` model comment marks this as a pending migration.
-- **Build-time `prisma migrate deploy` is best-effort** (failure swallowed) and
-  requires `DIRECT_URL`; multi-migration releases with data steps must follow a
-  runbook instead (`docs/payment-methods-migration-runbook.md`).
+- **Build-time `prisma migrate deploy` now fails the build on error** (no longer
+  swallowed) and **requires `DIRECT_URL`** — a schema problem stops the deploy
+  instead of shipping a stale schema that 500s at runtime. Multi-migration
+  releases with data steps must still follow a runbook instead of the plain
+  automatic deploy (`docs/payment-methods-migration-runbook.md`), because
+  `migrate deploy` applies all pending migrations in one run with nothing between.
 - **Admin runtime DB reads force dynamic rendering** (`force-dynamic`), trading
   ISR/static caching for always-fresh admin/order data.
 - **Discord admin retry action is deferred** (per project memory); admins see

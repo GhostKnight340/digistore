@@ -198,19 +198,43 @@ then **Ajouter au catalogue** creates the Ghost product/variants.
 - Region mapped from Reloadly country (`reloadlyCountryToRegion`), unknown → ""
   (admin completes). Published price defaults to suggested but is editable
   before import; nothing auto-publishes. Places **no** Reloadly order.
-- Dedup: existing slug reused (variants appended); an existing
-  `(product, faceValue, faceCurrency)` variant is skipped ("Déjà ajouté").
 - Import also upserts `ReloadlyProviderCost` for imported denominations so the
   pricing panel is immediately accurate. Manual/local products (e.g. Valorant)
   remain first-class and unaffected.
+
+### Importer workflow (refinements)
+
+- **Draft vs publish:** default **Brouillon** creates the product inactive
+  (hidden) with prices saved and mappings preserved; **Publier immédiatement**
+  requires an explicit confirmation. Adding variants to an existing parent
+  preserves its active state and adds new variants inactive unless explicitly
+  activated.
+- **Bulk + grouping:** select multiple regional Reloadly products, "Préparer
+  l'import", then group them under one Ghost parent (new, shared-new, or an
+  existing product) — grouping is always explicit, never automatic on brand.
+- **Variant uniqueness identity** — `src/lib/pricing/variant-identity.ts`:
+  `(parent) + faceValue + faceCurrency + reloadlyCountryCode + reloadlyProductId`.
+  Regional variants sharing a face value/currency coexist; a repeated
+  region+mapping is a duplicate and is skipped. SKUs embed the country.
+- **Media readiness:** `isProviderPlaceholderImage` distinguishes a temporary
+  Reloadly CDN logo from final Ghost media; publishing without final media warns
+  and requires acknowledgement.
+- **Competitor reference price:** admin-only
+  `ProductVariant.competitorReferencePriceMad` / `competitorReferenceSource` —
+  informational, never customer-visible, never affects pricing. Shown in the
+  pre-import pricing review alongside cost/suggested/published/profit, with
+  guard-rail highlights (negative profit, low margin, large deviation, missing
+  cost, stale sync).
 
 ## Tests
 
 `test/pricing/*.test.ts` (`npm test`): FIXED/RANGE cost, flat/percentage fee,
 discount, fee+discount, non-EUR recipient, margin precedence, FX conversion,
-nearest/always-up rounding, fixed override, missing-FX handling, and the
-Reloadly-country→region mapping. The sync-never-changes-`priceMad`,
+nearest/always-up rounding, fixed override, missing-FX handling, the
+Reloadly-country→region mapping, and the variant uniqueness identity (regional
+distinctness + duplicate-mapping detection). The sync-never-changes-`priceMad`,
 sandbox/live-separation, and importer flows (search, FIXED/RANGE import,
 duplicate prevention, storefront visibility, mapping validity, manual products
-unaffected) are additionally verified end-to-end against the sandbox + a Neon
-dev branch with cleanup.
+unaffected, plus draft import, existing-active-parent preservation, grouping
+into an existing parent, and competitor-field storage) are additionally
+verified end-to-end against the sandbox + a Neon dev branch with cleanup.

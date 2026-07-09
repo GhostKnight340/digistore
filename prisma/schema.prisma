@@ -84,20 +84,20 @@ model ProductMedia {
 }
 
 model ProductVariant {
-  id                     String   @id @default(cuid())
-  productId              String
-  name                   String
-  priceMad               Int
-  faceValue              Float?
-  faceCurrency           String   @default("MAD")
+  id                          String   @id @default(cuid())
+  productId                   String
+  name                        String
+  priceMad                    Int
+  faceValue                   Float?
+  faceCurrency                String   @default("MAD")
   // stockControl: "manual" | "api" | "reloadly"
-  stockControl           String   @default("manual")
-  stockMode              String   @default("automatic")
-  supplierCost           Float?
-  supplierCurrency       String   @default("MAD")
+  stockControl                String   @default("manual")
+  stockMode                   String   @default("automatic")
+  supplierCost                Float?
+  supplierCurrency            String   @default("MAD")
   // Only used when stockControl = "reloadly"
-  reloadlyProductId      Int?
-  reloadlyCountryCode    String?
+  reloadlyProductId           Int?
+  reloadlyCountryCode         String?
   // ── Pricing-policy overrides (suggested-price engine ONLY) ──────────────
   // These never mutate priceMad. They shape what the engine *suggests*; a
   // human still explicitly publishes. See docs/pricing-architecture.md.
@@ -105,13 +105,17 @@ model ProductVariant {
   //   fixedSuggestedPriceMad  — pin the suggested price to this exact MAD amount,
   //                             bypassing cost/FX/margin/rounding. Still requires
   //                             an explicit "Publier" to become priceMad.
-  marginPctOverride      Decimal? @db.Decimal(6, 3)
-  fixedSuggestedPriceMad Int?
-  active                 Boolean  @default(true)
-  featured               Boolean  @default(false)
-  sortOrder              Int      @default(0)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @default(now()) @updatedAt
+  marginPctOverride           Decimal? @db.Decimal(6, 3)
+  fixedSuggestedPriceMad      Int?
+  // Admin-only market reference price (informational). NEVER shown to customers,
+  // never affects storefront/suggested/published pricing. See docs/pricing-architecture.md.
+  competitorReferencePriceMad Int?
+  competitorReferenceSource   String?
+  active                      Boolean  @default(true)
+  featured                    Boolean  @default(false)
+  sortOrder                   Int      @default(0)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @default(now()) @updatedAt
 
   product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   digitalCodes DigitalCode[]
