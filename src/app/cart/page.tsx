@@ -5,6 +5,7 @@ import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatMAD } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
+import PaymentMethodsPreview from "@/components/PaymentMethodsPreview";
 import RegionBadge from "@/components/RegionBadge";
 import { getRegion } from "@/lib/regions";
 
@@ -144,6 +145,8 @@ export default function CartPage() {
               <span>Total</span>
               <span>{formatMAD(cartTotal)}</span>
             </div>
+            <PaymentMethodsPreview />
+
             <Link href="/checkout" className="btn-primary mt-6 w-full">
               Passer au paiement
             </Link>

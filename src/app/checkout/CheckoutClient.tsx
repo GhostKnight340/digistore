@@ -10,7 +10,7 @@ import { formatMAD } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
-import { buildCheckoutMethods } from "@/lib/paymentMethod";
+import { announcedPaymentMethods } from "@/lib/paymentMethod";
 import type { PaymentConfigDTO } from "@/lib/dto";
 import { getRegion } from "@/lib/regions";
 
@@ -44,7 +44,7 @@ export default function CheckoutClient({
   const [configError, setConfigError] = useState(false);
   // Bank accounts (CIH, etc.) collapse into one "Virement bancaire" option at
   // checkout; the customer picks the specific bank later on the payment page.
-  const methods = useMemo(() => buildCheckoutMethods(config?.methods ?? []), [config]);
+  const methods = useMemo(() => announcedPaymentMethods(config?.methods ?? []), [config]);
 
   const isLoggedIn = Boolean(initialCustomer);
   const [email, setEmail] = useState(initialCustomer?.email ?? "");
@@ -72,13 +72,9 @@ export default function CheckoutClient({
   }, [initialConfig]);
 
   // Informational only — the customer picks the actual method on the payment
-  // page. Card methods flagged "coming soon" are not offered there, so they
-  // are not announced here either.
+  // page.
   const paymentOptions = useMemo(
-    () =>
-      methods
-        .filter((method) => !(method.type === "card" && method.details.comingSoon))
-        .map((method) => ({ method, display: paymentMethodDisplay(method) })),
+    () => methods.map((method) => ({ method, display: paymentMethodDisplay(method) })),
     [methods],
   );
 
