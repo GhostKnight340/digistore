@@ -219,10 +219,7 @@ export default function CategoriesPanel() {
                   selectedId === category.id ? "bg-accent/10" : ""
                 }`}
               >
-                <span
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-bold text-white"
-                  style={{ backgroundColor: category.accentColor }}
-                >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface2 text-xs font-bold text-muted">
                   {category.icon || category.name.slice(0, 2).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -303,9 +300,6 @@ export default function CategoriesPanel() {
               </Field>
               <Field label="Icône texte">
                 <input className="input" value={draft.icon} onChange={(event) => update("icon", event.target.value)} placeholder="ST" />
-              </Field>
-              <Field label="Couleur accent">
-                <input className="input h-11" type="color" value={draft.accentColor} onChange={(event) => update("accentColor", event.target.value)} />
               </Field>
             </div>
 

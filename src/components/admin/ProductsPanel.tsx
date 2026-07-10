@@ -593,14 +593,10 @@ export default function ProductsPanel() {
                         key={p.slug}
                         type="button"
                         onClick={() => openParent(p)}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface ${
+                        className={`flex w-full items-center px-4 py-3 text-left transition-colors hover:bg-surface ${
                           selectedSlug === p.slug ? "bg-accent/10" : ""
                         }`}
                       >
-                        <div
-                          className="h-8 w-8 flex-shrink-0 rounded-lg"
-                          style={{ background: category.accentColor }}
-                        />
                         <div className="min-w-0">
                           <p className={`truncate text-sm font-medium ${selectedSlug === p.slug ? "text-white" : "text-muted"}`}>
                             {p.name}
@@ -1222,7 +1218,6 @@ function CategoryCombobox({
               }}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-surface hover:text-white"
             >
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.accentColor }} />
               <span className="flex-1">{category.name}</span>
               <span className="font-mono text-xs text-faint">{category.slug}</span>
             </button>
