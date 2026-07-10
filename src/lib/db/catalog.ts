@@ -98,13 +98,27 @@ function toVariantOption(
   };
 }
 
+/**
+ * Base64 `data:` product images are megabytes each. Inlining them in the catalog
+ * DTO both bloats every response AND blows past the 2 MB `unstable_cache` limit
+ * (which silently fails the cache write and throws). Serve those via the
+ * cacheable image endpoint instead; plain URLs pass through. Mirrors the same
+ * rule already applied in searchProductsPreview.
+ */
+function catalogImageUrl(rawImage: string | null, slug: string): string | null {
+  if (!rawImage) return null;
+  return rawImage.startsWith("data:")
+    ? `/api/product-image/${encodeURIComponent(slug)}`
+    : rawImage;
+}
+
 function toVariantProduct(
   row: ProductWithCategory,
   variant: ProductWithCategory["variants"][number],
   opts?: StockOpts,
 ): Product {
   const title = variantTitle(row.name, variant);
-  const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
+  const imageUrl = catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug);
   const region = variant.region || row.region;
   return {
     id: variant.id,
@@ -142,7 +156,7 @@ function toParentProduct(
     .map((variant) => toVariantOption(row, variant, opts));
   const selectedVariant =
     variants.find((variant) => variant.id === selectedVariantId) ?? variants[0];
-  const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
+  const imageUrl = catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug);
 
   return {
     id: row.slug,
