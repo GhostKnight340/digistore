@@ -39,6 +39,28 @@ export function variantIdentityKey(v: VariantIdentityParts): string {
   return `${v.faceValue}:${currency}:${country}:${productId}`;
 }
 
+export type VariantTitleParts = {
+  name?: string | null;
+  faceValue?: number | null;
+  faceCurrency?: string | null;
+};
+
+/**
+ * Display title for a variant, shown identically in the admin and on the
+ * storefront: the parent product name followed by the variant's editable
+ * `name`. The name defaults to "<faceValue> <faceCurrency>" at creation, so
+ * denominated variants read the same as before ("Xbox Game Pass 24.99 USD")
+ * while the title is now fully driven by — and editable through — the name
+ * field. Falls back to the face-value label if the name is blank, then to the
+ * bare parent name.
+ */
+export function variantTitle(parentName: string, v: VariantTitleParts): string {
+  const label =
+    (v.name?.trim() ?? "") ||
+    (v.faceValue != null ? `${v.faceValue} ${v.faceCurrency ?? ""}`.trim() : "");
+  return (label ? `${parentName} ${label}` : parentName).trim();
+}
+
 function slugifyPart(value: string): string {
   return value
     .normalize("NFD")

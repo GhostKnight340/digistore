@@ -22,7 +22,7 @@ import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import { REGION_LIST, getRegion } from "@/lib/regions";
-import { variantSku } from "@/lib/pricing/variant-identity";
+import { variantSku, variantTitle as computeVariantTitle } from "@/lib/pricing/variant-identity";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
 
@@ -1697,9 +1697,7 @@ function VariantsTab({
         const isConfirming = confirmDelete === orig.slug;
         const isDirty = isVariantDirty(orig, v);
         const status = stockBadge(v);
-        const variantTitle = v.faceValue != null
-          ? `${draft.name} ${v.faceValue} ${v.faceCurrency}`
-          : v.name;
+        const variantTitle = computeVariantTitle(draft.name, v);
         const isFirst = index === 0;
         const isLast = index === draft.variants.length - 1;
 

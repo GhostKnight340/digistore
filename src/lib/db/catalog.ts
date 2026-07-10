@@ -9,6 +9,7 @@ import {
   isInventoryEnabled,
   type StoreSettings,
 } from "@/lib/storeSettings";
+import { variantTitle } from "@/lib/pricing/variant-identity";
 
 /** Subset of settings the stock helpers need. */
 type StockOpts = Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">;
@@ -73,12 +74,6 @@ function variantStockStatus(
   if (stockMode === "force_out_of_stock") return "out_of_stock";
   if (!opts || opts.inventoryMode === "manual") return "in_stock";
   return variant._count.digitalCodes > 0 ? "in_stock" : "out_of_stock";
-}
-
-function variantTitle(parentName: string, variant: ProductWithCategory["variants"][number]) {
-  return variant.faceValue != null
-    ? `${parentName} ${variant.faceValue} ${variant.faceCurrency}`
-    : variant.name;
 }
 
 function toVariantOption(

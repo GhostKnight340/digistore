@@ -5,6 +5,7 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { ensureCategoryForProduct } from "./categories";
 import { timeAdmin } from "./adminTiming";
 import { isRegionCode } from "@/lib/regions";
+import { variantTitle } from "@/lib/pricing/variant-identity";
 import type {
   ActionResult,
   ConvertProductToVariantInput,
@@ -190,10 +191,7 @@ export async function getFeaturedVariantOptions(): Promise<FeaturedVariantOption
   });
 
   return rows.map((variant) => {
-    const displayName =
-      variant.faceValue != null
-        ? `${variant.product.name} ${variant.faceValue} ${variant.faceCurrency}`
-        : variant.name;
+    const displayName = variantTitle(variant.product.name, variant);
     return {
       id: variant.id,
       productName: variant.product.name,

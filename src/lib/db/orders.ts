@@ -13,6 +13,7 @@ import {
 } from "@/lib/orderNumber";
 import { getAdminPaymentMethods } from "./paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
+import { variantTitle } from "@/lib/pricing/variant-identity";
 import type { OrderStatus } from "@/lib/types";
 import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO, DeliveredFieldDTO, PaymentMethodDTO } from "@/lib/dto";
 
@@ -86,9 +87,7 @@ function orderItemName(item: {
   } | null;
 }) {
   if (!item.variant) return item.product.name;
-  return item.variant.faceValue != null
-    ? `${item.product.name} ${item.variant.faceValue} ${item.variant.faceCurrency}`
-    : item.variant.name;
+  return variantTitle(item.product.name, item.variant);
 }
 
 /**
