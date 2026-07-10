@@ -1383,7 +1383,7 @@ function VariantForm({
             </button>
           </div>
         </Field>
-        <Field label="Nom de la variante *">
+        <Field label="Titre de la variante *">
           <input
             className="input"
             value={v.name}
@@ -1392,7 +1392,8 @@ function VariantForm({
               onChange("name", name);
               if (!v.slug.trim()) onChange("slug", generateSku(name));
             }}
-            placeholder="Steam Wallet 50 EUR"
+            placeholder="50 EUR"
+            title="Titre affiché sur la boutique, après le nom du produit parent (ex. « Steam Wallet 50 EUR »)."
           />
         </Field>
         <Field label="Valeur faciale">
