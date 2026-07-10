@@ -136,9 +136,11 @@ export default async function ProductDetailPage({
               </>
             )}
           </h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-muted">
-            {product.description}
-          </p>
+          {(product.longDescription || product.description) && (
+            <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-muted">
+              {product.longDescription || product.description}
+            </p>
+          )}
 
           <div className="mt-6 flex flex-wrap gap-2">
             <span className="chip">{product.deliveryType}</span>

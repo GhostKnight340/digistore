@@ -34,7 +34,12 @@ export interface Product {
   /** Price in Moroccan Dirham. */
   price: number;
   deliveryType: string;
+  /** Meta-description / fallback text. */
   description: string;
+  /** Short tagline shown on category/catalogue cards. */
+  shortDescription?: string | null;
+  /** Full description shown on the product detail page. */
+  longDescription?: string | null;
   imageUrl?: string | null;
   featured?: boolean;
   stockStatus?: StockStatus;
