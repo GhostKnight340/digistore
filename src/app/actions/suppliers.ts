@@ -19,6 +19,7 @@ import {
   getReloadlyProviderOrders,
   getReloadlyDeliveryTargets,
 } from "@/lib/db/suppliers";
+import { getPricingSettings } from "@/lib/db/pricing-settings";
 import type {
   ReloadlyAvailabilityDTO,
   ReloadlyCatalogPageDTO,
@@ -165,8 +166,27 @@ export async function testReloadlyAvailabilityAction(
 ): Promise<ReloadlyAvailabilityDTO> {
   await requireAdminCustomer();
   try {
-    const product = await getGiftCardProduct(productId);
-    const { ok, issues } = validateReloadlyDenomination(product, expected);
+    const [product, { fxRatesToMad }] = await Promise.all([
+      getGiftCardProduct(productId),
+      getPricingSettings(),
+    ]);
+    const { ok, issues, infos } = validateReloadlyDenomination(product, expected, fxRatesToMad);
+
+    // Cross-currency cost detail: original provider cost + MAD equivalent via
+    // the internal rate. Display-only — never feeds back into any price.
+    const providerCurrency = product.recipientCurrencyCode?.trim().toUpperCase() ?? "";
+    const crossCurrency = providerCurrency !== "" && providerCurrency !== "MAD" && providerCurrency !== "DH";
+    const rate = crossCurrency ? fxRatesToMad[providerCurrency] : null;
+    const hasRate = rate != null && Number.isFinite(rate) && rate > 0;
+    const conversion =
+      crossCurrency && hasRate && expected.faceValue != null
+        ? {
+            originalAmount: expected.faceValue,
+            originalCurrency: providerCurrency,
+            convertedMad: expected.faceValue * rate,
+            rate,
+          }
+        : null;
 
     return {
       ok,
@@ -177,6 +197,9 @@ export async function testReloadlyAvailabilityAction(
       denominationType: product.denominationType,
       fixedDenominations: product.fixedRecipientDenominations ?? [],
       issues,
+      infos,
+      conversion,
+      missingRateCurrency: crossCurrency && !hasRate ? providerCurrency : null,
       error: null,
     };
   } catch (error) {
@@ -189,6 +212,9 @@ export async function testReloadlyAvailabilityAction(
       denominationType: null,
       fixedDenominations: [],
       issues: [],
+      infos: [],
+      conversion: null,
+      missingRateCurrency: null,
       error: describeReloadlyError(`availability:${productId}`, error),
     };
   }
@@ -204,16 +230,23 @@ export async function getReloadlyDeliveryChecksAction(
   orderId: string,
 ): Promise<Record<string, { ok: boolean; message: string | null }>> {
   await requireAdminCustomer();
-  const targets = await getReloadlyDeliveryTargets(orderId);
+  const [targets, { fxRatesToMad }] = await Promise.all([
+    getReloadlyDeliveryTargets(orderId),
+    getPricingSettings(),
+  ]);
   const result: Record<string, { ok: boolean; message: string | null }> = {};
   for (const t of targets) {
     try {
       const product = await getGiftCardProduct(t.reloadlyProductId);
-      const { ok, issues } = validateReloadlyDenomination(product, {
-        faceValue: t.faceValue,
-        currency: t.faceCurrency,
-        countryCode: t.countryCode,
-      });
+      const { ok, issues } = validateReloadlyDenomination(
+        product,
+        {
+          faceValue: t.faceValue,
+          currency: t.faceCurrency,
+          countryCode: t.countryCode,
+        },
+        fxRatesToMad,
+      );
       result[t.orderItemId] = { ok, message: ok ? null : issues.join(" ") };
     } catch (error) {
       console.error("[reloadlyDeliveryChecks]", error instanceof Error ? error.message : error);

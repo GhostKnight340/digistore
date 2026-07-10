@@ -17,6 +17,7 @@ import {
 } from "@/lib/discord/notify";
 import { deliverOrderViaDiscord } from "@/lib/discord/dm";
 import { recordReloadlyCostReconciliation } from "@/lib/db/pricing";
+import { getPricingSettings } from "@/lib/db/pricing-settings";
 import type { ActionResult, AssignmentEntry, DeliveredFieldDTO, ItemAssignment } from "@/lib/dto";
 import {
   placeGiftCardOrder,
@@ -484,11 +485,20 @@ async function resolveReloadlyEntry(input: {
   // "400 Invalid price" into a clear, actionable French message and avoids a
   // wasted order attempt.
   const product = await getGiftCardProduct(input.productId);
-  const { ok, issues } = validateReloadlyDenomination(product, {
-    faceValue: input.unitPrice,
-    currency: input.currency,
-    countryCode: input.countryCode,
-  });
+  // FX table lets the validator accept a MAD-priced variant mapped to a
+  // USD/EUR product (cross-currency cost) while still failing when no
+  // conversion rate is configured. The Reloadly charge itself stays in the
+  // provider currency and unitPrice is passed through untouched (no margin).
+  const { fxRatesToMad } = await getPricingSettings();
+  const { ok, issues } = validateReloadlyDenomination(
+    product,
+    {
+      faceValue: input.unitPrice,
+      currency: input.currency,
+      countryCode: input.countryCode,
+    },
+    fxRatesToMad,
+  );
   if (!ok) {
     throw new Error(issues.join(" "));
   }

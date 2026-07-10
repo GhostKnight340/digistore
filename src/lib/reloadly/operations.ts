@@ -180,21 +180,57 @@ export async function getGiftCardProduct(
   );
 }
 
+/** MAD (displayed "DH") is the storefront/reporting currency — a variant whose
+ *  faceCurrency is MAD is priced for customers in MAD while the provider cost
+ *  legitimately stays in the Reloadly recipient currency (USD, EUR, …). */
+function isStorefrontCurrency(code: string): boolean {
+  const c = code.trim().toUpperCase();
+  return c === "MAD" || c === "DH";
+}
+
 /**
  * Pure, French-message validation that a Ghost variant fits a Reloadly product:
  * currency, country, and (crucially) that the face value is an actually-offered
  * denomination. Shared by the delivery pre-flight check, the admin availability
  * test, and the order-page mismatch warning so they all speak the same language.
+ *
+ * Currency rule: the provider (recipient) currency is the SOURCE COST currency
+ * and does not have to equal the Ghost currency. A variant in MAD (storefront
+ * currency) mapped to a USD/EUR/… product is a valid cross-currency mapping as
+ * long as an internal FX rate exists to convert the cost into MAD — pass
+ * `fxRatesToMad` (from pricing settings) to enforce that. A mismatch is only an
+ * error when the variant claims a specific NON-storefront currency that differs
+ * from the product's, or when no conversion rate is configured.
  */
 export function validateReloadlyDenomination(
   product: ReloadlyGiftCardProduct,
   expected: { faceValue: number | null; currency?: string | null; countryCode?: string | null },
-): { ok: boolean; issues: string[] } {
+  fxRatesToMad?: Record<string, number>,
+): { ok: boolean; issues: string[]; infos: string[] } {
   const issues: string[] = [];
+  const infos: string[] = [];
   const cur = product.recipientCurrencyCode;
 
   if (expected.currency && cur !== expected.currency) {
-    issues.push(`Devise attendue ${expected.currency}, produit Reloadly en ${cur}.`);
+    if (!isStorefrontCurrency(expected.currency)) {
+      // The variant claims an explicit provider currency that doesn't match —
+      // a genuine mapping error (wrong product / wrong regional edition).
+      issues.push(`Devise attendue ${expected.currency}, produit Reloadly en ${cur}.`);
+    } else if (isStorefrontCurrency(cur)) {
+      // Provider is already in MAD — nothing to convert.
+    } else if (fxRatesToMad) {
+      const rate = fxRatesToMad[cur.trim().toUpperCase()];
+      if (rate == null || !Number.isFinite(rate) || rate <= 0) {
+        issues.push(
+          `Aucun taux de change ${cur} → MAD configuré. Ajoutez-le dans Tarification pour convertir le coût fournisseur.`,
+        );
+      } else {
+        infos.push(`Coût fournisseur converti de ${cur} vers MAD.`);
+      }
+    } else {
+      // No FX table supplied (caller can't check) — informational only.
+      infos.push(`Coût fournisseur en ${cur}, converti en MAD via le taux interne.`);
+    }
   }
   if (expected.countryCode && product.country?.isoName !== expected.countryCode) {
     issues.push(`Pays attendu ${expected.countryCode}, produit Reloadly ${product.country?.isoName ?? "?"}.`);
@@ -219,7 +255,7 @@ export function validateReloadlyDenomination(
       }
     }
   }
-  return { ok: issues.length === 0, issues };
+  return { ok: issues.length === 0, issues, infos };
 }
 
 export type ReloadlyAccountBalance = {

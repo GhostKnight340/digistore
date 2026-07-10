@@ -425,7 +425,19 @@ function MappingRow({ mapping }: { mapping: ReloadlyMappingDTO }) {
           {check.error ? (
             check.error
           ) : check.ok ? (
-            <>Available — {check.productName} ({check.currency}, {check.country}).</>
+            <>
+              <p>Available — {check.productName} ({check.currency}, {check.country}).</p>
+              {check.infos.map((info, idx) => (
+                <p key={idx} className="mt-1 text-green-300/90">{info}</p>
+              ))}
+              {check.conversion && (
+                <div className="mt-2 space-y-0.5 border-t border-green-500/20 pt-2 font-mono text-[11px] text-green-200/90">
+                  <p>Coût fournisseur : {check.conversion.originalAmount} {check.conversion.originalCurrency}</p>
+                  <p>Coût converti : ≈ {check.conversion.convertedMad.toFixed(2)} MAD</p>
+                  <p>Taux utilisé : 1 {check.conversion.originalCurrency} = {check.conversion.rate} MAD</p>
+                </div>
+              )}
+            </>
           ) : (
             <>
               <p className="font-semibold">Mismatches:</p>
@@ -434,6 +446,14 @@ function MappingRow({ mapping }: { mapping: ReloadlyMappingDTO }) {
                   <li key={idx}>{i}</li>
                 ))}
               </ul>
+              {check.missingRateCurrency && (
+                <Link
+                  href="?tab=pricing"
+                  className="mt-2 inline-block rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 font-medium text-amber-200 hover:bg-amber-500/20"
+                >
+                  Configurer le taux {check.missingRateCurrency} → MAD dans Tarification →
+                </Link>
+              )}
             </>
           )}
         </div>

@@ -616,6 +616,19 @@ export interface ReloadlyAvailabilityDTO {
   fixedDenominations: number[];
   /** Mismatches (currency / country / denomination) in French, if any. */
   issues: string[];
+  /** Informational notes (e.g. a valid cross-currency cost conversion). */
+  infos: string[];
+  /** Provider cost converted into MAD via the internal FX rate, when the
+   *  provider currency differs from the storefront currency. */
+  conversion: {
+    originalAmount: number;
+    originalCurrency: string;
+    convertedMad: number;
+    rate: number;
+  } | null;
+  /** Set when the provider currency has no configured FX rate — the UI links
+   *  to Tarification to add it. */
+  missingRateCurrency: string | null;
   error: string | null;
 }
 
