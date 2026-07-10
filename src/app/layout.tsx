@@ -7,6 +7,7 @@ import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
 
@@ -100,6 +101,7 @@ export default async function RootLayout({
           </ProductCatalogProvider>
         </StoreSettingsProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
