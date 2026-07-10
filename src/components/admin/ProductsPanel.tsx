@@ -1008,29 +1008,64 @@ function DetailsTab({
         ];
         const displayRegions = groupRegions.length ? groupRegions : [draft.region];
         const single = displayRegions.length <= 1;
+        // Variants whose explicit region silently overrides "Région de ce groupe".
+        const overridingCount = draft.variants.filter(
+          (v) => v.variantRegion && v.variantRegion !== draft.region,
+        ).length;
+        // Only flag the confusing case: the group resolves to ONE region that
+        // isn't the group's own — a genuine multi-region group (>1 badge) is an
+        // intended state, not a contradiction, so it stays quiet.
+        const effective = single ? displayRegions[0] : null;
+        const groupMismatch = overridingCount > 0 && !!effective && effective !== draft.region;
         return (
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {displayRegions.map((code) => (
-                <RegionBadge key={code || "unknown"} code={code} variant="overlay" />
-              ))}
+          <div className="rounded-xl border border-border bg-surface p-3.5">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {displayRegions.map((code) => (
+                  <RegionBadge key={code || "unknown"} code={code} variant="overlay" />
+                ))}
+              </div>
+              <div className="min-w-0 text-sm">
+                <p className="mb-0.5 text-xs text-faint">
+                  {single ? "Titre & badge générés" : `Titre & badges générés · ${displayRegions.length} régions`}
+                </p>
+                <p className="truncate font-medium text-white">
+                  {draft.name || "Nom du produit"}
+                  {single && regionTitleSuffix(displayRegions[0]).label && (
+                    <>
+                      {" "}
+                      <span className={regionTitleSuffix(displayRegions[0]).className}>
+                        {regionTitleSuffix(displayRegions[0]).label}
+                      </span>
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0 text-sm">
-              <p className="mb-0.5 text-xs text-faint">
-                {single ? "Titre & badge générés" : `Titre & badges générés · ${displayRegions.length} régions`}
-              </p>
-              <p className="truncate font-medium text-white">
-                {draft.name || "Nom du produit"}
-                {single && regionTitleSuffix(displayRegions[0]).label && (
-                  <>
-                    {" "}
-                    <span className={regionTitleSuffix(displayRegions[0]).className}>
-                      {regionTitleSuffix(displayRegions[0]).label}
-                    </span>
-                  </>
-                )}
-              </p>
-            </div>
+            {groupMismatch && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-[#F7B14A]/20 pt-3">
+                <span className="flex items-center gap-1.5 text-[12px] leading-snug text-[#D9B27C]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0" aria-hidden>
+                    <path d="M12 9v4M12 17h.01" />
+                    <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                  </svg>
+                  {overridingCount} variante{overridingCount > 1 ? "s" : ""} force{overridingCount > 1 ? "nt" : ""} la région{" "}
+                  <strong className="font-semibold">{getRegion(effective).name}</strong> au lieu du groupe ({getRegion(draft.region).name}).
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    update(
+                      "variants",
+                      draft.variants.map((v) => ({ ...v, variantRegion: null })),
+                    )
+                  }
+                  className="rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium text-muted transition hover:border-accent/40 hover:text-white"
+                >
+                  Réinitialiser les régions des variantes
+                </button>
+              </div>
+            )}
           </div>
         );
       })()}
