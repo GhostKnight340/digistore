@@ -993,18 +993,46 @@ function DetailsTab({
         </Field>
       </div>
 
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3.5">
-        <RegionBadge code={draft.region} variant="overlay" />
-        <div className="min-w-0 text-sm">
-          <p className="mb-0.5 text-xs text-faint">Titre &amp; badge générés</p>
-          <p className="truncate font-medium text-white">
-            {draft.name || "Nom du produit"}{" "}
-            <span className={regionTitleSuffix(draft.region).className}>
-              {regionTitleSuffix(draft.region).label}
-            </span>
-          </p>
-        </div>
-      </div>
+      {(() => {
+        // Distinct regions actually offered by the group's variants (each falls
+        // back to the group region). A multi-region group shows every badge and
+        // the storefront region selector; a single-region group shows just one.
+        const groupRegions = [
+          ...new Set(
+            (draft.variants.length
+              ? draft.variants.map((v) => v.variantRegion || draft.region)
+              : [draft.region]
+            ).filter(Boolean),
+          ),
+        ];
+        const displayRegions = groupRegions.length ? groupRegions : [draft.region];
+        const single = displayRegions.length <= 1;
+        return (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {displayRegions.map((code) => (
+                <RegionBadge key={code || "unknown"} code={code} variant="overlay" />
+              ))}
+            </div>
+            <div className="min-w-0 text-sm">
+              <p className="mb-0.5 text-xs text-faint">
+                {single ? "Titre & badge générés" : `Titre & badges générés · ${displayRegions.length} régions`}
+              </p>
+              <p className="truncate font-medium text-white">
+                {draft.name || "Nom du produit"}
+                {single && regionTitleSuffix(displayRegions[0]).label && (
+                  <>
+                    {" "}
+                    <span className={regionTitleSuffix(displayRegions[0]).className}>
+                      {regionTitleSuffix(displayRegions[0]).label}
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="flex items-center gap-6">
         <ToggleSwitch
