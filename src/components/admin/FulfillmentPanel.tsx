@@ -172,7 +172,7 @@ export default function FulfillmentPanel() {
                   {visibleOrders.map((order) => (
                     <tr key={order.id} className="border-b border-border/60">
                       <td className="px-5 py-3 font-mono text-xs text-white">
-                        {order.id}
+                        {order.publicOrderNumber}
                       </td>
                       <td className="px-5 py-3">
                         <p className="text-white">{order.customerName}</p>
@@ -225,7 +225,7 @@ export default function FulfillmentPanel() {
                 <div key={order.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-mono text-xs text-muted">{order.id}</p>
+                      <p className="font-mono text-xs text-muted">{order.publicOrderNumber}</p>
                       <p className="mt-1 truncate text-sm font-semibold text-white">{order.customerName}</p>
                       <p className="truncate text-xs text-muted">{order.customerEmail}</p>
                     </div>

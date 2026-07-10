@@ -9,6 +9,24 @@ import {
   type DiscordMessagePayload,
 } from "./client";
 import { createOrderCard, postOrderThreadEvent } from "./orderThread";
+import { getAdminPaymentMethods } from "@/lib/db/paymentMethods";
+import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
+
+/**
+ * Orders store the payment-method *id* in `order.paymentMethod`; resolve it to
+ * the customer-facing label (e.g. "CIH BANK") so the #orders card shows a name
+ * instead of a raw id or a blank field. Never throws; falls back to the raw
+ * value, then an em dash (Discord rejects empty embed field values).
+ */
+async function resolvePaymentMethodLabel(raw: string): Promise<string> {
+  try {
+    const { methods } = await getAdminPaymentMethods();
+    const method = resolveOrderPaymentMethod(raw, methods);
+    return method?.name || raw || "—";
+  } catch {
+    return raw || "—";
+  }
+}
 
 /**
  * Never-throw contract: every exported function here resolves, never
@@ -80,13 +98,13 @@ export type NewOrderNotification = {
   adminUrl: string;
 };
 
-export function notifyOrderCreated(input: NewOrderNotification): Promise<void> {
+export async function notifyOrderCreated(input: NewOrderNotification): Promise<void> {
   return createOrderCard({
     orderId: input.order.id,
     publicOrderNumber: input.publicOrderNumber,
     status: input.order.status,
     totalMad: input.order.totalMad,
-    paymentMethod: input.order.paymentMethod,
+    paymentMethod: await resolvePaymentMethodLabel(input.order.paymentMethod),
     itemSummary: input.itemSummary,
     adminUrl: input.adminUrl,
     discordMessageId: input.order.discordMessageId,
@@ -123,7 +141,7 @@ export type PaymentStatusNotification = {
   adminUrl: string;
 };
 
-export function notifyPaymentStatusChange(
+export async function notifyPaymentStatusChange(
   input: PaymentStatusNotification,
 ): Promise<void> {
   const label = ORDER_STATUS_LABEL[input.toStatus] ?? input.toStatus;
@@ -137,7 +155,7 @@ export function notifyPaymentStatusChange(
       publicOrderNumber: input.publicOrderNumber,
       status: input.toStatus,
       totalMad: input.order.totalMad,
-      paymentMethod: input.order.paymentMethod,
+      paymentMethod: await resolvePaymentMethodLabel(input.order.paymentMethod),
       adminUrl: input.adminUrl,
       discordMessageId: input.order.discordMessageId,
       discordThreadId: input.order.discordThreadId,
@@ -167,7 +185,7 @@ export type FulfillmentNeededNotification = {
   adminUrl: string;
 };
 
-export function notifyFulfillmentNeeded(
+export async function notifyFulfillmentNeeded(
   input: FulfillmentNeededNotification,
 ): Promise<void> {
   return postOrderThreadEvent(
@@ -176,7 +194,7 @@ export function notifyFulfillmentNeeded(
       publicOrderNumber: input.publicOrderNumber,
       status: "payment_confirmed",
       totalMad: input.order.totalMad,
-      paymentMethod: input.order.paymentMethod,
+      paymentMethod: await resolvePaymentMethodLabel(input.order.paymentMethod),
       adminUrl: input.adminUrl,
       discordMessageId: input.order.discordMessageId,
       discordThreadId: input.order.discordThreadId,
@@ -199,7 +217,7 @@ export type FulfillmentCompletedNotification = {
   adminUrl: string;
 };
 
-export function notifyFulfillmentCompleted(
+export async function notifyFulfillmentCompleted(
   input: FulfillmentCompletedNotification,
 ): Promise<void> {
   return postOrderThreadEvent(
@@ -208,7 +226,7 @@ export function notifyFulfillmentCompleted(
       publicOrderNumber: input.publicOrderNumber,
       status: "delivered",
       totalMad: input.order.totalMad,
-      paymentMethod: input.order.paymentMethod,
+      paymentMethod: await resolvePaymentMethodLabel(input.order.paymentMethod),
       adminUrl: input.adminUrl,
       discordMessageId: input.order.discordMessageId,
       discordThreadId: input.order.discordThreadId,

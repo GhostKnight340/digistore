@@ -123,6 +123,8 @@ export interface AdminPaymentProofDTO {
 
 export interface AdminOrderSummaryDTO {
   id: string;
+  /** Human-friendly sequential order number, e.g. "#000001". */
+  publicOrderNumber: string;
   status: OrderStatus;
   customerName: string;
   customerEmail: string;

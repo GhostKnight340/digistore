@@ -33,9 +33,14 @@ export async function submitPayment(
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Commande introuvable." };
-  if (order.status !== "pending_payment") {
-    return { ok: false, error: "La commande n’est pas en attente de paiement." };
+  // A customer may (re)send a justificatif from the initial pending state, or
+  // after the payment was refused / flagged with an issue — never once it's
+  // already submitted, confirmed, delivered, or cancelled.
+  const RESUBMITTABLE_STATUSES = ["pending_payment", "rejected", "payment_issue"];
+  if (!RESUBMITTABLE_STATUSES.includes(order.status)) {
+    return { ok: false, error: "Cette commande n’accepte plus de justificatif." };
   }
+  const fromStatus = order.status;
 
   const { methods } = await getAdminPaymentMethods();
   const method = resolveOrderPaymentMethod(order.paymentMethod, methods);
@@ -60,7 +65,7 @@ export async function submitPayment(
   try {
     await prisma.$transaction(async (tx) => {
       const updated = await tx.order.updateMany({
-        where: { id: orderId, status: "pending_payment" },
+        where: { id: orderId, status: fromStatus },
         data: { status: "payment_submitted" },
       });
       if (updated.count !== 1) {
@@ -89,7 +94,7 @@ export async function submitPayment(
         data: {
           orderId,
           type: "status_change",
-          fromStatus: "pending_payment",
+          fromStatus,
           toStatus: "payment_submitted",
           note: proof ? `Justificatif importé : ${proof.fileName}` : "Aucun justificatif importé.",
         },
@@ -121,7 +126,7 @@ export async function submitPayment(
     void notifyPaymentStatusChange({
       order,
       publicOrderNumber: reference.number,
-      fromStatus: "pending_payment",
+      fromStatus,
       toStatus: "payment_submitted",
       adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
     });
@@ -490,6 +495,17 @@ export async function applyPaymentStatusWithEmail(
     } catch (emailError) {
       console.error(`[email:${emailType}]`, emailError);
     }
+
+    // Mirror setPaymentStatus: reflect the admin review outcome (reject / refund
+    // / issue) on the #orders card so a refusal shows up in Discord too.
+    void notifyPaymentStatusChange({
+      order,
+      publicOrderNumber: reference.number,
+      fromStatus: order.status,
+      toStatus,
+      note,
+      adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
+    });
 
     return { ok: true };
   } catch (error) {

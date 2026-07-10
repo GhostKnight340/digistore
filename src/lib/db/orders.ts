@@ -315,9 +315,11 @@ function loadAdminOrderSummaries(options: { take?: number; statuses?: string[] }
 function buildAdminSummaryDTO(
   order: AdminOrderSummaryRecord,
   methods: PaymentMethodDTO[],
+  publicOrderNumber: string,
 ): AdminOrderSummaryDTO {
   return {
     id: order.id,
+    publicOrderNumber,
     status: order.status as OrderStatus,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
@@ -426,7 +428,7 @@ export async function getAdminOrdersPage(options: {
   statuses?: string[];
 } = {}): Promise<AdminOrderSummaryDTO[]> {
   await ensureDatabaseReady();
-  const [orders, { methods }] = await Promise.all([
+  const [orders, { methods }, sequenceRows] = await Promise.all([
     timeAdmin(
       "admin.orders",
       "order.findMany.summary",
@@ -434,9 +436,22 @@ export async function getAdminOrdersPage(options: {
       (rows) => rows.length,
     ),
     getAdminPaymentMethods(),
+    // Global chronological order → position gives each order its public
+    // sequence number without an N+1 count per row.
+    prisma.order.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true },
+    }),
   ]);
 
-  return orders.map((order) => buildAdminSummaryDTO(order, methods));
+  const sequenceById = new Map(sequenceRows.map((row, index) => [row.id, index + 1]));
+  return orders.map((order) =>
+    buildAdminSummaryDTO(
+      order,
+      methods,
+      formatPublicOrderNumber(sequenceById.get(order.id) ?? 0),
+    ),
+  );
 }
 
 export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDTO | null> {

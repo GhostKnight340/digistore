@@ -170,7 +170,13 @@ function PaymentExperience({
   const automated =
     activeMethod?.type === "paypal" || (activeMethod?.type === "card" && !comingSoon);
   const proofRequired = activeMethod?.proofRequired ?? true;
-  const proofBased = isPending && !automated && !comingSoon && !chooserOpen;
+  // A proof-upload method (bank/crypto/cash) rather than an automated one.
+  const proofFlow = !automated && !comingSoon && !chooserOpen;
+  const proofBased = isPending && proofFlow;
+  // A refused / flagged proof-based order can resubmit a new justificatif in-app.
+  const canResubmitProof = isRejected && proofFlow;
+  // Upload zone + sticky CTA appear for the initial upload and for a resubmit.
+  const showProofUpload = proofBased || canResubmitProof;
 
   function copy(key: string, value: string) {
     copyToClipboard(value).catch(() => {});
@@ -286,7 +292,7 @@ function PaymentExperience({
 
   return (
     <div className="container-page py-8 min-[900px]:py-10">
-      <div className={`mx-auto max-w-[1130px] ${proofBased ? "pb-[104px] min-[900px]:pb-0" : ""}`}>
+      <div className={`mx-auto max-w-[1130px] ${showProofUpload ? "pb-[104px] min-[900px]:pb-0" : ""}`}>
         {/* ── Compact payment header ── */}
         <div className="mb-6 flex flex-col gap-6 rounded-[18px] border border-white/[0.08] bg-[linear-gradient(150deg,#12141B,#0C0D12)] p-6 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-7 min-[900px]:p-7">
           <div className="min-w-0 flex-1">
@@ -491,13 +497,26 @@ function PaymentExperience({
               <TerminalConfirmed order={order} total={total} publicOrderNumber={publicOrderNumber} />
             )}
 
-            {/* Rejected / issue */}
+            {/* Rejected / issue — allow re-uploading a justificatif in-app */}
             {isRejected && (
-              <TerminalRejected
-                total={total}
-                whatsapp={whatsapp}
-                orderReference={publicOrderNumber}
-              />
+              <>
+                <TerminalRejected
+                  total={total}
+                  whatsapp={whatsapp}
+                  orderReference={publicOrderNumber}
+                  canResubmit={canResubmitProof}
+                />
+                {canResubmitProof && activeMethod && (
+                  <ProofCard
+                    proofFile={proofFile}
+                    proofRequired={proofRequired}
+                    submitting={submitting}
+                    proofError={proofError}
+                    onChange={handleProofChange}
+                    onSubmit={handleSubmit}
+                  />
+                )}
+              </>
             )}
 
             {/* Delivered */}
@@ -676,7 +695,7 @@ function PaymentExperience({
       </div>
 
       {/* Sticky mobile CTA */}
-      {proofBased && (
+      {showProofUpload && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-[linear-gradient(180deg,rgba(7,8,9,0),#070809_30%)] px-4 pb-5 pt-3 min-[900px]:hidden">
           <SubmitButton
             enabled={!!proofFile && !submitting}
@@ -1552,10 +1571,12 @@ function TerminalRejected({
   total,
   whatsapp,
   orderReference,
+  canResubmit,
 }: {
   total: number;
   whatsapp: string;
   orderReference: string;
+  canResubmit: boolean;
 }) {
   const contactHref = (msg: string) =>
     `https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`;
@@ -1574,26 +1595,20 @@ function TerminalRejected({
           </div>
         </div>
         <div className="rounded-[11px] border border-[rgba(224,92,92,0.2)] bg-[rgba(224,92,92,0.07)] px-3.5 py-3 text-[12.5px] leading-relaxed text-[#E8A6A6]">
-          Vérifiez que le montant du justificatif correspond bien à {formatDH(total)}, puis renvoyez
-          une image lisible du virement via le support.
+          Vérifiez que le montant du justificatif correspond bien à {formatDH(total)}, puis{" "}
+          {canResubmit
+            ? "renvoyez une image lisible du virement via le formulaire ci-dessous."
+            : "renvoyez une image lisible du virement via le support."}
         </div>
       </div>
-      <div className="flex gap-3 px-[22px] pb-[22px]">
+      <div className="px-[22px] pb-[22px]">
         <a
           href={contactHref(`Bonjour, j'ai un problème avec ma commande ${orderReference}`)}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex h-[46px] flex-1 items-center justify-center rounded-xl border border-white/[0.12] bg-transparent text-[13.5px] font-semibold text-[#C4C9D4] hover:bg-white/[0.04]"
+          className="flex h-[46px] w-full items-center justify-center rounded-xl border border-white/[0.12] bg-transparent text-[13.5px] font-semibold text-[#C4C9D4] hover:bg-white/[0.04]"
         >
           Contacter le support
-        </a>
-        <a
-          href={contactHref(`Bonjour, je souhaite renvoyer un justificatif pour ma commande ${orderReference}`)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex h-[46px] flex-1 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-[13.5px] font-semibold text-white"
-        >
-          Renvoyer un justificatif
         </a>
       </div>
     </div>
