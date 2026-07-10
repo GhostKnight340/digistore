@@ -170,6 +170,17 @@ export default function ProductsPanel() {
     setVariantDrafts((prev) => ({ ...prev, [slug]: { ...prev[slug], [k]: v } }));
   }
 
+  /** Clear every variant's explicit region so they inherit the group region.
+   *  Writes to variantDrafts — the buffer that actually gets persisted on save —
+   *  so the reset sticks; draft.variants stays as the dirty-check baseline. */
+  function resetVariantRegions() {
+    setVariantDrafts((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([slug, variant]) => [slug, { ...variant, variantRegion: null }]),
+      ),
+    );
+  }
+
   function variantSaveInput(parent: ParentProductDTO, variant: VariantDTO, originalSlug?: string): SaveVariantInput {
     return {
       originalSlug,
@@ -736,8 +747,10 @@ export default function ProductsPanel() {
               {activeTab === "details" && (
                 <DetailsTab
                   draft={draft}
+                  variants={draft.variants.map((v) => variantDrafts[v.slug] ?? v)}
                   categories={categories}
                   update={updateDraft}
+                  onResetVariantRegions={resetVariantRegions}
                   onCategoryCreated={(category) => {
                     setCategories((current) =>
                       current.some((item) => item.id === category.id) ? current : [...current, category],
@@ -926,13 +939,19 @@ function isVariantDirty(original: VariantDTO, draft: VariantDTO) {
 
 function DetailsTab({
   draft,
+  variants,
   categories,
   update,
+  onResetVariantRegions,
   onCategoryCreated,
 }: {
   draft: ParentProductDTO;
+  /** Current (edit-buffer) variants — the badge/override logic reads these so it
+   *  reflects unsaved edits and the reset actually persists. */
+  variants: VariantDTO[];
   categories: AdminCategoryDTO[];
   update: <K extends keyof ParentProductDTO>(k: K, v: ParentProductDTO[K]) => void;
+  onResetVariantRegions: () => void;
   onCategoryCreated: (category: AdminCategoryDTO) => void;
 }) {
   return (
@@ -996,8 +1015,8 @@ function DetailsTab({
         // the storefront region selector; a single-region group shows just one.
         const groupRegions = [
           ...new Set(
-            (draft.variants.length
-              ? draft.variants.map((v) => v.variantRegion || draft.region)
+            (variants.length
+              ? variants.map((v) => v.variantRegion || draft.region)
               : [draft.region]
             ).filter(Boolean),
           ),
@@ -1005,7 +1024,7 @@ function DetailsTab({
         const displayRegions = groupRegions.length ? groupRegions : [draft.region];
         const single = displayRegions.length <= 1;
         // Variants whose explicit region silently overrides "Région de ce groupe".
-        const overridingCount = draft.variants.filter(
+        const overridingCount = variants.filter(
           (v) => v.variantRegion && v.variantRegion !== draft.region,
         ).length;
         // Only flag the confusing case: the group resolves to ONE region that
@@ -1050,12 +1069,7 @@ function DetailsTab({
                 </span>
                 <button
                   type="button"
-                  onClick={() =>
-                    update(
-                      "variants",
-                      draft.variants.map((v) => ({ ...v, variantRegion: null })),
-                    )
-                  }
+                  onClick={onResetVariantRegions}
                   className="rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium text-muted transition hover:border-accent/40 hover:text-white"
                 >
                   Réinitialiser les régions des variantes
