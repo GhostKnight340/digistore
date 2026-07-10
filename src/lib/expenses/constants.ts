@@ -54,6 +54,12 @@ export const EXPENSE_STATUSES = [
   "cancelled",
   "estimated",
   "credit",
+  // Correction outcomes for a recurring occurrence:
+  "unpaid",
+  "failed",
+  "subscription_cancelled",
+  "subscription_expired",
+  "not_applicable",
 ] as const;
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
 
@@ -65,6 +71,42 @@ export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {
   cancelled: "Annulée",
   estimated: "Estimée",
   credit: "Crédit / Remboursement",
+  unpaid: "Non payée",
+  failed: "Paiement échoué",
+  subscription_cancelled: "Abonnement résilié",
+  subscription_expired: "Abonnement expiré",
+  not_applicable: "Ignorée / Non applicable",
+};
+
+/** Statuses selectable when correcting a recurring occurrence. */
+export const OCCURRENCE_CORRECTION_STATUSES = [
+  "paid",
+  "unpaid",
+  "failed",
+  "cancelled",
+  "subscription_cancelled",
+  "subscription_expired",
+  "not_applicable",
+] as const;
+
+/** Corrected statuses that mean "no payment actually happened" → the amount is
+ *  removed from totals and (for the two subscription ones) the sub terminates. */
+export const NOT_DEBITED_STATUSES = [
+  "unpaid",
+  "failed",
+  "cancelled",
+  "subscription_cancelled",
+  "subscription_expired",
+  "not_applicable",
+] as const;
+
+export const TERMINATION_TYPES = ["cancelled", "expired", "dropped"] as const;
+export type TerminationType = (typeof TERMINATION_TYPES)[number];
+
+export const TERMINATION_TYPE_LABELS: Record<TerminationType, string> = {
+  cancelled: "Abonnement résilié",
+  expired: "Abonnement expiré",
+  dropped: "Abonnement résilié",
 };
 
 export const EXPENSE_FREQUENCIES = [

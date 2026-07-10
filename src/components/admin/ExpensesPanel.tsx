@@ -16,6 +16,8 @@ import {
   setRecurringStatusAction,
   deleteExpenseAction,
   runDueRemindersAction,
+  correctOccurrenceAction,
+  dropSubscriptionAction,
 } from "@/app/actions/expenses";
 import type {
   LedgerRowDTO,
@@ -23,11 +25,13 @@ import type {
   UpcomingPaymentsDTO,
   UpcomingPaymentDTO,
   ExpenseDetailDTO,
+  ExpenseEntryDTO,
 } from "@/lib/expenses/types";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_CURRENCIES,
   EXPENSE_FREQUENCIES,
+  OCCURRENCE_CORRECTION_STATUSES,
   expenseCategoryLabel,
   expenseTypeLabel,
   expenseStatusLabel,
@@ -58,9 +62,16 @@ function statusTone(status: string): string {
     case "estimated":
       return "text-[#D9B27C] border-[#F7B14A]/30 bg-[#F7B14A]/10";
     case "cancelled":
+    case "not_applicable":
       return "text-faint border-border bg-surface2";
     case "credit":
       return "text-teal-300 border-teal-500/30 bg-teal-500/10";
+    case "subscription_cancelled":
+    case "subscription_expired":
+      return "text-[#E08B8B] border-red-500/25 bg-red-500/[0.07]";
+    case "unpaid":
+    case "failed":
+      return "text-[#D9B27C] border-[#F7B14A]/30 bg-[#F7B14A]/10";
     default:
       return "text-muted border-border bg-surface2";
   }
@@ -90,6 +101,9 @@ export default function ExpensesPanel() {
   const [editRecurring, setEditRecurring] = useState<LedgerRowDTO | null>(null);
   const [payTarget, setPayTarget] = useState<LedgerRowDTO | UpcomingPaymentDTO | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ recurringId?: string; entryId?: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<LedgerRowDTO | null>(null);
+  const [correctTarget, setCorrectTarget] = useState<ExpenseEntryDTO | null>(null);
+  const [detailRefresh, setDetailRefresh] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -280,9 +294,9 @@ export default function ExpensesPanel() {
                         onPay={() => setPayTarget(r)}
                         onEdit={() => { if (r.kind === "recurring") { setEditRecurring(r); setRecurringOpen(true); } }}
                         onSkip={() => r.recurringExpenseId && run(() => skipOccurrenceAction(r.recurringExpenseId!), "Échéance ignorée.")}
-                        onPause={() => r.recurringExpenseId && run(() => setRecurringStatusAction(r.recurringExpenseId!, r.status === "cancelled" ? "active" : "paused"), "Mis à jour.")}
+                        onPause={() => r.recurringExpenseId && run(() => setRecurringStatusAction(r.recurringExpenseId!, "paused"), "Mis à jour.")}
                         onResume={() => r.recurringExpenseId && run(() => setRecurringStatusAction(r.recurringExpenseId!, "active"), "Réactivé.")}
-                        onCancel={() => r.recurringExpenseId && confirm(`Annuler l'abonnement « ${r.name} » ? Les paiements passés sont conservés.`) && run(() => setRecurringStatusAction(r.recurringExpenseId!, "cancelled"), "Abonnement annulé.")}
+                        onDrop={() => setDropTarget(r)}
                         onDelete={() => confirm(`Supprimer « ${r.name} » ? (une dépense payée est archivée, pas effacée)`) && run(() => deleteExpenseAction(r.kind === "recurring" ? { recurringId: r.recurringExpenseId! } : { entryId: r.entryId! }, true), "Supprimé.")}
                       />
                     </td>
@@ -342,9 +356,37 @@ export default function ExpensesPanel() {
       {detailTarget && (
         <ExpenseDetail
           target={detailTarget}
+          refreshKey={detailRefresh}
           onClose={() => setDetailTarget(null)}
           onConfirmUsage={async (entryId, amount, currency) => {
             await run(() => confirmUsageAction(entryId, amount, currency), "Montant confirmé.");
+            setDetailRefresh((x) => x + 1);
+          }}
+          onCorrect={(occ) => setCorrectTarget(occ)}
+        />
+      )}
+      {dropTarget && (
+        <DropDialog
+          target={dropTarget}
+          busy={busy}
+          onClose={() => setDropTarget(null)}
+          onSubmit={async (opts) => {
+            if (dropTarget.recurringExpenseId) {
+              await run(() => dropSubscriptionAction(dropTarget.recurringExpenseId!, opts), "Abonnement résilié.");
+            }
+            setDropTarget(null);
+          }}
+        />
+      )}
+      {correctTarget && (
+        <CorrectionDialog
+          occurrence={correctTarget}
+          busy={busy}
+          onClose={() => setCorrectTarget(null)}
+          onSubmit={async (correction) => {
+            await run(() => correctOccurrenceAction(correctTarget.id, correction), "Correction enregistrée.");
+            setCorrectTarget(null);
+            setDetailRefresh((x) => x + 1);
           }}
         />
       )}
@@ -378,18 +420,18 @@ function ActBtn({ label, onClick, busy, tone }: { label: string; onClick: () => 
 }
 
 function RowActions({
-  row, busy, onPay, onEdit, onSkip, onPause, onResume, onCancel, onDelete,
+  row, busy, onPay, onEdit, onSkip, onPause, onResume, onDrop, onDelete,
 }: {
   row: LedgerRowDTO; busy: boolean;
-  onPay: () => void; onEdit: () => void; onSkip: () => void; onPause: () => void; onResume: () => void; onCancel: () => void; onDelete: () => void;
+  onPay: () => void; onEdit: () => void; onSkip: () => void; onPause: () => void; onResume: () => void; onDrop: () => void; onDelete: () => void;
 }) {
   const isRecurring = row.kind === "recurring";
-  const cancelled = row.status === "cancelled";
+  const terminated = row.status === "cancelled" || row.status === "subscription_cancelled" || row.status === "subscription_expired";
   const paid = row.status === "paid";
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      {!cancelled && !paid && <ActBtn label="Payer" onClick={onPay} busy={busy} />}
-      {isRecurring && !cancelled && (
+      {!terminated && !paid && <ActBtn label="Payer" onClick={onPay} busy={busy} />}
+      {isRecurring && !terminated && (
         <>
           <ActBtn label="Modifier" onClick={onEdit} busy={busy} />
           <ActBtn label="Ignorer" onClick={onSkip} busy={busy} />
@@ -398,10 +440,10 @@ function RowActions({
           ) : (
             <ActBtn label="Pause" onClick={onPause} busy={busy} />
           )}
-          <ActBtn label="Annuler" onClick={onCancel} busy={busy} tone="danger" />
+          <ActBtn label="Résilier" onClick={onDrop} busy={busy} tone="danger" />
         </>
       )}
-      {isRecurring && cancelled && <ActBtn label="Réactiver" onClick={onResume} busy={busy} />}
+      {isRecurring && terminated && <ActBtn label="Réactiver" onClick={onResume} busy={busy} />}
       <ActBtn label="Suppr." onClick={onDelete} busy={busy} tone="danger" />
     </div>
   );
@@ -728,13 +770,13 @@ function MarkPaidDialog({ target, busy, onClose, onSubmit }: { target: LedgerRow
   );
 }
 
-function ExpenseDetail({ target, onClose, onConfirmUsage }: { target: { recurringId?: string; entryId?: string }; onClose: () => void; onConfirmUsage: (entryId: string, amount: number, currency: string) => Promise<void> }) {
+function ExpenseDetail({ target, refreshKey, onClose, onConfirmUsage, onCorrect }: { target: { recurringId?: string; entryId?: string }; refreshKey: number; onClose: () => void; onConfirmUsage: (entryId: string, amount: number, currency: string) => Promise<void>; onCorrect: (occ: ExpenseEntryDTO) => void }) {
   const [detail, setDetail] = useState<ExpenseDetailDTO | null>(null);
   const [confirmAmount, setConfirmAmount] = useState("");
 
   useEffect(() => {
     getExpenseDetailAction(target).then(setDetail);
-  }, [target]);
+  }, [target, refreshKey]);
 
   const r = detail?.recurring;
   const e = detail?.entry;
@@ -788,11 +830,12 @@ function ExpenseDetail({ target, onClose, onConfirmUsage }: { target: { recurrin
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-faint">Historique des paiements</p>
               <div className="divide-y divide-border/60 rounded-lg border border-border">
                 {detail.occurrences.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                  <div key={o.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
                     <span className="text-muted">{formatExpenseDate(o.paidDate ?? o.occurrenceDate)}</span>
                     <span className="text-white">{formatOriginal(o.paidAmount ?? o.amountOriginal, o.paidCurrency ?? o.currency)}</span>
                     <span className="text-faint">{o.amountMad != null ? formatMadAmount(o.amountMad) : ""}</span>
                     <StatusChip status={o.status} />
+                    <button type="button" className="text-accent hover:text-accent-hover" onClick={() => onCorrect(o)}>Corriger</button>
                   </div>
                 ))}
               </div>
@@ -834,5 +877,116 @@ function Info({ label, value, full }: { label: string; value: string; full?: boo
       <p className="text-[11px] uppercase tracking-wide text-faint">{label}</p>
       <p className="text-white">{value}</p>
     </div>
+  );
+}
+
+// ── Subscription drop + occurrence correction dialogs ────────────────────────
+
+type DropOptions = Parameters<typeof dropSubscriptionAction>[1];
+type OccurrenceCorrection = Parameters<typeof correctOccurrenceAction>[1];
+
+const NOT_DEBITED = ["unpaid", "failed", "cancelled", "subscription_cancelled", "subscription_expired", "not_applicable"];
+
+function DropDialog({ target, busy, onClose, onSubmit }: { target: LedgerRowDTO; busy: boolean; onClose: () => void; onSubmit: (opts: DropOptions) => Promise<void> }) {
+  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10));
+  const [terminationType, setTerminationType] = useState<"cancelled" | "expired">("cancelled");
+  const [reason, setReason] = useState("");
+  const [lastOccurrencePaid, setLastOccurrencePaid] = useState(true);
+
+  return (
+    <Modal title={`Résilier — ${target.name}`} onClose={onClose}>
+      <p className="mb-3 text-xs text-muted">
+        Marque l&apos;abonnement comme résilié/expiré : arrête toutes les échéances futures et les rappels. L&apos;historique payé est conservé.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Type">
+          <select className="input" value={terminationType} onChange={(e) => setTerminationType(e.target.value as "cancelled" | "expired")}>
+            <option value="cancelled">Abonnement résilié</option>
+            <option value="expired">Abonnement expiré</option>
+          </select>
+        </Field>
+        <Field label="Date effective"><input className="input" type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} /></Field>
+      </div>
+      <Field label="Motif"><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Résiliation de l'abonnement" /></Field>
+      <label className="mt-3 flex items-center gap-1.5 text-xs text-muted">
+        <input type="checkbox" checked={lastOccurrencePaid} onChange={(e) => setLastOccurrencePaid(e.target.checked)} />
+        La dernière échéance a bien été débitée
+      </label>
+      {!lastOccurrencePaid && (
+        <p className="mt-1 text-xs text-[#D9B27C]">La dernière occurrence payée sera retirée des totaux (avec trace d&apos;audit).</p>
+      )}
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={busy}
+          onClick={() => onSubmit({ effectiveDate: new Date(effectiveDate).toISOString(), terminationType, reason: reason || null, lastOccurrencePaid, note: null })}
+        >
+          {busy ? "..." : "Confirmer la résiliation"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function CorrectionDialog({ occurrence, busy, onClose, onSubmit }: { occurrence: ExpenseEntryDTO; busy: boolean; onClose: () => void; onSubmit: (c: OccurrenceCorrection) => Promise<void> }) {
+  const [status, setStatus] = useState(occurrence.status);
+  const [paidDate, setPaidDate] = useState(toDateInput(occurrence.paidDate) || new Date().toISOString().slice(0, 10));
+  const [paidAmount, setPaidAmount] = useState(occurrence.paidAmount != null ? String(occurrence.paidAmount) : occurrence.amountOriginal != null ? String(occurrence.amountOriginal) : "");
+  const [reference, setReference] = useState(occurrence.paymentReference ?? "");
+  const [notes, setNotes] = useState(occurrence.notes ?? "");
+  const [subscriptionContinued, setSubscriptionContinued] = useState(true);
+
+  const debited = !NOT_DEBITED.includes(status);
+  const isSubTermination = status === "subscription_cancelled" || status === "subscription_expired";
+
+  return (
+    <Modal title={`Corriger l'occurrence — ${occurrence.name}`} onClose={onClose}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Nouveau statut">
+          <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+            {OCCURRENCE_CORRECTION_STATUSES.map((s) => <option key={s} value={s}>{expenseStatusLabel(s)}</option>)}
+          </select>
+        </Field>
+        {debited && <Field label="Date de paiement"><input className="input" type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} /></Field>}
+        {debited && <Field label="Montant payé"><input className="input" type="number" step="0.01" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} /></Field>}
+        <Field label="Référence"><input className="input" value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
+      </div>
+      <Field label="Notes"><textarea className="input min-h-[50px]" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+      {occurrence.recurringExpenseId && !isSubTermination && (
+        <label className="mt-3 flex items-center gap-1.5 text-xs text-muted">
+          <input type="checkbox" checked={subscriptionContinued} onChange={(e) => setSubscriptionContinued(e.target.checked)} />
+          L&apos;abonnement a continué après cette occurrence
+        </label>
+      )}
+      {!debited && (
+        <p className="mt-2 text-xs text-[#D9B27C]">Ce statut retire le montant des totaux ; l&apos;original reste visible dans l&apos;audit.</p>
+      )}
+      {isSubTermination && (
+        <p className="mt-1 text-xs text-[#E08B8B]">L&apos;abonnement sera marqué inactif et les échéances futures désactivées.</p>
+      )}
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={busy}
+          onClick={() =>
+            onSubmit({
+              status,
+              paidDate: debited ? new Date(paidDate).toISOString() : null,
+              paidAmount: debited && paidAmount ? Number(paidAmount) : null,
+              paidCurrency: occurrence.currency,
+              paymentReference: reference || null,
+              notes: notes || null,
+              subscriptionContinued: isSubTermination ? false : subscriptionContinued,
+            })
+          }
+        >
+          {busy ? "..." : "Enregistrer la correction"}
+        </button>
+      </div>
+    </Modal>
   );
 }

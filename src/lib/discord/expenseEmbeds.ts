@@ -159,6 +159,47 @@ export function usageConfirmedEmbed(d: {
   return { title: "🧾 Dépense variable confirmée", color: COLOR.teal, fields };
 }
 
+export function subscriptionDroppedEmbed(d: {
+  name: string;
+  effectiveDate: string;
+  lastOccurrencePaid: boolean;
+  reason?: string | null;
+}): DiscordEmbed {
+  return {
+    title: "🛑 Abonnement résilié",
+    color: COLOR.red,
+    fields: [
+      { name: "Service", value: d.name, inline: true },
+      { name: "Date effective", value: formatExpenseDate(d.effectiveDate), inline: true },
+      { name: "Dernière échéance", value: d.lastOccurrencePaid ? "Débitée" : "Non débitée", inline: true },
+      { name: "Occurrences futures", value: "Désactivées", inline: true },
+      ...(d.reason ? [{ name: "Motif", value: d.reason }] : []),
+    ],
+  };
+}
+
+export function expenseCorrectedEmbed(d: {
+  name: string;
+  oldStatus: string;
+  newStatus: string;
+  removedAmount: number | null;
+  currency: string;
+  futureDisabled: boolean;
+}): DiscordEmbed {
+  const fields = [
+    { name: "Service", value: d.name, inline: true },
+    { name: "Ancien statut", value: expenseStatusLabel(d.oldStatus), inline: true },
+    { name: "Nouveau statut", value: expenseStatusLabel(d.newStatus), inline: true },
+  ];
+  if (d.removedAmount != null) {
+    fields.push({ name: "Montant retiré des dépenses", value: formatOriginal(d.removedAmount, d.currency), inline: true });
+  }
+  if (d.futureDisabled) {
+    fields.push({ name: "Occurrences futures", value: "Désactivées", inline: true });
+  }
+  return { title: "✏️ Dépense corrigée", color: COLOR.amber, fields };
+}
+
 export function monthlySummaryEmbed(d: {
   monthLabel: string;
   totalMad: number;

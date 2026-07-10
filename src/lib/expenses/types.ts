@@ -64,6 +64,10 @@ export type RecurringExpenseDTO = {
   // ledger's status column when the subscription is active.
   occurrenceStatus: string;
   lastPaymentDate: string | null;
+  // Set when the subscription was dropped/expired.
+  terminationType: string | null;
+  terminatedAt: string | null;
+  terminationReason: string | null;
 };
 
 /** A row in the ledger table: either a standalone ExpenseEntry or the virtual

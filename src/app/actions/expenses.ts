@@ -20,9 +20,13 @@ import {
   setRecurringStatus,
   deleteRecurring,
   deleteEntry,
+  correctOccurrence,
+  dropSubscription,
   type RecurringInput,
   type OneTimeInput,
   type PaidInfo,
+  type OccurrenceCorrection,
+  type DropOptions,
 } from "@/lib/db/expenses";
 import { getPricingSettings } from "@/lib/db/pricing-settings";
 import { convertToMad } from "@/lib/expenses/currency";
@@ -32,6 +36,8 @@ import {
   expensePaidEmbed,
   expenseCancelledEmbed,
   usageConfirmedEmbed,
+  expenseCorrectedEmbed,
+  subscriptionDroppedEmbed,
 } from "@/lib/discord/expenseEmbeds";
 import { runExpenseCron } from "@/lib/expenses/reminders";
 import type { ExpenseFilters } from "@/lib/expenses/types";
@@ -241,6 +247,55 @@ export async function deleteExpenseAction(
   if (input.recurringId) await deleteRecurring(input.recurringId, hard);
   else if (input.entryId) await deleteEntry(input.entryId, hard);
   else return { ok: false, error: "Aucune dépense spécifiée." };
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+// ── Correction + subscription drop ───────────────────────────────────────────
+
+export async function correctOccurrenceAction(entryId: string, correction: OccurrenceCorrection): Promise<Result> {
+  const who = await actor();
+  if (correction.paidAmount != null && !validAmount(correction.paidAmount, true)) {
+    return { ok: false, error: "Montant invalide." };
+  }
+  const res = await correctOccurrence(entryId, correction, who);
+  if (await expensesDiscordEnabled()) {
+    // Post a correction notice when a paid occurrence is corrected in a
+    // financially meaningful way (status change and/or amount removed).
+    if (res.before.status !== correction.status || res.removedAmount != null) {
+      await postAndLog({
+        entryId, recurringExpenseId: res.before.recurringExpenseId, kind: "edited",
+        dedupeKey: `entry:${entryId}:corrected:${Date.now()}`,
+        embed: expenseCorrectedEmbed({
+          name: res.before.name,
+          oldStatus: res.before.status,
+          newStatus: correction.status,
+          removedAmount: res.removedAmount,
+          currency: res.removedCurrency,
+          futureDisabled: res.terminated,
+        }),
+      });
+    }
+  }
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function dropSubscriptionAction(recurringId: string, opts: DropOptions): Promise<Result> {
+  const who = await actor();
+  const res = await dropSubscription(recurringId, opts, who);
+  if (await expensesDiscordEnabled()) {
+    await postAndLog({
+      recurringExpenseId: recurringId, kind: "cancelled",
+      dedupeKey: `recur:${recurringId}:dropped:${Date.now()}`,
+      embed: subscriptionDroppedEmbed({
+        name: res.name,
+        effectiveDate: res.effective.toISOString(),
+        lastOccurrencePaid: res.lastOccurrencePaid,
+        reason: res.reason,
+      }),
+    });
+  }
   revalidatePath("/admin");
   return { ok: true };
 }

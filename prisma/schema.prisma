@@ -565,8 +565,13 @@ model RecurringExpense {
   reminderDaysBefore Int[]     @default([])
   remindOnDue        Boolean   @default(true)
   remindOverdue      Boolean   @default(true)
-  // status: "active" | "paused" | "cancelled"
+  // status: "active" | "paused" | "cancelled"  (cancelled = terminated/inactive)
   status             String    @default("active")
+  // Set when the subscription is dropped/expired. terminationType:
+  // "cancelled" (résilié) | "expired" | "dropped". Cleared on reactivation.
+  terminationType    String?
+  terminatedAt       DateTime?
+  terminationReason  String?
   createdBy          String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @default(now()) @updatedAt

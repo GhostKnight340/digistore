@@ -14,7 +14,11 @@ import type {
   ExpenseDetailDTO,
   ExpenseFilters,
 } from "@/lib/expenses/types";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import {
+  NOT_DEBITED_STATUSES,
+  type TerminationType,
+} from "@/lib/expenses/constants";
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
@@ -90,9 +94,13 @@ type RecurringWithOccurrences = Prisma.RecurringExpenseGetPayload<{
   include: { occurrences: true };
 }>;
 
-/** The status of a recurring subscription's *next* occurrence for the ledger. */
-function occurrenceStatus(r: { status: string; nextBillingDate: Date }): string {
-  if (r.status === "cancelled") return "cancelled";
+/** The status of a recurring subscription's *next* occurrence for the ledger.
+ *  A terminated subscription shows its termination outcome, not a payment state.
+ *  A passed due date is "overdue" (À confirmer / En retard) — NEVER auto-paid. */
+function occurrenceStatus(r: { status: string; nextBillingDate: Date; terminationType: string | null }): string {
+  if (r.status === "cancelled") {
+    return r.terminationType === "expired" ? "subscription_expired" : "subscription_cancelled";
+  }
   if (r.status === "paused") return "pending";
   return r.nextBillingDate.getTime() < Date.now() ? "overdue" : "upcoming";
 }
@@ -128,6 +136,9 @@ function toRecurringDTO(r: RecurringWithOccurrences, fx: Record<string, number>)
     updatedAt: r.updatedAt.toISOString(),
     occurrenceStatus: occurrenceStatus(r),
     lastPaymentDate: paid[0]?.paidDate?.toISOString() ?? null,
+    terminationType: r.terminationType,
+    terminatedAt: iso(r.terminatedAt),
+    terminationReason: r.terminationReason,
   };
 }
 
@@ -594,8 +605,8 @@ export async function updateEntry(
         expenseEntryId: id,
         kind: "edit",
         field: a.field,
-        oldValue: a.oldValue as Prisma.InputJsonValue,
-        newValue: a.newValue as Prisma.InputJsonValue,
+        oldValue: a.oldValue == null ? Prisma.DbNull : (a.oldValue as Prisma.InputJsonValue),
+        newValue: a.newValue == null ? Prisma.DbNull : (a.newValue as Prisma.InputJsonValue),
         createdBy: actor,
       })),
     });
@@ -622,6 +633,7 @@ export async function markRecurringOccurrencePaid(
   const fx = await fxRates();
   const r = await prisma.recurringExpense.findUnique({ where: { id: recurringId } });
   if (!r) throw new Error("Abonnement introuvable.");
+  if (r.status === "cancelled") throw new Error("Abonnement résilié — réactivez-le d'abord.");
   const { amountMad, rate } = convertToMad(paid.paidAmount, paid.paidCurrency, fx);
   const occurrenceDate = r.nextBillingDate;
 
@@ -720,7 +732,179 @@ export async function skipOccurrence(recurringId: string) {
 }
 
 export async function setRecurringStatus(recurringId: string, status: "active" | "paused" | "cancelled") {
-  return prisma.recurringExpense.update({ where: { id: recurringId }, data: { status } });
+  // Reactivating clears any termination so it re-enters projections/reminders.
+  return prisma.recurringExpense.update({
+    where: { id: recurringId },
+    data: status === "active"
+      ? { status, terminationType: null, terminatedAt: null, terminationReason: null }
+      : { status },
+  });
+}
+
+// ── Correction + subscription drop ───────────────────────────────────────────
+
+export type OccurrenceCorrection = {
+  status: string;
+  paidDate?: string | null;
+  paidAmount?: number | null;
+  paidCurrency?: string | null;
+  paymentReference?: string | null;
+  notes?: string | null;
+  // false → the subscription did NOT continue after this occurrence (terminate).
+  subscriptionContinued?: boolean;
+};
+
+function isNotDebited(status: string): boolean {
+  return (NOT_DEBITED_STATUSES as readonly string[]).includes(status);
+}
+
+/** Correct a recurring occurrence (or any entry). Records every change as an
+ *  append-only ExpenseAdjustment (previous value preserved), removes the amount
+ *  from totals when the corrected status means "not debited", and terminates the
+ *  parent subscription when the occurrence shows it ended. */
+export async function correctOccurrence(entryId: string, c: OccurrenceCorrection, actor: string | null) {
+  const before = await prisma.expenseEntry.findUnique({ where: { id: entryId } });
+  if (!before) throw new Error("Occurrence introuvable.");
+  const fx = await fxRates();
+
+  const audits: { field: string; oldValue: unknown; newValue: unknown }[] = [];
+  const data: Prisma.ExpenseEntryUpdateInput = { updatedBy: actor };
+
+  if (c.status !== before.status) {
+    audits.push({ field: "status", oldValue: before.status, newValue: c.status });
+    data.status = c.status;
+  }
+  if (c.paymentReference !== undefined && c.paymentReference !== before.paymentReference) {
+    audits.push({ field: "paymentReference", oldValue: before.paymentReference, newValue: c.paymentReference });
+    data.paymentReference = c.paymentReference;
+  }
+  if (c.notes !== undefined) data.notes = c.notes;
+
+  const debited = !isNotDebited(c.status);
+  if (debited && c.paidAmount !== undefined) {
+    const { amountMad, rate } = convertToMad(c.paidAmount, c.paidCurrency ?? before.currency, fx);
+    if (num(before.amountOriginal) !== c.paidAmount) {
+      audits.push({ field: "amountOriginal", oldValue: num(before.amountOriginal), newValue: c.paidAmount });
+    }
+    data.amountOriginal = c.paidAmount;
+    data.paidAmount = c.paidAmount;
+    data.exchangeRateToMad = rate;
+    data.amountMad = amountMad;
+    if (c.paidCurrency) data.currency = c.paidCurrency;
+  }
+  if (debited && c.paidDate !== undefined) {
+    data.paidDate = c.paidDate ? new Date(c.paidDate) : null;
+  }
+  if (!debited) {
+    // Reverse its effect on totals: it no longer counts as paid. Keep
+    // amountOriginal for the "montant retiré" audit/display, but null the paid
+    // figures + amountMad so it can never be summed.
+    if (before.status === "paid") {
+      audits.push({ field: "amountMad", oldValue: num(before.amountMad), newValue: null });
+    }
+    data.paidAmount = null;
+    data.paidDate = null;
+    data.amountMad = null;
+    data.paidExchangeRate = null;
+  }
+
+  const terminate =
+    Boolean(before.recurringExpenseId) &&
+    (c.subscriptionContinued === false || c.status === "subscription_cancelled" || c.status === "subscription_expired");
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const e = await tx.expenseEntry.update({ where: { id: entryId }, data });
+    if (audits.length) {
+      await tx.expenseAdjustment.createMany({
+        data: audits.map((a) => ({
+          expenseEntryId: entryId,
+          kind: "correction",
+          field: a.field,
+          oldValue: a.oldValue == null ? Prisma.DbNull : (a.oldValue as Prisma.InputJsonValue),
+          newValue: a.newValue == null ? Prisma.DbNull : (a.newValue as Prisma.InputJsonValue),
+          reason: c.notes ?? null,
+          createdBy: actor,
+        })),
+      });
+    }
+    if (terminate && before.recurringExpenseId) {
+      const type: TerminationType = c.status === "subscription_expired" ? "expired" : "cancelled";
+      await tx.recurringExpense.update({
+        where: { id: before.recurringExpenseId },
+        data: {
+          status: "cancelled",
+          terminationType: type,
+          terminatedAt: c.paidDate ? new Date(c.paidDate) : (before.occurrenceDate ?? new Date()),
+          terminationReason: c.notes ?? null,
+        },
+      });
+    }
+    return e;
+  });
+
+  return {
+    entry: updated,
+    before,
+    terminated: terminate,
+    removedAmount: !debited && before.status === "paid" ? num(before.amountOriginal) : null,
+    removedCurrency: before.currency,
+  };
+}
+
+export type DropOptions = {
+  effectiveDate?: string | null;
+  terminationType: "cancelled" | "expired";
+  reason?: string | null;
+  lastOccurrencePaid: boolean;
+  note?: string | null;
+};
+
+/** "Marquer comme abonnement résilié" — terminate the subscription: mark it
+ *  inactive (stops future occurrences + reminders since those filter on active),
+ *  and if the last scheduled occurrence was NOT actually charged, reverse the
+ *  most recent paid occurrence with a full audit trail. */
+export async function dropSubscription(recurringId: string, opts: DropOptions, actor: string | null) {
+  const r = await prisma.recurringExpense.findUnique({
+    where: { id: recurringId },
+    include: { occurrences: { where: { status: "paid" }, orderBy: { paidDate: "desc" }, take: 1 } },
+  });
+  if (!r) throw new Error("Abonnement introuvable.");
+  const effective = opts.effectiveDate ? new Date(opts.effectiveDate) : new Date();
+  let removedAmount: number | null = null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.recurringExpense.update({
+      where: { id: recurringId },
+      data: {
+        status: "cancelled",
+        terminationType: opts.terminationType,
+        terminatedAt: effective,
+        terminationReason: opts.reason ?? null,
+      },
+    });
+    if (!opts.lastOccurrencePaid && r.occurrences[0]) {
+      const occ = r.occurrences[0];
+      removedAmount = num(occ.amountOriginal);
+      const newStatus = opts.terminationType === "expired" ? "subscription_expired" : "subscription_cancelled";
+      await tx.expenseEntry.update({
+        where: { id: occ.id },
+        data: { status: newStatus, paidAmount: null, paidDate: null, amountMad: null, paidExchangeRate: null, updatedBy: actor },
+      });
+      await tx.expenseAdjustment.create({
+        data: {
+          expenseEntryId: occ.id,
+          kind: "reversal",
+          field: "status",
+          oldValue: "paid",
+          newValue: newStatus,
+          reason: opts.reason ?? "Abonnement résilié — occurrence non débitée",
+          createdBy: actor,
+        },
+      });
+    }
+  });
+
+  return { name: r.name, terminationType: opts.terminationType, effective, lastOccurrencePaid: opts.lastOccurrencePaid, reason: opts.reason ?? null, removedAmount, currency: r.currency };
 }
 
 /** Delete a recurring subscription. Hard-delete only when it has no paid
