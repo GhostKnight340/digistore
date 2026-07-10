@@ -87,7 +87,9 @@ export default async function ProductsPage({
           Tous
           <span className="font-mono text-[11px] text-faint">{totalRegionCount}</span>
         </Link>
-        {REGION_LIST.map((item) => (
+        {REGION_LIST.filter(
+          (item) => (regionCounts[item.code] ?? 0) > 0 || region === item.code,
+        ).map((item) => (
           <Link
             key={item.code}
             href={`/products?${new URLSearchParams({ region: item.code, ...(category ? { category } : {}) })}`}
