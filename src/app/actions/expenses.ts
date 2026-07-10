@@ -33,6 +33,7 @@ import {
   expenseCancelledEmbed,
   usageConfirmedEmbed,
 } from "@/lib/discord/expenseEmbeds";
+import { runExpenseCron } from "@/lib/expenses/reminders";
 import type { ExpenseFilters } from "@/lib/expenses/types";
 
 type Result = { ok: boolean; error?: string };
@@ -242,4 +243,14 @@ export async function deleteExpenseAction(
   else return { ok: false, error: "Aucune dépense spécifiée." };
   revalidatePath("/admin");
   return { ok: true };
+}
+
+/** Manual trigger for the same idempotent logic the daily cron runs. */
+export async function runDueRemindersAction(): Promise<
+  Result & { remindersSent?: number; overdueMarked?: number; summaryPosted?: boolean }
+> {
+  await actor();
+  const r = await runExpenseCron();
+  revalidatePath("/admin");
+  return { ok: true, ...r };
 }

@@ -15,6 +15,7 @@ import {
   skipOccurrenceAction,
   setRecurringStatusAction,
   deleteExpenseAction,
+  runDueRemindersAction,
 } from "@/app/actions/expenses";
 import type {
   LedgerRowDTO,
@@ -151,6 +152,20 @@ export default function ExpensesPanel() {
           </button>
           <button type="button" onClick={() => setOneTimeOpen(true)} className="btn-ghost py-1.5 text-xs">
             + Dépense ponctuelle
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                const r = await runDueRemindersAction();
+                return { ok: r.ok, error: r.error };
+              }, "Rappels traités.")
+            }
+            className="btn-ghost py-1.5 text-xs"
+            title="Traiter les rappels et échéances en retard maintenant (comme le fait le cron quotidien)"
+          >
+            Rappels
           </button>
         </div>
       </div>
