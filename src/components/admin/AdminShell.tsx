@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import CommandSearch from "@/components/admin/CommandSearch";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
 
@@ -597,54 +598,93 @@ export default function AdminShell({
               >
                 {currentLabel}
               </span>
+              <CommandSearch
+                renderTrigger={(open) => (
+                  <button
+                    type="button"
+                    onClick={open}
+                    aria-label="Rechercher ou accéder à…"
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      flexShrink: 0,
+                      borderRadius: "9px",
+                      border: `1px solid ${C.borderStrong}`,
+                      background: C.surfaceInput,
+                      color: C.muted,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="7" />
+                      <line x1="21" y1="21" x2="16.6" y2="16.6" />
+                    </svg>
+                  </button>
+                )}
+              />
             </>
           ) : (
-            <div
-              style={{
-                flex: 1,
-                maxWidth: "420px",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                height: "38px",
-                padding: "0 13px",
-                background: C.surfaceInput,
-                border: `1px solid ${searchFocus ? "rgba(62,123,250,0.35)" : C.borderInput}`,
-                borderRadius: "10px",
-                boxShadow: searchFocus ? "0 0 0 3px rgba(62,123,250,0.20)" : "none",
-                transition: "border-color 120ms ease, box-shadow 120ms ease",
-              }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2">
-                <circle cx="11" cy="11" r="7" />
-                <line x1="21" y1="21" x2="16.6" y2="16.6" />
-              </svg>
-              <input
-                placeholder="Rechercher ou accéder à…  commandes, produits, clients"
-                onFocus={() => setSearchFocus(true)}
-                onBlur={() => setSearchFocus(false)}
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: C.text,
-                  fontSize: "13px",
-                }}
-              />
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "11px",
-                  color: C.faint,
-                  border: `1px solid ${C.borderStrong}`,
-                  borderRadius: "5px",
-                  padding: "1px 6px",
-                }}
-              >
-                ⌘K
-              </span>
-            </div>
+            <CommandSearch
+              renderTrigger={(open) => (
+                <button
+                  type="button"
+                  onClick={open}
+                  onFocus={() => setSearchFocus(true)}
+                  onBlur={() => setSearchFocus(false)}
+                  aria-label="Rechercher ou accéder à…"
+                  style={{
+                    flex: 1,
+                    maxWidth: "420px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    height: "38px",
+                    padding: "0 13px",
+                    background: C.surfaceInput,
+                    border: `1px solid ${searchFocus ? "rgba(62,123,250,0.35)" : C.borderInput}`,
+                    borderRadius: "10px",
+                    boxShadow: searchFocus ? "0 0 0 3px rgba(62,123,250,0.20)" : "none",
+                    transition: "border-color 120ms ease, box-shadow 120ms ease",
+                    cursor: "text",
+                    textAlign: "left",
+                    font: "inherit",
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="21" y1="21" x2="16.6" y2="16.6" />
+                  </svg>
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      color: C.faint,
+                      fontSize: "13px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Rechercher ou accéder à…  commandes, produits, clients
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "11px",
+                      color: C.faint,
+                      border: `1px solid ${C.borderStrong}`,
+                      borderRadius: "5px",
+                      padding: "1px 6px",
+                    }}
+                  >
+                    ⌘K
+                  </span>
+                </button>
+              )}
+            />
           )}
           {!isMobile ? <div style={{ flex: 1 }} /> : null}
           <Link
