@@ -95,6 +95,10 @@ export default async function ProductDetailPage({
             <RegionBadge code={displayRegion} variant="overlay" className="absolute left-3.5 top-3.5" />
           </div>
 
+          {(product.longDescription || product.description) && (
+            <ProductInfoCard text={product.longDescription || product.description} />
+          )}
+
           <section className="mt-10">
             <h2 className="text-lg font-semibold tracking-tight text-text">
               Comment ça marche
@@ -136,11 +140,6 @@ export default async function ProductDetailPage({
               </>
             )}
           </h1>
-          {(product.longDescription || product.description) && (
-            <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-muted">
-              {product.longDescription || product.description}
-            </p>
-          )}
 
           <div className="mt-6 flex flex-wrap gap-2">
             <span className="chip">{product.deliveryType}</span>
@@ -246,5 +245,63 @@ export default async function ProductDetailPage({
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * Contextual "Bon à savoir" tip card shown under the product media. Renders the
+ * product's own description (any product, any length) as separated paragraphs,
+ * with ⚠️-prefixed lines highlighted as notices — noticeable but not a full
+ * error alert. Purely presentational; the content/data source is unchanged.
+ */
+function ProductInfoCard({ text }: { text: string }) {
+  const paragraphs = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (paragraphs.length === 0) return null;
+
+  return (
+    <section className="mt-8 overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex items-center gap-2.5 border-b border-border/60 px-5 py-3.5">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10">
+          <LightbulbIcon className="h-[18px] w-[18px] text-[#9FB8FF]" />
+        </span>
+        <h2 className="text-sm font-semibold text-text">Bon à savoir</h2>
+      </div>
+      <div className="space-y-2.5 px-5 py-4 text-[14px] leading-relaxed text-muted">
+        {paragraphs.map((para, index) =>
+          para.startsWith("⚠") ? (
+            <p
+              key={index}
+              className="rounded-lg border border-[#F7B14A]/25 bg-[#F7B14A]/[0.07] px-3 py-2 text-[13.5px] font-medium text-[#D9B27C]"
+            >
+              {para}
+            </p>
+          ) : (
+            <p key={index}>{para}</p>
+          ),
+        )}
+      </div>
+    </section>
+  );
+}
+
+function LightbulbIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M9 18h6" />
+      <path d="M10 21h4" />
+      <path d="M12 3a6 6 0 0 0-3.6 10.8c.46.35.9.86 1.1 1.7.08.3.35.5.65.5h3.7c.3 0 .57-.2.65-.5.2-.84.64-1.35 1.1-1.7A6 6 0 0 0 12 3z" />
+    </svg>
   );
 }
