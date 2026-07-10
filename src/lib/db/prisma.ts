@@ -17,7 +17,13 @@ if (process.env.NODE_ENV !== "production") {
 let ensurePromise: Promise<void> | null = null;
 
 export function ensureDatabaseReady(): Promise<void> {
-  ensurePromise ??= seedCatalogProducts();
+  ensurePromise ??= seedCatalogProducts().catch((error) => {
+    // Never memoize a rejection: a transient DB outage (e.g. Neon waking from
+    // auto-suspend) would otherwise poison this instance for its whole life,
+    // failing every future read. Reset so the next call retries.
+    ensurePromise = null;
+    throw error;
+  });
   return ensurePromise;
 }
 

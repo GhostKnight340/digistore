@@ -25,16 +25,6 @@ import type {
 
 type ProductWithCategory = Awaited<ReturnType<typeof getActiveProductRows>>[number];
 
-/**
- * Reads that embed a variant's stock status carry this max age. With automatic
- * inventory, stock is derived from the live unused-code count, which changes on
- * delivery/restock — events that may happen outside a request (fire-and-forget
- * fulfillment) where `revalidateTag` can't run. The tag still invalidates
- * instantly on admin edits/inventory actions; this bounds any other drift.
- * Overselling is separately impossible: the code claim at delivery is atomic.
- */
-const STOCK_CACHE_TTL_SECONDS = 60;
-
 const productCatalogInclude = {
   categoryRecord: true,
   media: {
@@ -269,7 +259,6 @@ export async function getCatalogData(): Promise<{
 
 export const getRegionCounts = unstable_cache(
   async function getRegionCounts(): Promise<Record<string, number>> {
-    await ensureDatabaseReady();
     const rows = await prisma.product.groupBy({
       by: ["region"],
       where: {
@@ -304,7 +293,6 @@ type CatalogPageResult = {
 
 const getCatalogPageCached = unstable_cache(
   async (options: CatalogPageOptions): Promise<CatalogPageResult> => {
-  await ensureDatabaseReady();
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(200, Math.max(1, options.take ?? 24));
   const [categoryRows, productRows] = await Promise.all([
@@ -366,7 +354,7 @@ const getCatalogPageCached = unstable_cache(
   };
   },
   ["catalog-page"],
-  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG], revalidate: STOCK_CACHE_TTL_SECONDS },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
 );
 
 export async function getCatalogPage(
@@ -397,7 +385,6 @@ const searchProductsPreviewCached = unstable_cache(
     query: string,
     limit: number,
   ): Promise<{ results: ProductSearchResult[]; hasMore: boolean }> => {
-  await ensureDatabaseReady();
   const settings = await loadStoreSettings();
   // Fetch a little wider than `limit`: some rows drop out once inventory/active
   // visibility is applied, and the surplus tells us whether to offer "voir tous
@@ -446,7 +433,6 @@ export async function getProductCatalog(): Promise<Product[]> {
 
 export const getProductBySlug = unstable_cache(
   async (slug: string): Promise<Product | null> => {
-    await ensureDatabaseReady();
     const product = await prisma.product.findFirst({
       where: {
         slug,
@@ -460,12 +446,11 @@ export const getProductBySlug = unstable_cache(
     return product ? toParentProduct(product, undefined, settings) : null;
   },
   ["product-by-slug"],
-  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG], revalidate: STOCK_CACHE_TTL_SECONDS },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
 );
 
 export const getParentProductSlugs = unstable_cache(
   async (): Promise<string[]> => {
-    await ensureDatabaseReady();
     const products = await prisma.product.findMany({
       where: {
         active: true,
@@ -482,7 +467,6 @@ export const getParentProductSlugs = unstable_cache(
 
 export const getProductsByCategorySlug = unstable_cache(
   async (category: string): Promise<Product[]> => {
-    await ensureDatabaseReady();
     const products = await prisma.product.findMany({
       where: {
         category,
@@ -501,13 +485,12 @@ export const getProductsByCategorySlug = unstable_cache(
     );
   },
   ["products-by-category"],
-  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG], revalidate: STOCK_CACHE_TTL_SECONDS },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
 );
 
 /** Uncached settings read. Used inside the catalog caches (which carry the
  *  settings tag themselves) so we never nest one `unstable_cache` in another. */
 async function loadStoreSettings(): Promise<StoreSettings> {
-  await ensureDatabaseReady();
   const record = await prisma.storeSetting.findUnique({
     where: { id: "default" },
   });
