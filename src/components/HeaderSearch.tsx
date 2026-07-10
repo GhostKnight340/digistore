@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { ProductSearchResult } from "@/lib/types";
-import { formatMAD } from "@/lib/format";
+import { formatDH } from "@/lib/format";
 import { getRegion } from "@/lib/regions";
 import RegionBadge from "./RegionBadge";
 
@@ -345,7 +345,7 @@ function ResultRow({
             {"À partir de"}
           </span>
           <span className="mt-1 block font-mono text-sm font-semibold text-text">
-            {formatMAD(result.price)}
+            {formatDH(result.price)}
           </span>
         </span>
       </button>

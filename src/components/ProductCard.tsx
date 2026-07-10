@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Product } from "@/lib/types";
-import { formatMAD } from "@/lib/format";
+import { formatDH } from "@/lib/format";
 import ProductArt from "./ProductArt";
 import RegionBadge, { regionTitleSuffix } from "./RegionBadge";
 
@@ -52,7 +52,7 @@ export default function ProductCard({
         </h3>
         <div className={`${featured ? "mt-4" : "mt-3"} flex flex-wrap items-baseline justify-between gap-2`}>
           <span className={`font-mono font-semibold tracking-tight text-text ${featured ? "text-xl" : "text-lg"}`}>
-            {formatMAD(product.price)}
+            {formatDH(product.price)}
           </span>
           <span className="min-w-0 truncate text-xs text-faint">{product.categoryName}</span>
         </div>

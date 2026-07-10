@@ -1,6 +1,14 @@
-/** Formats a number as Moroccan Dirham, e.g. "100 MAD". */
+/** Formats a number as Moroccan Dirham, e.g. "100 MAD".
+ *  Internal/admin use only — the currency code stays MAD here. */
 export function formatMAD(amount: number): string {
   return `${new Intl.NumberFormat("en-US").format(amount)} MAD`;
+}
+
+/** Customer-facing price label, e.g. "100 DH". Display-only: the underlying
+ *  currency is still MAD everywhere else (pricing, DB, payments, admin) — the
+ *  storefront just shows the Moroccan dirham to shoppers as "DH". */
+export function formatDH(amount: number): string {
+  return `${new Intl.NumberFormat("en-US").format(amount)} DH`;
 }
 
 /** Short, human-friendly date used across order views. */

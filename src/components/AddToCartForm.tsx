@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
 import type { CartIdentity } from "@/lib/cartIdentity";
-import { formatMAD } from "@/lib/format";
+import { formatDH } from "@/lib/format";
 
 export default function AddToCartForm({
   productId,
@@ -63,7 +63,7 @@ export default function AddToCartForm({
         <div className="mb-5">
           <div className="mb-1 text-sm text-faint">Total</div>
           <div className="text-3xl font-semibold tracking-[-0.03em] text-text">
-            {formatMAD(price * qty)}
+            {formatDH(price * qty)}
           </div>
         </div>
       )}

@@ -111,7 +111,7 @@ export async function submitPayment(
           order_number: reference.number,
           order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
           payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
-          total: `${order.totalMad} MAD`,
+          total: `${order.totalMad} DH`,
         },
       });
     } catch (emailError) {
@@ -418,7 +418,7 @@ export async function renderPaymentStatusEmailPreview(
     order_number: reference.number,
     order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
     payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
-    total: `${order.totalMad} MAD`,
+    total: `${order.totalMad} DH`,
     reason,
   };
   const rawBody =
@@ -483,7 +483,7 @@ export async function applyPaymentStatusWithEmail(
           order_number: reference.number,
           order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
           payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
-          total: `${order.totalMad} MAD`,
+          total: `${order.totalMad} DH`,
           reason: email.reason,
         },
       });

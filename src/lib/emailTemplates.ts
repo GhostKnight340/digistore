@@ -483,13 +483,13 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
     { key: "order_number", sample: "#000128" },
     { key: "order_url", sample: "https://ghost.ma/order/example" },
     { key: "payment_url", sample: "https://ghost.ma/payment/example" },
-    { key: "total", sample: "250 MAD" },
+    { key: "total", sample: "250 DH" },
   ],
   awaiting_payment: [
     { key: "customer_name", sample: "Amine" },
     { key: "order_number", sample: "#000128" },
     { key: "payment_url", sample: "https://ghost.ma/payment/example" },
-    { key: "total", sample: "250 MAD" },
+    { key: "total", sample: "250 DH" },
   ],
   proof_received: [
     { key: "customer_name", sample: "Amine" },
@@ -527,7 +527,7 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
     { key: "order_number", sample: "#000128" },
     { key: "order_url", sample: "https://ghost.ma/order/example" },
     { key: "reason", sample: "Remboursement partiel" },
-    { key: "total", sample: "250 MAD" },
+    { key: "total", sample: "250 DH" },
   ],
 };
 

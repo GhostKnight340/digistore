@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { formatMAD } from "@/lib/format";
+import { formatDH } from "@/lib/format";
 import { orderStatusLabel, canCustomerCancel } from "@/lib/orderStatus";
 import {
   getPaymentPageDataAction,
@@ -279,7 +279,7 @@ function PaymentExperience({
         : isSubmitted
           ? "Votre justificatif est en cours de vérification."
           : activeMethod?.type === "bank"
-            ? `Effectuez un virement de ${formatMAD(total)} vers le compte ci-dessous, puis ajoutez votre justificatif.`
+            ? `Effectuez un virement de ${formatDH(total)} vers le compte ci-dessous, puis ajoutez votre justificatif.`
             : "Réglez le montant ci-dessous pour valider votre commande.";
 
   const product = order.items[0] ? getProduct(order.items[0].productId) : undefined;
@@ -323,7 +323,7 @@ function PaymentExperience({
               <span className="font-mono text-[44px] font-semibold leading-none tracking-[-0.03em] text-white">
                 {madWhole(total)}
               </span>
-              <span className="text-lg font-semibold text-[#9FB8FF]">MAD</span>
+              <span className="text-lg font-semibold text-[#9FB8FF]">DH</span>
             </div>
             <div className="mt-3 flex items-center gap-2 border-t border-white/[0.07] pt-3 text-[12.5px] text-[#7A808C]">
               <LockIcon /> Vérification manuelle sécurisée
@@ -566,7 +566,7 @@ function PaymentExperience({
                           </div>
                         </div>
                         <span className="shrink-0 font-mono text-[13px] text-white">
-                          {formatMAD(item.unitPriceMad * item.quantity)}
+                          {formatDH(item.unitPriceMad * item.quantity)}
                         </span>
                       </div>
                     );
@@ -574,7 +574,7 @@ function PaymentExperience({
 
                   <div className="flex justify-between pt-[13px] text-[13px]">
                     <span className="text-[#9A9FAB]">Sous-total</span>
-                    <span className="font-mono text-white">{formatMAD(total)}</span>
+                    <span className="font-mono text-white">{formatDH(total)}</span>
                   </div>
                   <div className="flex justify-between border-b border-white/[0.06] pb-[13px] pt-[9px] text-[13px]">
                     <span className="text-[#9A9FAB]">Livraison</span>
@@ -583,7 +583,7 @@ function PaymentExperience({
                   <div className="flex items-baseline justify-between pt-[13px]">
                     <span className="text-sm font-semibold text-white">Total</span>
                     <span className="font-mono text-xl font-semibold text-white">
-                      {formatMAD(total)}
+                      {formatDH(total)}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center gap-2 rounded-[10px] border border-white/[0.06] bg-[#0B0C10] px-3 py-2.5">
@@ -959,7 +959,7 @@ function BankModule({
               Montant exact à virer
             </div>
             <div className="font-mono text-[26px] font-semibold tracking-[-0.01em] text-white">
-              {madExact(total)} MAD
+              {madExact(total)} DH
             </div>
           </div>
           <CopyButton
@@ -1259,7 +1259,7 @@ function AmountPanel({
         <div className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-[#8DA6E8]">
           Montant
         </div>
-        <div className="font-mono text-[26px] font-semibold text-white">{madExact(total)} MAD</div>
+        <div className="font-mono text-[26px] font-semibold text-white">{madExact(total)} DH</div>
       </div>
       {convertedLabel && (
         <div className="text-right">
@@ -1532,7 +1532,7 @@ function TerminalConfirmed({
         </span>
         <h2 className="text-[19px] font-semibold text-white">Paiement confirmé</h2>
         <p className="mx-auto mt-1.5 max-w-[340px] text-[13.5px] text-[#9A9FAB]">
-          Votre paiement de <strong className="text-white">{formatMAD(total)}</strong> a été vérifié.
+          Votre paiement de <strong className="text-white">{formatDH(total)}</strong> a été vérifié.
           Votre commande {publicOrderNumber} est en cours de préparation.
         </p>
       </div>
@@ -1574,7 +1574,7 @@ function TerminalRejected({
           </div>
         </div>
         <div className="rounded-[11px] border border-[rgba(224,92,92,0.2)] bg-[rgba(224,92,92,0.07)] px-3.5 py-3 text-[12.5px] leading-relaxed text-[#E8A6A6]">
-          Vérifiez que le montant du justificatif correspond bien à {formatMAD(total)}, puis renvoyez
+          Vérifiez que le montant du justificatif correspond bien à {formatDH(total)}, puis renvoyez
           une image lisible du virement via le support.
         </div>
       </div>

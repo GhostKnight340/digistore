@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import PaymentBrandMark from "@/components/PaymentBrandMark";
-import { formatMAD } from "@/lib/format";
+import { formatDH } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
@@ -411,7 +411,7 @@ export default function CheckoutClient({
                       <div className="font-mono text-[11.5px] text-faint">Qté {item.quantity}</div>
                     </div>
                     <span className="shrink-0 font-mono text-[13px] text-text">
-                      {formatMAD(product.price * item.quantity)}
+                      {formatDH(product.price * item.quantity)}
                     </span>
                   </li>
                 );
@@ -442,7 +442,7 @@ export default function CheckoutClient({
               <div className="mb-[11px] flex items-baseline justify-between">
                 <span className="text-[12.5px] text-muted">Total à payer</span>
                 <span className="font-mono text-[19px] font-semibold text-white">
-                  {formatMAD(cartTotal)}
+                  {formatDH(cartTotal)}
                 </span>
               </div>
               <button
@@ -522,7 +522,7 @@ function SummaryCard({
                   <div className="font-mono text-xs text-faint">Qté {item.quantity}</div>
                 </div>
                 <span className="shrink-0 font-mono text-[13.5px] text-text">
-                  {formatMAD(product.price * item.quantity)}
+                  {formatDH(product.price * item.quantity)}
                 </span>
               </li>
             );
@@ -532,7 +532,7 @@ function SummaryCard({
         <div className="flex flex-col gap-[11px] border-b border-white/[0.06] py-4">
           <div className="flex justify-between text-[13.5px]">
             <span className="text-muted">Sous-total</span>
-            <span className="font-mono text-text">{formatMAD(cartTotal)}</span>
+            <span className="font-mono text-text">{formatDH(cartTotal)}</span>
           </div>
           <div className="flex justify-between text-[13.5px]">
             <span className="text-muted">Frais de livraison</span>
@@ -543,7 +543,7 @@ function SummaryCard({
         <div className="flex items-baseline justify-between py-4 pb-1">
           <span className="text-[15px] font-semibold text-white">Total</span>
           <span className="font-mono text-[22px] font-semibold tracking-tight text-white">
-            {formatMAD(cartTotal)}
+            {formatDH(cartTotal)}
           </span>
         </div>
 

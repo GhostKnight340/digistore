@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
-import { formatMAD } from "@/lib/format";
+import { formatDH } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
 import PaymentMethodsPreview from "@/components/PaymentMethodsPreview";
 import RegionBadge from "@/components/RegionBadge";
@@ -77,7 +77,7 @@ export default function CartPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-muted">
-                      {formatMAD(product.price)} l'unité
+                      {formatDH(product.price)} l'unité
                     </span>
                     <RegionBadge code={product.region} variant="chip" size="micro" />
                   </div>
@@ -116,7 +116,7 @@ export default function CartPage() {
                       </button>
                     </div>
                     <span className="font-bold text-white">
-                      {formatMAD(product.price * item.quantity)}
+                      {formatDH(product.price * item.quantity)}
                     </span>
                   </div>
                 </div>
@@ -133,7 +133,7 @@ export default function CartPage() {
             <dl className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between text-muted">
                 <dt>Sous-total</dt>
-                <dd className="text-white">{formatMAD(cartTotal)}</dd>
+                <dd className="text-white">{formatDH(cartTotal)}</dd>
               </div>
               <div className="flex justify-between text-muted">
                 <dt>Livraison</dt>
@@ -143,7 +143,7 @@ export default function CartPage() {
             <div className="my-4 border-t border-border" />
             <div className="flex justify-between text-base font-bold text-white">
               <span>Total</span>
-              <span>{formatMAD(cartTotal)}</span>
+              <span>{formatDH(cartTotal)}</span>
             </div>
             <PaymentMethodsPreview />
 

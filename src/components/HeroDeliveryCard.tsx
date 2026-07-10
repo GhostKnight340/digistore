@@ -138,7 +138,7 @@ export default function HeroDeliveryCard() {
             </div>
             <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
               <span className="text-[34px] font-semibold leading-none text-text sm:text-[42px]">
-                100 MAD
+                100 DH
               </span>
               <span className="font-mono text-[15px] text-muted">~ 9 EUR</span>
             </div>

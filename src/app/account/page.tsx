@@ -5,7 +5,7 @@ import {
   canDisconnectProvider,
   isProfileIncomplete,
 } from "@/lib/auth";
-import { formatDate, formatMAD } from "@/lib/format";
+import { formatDate, formatDH } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
 import { getDiscordApplicationId } from "@/lib/discord/config";
@@ -148,7 +148,7 @@ export default async function AccountPage() {
                     label={getPublicOrderLabel(order)}
                     meta={formatDate(order.createdAt.toISOString())}
                     status={order.status}
-                    amount={formatMAD(order.totalMad)}
+                    amount={formatDH(order.totalMad)}
                   />
                 ))
               )}

@@ -198,7 +198,7 @@ export default async function ProductDetailPage({
                       }`}
                     >
                       <span className="block font-medium">{item.title}</span>
-                      <span className="font-mono text-xs">{item.price} MAD</span>
+                      <span className="font-mono text-xs">{item.price} DH</span>
                     </Link>
                   ))}
                 </div>

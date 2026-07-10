@@ -7,7 +7,7 @@ import {
   requireCustomer,
   isProfileIncomplete,
 } from "@/lib/auth";
-import { formatMAD } from "@/lib/format";
+import { formatDH } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
 
@@ -107,7 +107,7 @@ export default async function AccountOrdersPage() {
                         {orderStatusShort(order.status)}
                       </span>
                       <span className="font-mono text-sm font-semibold text-white">
-                        {formatMAD(order.totalMad)}
+                        {formatDH(order.totalMad)}
                       </span>
                     </div>
                   </Link>

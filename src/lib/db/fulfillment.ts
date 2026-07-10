@@ -74,7 +74,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
           customer_name: order.customerName,
           order_number: reference.number,
           order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
-          total: `${order.totalMad} MAD`,
+          total: `${order.totalMad} DH`,
         },
       });
     } catch (emailError) {
@@ -342,7 +342,7 @@ export async function deliverOrder(
           // Token link — the enumerable public order number is never sufficient
           // to reveal codes; the secret token (or logged-in ownership) is.
           delivery_url: absoluteAppUrl(`/delivery/${deliveryToken}`),
-          total: `${order.totalMad} MAD`,
+          total: `${order.totalMad} DH`,
         },
       });
     } catch (emailError) {
