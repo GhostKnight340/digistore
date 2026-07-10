@@ -31,6 +31,43 @@ export class ReloadlyConfigError extends Error {
   }
 }
 
+/**
+ * True when a fetch() rejected before any HTTP response arrived — DNS failure,
+ * connection reset, TLS error, timeout, or abort — i.e. we never actually
+ * reached Reloadly. These surface as a bare TypeError/AbortException rather than
+ * a {@link ReloadlyApiError} (which only exists once a status code came back).
+ */
+export function isReloadlyNetworkError(error: unknown): boolean {
+  if (error instanceof ReloadlyApiError || error instanceof ReloadlyConfigError) {
+    return false;
+  }
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof TypeError && /fetch/i.test(error.message)) return true;
+  // undici wraps low-level socket failures (ECONNRESET, ENOTFOUND, ETIMEDOUT…)
+  // in `error.cause` with a string `code`.
+  const cause = (error as { cause?: { code?: unknown } } | null)?.cause;
+  return typeof cause?.code === "string";
+}
+
+/**
+ * Turn any error from a Reloadly call into a safe, credential-free message for
+ * the admin UI, and log the real cause server-side under `[reloadly:<context>]`.
+ * Typed Reloadly errors already carry a safe message; anything else is a network
+ * failure or an unexpected bug whose detail must never reach the browser.
+ */
+export function describeReloadlyError(context: string, error: unknown): string {
+  if (error instanceof ReloadlyConfigError) return error.message;
+  if (error instanceof ReloadlyApiError) return error.message;
+  console.error(
+    `[reloadly:${context}]`,
+    error instanceof Error ? (error.stack ?? error.message) : error,
+  );
+  if (isReloadlyNetworkError(error)) {
+    return "Reloadly est injoignable (réseau ou délai dépassé). Réessayez dans un instant.";
+  }
+  return "Erreur lors de la communication avec Reloadly.";
+}
+
 type TokenCacheEntry = {
   accessToken: string;
   expiresAt: number; // epoch ms

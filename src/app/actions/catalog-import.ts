@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdminCustomer } from "@/lib/auth";
-import { ReloadlyApiError, ReloadlyConfigError } from "@/lib/reloadly/client";
+import { describeReloadlyError } from "@/lib/reloadly/client";
 import {
   searchReloadlyImportCatalog,
   getReloadlyImportDetail,
@@ -24,12 +24,6 @@ import type {
   ReloadlyImportSearchPageDTO,
 } from "@/lib/dto";
 
-function safeError(error: unknown): string {
-  if (error instanceof ReloadlyConfigError) return error.message;
-  if (error instanceof ReloadlyApiError) return error.message;
-  return "Erreur lors de la communication avec Reloadly.";
-}
-
 export async function searchReloadlyImportCatalogAction(filters: {
   page?: number;
   size?: number;
@@ -42,7 +36,7 @@ export async function searchReloadlyImportCatalogAction(filters: {
   try {
     return { ok: true, data: await searchReloadlyImportCatalog(filters) };
   } catch (error) {
-    return { ok: false, error: safeError(error) };
+    return { ok: false, error: describeReloadlyError("import:search", error) };
   }
 }
 
@@ -53,7 +47,7 @@ export async function getReloadlyImportDetailAction(
   try {
     return { ok: true, data: await getReloadlyImportDetail(productId) };
   } catch (error) {
-    return { ok: false, error: safeError(error) };
+    return { ok: false, error: describeReloadlyError(`import:detail:${productId}`, error) };
   }
 }
 
@@ -67,7 +61,7 @@ export async function previewReloadlyDenominationsAction(input: {
   try {
     return { ok: true, data: await previewReloadlyDenominations(input) };
   } catch (error) {
-    return { ok: false, error: safeError(error) };
+    return { ok: false, error: describeReloadlyError(`import:preview:${input.productId}`, error) };
   }
 }
 

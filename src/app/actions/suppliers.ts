@@ -5,7 +5,7 @@ import {
   getReloadlyEnvironment,
   isReloadlyConfigured,
 } from "@/lib/reloadly/config";
-import { ReloadlyApiError, ReloadlyConfigError } from "@/lib/reloadly/client";
+import { describeReloadlyError } from "@/lib/reloadly/client";
 import {
   getGiftCardProducts,
   getGiftCardProduct,
@@ -30,13 +30,6 @@ import type {
   SupplierEnvironment,
   SupplierTimeRange,
 } from "@/lib/dto";
-
-/** Only ever surface a safe, credential-free message to the admin UI. */
-function safeReloadlyError(error: unknown): string {
-  if (error instanceof ReloadlyConfigError) return error.message;
-  if (error instanceof ReloadlyApiError) return error.message;
-  return "Erreur lors de la communication avec Reloadly.";
-}
 
 export async function getReloadlyOverviewAction(): Promise<ReloadlyOverviewDTO> {
   await requireAdminCustomer();
@@ -87,7 +80,7 @@ export async function testReloadlyConnectionAction(): Promise<ReloadlyHealthDTO>
       environment,
       checkedAt,
       balance: null,
-      error: safeReloadlyError(error),
+      error: describeReloadlyError("health", error),
     };
   }
 }
@@ -160,7 +153,7 @@ export async function searchReloadlyCatalogAction(input: {
       },
     };
   } catch (error) {
-    return { ok: false, error: safeReloadlyError(error) };
+    return { ok: false, error: describeReloadlyError("catalog", error) };
   }
 }
 
@@ -196,7 +189,7 @@ export async function testReloadlyAvailabilityAction(
       denominationType: null,
       fixedDenominations: [],
       issues: [],
-      error: safeReloadlyError(error),
+      error: describeReloadlyError(`availability:${productId}`, error),
     };
   }
 }
