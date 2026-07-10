@@ -261,7 +261,10 @@ export async function addCodeAction(
   code: string,
 ): Promise<ActionResult> {
   await assertAdminAccess();
-  return addCode(productSlug, code);
+  const result = await addCode(productSlug, code);
+  // Availability derives from the unused-code count → refresh the storefront.
+  if (result.ok) revalidateStorefrontCatalog();
+  return result;
 }
 
 export async function addCodesBulkAction(
@@ -269,14 +272,18 @@ export async function addCodesBulkAction(
   raw: string,
 ): Promise<ActionResult & { added?: number; skipped?: number }> {
   await assertAdminAccess();
-  return addCodesBulk(productSlug, raw);
+  const result = await addCodesBulk(productSlug, raw);
+  if (result.ok) revalidateStorefrontCatalog();
+  return result;
 }
 
 export async function disableCodeAction(
   codeId: string,
 ): Promise<ActionResult> {
   await assertAdminAccess();
-  return disableCode(codeId);
+  const result = await disableCode(codeId);
+  if (result.ok) revalidateStorefrontCatalog();
+  return result;
 }
 
 export async function confirmPaymentAction(
@@ -291,7 +298,10 @@ export async function deliverOrderAction(
   assignments: ItemAssignment[],
 ): Promise<ActionResult> {
   await assertAdminAccess();
-  return deliverOrder(orderId, assignments);
+  const result = await deliverOrder(orderId, assignments);
+  // Delivery consumes unused codes → a product may have just sold out.
+  if (result.ok) revalidateStorefrontCatalog();
+  return result;
 }
 
 export async function changeOrderStatusAction(

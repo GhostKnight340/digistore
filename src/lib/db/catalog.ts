@@ -25,6 +25,16 @@ import type {
 
 type ProductWithCategory = Awaited<ReturnType<typeof getActiveProductRows>>[number];
 
+/**
+ * Reads that embed a variant's stock status carry this max age. With automatic
+ * inventory, stock is derived from the live unused-code count, which changes on
+ * delivery/restock — events that may happen outside a request (fire-and-forget
+ * fulfillment) where `revalidateTag` can't run. The tag still invalidates
+ * instantly on admin edits/inventory actions; this bounds any other drift.
+ * Overselling is separately impossible: the code claim at delivery is atomic.
+ */
+const STOCK_CACHE_TTL_SECONDS = 60;
+
 const productCatalogInclude = {
   categoryRecord: true,
   media: {
@@ -356,7 +366,7 @@ const getCatalogPageCached = unstable_cache(
   };
   },
   ["catalog-page"],
-  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG], revalidate: STOCK_CACHE_TTL_SECONDS },
 );
 
 export async function getCatalogPage(
@@ -450,7 +460,7 @@ export const getProductBySlug = unstable_cache(
     return product ? toParentProduct(product, undefined, settings) : null;
   },
   ["product-by-slug"],
-  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG], revalidate: STOCK_CACHE_TTL_SECONDS },
 );
 
 export const getParentProductSlugs = unstable_cache(
@@ -491,7 +501,7 @@ export const getProductsByCategorySlug = unstable_cache(
     );
   },
   ["products-by-category"],
-  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG], revalidate: STOCK_CACHE_TTL_SECONDS },
 );
 
 /** Uncached settings read. Used inside the catalog caches (which carry the
