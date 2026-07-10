@@ -109,11 +109,14 @@ function toVariantProduct(
 ): Product {
   const title = variantTitle(row.name, variant);
   const imageUrl = row.imageUrl ?? row.media[0]?.url ?? null;
+  const region = variant.region || row.region;
   return {
     id: variant.id,
     parentId: row.slug,
     variantId: variant.id,
-    href: `/products/${row.slug}?variant=${encodeURIComponent(variant.id)}`,
+    // Carry both region + variant so the group page opens with the exact
+    // region/denomination the customer clicked preselected.
+    href: `/products/${row.slug}?region=${encodeURIComponent(region)}&variant=${encodeURIComponent(variant.id)}`,
     name: title,
     category: row.category,
     categoryName: row.categoryRecord?.name ?? row.category,

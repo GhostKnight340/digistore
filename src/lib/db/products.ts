@@ -57,6 +57,7 @@ function toVariant(product: ProductRow, variant: ProductRow["variants"][number])
     faceCurrency: variant.faceCurrency,
     supplierCost: variant.supplierCost,
     supplierCurrency: variant.supplierCurrency,
+    variantRegion: variant.region,
     active: variant.active,
     featured: variant.featured,
     stockControl: variant.stockControl,
@@ -77,6 +78,7 @@ function productAsFallbackVariant(product: ProductRow): VariantDTO {
     faceCurrency: "MAD",
     supplierCost: null,
     supplierCurrency: "MAD",
+    variantRegion: null,
     active: product.active,
     featured: product.featured,
     stockControl: "manual",
@@ -458,12 +460,19 @@ export async function convertProductToVariant(
   const baseVariantId = source.slug;
   try {
     await prisma.$transaction(async (tx) => {
+      // Merging across regions: stamp the moved variants with the source
+      // product's region so a single group can hold e.g. FR + US variants and
+      // the storefront region selector appears. Falls back to the variant's own
+      // region if one was already set explicitly.
+      const stampedRegion = normalizeRegion(source.region) || null;
+
       await tx.productVariant.upsert({
         where: { id: baseVariantId },
         update: {
           productId: target.id,
           name: source.name,
           priceMad: source.priceMad,
+          region: stampedRegion,
           active: source.active,
           featured: source.featured,
           stockMode: "automatic",
@@ -475,6 +484,7 @@ export async function convertProductToVariant(
           priceMad: source.priceMad,
           faceValue: null,
           faceCurrency: "MAD",
+          region: stampedRegion,
           stockControl: "manual",
           stockMode: "automatic",
           active: source.active,
@@ -483,6 +493,12 @@ export async function convertProductToVariant(
         },
       });
 
+      // Move the remaining variants, stamping region only where it isn't
+      // already set (preserve any explicit per-variant region).
+      await tx.productVariant.updateMany({
+        where: { productId: source.id, id: { not: baseVariantId }, region: null },
+        data: { productId: target.id, region: stampedRegion },
+      });
       await tx.productVariant.updateMany({
         where: { productId: source.id, id: { not: baseVariantId } },
         data: { productId: target.id },
@@ -625,6 +641,11 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
 
     if (!product) return { ok: false, error: "Product not found." };
 
+    // Empty/invalid → null so the variant inherits the parent product's region.
+    const variantRegion = data.variantRegion
+      ? normalizeRegion(data.variantRegion) || null
+      : null;
+
     const variantFields = {
       name: data.name,
       priceMad: data.priceMad,
@@ -632,6 +653,7 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       faceCurrency: data.faceCurrency,
       supplierCost: data.supplierCost,
       supplierCurrency: data.supplierCurrency,
+      region: variantRegion,
       stockControl: data.stockControl,
       stockMode: data.stockMode,
       active: data.active,
@@ -689,6 +711,52 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       });
     }
 
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+/**
+ * Persist a new display order for a parent product's variants.
+ *
+ * `orderedSlugs` is the full list of the parent's variant SKUs in the desired
+ * order. We write each variant's array index into `sortOrder`, which is what
+ * every read path orders by ([{ sortOrder: "asc" }, ...]). The caller only
+ * needs to supply the order; the numeric values are derived here so they stay
+ * dense and gap-free.
+ */
+export async function reorderVariants(
+  parentSlug: string,
+  orderedSlugs: string[],
+): Promise<ActionResult> {
+  await ensureDatabaseReady();
+
+  const product = await prisma.product.findUnique({
+    where: { slug: parentSlug },
+    select: { id: true, variants: { select: { id: true } } },
+  });
+  if (!product) return { ok: false, error: "Product not found." };
+
+  const known = new Set(product.variants.map((variant) => variant.id));
+  // Guard against a stale client: the incoming order must reference exactly the
+  // variants that currently exist, so we never leave some rows unordered.
+  if (
+    orderedSlugs.length !== known.size ||
+    !orderedSlugs.every((slug) => known.has(slug))
+  ) {
+    return { ok: false, error: "Variant list is out of date. Reload and retry." };
+  }
+
+  try {
+    await prisma.$transaction(
+      orderedSlugs.map((slug, index) =>
+        prisma.productVariant.update({
+          where: { id: slug },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
     return { ok: true };
   } catch (error) {
     return { ok: false, error: String(error) };

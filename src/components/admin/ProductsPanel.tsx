@@ -15,12 +15,13 @@ import {
   saveVariantAction,
   deleteVariantAction,
   duplicateVariantAction,
+  reorderVariantsAction,
 } from "@/app/actions/admin";
 import { uploadImageFile } from "@/lib/clientUpload";
 import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
-import { REGION_LIST } from "@/lib/regions";
+import { REGION_LIST, getRegion } from "@/lib/regions";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
 
@@ -181,6 +182,7 @@ export default function ProductsPanel() {
       supplierCost: variant.supplierCost,
       supplierCurrency: variant.supplierCurrency,
       region: parent.region,
+      variantRegion: variant.variantRegion ?? null,
       deliveryType: parent.deliveryType,
       active: variant.active,
       featured: variant.featured,
@@ -307,6 +309,7 @@ export default function ProductsPanel() {
       faceCurrency: "MAD",
       supplierCost: null,
       supplierCurrency: "MAD",
+      variantRegion: null,
       active: true,
       featured: false,
       stockControl: "manual",
@@ -343,6 +346,7 @@ export default function ProductsPanel() {
       supplierCost: newVariantDraft.supplierCost,
       supplierCurrency: newVariantDraft.supplierCurrency,
       region: draft.region,
+      variantRegion: newVariantDraft.variantRegion ?? null,
       deliveryType: draft.deliveryType,
       active: newVariantDraft.active,
       featured: newVariantDraft.featured,
@@ -389,6 +393,25 @@ export default function ProductsPanel() {
     setSaving(false);
   }
 
+  async function moveVariant(slug: string, direction: "up" | "down") {
+    if (!draft) return;
+    const order = draft.variants.map((variant) => variant.slug);
+    const from = order.indexOf(slug);
+    const to = direction === "up" ? from - 1 : from + 1;
+    if (from < 0 || to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to], order[from]];
+
+    setSaving(true);
+    setMsg(null);
+    const result = await reorderVariantsAction(draft.slug, order);
+    if (result.ok) {
+      await refreshDetail();
+    } else {
+      setMsg({ text: result.error ?? "Erreur inconnue.", ok: false });
+    }
+    setSaving(false);
+  }
+
   async function saveVariant(slug: string) {
     if (!draft) return;
     const v = variantDrafts[slug];
@@ -406,6 +429,7 @@ export default function ProductsPanel() {
       supplierCost: v.supplierCost,
       supplierCurrency: v.supplierCurrency,
       region: draft.region,
+      variantRegion: v.variantRegion ?? null,
       deliveryType: draft.deliveryType,
       active: v.active,
       featured: v.featured,
@@ -744,6 +768,7 @@ export default function ProductsPanel() {
                   onCancelNewVariant={cancelAddVariant}
                   onDeleteVariant={deleteVariantHandler}
                   onDuplicateVariant={duplicateVariantHandler}
+                  onMoveVariant={moveVariant}
                   onConvertStandalone={convertStandaloneProduct}
                 />
               )}
@@ -892,6 +917,7 @@ function isVariantDirty(original: VariantDTO, draft: VariantDTO) {
     original.faceCurrency !== draft.faceCurrency ||
     original.supplierCost !== draft.supplierCost ||
     original.supplierCurrency !== draft.supplierCurrency ||
+    (original.variantRegion ?? null) !== (draft.variantRegion ?? null) ||
     original.active !== draft.active ||
     original.featured !== draft.featured ||
     original.stockControl !== draft.stockControl ||
@@ -1248,9 +1274,11 @@ function ContentTab({
 function VariantForm({
   v,
   onChange,
+  parentRegion,
 }: {
   v: VariantDTO;
   onChange: <K extends keyof VariantDTO>(k: K, val: VariantDTO[K]) => void;
+  parentRegion: string;
 }) {
   const { settings } = useStoreSettings();
   const inventoryOn = isInventoryEnabled(settings);
@@ -1335,6 +1363,23 @@ function VariantForm({
             onChange={(e) => onChange("supplierCurrency", e.target.value)}
           >
             {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Région de la variante">
+          <select
+            className="input"
+            value={v.variantRegion ?? ""}
+            onChange={(e) => onChange("variantRegion", e.target.value || null)}
+            title="Laissez « Hériter du groupe » sauf si cette variante cible une région différente du groupe."
+          >
+            <option value="">
+              Hériter du groupe{parentRegion ? ` (${getRegion(parentRegion).name})` : ""}
+            </option>
+            {REGION_LIST.map((region) => (
+              <option key={region.code} value={region.code}>
+                {region.name} ({region.code})
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Gestion du stock">
@@ -1429,6 +1474,7 @@ function VariantsTab({
   onCancelNewVariant,
   onDeleteVariant,
   onDuplicateVariant,
+  onMoveVariant,
   onConvertStandalone,
 }: {
   draft: ParentProductDTO;
@@ -1447,6 +1493,7 @@ function VariantsTab({
   onCancelNewVariant: () => void;
   onDeleteVariant: (slug: string) => Promise<void>;
   onDuplicateVariant: (slug: string) => Promise<void>;
+  onMoveVariant: (slug: string, direction: "up" | "down") => Promise<void>;
   onConvertStandalone: (sourceSlug: string, removeSource: boolean) => Promise<void>;
 }) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -1520,6 +1567,7 @@ function VariantsTab({
           <p className="mb-4 text-sm font-semibold text-white">Nouvelle variante</p>
           <VariantForm
             v={newVariantDraft}
+            parentRegion={draft.region}
             onChange={(k, val) => {
               const next = { ...newVariantDraft, [k]: val };
               if (k === "name" && typeof val === "string" && !newVariantDraft.slug.trim()) {
@@ -1556,7 +1604,7 @@ function VariantsTab({
         </div>
       )}
 
-      {draft.variants.map((orig) => {
+      {draft.variants.map((orig, index) => {
         const v = variantDrafts[orig.slug] ?? orig;
         const isEditing = editingVariant === orig.slug;
         const isConfirming = confirmDelete === orig.slug;
@@ -1565,16 +1613,46 @@ function VariantsTab({
         const variantTitle = v.faceValue != null
           ? `${draft.name} ${v.faceValue} ${v.faceCurrency}`
           : v.name;
+        const isFirst = index === 0;
+        const isLast = index === draft.variants.length - 1;
 
         return (
           <div key={orig.slug} className="rounded-xl border border-border bg-base">
             {/* Row header */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
               <div className="flex items-center gap-3">
+                {/* Reorder controls: move this variant up/down in display order. */}
+                <div className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => onMoveVariant(orig.slug, "up")}
+                    disabled={saving || isFirst}
+                    aria-label="Déplacer vers le haut"
+                    title="Déplacer vers le haut"
+                    className="flex h-4 w-5 items-center justify-center text-muted transition hover:text-white disabled:opacity-30"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMoveVariant(orig.slug, "down")}
+                    disabled={saving || isLast}
+                    aria-label="Déplacer vers le bas"
+                    title="Déplacer vers le bas"
+                    className="flex h-4 w-5 items-center justify-center text-muted transition hover:text-white disabled:opacity-30"
+                  >
+                    ▼
+                  </button>
+                </div>
                 <div>
                   <p className="text-sm font-medium text-white">{variantTitle}</p>
                   <p className="font-mono text-[11px] text-muted">SKU: {v.slug}</p>
                 </div>
+                <RegionBadge
+                  code={v.variantRegion || draft.region}
+                  variant="chip"
+                  size="micro"
+                />
                 <span className={`chip ${v.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
                   {v.active ? "Actif" : "Masqué"}
                 </span>
@@ -1705,6 +1783,7 @@ function VariantsTab({
               <div className="border-t border-border px-4 py-4">
                 <VariantForm
                   v={v}
+                  parentRegion={draft.region}
                   onChange={(k, val) => updateVariant(orig.slug, k, val)}
                 />
               </div>

@@ -51,6 +51,7 @@ import {
   getProductList,
   saveParentProduct,
   saveVariant,
+  reorderVariants,
 } from "@/lib/db/products";
 import {
   createCategoryQuick,
@@ -455,6 +456,16 @@ export async function duplicateVariantAction(
 ): Promise<ActionResult & { slug?: string }> {
   await assertAdminAccess();
   const result = await duplicateVariant(variantId);
+  if (result.ok) revalidateStorefrontCatalog();
+  return result;
+}
+
+export async function reorderVariantsAction(
+  parentSlug: string,
+  orderedSlugs: string[],
+): Promise<ActionResult> {
+  await assertAdminAccess();
+  const result = await reorderVariants(parentSlug, orderedSlugs);
   if (result.ok) revalidateStorefrontCatalog();
   return result;
 }

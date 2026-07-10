@@ -260,6 +260,12 @@ export interface VariantDTO {
   priceMad: number;
   faceValue: number | null;
   faceCurrency: string;
+  /**
+   * Per-variant region (a region-table code, e.g. "US"). Null → the variant
+   * inherits its parent product's region. When one parent holds variants with
+   * differing regions, the storefront shows a region selector.
+   */
+  variantRegion: string | null;
   supplierCost: number | null;
   supplierCurrency: string;
   active: boolean;
@@ -317,7 +323,10 @@ export interface SaveVariantInput {
   faceCurrency: string;
   supplierCost: number | null;
   supplierCurrency: string;
+  /** Parent product's region (used only for the base-product edge case). */
   region: string;
+  /** Per-variant region override; null/empty → inherit the parent's region. */
+  variantRegion?: string | null;
   deliveryType: string;
   active: boolean;
   featured: boolean;
