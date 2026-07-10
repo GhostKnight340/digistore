@@ -96,6 +96,31 @@ export async function sendExpenseEmbed(
   }
 }
 
+/**
+ * Like {@link sendExpenseEmbed} but posts a full message payload (embed +
+ * optional link-button components), used by the end-of-month expense review.
+ * Same never-throw + outcome-returning contract so the caller can persist the
+ * sent/failed state and offer a retry.
+ */
+export async function sendExpenseMessage(
+  payload: DiscordMessagePayload,
+): Promise<{ ok: boolean; disabled?: boolean; messageId?: string; error?: string }> {
+  if (!isDiscordEnabled()) return { ok: false, disabled: true, error: "Discord désactivé." };
+  const channelId = getDiscordChannelId("expenses");
+  if (!channelId) return { ok: false, error: "Canal dépenses non configuré (DISCORD_CHANNEL_EXPENSES_ID)." };
+  try {
+    const message = await postChannelMessage(channelId, {
+      ...payload,
+      embeds: payload.embeds?.map((e) => ({ timestamp: new Date().toISOString(), ...e })),
+    });
+    return { ok: true, messageId: message.id };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[discord:notify:expenses]", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // #orders — one parent "card" per order (edited in place as status changes),
 // each with a thread holding that order's full lifecycle timeline. See

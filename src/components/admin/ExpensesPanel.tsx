@@ -18,6 +18,10 @@ import {
   runDueRemindersAction,
   correctOccurrenceAction,
   dropSubscriptionAction,
+  getMonthlyReviewsAction,
+  acknowledgeMonthlyReviewAction,
+  retryMonthlyReviewAction,
+  sendMonthlyReviewNowAction,
 } from "@/app/actions/expenses";
 import type {
   LedgerRowDTO,
@@ -26,6 +30,7 @@ import type {
   UpcomingPaymentDTO,
   ExpenseDetailDTO,
   ExpenseEntryDTO,
+  MonthlyReviewDTO,
 } from "@/lib/expenses/types";
 import {
   EXPENSE_CATEGORIES,
@@ -89,6 +94,7 @@ export default function ExpensesPanel() {
   const [summary, setSummary] = useState<ExpenseSummaryDTO | null>(null);
   const [rows, setRows] = useState<LedgerRowDTO[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingPaymentsDTO | null>(null);
+  const [reviews, setReviews] = useState<MonthlyReviewDTO[]>([]);
   const [view, setView] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
@@ -108,7 +114,7 @@ export default function ExpensesPanel() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, r, u] = await Promise.all([
+      const [s, r, u, rev] = await Promise.all([
         getExpenseSummaryAction(),
         getExpensesAction({
           view,
@@ -116,10 +122,12 @@ export default function ExpensesPanel() {
           currency: currencyFilter || undefined,
         }),
         getUpcomingPaymentsAction(),
+        getMonthlyReviewsAction(),
       ]);
       setSummary(s);
       setRows(r);
       setUpcoming(u);
+      setReviews(rev);
     } catch {
       setMsg({ text: "Impossible de charger les dépenses.", ok: false });
     } finally {
@@ -180,6 +188,20 @@ export default function ExpensesPanel() {
             title="Traiter les rappels et échéances en retard maintenant (comme le fait le cron quotidien)"
           >
             Rappels
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                const r = await sendMonthlyReviewNowAction();
+                return { ok: r.ok, error: r.error };
+              }, "Revue du mois envoyée sur Discord.")
+            }
+            className="btn-ghost py-1.5 text-xs"
+            title="Envoyer maintenant la revue du mois en cours sur Discord (idempotent — une revue déjà envoyée n'est pas dupliquée)"
+          >
+            Revue du mois
           </button>
         </div>
       </div>
@@ -308,6 +330,14 @@ export default function ExpensesPanel() {
         </div>
       </div>
 
+      {/* Monthly-review history */}
+      <MonthlyReviewHistory
+        reviews={reviews}
+        busy={busy}
+        onAcknowledge={(monthKey) => run(() => acknowledgeMonthlyReviewAction(monthKey), "Revue marquée comme vérifiée.")}
+        onRetry={(monthKey) => run(() => retryMonthlyReviewAction(monthKey), "Revue renvoyée sur Discord.")}
+      />
+
       {recurringOpen && (
         <RecurringForm
           editId={editRecurring?.recurringExpenseId ?? null}
@@ -400,6 +430,126 @@ function SummaryCard({ label, value, sub, loading, tone }: { label: string; valu
       <p className="text-xs uppercase tracking-wide text-faint">{label}</p>
       <p className="mt-1.5 text-2xl font-semibold text-white">{loading ? "…" : value}</p>
       {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
+    </div>
+  );
+}
+
+// ── Monthly-review history ────────────────────────────────────────────────────
+
+function reviewMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function reviewSentTone(status: string): string {
+  switch (status) {
+    case "sent":
+      return "text-green-400 border-green-500/30 bg-green-500/10";
+    case "failed":
+      return "text-red-300 border-red-500/30 bg-red-500/10";
+    case "sending":
+      return "text-[#9FB8FF] border-accent/30 bg-accent/10";
+    default:
+      return "text-muted border-border bg-surface2";
+  }
+}
+
+const REVIEW_STATUS_LABELS: Record<string, string> = {
+  pending: "En attente",
+  sending: "Envoi…",
+  sent: "Envoyée",
+  failed: "Échec",
+};
+
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function MonthlyReviewHistory({
+  reviews,
+  busy,
+  onAcknowledge,
+  onRetry,
+}: {
+  reviews: MonthlyReviewDTO[];
+  busy: boolean;
+  onAcknowledge: (monthKey: string) => void;
+  onRetry: (monthKey: string) => void;
+}) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Revue mensuelle des dépenses</h3>
+          <p className="text-xs text-muted">Envoyée sur Discord le dernier jour du mois. « Tout est correct » enregistre votre vérification (aucun statut de paiement n'est modifié).</p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs uppercase text-muted">
+            <tr className="border-b border-border">
+              <th className="px-4 py-3 font-medium">Mois</th>
+              <th className="px-4 py-3 font-medium">Discord</th>
+              <th className="px-4 py-3 font-medium">Envoyée le</th>
+              <th className="px-4 py-3 font-medium">Vérifiée</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reviews.length === 0 ? (
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-muted">Aucune revue mensuelle pour l'instant.</td></tr>
+            ) : (
+              reviews.map((rev) => (
+                <tr key={rev.id} className="border-b border-border/60 hover:bg-surface/40 align-top">
+                  <td className="px-4 py-3 font-medium text-white">{reviewMonthLabel(rev.monthKey)}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block rounded-md border px-2 py-0.5 text-[11px] font-medium ${reviewSentTone(rev.status)}`}>
+                      {REVIEW_STATUS_LABELS[rev.status] ?? rev.status}
+                    </span>
+                    {rev.status === "failed" && rev.error && (
+                      <p className="mt-1 max-w-[280px] truncate text-[11px] text-red-300" title={rev.error}>{rev.error}</p>
+                    )}
+                    {rev.attemptCount > 1 && (
+                      <p className="mt-0.5 text-[11px] text-faint">{rev.attemptCount} tentatives</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-muted">{fmtDateTime(rev.sentAt)}</td>
+                  <td className="px-4 py-3 text-muted">
+                    {rev.acknowledgedAt ? (
+                      <span className="text-green-400">
+                        {rev.acknowledgedBy ?? "Oui"}
+                        <span className="block text-[11px] text-faint">{fmtDateTime(rev.acknowledgedAt)}</span>
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {rev.status === "sent" && !rev.acknowledgedAt && (
+                        <button type="button" disabled={busy} onClick={() => onAcknowledge(rev.monthKey)} className="btn-ghost py-1 text-[11px]">
+                          Tout est correct
+                        </button>
+                      )}
+                      {rev.status === "failed" && (
+                        <button type="button" disabled={busy} onClick={() => onRetry(rev.monthKey)} className="btn-ghost py-1 text-[11px]">
+                          Réessayer
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

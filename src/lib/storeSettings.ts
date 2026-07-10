@@ -109,6 +109,14 @@ export type StoreSettings = {
     defaultReminderDaysBefore: number[];
     remindOnDue: boolean;
     remindOverdue: boolean;
+    // End-of-month expense review (posted to the #ghost-expenses channel on the
+    // last calendar day of the month). businessTimezone decides which day is
+    // "the last day"; monthlyReviewHour is the earliest business-local hour the
+    // dedicated evening cron may send at (keep it aligned with the cron's UTC
+    // time in vercel.json — see src/app/api/cron/expense-review/route.ts).
+    monthlyReviewEnabled: boolean;
+    businessTimezone: string;
+    monthlyReviewHour: number;
   };
 };
 
@@ -327,6 +335,9 @@ export const defaultStoreSettings: StoreSettings = {
     defaultReminderDaysBefore: [7, 3, 1],
     remindOnDue: true,
     remindOverdue: true,
+    monthlyReviewEnabled: true,
+    businessTimezone: "Africa/Casablanca",
+    monthlyReviewHour: 20,
   },
 };
 

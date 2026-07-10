@@ -223,9 +223,32 @@ export type DiscordEmbed = {
   footer?: { text: string };
 };
 
+/**
+ * Message components. Only style-5 LINK buttons are used — they are pure
+ * hyperlinks that never send an interaction back, so they need no interactions
+ * endpoint, no gateway, and no signature verification. (Non-link buttons would
+ * require a full Discord Interactions framework, which this REST-only bot
+ * deliberately does not have.)
+ */
+export const DISCORD_COMPONENT_TYPE = { ACTION_ROW: 1, BUTTON: 2 } as const;
+export const DISCORD_BUTTON_STYLE = { LINK: 5 } as const;
+
+export type DiscordLinkButton = {
+  type: typeof DISCORD_COMPONENT_TYPE.BUTTON;
+  style: typeof DISCORD_BUTTON_STYLE.LINK;
+  label: string;
+  url: string;
+};
+
+export type DiscordActionRow = {
+  type: typeof DISCORD_COMPONENT_TYPE.ACTION_ROW;
+  components: DiscordLinkButton[];
+};
+
 export type DiscordMessagePayload = {
   content?: string;
   embeds?: DiscordEmbed[];
+  components?: DiscordActionRow[];
 };
 
 export type DiscordMessage = {

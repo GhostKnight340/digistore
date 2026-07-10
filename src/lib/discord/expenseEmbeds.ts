@@ -5,9 +5,15 @@
  * service, amount, currency, DH equivalent, frequency, dates, category, status,
  * and actor.
  */
-import type { DiscordEmbed } from "./client";
+import type { DiscordEmbed, DiscordMessagePayload } from "./client";
+import { DISCORD_BUTTON_STYLE, DISCORD_COMPONENT_TYPE } from "./client";
 import { formatOriginal, formatMadAmount, formatExpenseDate } from "@/lib/expenses/currency";
 import { expenseCategoryLabel, expenseFrequencyLabel, expenseStatusLabel } from "@/lib/expenses/constants";
+import {
+  REVIEW_CONTROL_QUESTION,
+  reviewSummaryLines,
+  type MonthlyReviewModel,
+} from "@/lib/expenses/monthlyReview";
 
 const COLOR = {
   blue: 0x3e7bfa,
@@ -231,6 +237,83 @@ export function monthlySummaryEmbed(d: {
       {
         name: "À venir le mois prochain",
         value: `${d.upcomingCount} paiement${d.upcomingCount > 1 ? "s" : ""} — environ ${formatMadAmount(d.upcomingMad)}`,
+      },
+    ],
+  };
+}
+
+// Discord's per-embed description hard limit is 4096 chars; stay under it.
+const REVIEW_DESC_LIMIT = 3900;
+const MAX_LINES_PER_GROUP = 15;
+const MAX_PREVIEW_LINES = 10;
+
+function capitalize(value: string): string {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+/**
+ * Build the end-of-month expense review message: a single rich embed (grouped
+ * by status, with summary, control question, "À vérifier" list, and next-month
+ * preview) plus a LINK button to the admin expenses page. Pure — the notify
+ * layer sends it and the caller persists the outcome.
+ *
+ * The message never asks Discord to change anything; it is a review request. The
+ * only interactive element is the link button, which just opens the admin.
+ */
+export function monthlyReviewMessage(model: MonthlyReviewModel, adminUrl: string): DiscordMessagePayload {
+  const sections: string[] = [];
+
+  for (const group of model.groups) {
+    const shown = group.lines.slice(0, MAX_LINES_PER_GROUP);
+    const hidden = group.lines.length - shown.length;
+    const body = shown
+      .map((l) => (l.note ? `${l.text} _(${l.note})_` : l.text))
+      .join("\n");
+    const more = hidden > 0 ? `\n… +${hidden} autre${hidden > 1 ? "s" : ""}` : "";
+    sections.push(`${group.emoji} **${group.label}**\n${body}${more}`);
+  }
+
+  if (model.isEmpty) {
+    sections.push("_Aucune dépense à revoir pour ce mois._");
+  }
+
+  sections.push(`**Résumé :**\n${reviewSummaryLines(model).join("\n")}`);
+  sections.push(`❓ **${REVIEW_CONTROL_QUESTION}**`);
+
+  if (model.attention.length > 0) {
+    sections.push(`**À vérifier :**\n${model.attention.map((a) => `- ${a}`).join("\n")}`);
+  }
+
+  const previewBody =
+    model.preview.length > 0
+      ? model.preview.slice(0, MAX_PREVIEW_LINES).map((l) => l.text).join("\n")
+      : "_Aucun paiement prévu._";
+  sections.push(`📅 **À venir le mois prochain :**\n${previewBody}`);
+
+  let description = sections.join("\n\n");
+  if (description.length > REVIEW_DESC_LIMIT) {
+    description = `${description.slice(0, REVIEW_DESC_LIMIT - 1)}…`;
+  }
+
+  return {
+    embeds: [
+      {
+        title: `📋 Revue des dépenses — ${capitalize(model.monthLabel)}`,
+        description,
+        color: COLOR.blue,
+      },
+    ],
+    components: [
+      {
+        type: DISCORD_COMPONENT_TYPE.ACTION_ROW,
+        components: [
+          {
+            type: DISCORD_COMPONENT_TYPE.BUTTON,
+            style: DISCORD_BUTTON_STYLE.LINK,
+            label: "Vérifier les dépenses",
+            url: adminUrl,
+          },
+        ],
       },
     ],
   };

@@ -22,6 +22,8 @@ import {
   deleteEntry,
   correctOccurrence,
   dropSubscription,
+  getMonthlyReviews,
+  acknowledgeMonthlyReview,
   type RecurringInput,
   type OneTimeInput,
   type PaidInfo,
@@ -40,7 +42,11 @@ import {
   subscriptionDroppedEmbed,
 } from "@/lib/discord/expenseEmbeds";
 import { runExpenseCron } from "@/lib/expenses/reminders";
-import type { ExpenseFilters } from "@/lib/expenses/types";
+import {
+  retryMonthlyReview,
+  sendMonthlyReviewNow,
+} from "@/lib/expenses/monthlyReviewJob";
+import type { ExpenseFilters, MonthlyReviewDTO } from "@/lib/expenses/types";
 
 type Result = { ok: boolean; error?: string };
 
@@ -308,4 +314,46 @@ export async function runDueRemindersAction(): Promise<
   const r = await runExpenseCron();
   revalidatePath("/admin");
   return { ok: true, ...r };
+}
+
+// ── Monthly review ────────────────────────────────────────────────────────────
+
+export async function getMonthlyReviewsAction(limit = 12): Promise<MonthlyReviewDTO[]> {
+  await requireAdminCustomer();
+  return getMonthlyReviews(limit);
+}
+
+/** "Tout est correct" — records acknowledgement (date + admin identity) only.
+ *  Never changes any payment status or expense record. */
+export async function acknowledgeMonthlyReviewAction(monthKey: string): Promise<Result> {
+  const who = await actor();
+  try {
+    await acknowledgeMonthlyReview(monthKey, who);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Action impossible." };
+  }
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/** Retry sending a specific month's review after a Discord failure. Idempotent:
+ *  a month already sent is refused rather than duplicated. */
+export async function retryMonthlyReviewAction(monthKey: string): Promise<Result> {
+  await actor();
+  const r = await retryMonthlyReview(monthKey);
+  revalidatePath("/admin");
+  if (r.error) return { ok: false, error: r.error };
+  if (r.skipped) return { ok: false, error: "Cette revue a déjà été envoyée." };
+  return { ok: r.posted ?? false, error: r.posted ? undefined : "Échec de l'envoi Discord." };
+}
+
+/** Send the current ending month's review now, bypassing the day/hour gate
+ *  (still idempotent). For previewing/testing the report from the admin. */
+export async function sendMonthlyReviewNowAction(): Promise<Result & { monthKey?: string }> {
+  await actor();
+  const r = await sendMonthlyReviewNow();
+  revalidatePath("/admin");
+  if (r.skipped) return { ok: false, error: "La revue de ce mois a déjà été envoyée.", monthKey: r.monthKey };
+  if (!r.posted) return { ok: false, error: r.error ?? "Échec de l'envoi Discord.", monthKey: r.monthKey };
+  return { ok: true, monthKey: r.monthKey };
 }

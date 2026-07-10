@@ -678,6 +678,30 @@ model ExpenseNotificationLog {
   @@index([kind, createdAt])
 }
 
+// End-of-month expense review: one row per ending month (monthKey "YYYY-MM" in
+// the business timezone). The unique monthKey is the idempotency anchor so a
+// re-run of the evening cron never posts a second report, while a row still in
+// "pending"/"failed" can be safely retried. Acknowledgement ("Tout est correct")
+// is recorded here from the admin panel — it never mutates any expense record.
+model ExpenseMonthlyReview {
+  id       String @id @default(cuid())
+  // "YYYY-MM" of the month being reviewed, computed in the business timezone.
+  monthKey String @unique
+  // status: "pending" | "sending" | "sent" | "failed"
+  status           String    @default("pending")
+  attemptCount     Int       @default(0)
+  discordMessageId String?
+  error            String?
+  sentAt           DateTime?
+  // Set when an admin marks the review acknowledged. Preserved as evidence.
+  acknowledgedAt   DateTime?
+  acknowledgedBy   String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  @@index([monthKey])
+}
+
 // §10 fulfillment cost reconciliation: after a real Reloadly order, compare the
 // estimated provider cost (from synced catalog data) with the actual
 // balanceInfo.cost Reloadly charged. Append-only; never feeds back into any

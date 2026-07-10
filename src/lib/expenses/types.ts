@@ -155,6 +155,21 @@ export type ExpenseDetailDTO = {
   notifications: ExpenseNotificationDTO[];
 };
 
+/** One end-of-month review's send + acknowledgement state, for the admin history. */
+export type MonthlyReviewDTO = {
+  id: string;
+  monthKey: string; // "YYYY-MM"
+  status: string; // "pending" | "sending" | "sent" | "failed"
+  attemptCount: number;
+  discordMessageId: string | null;
+  error: string | null;
+  sentAt: string | null;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ExpenseFilters = {
   view?: string; // "all" | "upcoming" | "paid" | "overdue" | "recurring" | "one_time" | "variable" | "cancelled"
   category?: string;

@@ -19,6 +19,8 @@ import {
   NOT_DEBITED_STATUSES,
   type TerminationType,
 } from "@/lib/expenses/constants";
+import type { ReviewItem, ReviewRanges } from "@/lib/expenses/monthlyReview";
+import type { MonthlyReviewDTO } from "@/lib/expenses/types";
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
@@ -982,4 +984,235 @@ export async function recordNotification(rec: NotificationRecord) {
       dedupeKey: rec.dedupeKey,
     },
   });
+}
+
+// ── End-of-month review: data collection ─────────────────────────────────────
+
+function reviewEntryItem(
+  e: Prisma.ExpenseEntryGetPayload<object>,
+  fx: Record<string, number>,
+): ReviewItem {
+  const amountMad = num(e.amountMad) ?? convertToMad(num(e.amountOriginal), e.currency, fx).amountMad;
+  return {
+    key: `entry:${e.id}`,
+    name: e.name,
+    amountOriginal: num(e.amountOriginal),
+    currency: e.currency,
+    amountMad,
+    scheduledDate: iso(e.dueDate ?? e.occurrenceDate),
+    paidDate: iso(e.paidDate),
+    status: e.status,
+    isRecurring: e.recurringExpenseId != null || e.type === "recurring",
+    estimated: e.amountEstimated && e.amountOriginal == null,
+    corrected: false,
+    note: null,
+  };
+}
+
+/**
+ * Gather everything relevant to the ending month for the review, using ONLY
+ * real ledger statuses (never inferring "paid" from a date):
+ *   • entries paid during the month,
+ *   • unresolved open entries due this month or earlier (incl. estimated ones),
+ *   • subscriptions terminated during the month,
+ *   • active/paused subscriptions whose next occurrence is this month or overdue,
+ *   • entries with a financially-relevant correction recorded this month,
+ * plus a next-month preview. Deliberately excludes long-inactive subscriptions
+ * with nothing unresolved and old resolved expenses outside the month.
+ */
+export async function collectMonthlyReviewData(
+  ranges: ReviewRanges,
+): Promise<{ items: ReviewItem[]; preview: ReviewItem[] }> {
+  const fx = await fxRates();
+  const { monthStart, monthEnd, nextMonthStart, nextMonthEnd } = ranges;
+
+  const [paid, openEntries, terminated, recurrings, corrections, previewRecur, previewEntries] =
+    await Promise.all([
+      prisma.expenseEntry.findMany({ where: { status: "paid", paidDate: { gte: monthStart, lt: monthEnd } } }),
+      prisma.expenseEntry.findMany({
+        where: {
+          status: { in: ["pending", "overdue", "upcoming", "estimated", "credit"] },
+          OR: [{ dueDate: { lt: monthEnd } }, { dueDate: null }],
+        },
+      }),
+      prisma.recurringExpense.findMany({
+        where: { terminationType: { not: null }, terminatedAt: { gte: monthStart, lt: monthEnd } },
+      }),
+      prisma.recurringExpense.findMany({
+        where: { status: { in: ["active", "paused"] }, nextBillingDate: { lt: monthEnd } },
+      }),
+      prisma.expenseAdjustment.findMany({
+        where: { kind: { in: ["correction", "reversal"] }, createdAt: { gte: monthStart, lt: monthEnd } },
+        select: { expenseEntryId: true },
+      }),
+      prisma.recurringExpense.findMany({
+        where: { status: "active", nextBillingDate: { gte: nextMonthStart, lt: nextMonthEnd } },
+      }),
+      prisma.expenseEntry.findMany({
+        where: { status: { in: ["upcoming", "pending"] }, dueDate: { gte: nextMonthStart, lt: nextMonthEnd } },
+      }),
+    ]);
+
+  const correctedIds = new Set(corrections.map((c) => c.expenseEntryId));
+  const terminatedIds = new Set(terminated.map((r) => r.id));
+
+  const items: ReviewItem[] = [];
+  const seenEntryIds = new Set<string>();
+  const pushEntry = (e: Prisma.ExpenseEntryGetPayload<object>) => {
+    seenEntryIds.add(e.id);
+    items.push({ ...reviewEntryItem(e, fx), corrected: correctedIds.has(e.id) });
+  };
+
+  for (const e of paid) pushEntry(e);
+  for (const e of openEntries) pushEntry(e);
+
+  // Corrected entries this month that weren't already captured (e.g. a paid
+  // occurrence corrected to "unpaid" — an open-status query would miss it).
+  // Skip those whose subscription is already shown under "terminated".
+  const missingCorrectedIds = [...correctedIds].filter((id) => !seenEntryIds.has(id));
+  if (missingCorrectedIds.length) {
+    const correctedEntries = await prisma.expenseEntry.findMany({ where: { id: { in: missingCorrectedIds } } });
+    for (const e of correctedEntries) {
+      if (e.recurringExpenseId && terminatedIds.has(e.recurringExpenseId)) continue;
+      items.push({ ...reviewEntryItem(e, fx), corrected: true });
+    }
+  }
+
+  for (const r of terminated) {
+    const expired = r.terminationType === "expired";
+    const label = expired ? "abonnement expiré" : "abonnement résilié";
+    items.push({
+      key: `recur:${r.id}`,
+      name: r.name,
+      amountOriginal: num(r.amount),
+      currency: r.currency,
+      amountMad: convertToMad(num(r.amount), r.currency, fx).amountMad,
+      scheduledDate: iso(r.terminatedAt),
+      paidDate: null,
+      status: expired ? "subscription_expired" : "subscription_cancelled",
+      isRecurring: true,
+      estimated: false,
+      note: r.terminationReason ? `${label} — ${r.terminationReason}` : label,
+    });
+  }
+
+  for (const r of recurrings) {
+    if (terminatedIds.has(r.id)) continue; // already shown as terminated
+    items.push({
+      key: `recur:${r.id}`,
+      name: r.name,
+      amountOriginal: num(r.amount),
+      currency: r.currency,
+      amountMad: convertToMad(num(r.amount), r.currency, fx).amountMad,
+      scheduledDate: iso(r.nextBillingDate),
+      paidDate: null,
+      status: occurrenceStatus(r), // upcoming | overdue | pending — never "paid"
+      isRecurring: true,
+      estimated: r.isUsageBased && r.amount == null,
+    });
+  }
+
+  const preview: ReviewItem[] = [];
+  for (const r of previewRecur) {
+    preview.push({
+      key: `recur:${r.id}`,
+      name: r.name,
+      amountOriginal: num(r.amount),
+      currency: r.currency,
+      amountMad: convertToMad(num(r.amount), r.currency, fx).amountMad,
+      scheduledDate: iso(r.nextBillingDate),
+      paidDate: null,
+      status: "upcoming",
+      isRecurring: true,
+      estimated: r.isUsageBased && r.amount == null,
+    });
+  }
+  for (const e of previewEntries) preview.push(reviewEntryItem(e, fx));
+
+  return { items, preview };
+}
+
+// ── End-of-month review: idempotent send state + acknowledgement ─────────────
+
+function toMonthlyReviewDTO(r: Prisma.ExpenseMonthlyReviewGetPayload<object>): MonthlyReviewDTO {
+  return {
+    id: r.id,
+    monthKey: r.monthKey,
+    status: r.status,
+    attemptCount: r.attemptCount,
+    discordMessageId: r.discordMessageId,
+    error: r.error,
+    sentAt: iso(r.sentAt),
+    acknowledgedAt: iso(r.acknowledgedAt),
+    acknowledgedBy: r.acknowledgedBy,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Atomically claim the right to send this month's review. Ensures a row exists,
+ * then flips it from a claimable state ("pending"/"failed") to "sending" in a
+ * single UPDATE. A concurrent second run re-reads "sending" (not claimable) and
+ * gets 0 → returns false. A row already "sent" also returns false (no duplicate).
+ */
+export async function claimMonthlyReview(monthKey: string): Promise<boolean> {
+  await prisma.expenseMonthlyReview.upsert({
+    where: { monthKey },
+    update: {},
+    create: { monthKey, status: "pending" },
+  });
+  const claimed = await prisma.expenseMonthlyReview.updateMany({
+    where: { monthKey, status: { in: ["pending", "failed"] } },
+    data: { status: "sending", attemptCount: { increment: 1 } },
+  });
+  return claimed.count > 0;
+}
+
+export async function recordMonthlyReviewResult(
+  monthKey: string,
+  result: { ok: boolean; messageId?: string | null; error?: string | null },
+): Promise<void> {
+  await prisma.expenseMonthlyReview.update({
+    where: { monthKey },
+    data: result.ok
+      ? { status: "sent", discordMessageId: result.messageId ?? null, sentAt: new Date(), error: null }
+      : { status: "failed", error: result.error ?? null },
+  });
+}
+
+export async function getMonthlyReview(monthKey: string): Promise<MonthlyReviewDTO | null> {
+  const r = await prisma.expenseMonthlyReview.findUnique({ where: { monthKey } });
+  return r ? toMonthlyReviewDTO(r) : null;
+}
+
+export async function getMonthlyReviews(limit = 12): Promise<MonthlyReviewDTO[]> {
+  const rows = await prisma.expenseMonthlyReview.findMany({
+    orderBy: { monthKey: "desc" },
+    take: limit,
+  });
+  return rows.map(toMonthlyReviewDTO);
+}
+
+/** Record acknowledgement ("Tout est correct") — evidence only; never touches
+ *  any expense record or payment status. First acknowledgement wins. */
+export async function acknowledgeMonthlyReview(monthKey: string, actor: string | null): Promise<MonthlyReviewDTO> {
+  const existing = await prisma.expenseMonthlyReview.findUnique({ where: { monthKey } });
+  if (!existing) throw new Error("Revue introuvable.");
+  if (existing.acknowledgedAt) return toMonthlyReviewDTO(existing);
+  const updated = await prisma.expenseMonthlyReview.update({
+    where: { monthKey },
+    data: { acknowledgedAt: new Date(), acknowledgedBy: actor },
+  });
+  return toMonthlyReviewDTO(updated);
+}
+
+/** Reset a failed/stuck row so it can be re-sent. A row already "sent" is left
+ *  untouched (prevents a duplicate report). Returns whether a retry may proceed. */
+export async function resetMonthlyReviewForRetry(monthKey: string): Promise<{ ok: boolean; error?: string }> {
+  const existing = await prisma.expenseMonthlyReview.findUnique({ where: { monthKey } });
+  if (!existing) return { ok: true }; // claim will create it
+  if (existing.status === "sent") return { ok: false, error: "Cette revue a déjà été envoyée." };
+  await prisma.expenseMonthlyReview.update({ where: { monthKey }, data: { status: "pending" } });
+  return { ok: true };
 }
