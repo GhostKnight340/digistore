@@ -26,7 +26,7 @@ export default async function ProductsPage({
       page,
       take: 24,
     }),
-    getRegionCounts(),
+    getRegionCounts({ category, query }),
   ]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const totalRegionCount = Object.values(regionCounts).reduce((sum, n) => sum + n, 0);

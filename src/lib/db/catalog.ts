@@ -258,22 +258,30 @@ export async function getCatalogData(): Promise<{
 }
 
 export const getRegionCounts = unstable_cache(
-  async function getRegionCounts(): Promise<Record<string, number>> {
-    const rows = await prisma.product.groupBy({
-      by: ["region"],
-      where: {
-        active: true,
-        categoryRecord: { is: { active: true } },
-        variants: { some: { active: true } },
-      },
-      _count: { _all: true },
-    });
+  async function getRegionCounts(
+    options: { category?: string; query?: string } = {},
+  ): Promise<Record<string, number>> {
+    // Count public variants grouped by their parent product's region, scoped to
+    // the current category/search — so the region chips only surface regions
+    // that actually have products in the current view (matches both the grid and
+    // the parent-region-based region filter). Not filtered by region itself, so
+    // every available region is offered.
+    const [rows, settings] = await Promise.all([
+      getActiveProductRows({ category: options.category, query: options.query }),
+      loadStoreSettings(),
+    ]);
     const counts: Record<string, number> = {};
-    for (const row of rows) counts[row.region] = row._count._all;
+    for (const row of rows) {
+      const publicVariants = row.variants.filter((variant) =>
+        isVariantPublic(row, variant, settings),
+      ).length;
+      if (publicVariants === 0 || !row.region) continue;
+      counts[row.region] = (counts[row.region] ?? 0) + publicVariants;
+    }
     return counts;
   },
   ["region-counts"],
-  { tags: [CATALOG_TAG] },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
 );
 
 type CatalogPageOptions = {
