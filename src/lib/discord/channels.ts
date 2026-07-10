@@ -11,7 +11,8 @@ export type DiscordChannelKey =
   | "support"
   | "stockAlerts"
   | "systemAlerts"
-  | "dailySummary";
+  | "dailySummary"
+  | "expenses";
 
 export type DiscordChannelDefinition = {
   key: DiscordChannelKey;
@@ -46,6 +47,14 @@ export const DISCORD_SERVER_STRUCTURE: DiscordCategoryDefinition[] = [
       { key: "stockAlerts", name: "stock-alerts", envVar: "DISCORD_CHANNEL_STOCK_ALERTS_ID" },
       { key: "systemAlerts", name: "system-alerts", envVar: "DISCORD_CHANNEL_SYSTEM_ALERTS_ID" },
       { key: "dailySummary", name: "daily-summary", envVar: "DISCORD_CHANNEL_DAILY_SUMMARY_ID" },
+    ],
+  },
+  {
+    name: "💸 FINANCE",
+    channels: [
+      // Ghost.ma's own operating-expense feed — new/paid/cancelled expenses,
+      // due/overdue reminders, and the monthly summary. See src/lib/discord/notify.ts.
+      { key: "expenses", name: "ghost-expenses", envVar: "DISCORD_CHANNEL_EXPENSES_ID" },
     ],
   },
 ];

@@ -75,6 +75,27 @@ function embed(partial: DiscordEmbed): DiscordMessagePayload {
   return { embeds: [{ timestamp: new Date().toISOString(), ...partial }] };
 }
 
+/**
+ * Posts an embed to the #ghost-expenses channel and RETURNS the outcome (unlike
+ * the fire-and-forget safeSend) so the caller can persist an ExpenseNotificationLog
+ * row (sent/failed + message id) and offer a retry. Never throws.
+ */
+export async function sendExpenseEmbed(
+  partial: DiscordEmbed,
+): Promise<{ ok: boolean; disabled?: boolean; messageId?: string; error?: string }> {
+  if (!isDiscordEnabled()) return { ok: false, disabled: true, error: "Discord désactivé." };
+  const channelId = getDiscordChannelId("expenses");
+  if (!channelId) return { ok: false, error: "Canal dépenses non configuré (DISCORD_CHANNEL_EXPENSES_ID)." };
+  try {
+    const message = await postChannelMessage(channelId, embed(partial));
+    return { ok: true, messageId: message.id };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[discord:notify:expenses]", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // #orders — one parent "card" per order (edited in place as status changes),
 // each with a thread holding that order's full lifecycle timeline. See
