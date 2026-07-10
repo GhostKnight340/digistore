@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CATALOG_TAG } from "@/lib/cacheTags";
 import { requireAdminCustomer } from "@/lib/auth";
 import { describeReloadlyError } from "@/lib/reloadly/client";
 import {
@@ -77,6 +78,7 @@ export async function importReloadlyProductAction(
   const result = await importReloadlyProduct(input);
   if (result.ok && result.productSlug) {
     // Refresh storefront + admin catalog surfaces so the new product appears.
+    revalidateTag(CATALOG_TAG);
     revalidatePath("/products");
     revalidatePath(`/products/${result.productSlug}`);
     revalidatePath("/admin");
@@ -97,6 +99,7 @@ export async function importReloadlyBatchAction(
   await requireAdminCustomer();
   const result = await importReloadlyBatch(input);
   if (result.ok) {
+    revalidateTag(CATALOG_TAG);
     revalidatePath("/products");
     revalidatePath("/admin");
     for (const p of result.products) revalidatePath(`/products/${p.slug}`);

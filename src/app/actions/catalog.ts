@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CATALOG_TAG, STORE_SETTINGS_TAG } from "@/lib/cacheTags";
 import {
   getCatalogData,
   getProductCatalog,
@@ -30,6 +31,9 @@ export async function saveStoreSettingsAction(
   await requireAdminCustomer();
   try {
     await saveStoreSettings(settings);
+    // Settings feed catalog visibility/pricing, so this tag also refreshes the
+    // catalog caches (they carry the settings tag).
+    revalidateTag(STORE_SETTINGS_TAG);
     revalidatePath("/", "layout");
     revalidatePath("/admin/editor");
     return { ok: true };
@@ -56,6 +60,9 @@ export async function updateProductCatalogItemAction(
   await requireAdminCustomer();
   try {
     await updateProductCatalogItem(slug, data);
+    revalidateTag(CATALOG_TAG);
+    revalidatePath("/", "layout");
+    revalidatePath("/products", "page");
     return { ok: true };
   } catch (error) {
     return {

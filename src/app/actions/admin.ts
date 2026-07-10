@@ -1,6 +1,7 @@
 ﻿"use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CATALOG_TAG } from "@/lib/cacheTags";
 import { requireAdminCustomer } from "@/lib/auth";
 import {
   getAdminCustomers,
@@ -102,6 +103,9 @@ async function assertAdminAccess() {
 }
 
 function revalidateStorefrontCatalog() {
+  // Invalidate the cross-request data cache (see src/lib/cacheTags.ts) so the
+  // storefront reflects catalog/pricing edits on the next load.
+  revalidateTag(CATALOG_TAG);
   revalidatePath("/", "layout");
   revalidatePath("/", "page");
   revalidatePath("/products", "page");

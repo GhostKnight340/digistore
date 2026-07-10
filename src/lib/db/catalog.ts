@@ -1,8 +1,9 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
-import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { CATALOG_TAG, STORE_SETTINGS_TAG } from "@/lib/cacheTags";
 import {
   defaultStoreSettings,
   mergeStoreSettings,
@@ -230,42 +231,51 @@ function getActiveProductRows(options: {
   });
 }
 
-export const getCatalogData = cache(async function getCatalogData(): Promise<{
+export async function getCatalogData(): Promise<{
   categories: Category[];
   products: Product[];
 }> {
-  return getCatalogPage({ take: 100 });
-});
-
-export async function getRegionCounts(): Promise<Record<string, number>> {
-  await ensureDatabaseReady();
-  const rows = await prisma.product.groupBy({
-    by: ["region"],
-    where: {
-      active: true,
-      categoryRecord: { is: { active: true } },
-      variants: { some: { active: true } },
-    },
-    _count: { _all: true },
-  });
-  const counts: Record<string, number> = {};
-  for (const row of rows) counts[row.region] = row._count._all;
-  return counts;
+  const { categories, products } = await getCatalogPage({ take: 100 });
+  return { categories, products };
 }
 
-export async function getCatalogPage(options: {
+export const getRegionCounts = unstable_cache(
+  async function getRegionCounts(): Promise<Record<string, number>> {
+    await ensureDatabaseReady();
+    const rows = await prisma.product.groupBy({
+      by: ["region"],
+      where: {
+        active: true,
+        categoryRecord: { is: { active: true } },
+        variants: { some: { active: true } },
+      },
+      _count: { _all: true },
+    });
+    const counts: Record<string, number> = {};
+    for (const row of rows) counts[row.region] = row._count._all;
+    return counts;
+  },
+  ["region-counts"],
+  { tags: [CATALOG_TAG] },
+);
+
+type CatalogPageOptions = {
   category?: string;
   region?: string;
   query?: string;
   page?: number;
   take?: number;
-} = {}): Promise<{
+};
+type CatalogPageResult = {
   categories: Category[];
   products: Product[];
   total: number;
   page: number;
   pageSize: number;
-}> {
+};
+
+const getCatalogPageCached = unstable_cache(
+  async (options: CatalogPageOptions): Promise<CatalogPageResult> => {
   await ensureDatabaseReady();
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(200, Math.max(1, options.take ?? 24));
@@ -293,7 +303,7 @@ export async function getCatalogPage(options: {
       query: options.query,
     }),
   ]);
-  const settings = await getStoreSettings();
+  const settings = await loadStoreSettings();
   const variantProducts = productRows
     .flatMap((row, productIndex) =>
       row.variants
@@ -326,6 +336,15 @@ export async function getCatalogPage(options: {
     page,
     pageSize,
   };
+  },
+  ["catalog-page"],
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+);
+
+export async function getCatalogPage(
+  options: CatalogPageOptions = {},
+): Promise<CatalogPageResult> {
+  return getCatalogPageCached(options);
 }
 
 /**
@@ -342,9 +361,16 @@ export async function searchProductsPreview(
 ): Promise<{ results: ProductSearchResult[]; hasMore: boolean }> {
   const query = rawQuery.trim();
   if (query.length < 2) return { results: [], hasMore: false };
+  return searchProductsPreviewCached(query, limit);
+}
 
+const searchProductsPreviewCached = unstable_cache(
+  async (
+    query: string,
+    limit: number,
+  ): Promise<{ results: ProductSearchResult[]; hasMore: boolean }> => {
   await ensureDatabaseReady();
-  const settings = await getStoreSettings();
+  const settings = await loadStoreSettings();
   // Fetch a little wider than `limit`: some rows drop out once inventory/active
   // visibility is applied, and the surplus tells us whether to offer "voir tous
   // les résultats".
@@ -380,69 +406,88 @@ export async function searchProductsPreview(
   }
 
   return { results: matches.slice(0, limit), hasMore: matches.length > limit };
-}
+  },
+  ["search-preview"],
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+);
 
 export async function getProductCatalog(): Promise<Product[]> {
   const { products } = await getCatalogData();
   return products;
 }
 
-export async function getProductBySlug(slug: string): Promise<Product | null> {
-  await ensureDatabaseReady();
-  const product = await prisma.product.findFirst({
-    where: {
-      slug,
-      active: true,
-      variants: { some: { active: true } },
-      categoryRecord: { is: { active: true } },
-    },
-    include: productCatalogInclude,
-  });
-  const settings = await getStoreSettings();
-  return product ? toParentProduct(product, undefined, settings) : null;
-}
+export const getProductBySlug = unstable_cache(
+  async (slug: string): Promise<Product | null> => {
+    await ensureDatabaseReady();
+    const product = await prisma.product.findFirst({
+      where: {
+        slug,
+        active: true,
+        variants: { some: { active: true } },
+        categoryRecord: { is: { active: true } },
+      },
+      include: productCatalogInclude,
+    });
+    const settings = await loadStoreSettings();
+    return product ? toParentProduct(product, undefined, settings) : null;
+  },
+  ["product-by-slug"],
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+);
 
-export async function getParentProductSlugs(): Promise<string[]> {
-  await ensureDatabaseReady();
-  const products = await prisma.product.findMany({
-    where: {
-      active: true,
-      variants: { some: { active: true } },
-      categoryRecord: { is: { active: true } },
-    },
-    select: { slug: true },
-  });
-  return products.map((product) => product.slug);
-}
+export const getParentProductSlugs = unstable_cache(
+  async (): Promise<string[]> => {
+    await ensureDatabaseReady();
+    const products = await prisma.product.findMany({
+      where: {
+        active: true,
+        variants: { some: { active: true } },
+        categoryRecord: { is: { active: true } },
+      },
+      select: { slug: true },
+    });
+    return products.map((product) => product.slug);
+  },
+  ["parent-product-slugs"],
+  { tags: [CATALOG_TAG] },
+);
 
-export async function getProductsByCategorySlug(
-  category: string,
-): Promise<Product[]> {
-  await ensureDatabaseReady();
-  const products = await prisma.product.findMany({
-    where: {
-      category,
-      active: true,
-      variants: { some: { active: true } },
-      categoryRecord: { is: { active: true } },
-    },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    include: productCatalogInclude,
-  });
-  const settings = await getStoreSettings();
-  return products.flatMap((row) =>
-    row.variants
-      .filter((variant) => isVariantPublic(row, variant, settings))
-      .map((variant) => toVariantProduct(row, variant, settings)),
-  );
-}
+export const getProductsByCategorySlug = unstable_cache(
+  async (category: string): Promise<Product[]> => {
+    await ensureDatabaseReady();
+    const products = await prisma.product.findMany({
+      where: {
+        category,
+        active: true,
+        variants: { some: { active: true } },
+        categoryRecord: { is: { active: true } },
+      },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: productCatalogInclude,
+    });
+    const settings = await loadStoreSettings();
+    return products.flatMap((row) =>
+      row.variants
+        .filter((variant) => isVariantPublic(row, variant, settings))
+        .map((variant) => toVariantProduct(row, variant, settings)),
+    );
+  },
+  ["products-by-category"],
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+);
 
-export const getStoreSettings = cache(async function getStoreSettings(): Promise<StoreSettings> {
+/** Uncached settings read. Used inside the catalog caches (which carry the
+ *  settings tag themselves) so we never nest one `unstable_cache` in another. */
+async function loadStoreSettings(): Promise<StoreSettings> {
   await ensureDatabaseReady();
   const record = await prisma.storeSetting.findUnique({
     where: { id: "default" },
   });
   return record ? mergeStoreSettings(record.value) : defaultStoreSettings;
+}
+
+export const getStoreSettings = unstable_cache(loadStoreSettings, ["store-settings"], {
+  tags: [STORE_SETTINGS_TAG],
 });
 
 export async function saveStoreSettings(settings: StoreSettings): Promise<void> {
