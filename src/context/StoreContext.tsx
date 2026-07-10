@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import type { CartItem } from "@/lib/types";
+import type { CartIdentity } from "@/lib/cartIdentity";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 
 const CART_KEY = "digitalshop.cart.v1";
@@ -18,7 +19,7 @@ interface StoreContextValue {
   ready: boolean;
   cartCount: number;
   cartTotal: number;
-  addToCart: (productId: string, quantity?: number) => void;
+  addToCart: (productId: string, quantity?: number, identity?: CartIdentity) => void;
   removeFromCart: (productId: string) => void;
   setQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -37,7 +38,7 @@ function readJSON<T>(key: string, fallback: T): T {
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const { getProduct } = useProductCatalog();
+  const { getProduct, findProductByIdentity, products } = useProductCatalog();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [ready, setReady] = useState(false);
 
@@ -46,24 +47,55 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setReady(true);
   }, []);
 
+  // Reconcile stale cart items against the catalog. A cart item keys on the
+  // variant id (= SKU, a mutable primary key), so an admin SKU rename or the
+  // SKU-cleanup script orphans saved carts. For each item we: keep it as-is if
+  // its id still resolves; else re-bind it to the current variant via its stored
+  // natural key (parent + denomination + region); else drop it. Without this the
+  // badge counts a ghost item while the list is empty and the total is 0.
+  useEffect(() => {
+    if (!ready || products.length === 0) return;
+    setCart((prev) => {
+      let changed = false;
+      const next: CartItem[] = [];
+      for (const item of prev) {
+        if (getProduct(item.productId)) {
+          next.push(item);
+          continue;
+        }
+        const rebound = findProductByIdentity(item);
+        if (rebound) {
+          next.push({ ...item, productId: rebound.id });
+          changed = true;
+        } else {
+          changed = true; // dropped: no id match and no natural-key match
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [ready, products, getProduct, findProductByIdentity]);
+
   useEffect(() => {
     if (!ready) return;
     window.localStorage.setItem(CART_KEY, JSON.stringify(cart));
   }, [cart, ready]);
 
-  const addToCart = useCallback((productId: string, quantity = 1) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === productId);
-      if (existing) {
-        return prev.map((item) =>
-          item.productId === productId
-            ? { ...item, quantity: item.quantity + quantity }
-            : item,
-        );
-      }
-      return [...prev, { productId, quantity }];
-    });
-  }, []);
+  const addToCart = useCallback(
+    (productId: string, quantity = 1, identity?: CartIdentity) => {
+      setCart((prev) => {
+        const existing = prev.find((item) => item.productId === productId);
+        if (existing) {
+          return prev.map((item) =>
+            item.productId === productId
+              ? { ...item, quantity: item.quantity + quantity, ...identity }
+              : item,
+          );
+        }
+        return [...prev, { productId, quantity, ...identity }];
+      });
+    },
+    [],
+  );
 
   const removeFromCart = useCallback((productId: string) => {
     setCart((prev) => prev.filter((item) => item.productId !== productId));

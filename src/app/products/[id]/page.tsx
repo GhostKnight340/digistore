@@ -205,6 +205,12 @@ export default async function ProductDetailPage({
             <AddToCartForm
               productId={selectedVariant?.id ?? product.id}
               price={selectedVariant?.price ?? product.price}
+              identity={{
+                parentId: product.id,
+                faceValue: selectedVariant?.faceValue ?? null,
+                faceCurrency: selectedVariant?.faceCurrency,
+                region: selectedVariant?.region ?? product.region,
+              }}
             />
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
               Paiement sécurisé

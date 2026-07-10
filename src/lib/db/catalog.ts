@@ -122,6 +122,9 @@ function toVariantProduct(
     categoryName: row.categoryRecord?.name ?? row.category,
     // Cart/order rows resolve to the variant's region (falls back to parent).
     region: variant.region || row.region,
+    // Natural-key parts so a renamed SKU doesn't orphan carts (lib/cartIdentity).
+    faceValue: variant.faceValue,
+    faceCurrency: variant.faceCurrency,
     price: variant.priceMad,
     deliveryType: row.deliveryType,
     description: row.description,

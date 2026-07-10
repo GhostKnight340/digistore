@@ -26,6 +26,11 @@ export interface Product {
   category: string;
   categoryName?: string;
   region: string;
+  /** Denomination face value / currency of the underlying variant, when this
+   * Product is a variant-flattened catalogue row. Used to form a stable natural
+   * key so carts survive SKU/id renames (see lib/cartIdentity.ts). */
+  faceValue?: number | null;
+  faceCurrency?: string;
   /** Price in Moroccan Dirham. */
   price: number;
   deliveryType: string;
@@ -69,6 +74,12 @@ export interface ProductVariantOption {
 export interface CartItem {
   productId: string;
   quantity: number;
+  /** Natural-key identity captured at add-time so a stale item (whose SKU/id was
+   * renamed) can re-bind to the current variant. Absent on legacy v1 items. */
+  parentId?: string;
+  faceValue?: number | null;
+  faceCurrency?: string;
+  region?: string;
 }
 
 export interface OrderItem {

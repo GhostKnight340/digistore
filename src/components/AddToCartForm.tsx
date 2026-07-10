@@ -3,14 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
+import type { CartIdentity } from "@/lib/cartIdentity";
 import { formatMAD } from "@/lib/format";
 
 export default function AddToCartForm({
   productId,
   price,
+  identity,
 }: {
   productId: string;
   price?: number;
+  /** Natural-key parts stored with the cart line so it survives SKU renames. */
+  identity?: CartIdentity;
 }) {
   const { addToCart } = useStore();
   const router = useRouter();
@@ -18,13 +22,13 @@ export default function AddToCartForm({
   const [added, setAdded] = useState(false);
 
   function handleAdd() {
-    addToCart(productId, qty);
+    addToCart(productId, qty, identity);
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   }
 
   function handleBuyNow() {
-    addToCart(productId, qty);
+    addToCart(productId, qty, identity);
     router.push("/cart");
   }
 
