@@ -213,16 +213,38 @@ export async function reorderCategories(ids: string[]): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function deleteCategory(id: string): Promise<ActionResult> {
+export async function deleteCategory(
+  id: string,
+  reassignToId?: string | null,
+): Promise<ActionResult> {
   await ensureDatabaseReady();
   const category = await prisma.category.findUnique({
     where: { id },
     include: { _count: { select: { products: true } } },
   });
   if (!category) return { ok: false, error: "Catégorie introuvable." };
+
   if (category._count.products > 0) {
-    return { ok: false, error: "Cette catégorie contient des produits. Déplacez-les avant suppression." };
+    // Category still holds products — Product.category is a required FK, so they
+    // must be moved to another category before this one can go.
+    if (!reassignToId) {
+      return { ok: false, error: "Cette catégorie contient des produits. Déplacez-les avant suppression." };
+    }
+    if (reassignToId === id) {
+      return { ok: false, error: "Choisissez une autre catégorie de destination." };
+    }
+    const target = await prisma.category.findUnique({ where: { id: reassignToId }, select: { id: true } });
+    if (!target) return { ok: false, error: "Catégorie de destination introuvable." };
+
+    // Reassign then delete atomically so a failure never leaves products
+    // pointing at a category that's about to disappear.
+    await prisma.$transaction([
+      prisma.product.updateMany({ where: { category: id }, data: { category: reassignToId } }),
+      prisma.category.delete({ where: { id } }),
+    ]);
+    return { ok: true };
   }
+
   await prisma.category.delete({ where: { id } });
   return { ok: true };
 }

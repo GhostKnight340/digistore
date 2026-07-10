@@ -378,9 +378,12 @@ export async function reorderCategoriesAction(ids: string[]): Promise<ActionResu
   return result;
 }
 
-export async function deleteCategoryAction(id: string): Promise<ActionResult> {
+export async function deleteCategoryAction(
+  id: string,
+  reassignToId?: string | null,
+): Promise<ActionResult> {
   await assertAdminAccess();
-  const result = await deleteCategory(id);
+  const result = await deleteCategory(id, reassignToId);
   if (result.ok) {
     revalidateStorefrontCatalog();
     revalidatePath("/admin");

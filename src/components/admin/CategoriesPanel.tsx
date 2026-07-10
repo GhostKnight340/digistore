@@ -44,6 +44,10 @@ export default function CategoriesPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  // When deleting a category that still holds products, the admin must first
+  // pick where those products go (Product.category is a required FK).
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [reassignTo, setReassignTo] = useState<string>("");
 
   const selected = useMemo(
     () => categories.find((category) => category.id === selectedId) ?? null,
@@ -70,6 +74,7 @@ export default function CategoriesPanel() {
     setSelectedId(category.id);
     setDraft(category);
     setMessage(null);
+    setReassignOpen(false);
   }
 
   function createNew() {
@@ -77,6 +82,7 @@ export default function CategoriesPanel() {
     setSelectedId(null);
     setDraft(next);
     setMessage(null);
+    setReassignOpen(false);
   }
 
   function update<K extends keyof AdminCategoryDTO>(key: K, value: AdminCategoryDTO[K]) {
@@ -136,20 +142,56 @@ export default function CategoriesPanel() {
     await load();
   }
 
-  async function remove() {
+  async function deleteCategory(reassignToId?: string) {
     if (!selected) return;
-    if (!window.confirm(`Supprimer la catégorie « ${selected.name} » ?`)) return;
     setSaving(true);
-    const result = await deleteCategoryAction(selected.id);
-    if (result.ok) {
-      setMessage({ text: "Catégorie supprimée.", ok: true });
-      setSelectedId(null);
-      setDraft(null);
-      await load();
-    } else {
-      setMessage({ text: result.error ?? "Suppression impossible.", ok: false });
+    setMessage(null);
+    try {
+      const result = await deleteCategoryAction(selected.id, reassignToId);
+      if (result.ok) {
+        setMessage({ text: "Catégorie supprimée.", ok: true });
+        setReassignOpen(false);
+        setReassignTo("");
+        setSelectedId(null);
+        setDraft(null);
+        await load();
+      } else {
+        setMessage({ text: result.error ?? "Suppression impossible.", ok: false });
+      }
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : "Suppression impossible.", ok: false });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
+  }
+
+  function remove() {
+    if (!selected) return;
+    // Non-empty category: open the reassignment picker instead of deleting.
+    if (selected.productCount > 0) {
+      const firstOther = categories.find((c) => c.id !== selected.id);
+      setReassignTo(firstOther?.id ?? "");
+      setReassignOpen(true);
+      setMessage(null);
+      return;
+    }
+    if (!window.confirm(`Supprimer la catégorie « ${selected.name} » ?`)) return;
+    void deleteCategory();
+  }
+
+  function confirmReassignDelete() {
+    if (!selected || !reassignTo) return;
+    const target = categories.find((c) => c.id === reassignTo);
+    if (
+      !window.confirm(
+        `Déplacer ${selected.productCount} produit${selected.productCount > 1 ? "s" : ""} vers « ${
+          target?.name ?? reassignTo
+        } », puis supprimer « ${selected.name} » ?`,
+      )
+    ) {
+      return;
+    }
+    void deleteCategory(reassignTo);
   }
 
   return (
@@ -296,6 +338,50 @@ export default function CategoriesPanel() {
 
             {message ? (
               <p className={`text-sm ${message.ok ? "text-green-400" : "text-red-400"}`}>{message.text}</p>
+            ) : null}
+
+            {reassignOpen && selected ? (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/[0.06] p-4">
+                <p className="text-sm font-semibold text-red-200">
+                  « {selected.name} » contient {selected.productCount} produit
+                  {selected.productCount > 1 ? "s" : ""}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  Choisissez la catégorie vers laquelle déplacer {selected.productCount > 1 ? "ces produits" : "ce produit"} avant la suppression.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                  <select
+                    className="input max-w-xs"
+                    value={reassignTo}
+                    onChange={(e) => setReassignTo(e.target.value)}
+                    disabled={saving}
+                  >
+                    {categories
+                      .filter((c) => c.id !== selected.id)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={confirmReassignDelete}
+                    disabled={saving || !reassignTo}
+                    className="rounded-xl border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:opacity-40"
+                  >
+                    {saving ? "Suppression..." : "Déplacer et supprimer"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReassignOpen(false)}
+                    disabled={saving}
+                    className="text-sm text-muted transition hover:text-white disabled:opacity-40"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
             ) : null}
 
             <div className="flex flex-wrap justify-between gap-3 border-t border-border pt-5">
