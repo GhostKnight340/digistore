@@ -77,3 +77,29 @@ test("SKU includes the country so regional variants never collide", () => {
   assert.equal(fr, frEurAgain); // deterministic
   assert.match(fr, /steam-wallet-fr-10-eur/);
 });
+
+test("SKU does not double the region when the parent slug already ends with it", () => {
+  // Region-named parent (slug already ends with the country) must not repeat it.
+  assert.equal(
+    variantSku("google-play-us", { faceValue: 10, faceCurrency: "USD", reloadlyCountryCode: "US" }),
+    "google-play-us-10-usd",
+  );
+  assert.equal(
+    variantSku("google-play-fr", { faceValue: 50, faceCurrency: "EUR", reloadlyCountryCode: "FR" }),
+    "google-play-fr-50-eur",
+  );
+  // Case-insensitive, and only a trailing whole segment counts (not "plus-us").
+  assert.equal(
+    variantSku("google-play-us", { faceValue: 25, faceCurrency: "USD", reloadlyCountryCode: "us" }),
+    "google-play-us-25-usd",
+  );
+  // Region-neutral parent still keeps the country so FR/US stay distinct.
+  assert.equal(
+    variantSku("google-play", { faceValue: 10, faceCurrency: "USD", reloadlyCountryCode: "US" }),
+    "google-play-us-10-usd",
+  );
+  assert.notEqual(
+    variantSku("google-play", { faceValue: 10, faceCurrency: "EUR", reloadlyCountryCode: "FR" }),
+    variantSku("google-play", { faceValue: 10, faceCurrency: "USD", reloadlyCountryCode: "US" }),
+  );
+});

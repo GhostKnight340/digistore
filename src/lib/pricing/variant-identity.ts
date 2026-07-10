@@ -52,8 +52,25 @@ function slugifyPart(value: string): string {
 /**
  * SKU for a variant. Includes the country so region-distinct variants under one
  * parent (e.g. Steam Wallet FR·10EUR vs US·10USD) never collide on the SKU.
+ *
+ * When the parent slug already ends with that same region code, the country is
+ * NOT appended again — otherwise a region-named parent produces a doubled
+ * segment (parent "google-play-us" + country "US" → "google-play-us-us-…"). The
+ * region-neutral parent ("google-play") still gets the country, keeping FR/US
+ * variants distinct.
  */
 export function variantSku(parentSlug: string, v: VariantIdentityParts): string {
-  const parts = [parentSlug, v.reloadlyCountryCode ?? "", String(v.faceValue), v.faceCurrency];
+  const country = (v.reloadlyCountryCode ?? "").trim();
+  const slugLower = parentSlug.trim().toLowerCase();
+  const countryLower = country.toLowerCase();
+  const parentEndsWithCountry =
+    !!countryLower &&
+    (slugLower === countryLower || slugLower.endsWith(`-${countryLower}`));
+  const parts = [
+    parentSlug,
+    parentEndsWithCountry ? "" : country,
+    String(v.faceValue),
+    v.faceCurrency,
+  ];
   return slugifyPart(parts.filter(Boolean).join("-")).slice(0, 170);
 }
