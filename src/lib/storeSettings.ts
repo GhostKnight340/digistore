@@ -99,6 +99,17 @@ export type StoreSettings = {
     cardRadius: string;
     buttonRadius: string;
   };
+  // Admin-only expense-ledger config. No actual expense values live here — just
+  // reporting/notification preferences.
+  expenses: {
+    reportingCurrency: string;
+    discordEnabled: boolean;
+    monthlySummaryEnabled: boolean;
+    monthlySummaryDay: number;
+    defaultReminderDaysBefore: number[];
+    remindOnDue: boolean;
+    remindOverdue: boolean;
+  };
 };
 
 export const defaultStoreSettings: StoreSettings = {
@@ -308,6 +319,15 @@ export const defaultStoreSettings: StoreSettings = {
     cardRadius: "16px",
     buttonRadius: "12px",
   },
+  expenses: {
+    reportingCurrency: "MAD",
+    discordEnabled: true,
+    monthlySummaryEnabled: true,
+    monthlySummaryDay: 1,
+    defaultReminderDaysBefore: [7, 3, 1],
+    remindOnDue: true,
+    remindOverdue: true,
+  },
 };
 
 /**
@@ -429,6 +449,14 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
     theme: {
       ...defaultStoreSettings.theme,
       ...(isObject(value.theme) ? value.theme : {}),
+    },
+    expenses: {
+      ...defaultStoreSettings.expenses,
+      ...(isObject(value.expenses) ? value.expenses : {}),
+      defaultReminderDaysBefore:
+        isObject(value.expenses) && Array.isArray(value.expenses.defaultReminderDaysBefore)
+          ? value.expenses.defaultReminderDaysBefore.filter((n): n is number => typeof n === "number")
+          : defaultStoreSettings.expenses.defaultReminderDaysBefore,
     },
   };
 }

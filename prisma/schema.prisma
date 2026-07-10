@@ -534,6 +534,145 @@ model PricingSyncRun {
   @@index([environment, startedAt])
 }
 
+// ── Expense ledger (admin-only) ──────────────────────────────────────────────
+// Ghost.ma's own operating costs. The recurring subscription DEFINITION
+// (RecurringExpense) is kept separate from the immutable paid OCCURRENCES
+// (ExpenseEntry) so historical payments are never overwritten. Money is Decimal
+// (never Float); the DH reporting figure snapshots the FX rate used at record
+// time so past totals never shift when rates are edited later. Never exposed to
+// customers — admin-only, behind assertAdminAccess.
+model RecurringExpense {
+  id                 String    @id @default(cuid())
+  name               String
+  description        String    @default("")
+  category           String
+  currency           String    @default("MAD")
+  // Null for a pure usage-based subscription whose amount is only known per
+  // invoice — each occurrence confirms its own figure.
+  amount             Decimal?  @db.Decimal(18, 6)
+  isUsageBased       Boolean   @default(false)
+  // frequency: "weekly" | "monthly" | "quarterly" | "semiannual" | "yearly" | "custom"
+  frequency          String
+  customIntervalDays Int?
+  // Exact next billing date is stored, never inferred only from the frequency.
+  nextBillingDate    DateTime
+  startDate          DateTime?
+  endDate            DateTime?
+  autoRenew          Boolean   @default(true)
+  paymentAccount     String?
+  notes              String?
+  // Days-before offsets to remind on, e.g. [7, 3, 1].
+  reminderDaysBefore Int[]     @default([])
+  remindOnDue        Boolean   @default(true)
+  remindOverdue      Boolean   @default(true)
+  // status: "active" | "paused" | "cancelled"
+  status             String    @default("active")
+  createdBy          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  occurrences   ExpenseEntry[]
+  notifications ExpenseNotificationLog[]
+
+  @@index([status, nextBillingDate])
+  @@index([category])
+}
+
+model ExpenseEntry {
+  id                 String    @id @default(cuid())
+  // Null for a standalone one-time / usage / credit entry.
+  recurringExpenseId String?
+  name               String
+  category           String
+  // type: "recurring" | "one_time" | "usage_based" | "credit"
+  type               String
+  // amountOriginal is null while an estimate/usage amount is still pending.
+  amountOriginal     Decimal?  @db.Decimal(18, 6)
+  currency           String    @default("MAD")
+  amountEstimated    Boolean   @default(false)
+  // Rate + converted DH amount are frozen at record time so editing global FX
+  // rates later never changes historical totals.
+  exchangeRateToMad  Decimal?  @db.Decimal(18, 8)
+  amountMad          Decimal?  @db.Decimal(18, 6)
+  // status: "upcoming" | "pending" | "paid" | "overdue" | "cancelled" | "estimated" | "credit"
+  status             String    @default("upcoming")
+  dueDate            DateTime?
+  occurrenceDate     DateTime?
+  paidDate           DateTime?
+  paidAmount         Decimal?  @db.Decimal(18, 6)
+  paidCurrency       String?
+  paidExchangeRate   Decimal?  @db.Decimal(18, 8)
+  paymentReference   String?
+  paymentAccount     String?
+  invoiceReference   String?
+  // Optional receipt stored as base64 in Postgres (like PaymentProof) until
+  // object storage exists. Served only through an admin-only action.
+  receiptFileName    String?
+  receiptMimeType    String?
+  receiptData        String?
+  notes              String?
+  createdBy          String?
+  updatedBy          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  recurringExpense RecurringExpense?        @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
+  adjustments      ExpenseAdjustment[]
+  notifications    ExpenseNotificationLog[]
+
+  @@index([status])
+  @@index([category])
+  @@index([dueDate])
+  @@index([recurringExpenseId])
+  @@index([createdAt])
+}
+
+// Append-only audit for meaningful edits to a paid ExpenseEntry: the previous
+// value is preserved rather than silently rewritten. Mirrors PaymentEvent.
+model ExpenseAdjustment {
+  id             String   @id @default(cuid())
+  expenseEntryId String
+  // kind: "edit" | "correction" | "reversal"
+  kind           String   @default("edit")
+  field          String
+  oldValue       Json?
+  newValue       Json?
+  reason         String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+
+  expenseEntry ExpenseEntry @relation(fields: [expenseEntryId], references: [id], onDelete: Cascade)
+
+  @@index([expenseEntryId])
+}
+
+// Discord notification history + idempotency ledger for the expense channel.
+// `dedupeKey` is unique so a double-firing cron (reminders/summary) can never
+// post the same message twice.
+model ExpenseNotificationLog {
+  id                 String    @id @default(cuid())
+  recurringExpenseId String?
+  expenseEntryId     String?
+  occurrenceDate     DateTime?
+  // kind: created | paid | cancelled | edited | reminder_7d | reminder_3d
+  //     | reminder_1d | due | overdue | usage_confirmed | monthly_summary
+  kind               String
+  channel            String    @default("expenses")
+  discordMessageId   String?
+  // status: "sent" | "failed"
+  status             String
+  error              String?
+  dedupeKey          String    @unique
+  createdAt          DateTime  @default(now())
+
+  recurringExpense RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: Cascade)
+  expenseEntry     ExpenseEntry?     @relation(fields: [expenseEntryId], references: [id], onDelete: Cascade)
+
+  @@index([recurringExpenseId])
+  @@index([expenseEntryId])
+  @@index([kind, createdAt])
+}
+
 // §10 fulfillment cost reconciliation: after a real Reloadly order, compare the
 // estimated provider cost (from synced catalog data) with the actual
 // balanceInfo.cost Reloadly charged. Append-only; never feeds back into any
