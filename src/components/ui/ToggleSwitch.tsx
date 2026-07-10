@@ -58,7 +58,7 @@ export default function ToggleSwitch({
       </button>
       {showState && (
         <span
-          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+          className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${
             checked
               ? "border-accent/30 bg-accent/10 text-accent"
               : "border-border bg-surface text-muted"

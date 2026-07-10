@@ -713,7 +713,7 @@ export default function ProductsPanel() {
               <button type="button" onClick={cancel} className="btn-ghost text-sm" disabled={saving}>
                 Annuler
               </button>
-              <button type="button" onClick={save} className="btn-primary text-sm" disabled={saving}>
+              <button type="button" onClick={save} className="btn-primary flex-1 text-sm xl:flex-none" disabled={saving}>
                 {saving ? "Enregistrement…" : "Enregistrer le produit"}
               </button>
             </div>
@@ -727,7 +727,7 @@ export default function ProductsPanel() {
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
-                  className={`whitespace-nowrap px-5 py-3 text-sm font-medium capitalize transition-colors ${
+                  className={`shrink-0 whitespace-nowrap px-4 py-3 text-sm font-medium capitalize transition-colors sm:px-5 ${
                     activeTab === tab
                       ? "border-b-2 border-accent text-white"
                       : "text-muted hover:text-white"
@@ -743,7 +743,7 @@ export default function ProductsPanel() {
               ))}
             </div>
 
-            <div className="min-w-0 p-5">
+            <div className="min-w-0 p-4 sm:p-5">
               {activeTab === "details" && (
                 <DetailsTab
                   draft={draft}
@@ -1600,13 +1600,13 @@ function VariantsTab({
     <div className="space-y-3">
       {parentOptions.length > 0 && (
         <div className="rounded-xl border border-border bg-base px-4 py-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[220px] flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="min-w-0 flex-1 sm:min-w-[220px]">
               <label className="mb-1.5 block text-xs font-medium text-white">
                 Convertir un produit autonome en variante
               </label>
               <select
-                className="input h-10 py-0 text-sm"
+                className="input h-10 w-full py-0 text-sm"
                 value={sourceSlug}
                 onChange={(event) => setSourceSlug(event.target.value)}
               >
@@ -1618,12 +1618,12 @@ function VariantsTab({
                 ))}
               </select>
             </div>
-            <label className="flex items-center gap-2 text-xs text-muted">
+            <label className="flex items-start gap-2 text-xs leading-relaxed text-muted sm:items-center">
               <input
                 type="checkbox"
                 checked={removeSource}
                 onChange={(event) => setRemoveSource(event.target.checked)}
-                className="h-4 w-4 accent-[#3e7bfa]"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#3e7bfa] sm:mt-0"
               />
               Supprimer le produit parent source après conversion
             </label>
@@ -1634,7 +1634,7 @@ function VariantsTab({
                 await onConvertStandalone(sourceSlug, removeSource);
                 setSourceSlug("");
               }}
-              className="btn-primary h-10 px-4 text-xs disabled:opacity-50"
+              className="btn-primary h-10 w-full px-4 text-xs disabled:opacity-50 sm:w-auto"
             >
               Convertir
             </button>
@@ -1651,7 +1651,7 @@ function VariantsTab({
           type="button"
           onClick={onAddVariant}
           disabled={isAddingVariant || saving}
-          className="btn-primary py-1.5 text-xs"
+          className="btn-primary w-full py-2.5 text-xs sm:w-auto sm:py-1.5"
         >
           + Ajouter une variante
         </button>
@@ -1673,11 +1673,11 @@ function VariantsTab({
               onNewVariantChange(next);
             }}
           />
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={onCancelNewVariant}
-              className="btn-ghost py-1.5 text-xs"
+              className="btn-ghost w-full py-2.5 text-xs sm:w-auto sm:py-1.5"
               disabled={saving}
             >
               Annuler
@@ -1685,7 +1685,7 @@ function VariantsTab({
             <button
               type="button"
               onClick={onSaveNewVariant}
-              className="btn-primary py-1.5 text-xs"
+              className="btn-primary w-full py-2.5 text-xs sm:w-auto sm:py-1.5"
               disabled={saving}
             >
               {saving ? "Enregistrement…" : "Enregistrer la variante"}
@@ -1713,9 +1713,9 @@ function VariantsTab({
 
         return (
           <div key={orig.slug} className="rounded-xl border border-border bg-base">
-            {/* Row header */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-              <div className="flex items-center gap-3">
+            {/* Row header — one inline row on lg+, a stacked labeled card below lg. */}
+            <div className="flex min-w-0 flex-col gap-3 px-4 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
                 {/* Reorder controls: move this variant up/down in display order. */}
                 <div className="flex flex-col">
                   <button
@@ -1724,7 +1724,7 @@ function VariantsTab({
                     disabled={saving || isFirst}
                     aria-label="Déplacer vers le haut"
                     title="Déplacer vers le haut"
-                    className="flex h-4 w-5 items-center justify-center text-muted transition hover:text-white disabled:opacity-30"
+                    className="flex h-6 w-8 items-center justify-center text-muted transition hover:text-white disabled:opacity-30 lg:h-4 lg:w-5"
                   >
                     ▲
                   </button>
@@ -1734,99 +1734,118 @@ function VariantsTab({
                     disabled={saving || isLast}
                     aria-label="Déplacer vers le bas"
                     title="Déplacer vers le bas"
-                    className="flex h-4 w-5 items-center justify-center text-muted transition hover:text-white disabled:opacity-30"
+                    className="flex h-6 w-8 items-center justify-center text-muted transition hover:text-white disabled:opacity-30 lg:h-4 lg:w-5"
                   >
                     ▼
                   </button>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-white">{variantTitle}</p>
-                  <p className="font-mono text-[11px] text-muted">SKU: {v.slug}</p>
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium text-white">{variantTitle}</p>
+                  <p className="break-all font-mono text-[11px] text-muted">SKU: {v.slug}</p>
                 </div>
                 <RegionBadge
                   code={v.variantRegion || draft.region}
                   variant="chip"
                   size="micro"
                 />
-                <span className={`chip ${v.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
+                <span className={`chip whitespace-nowrap ${v.active ? "border-green-500/30 text-green-400" : "border-yellow-500/30 text-yellow-500"}`}>
                   {v.active ? "Actif" : "Masqué"}
                 </span>
-                {v.featured && <span className="chip border-accent/30 text-accent">Mis en avant</span>}
+                {v.featured && <span className="chip whitespace-nowrap border-accent/30 text-accent">Mis en avant</span>}
+                <span className={`chip whitespace-nowrap lg:hidden ${status.className}`}>{status.label}</span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-muted">
+              <div className="flex w-full min-w-0 flex-col gap-2.5 text-sm text-muted lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
                 {v.faceValue != null && (
-                  <span className="font-medium text-white">{v.faceValue} {v.faceCurrency}</span>
+                  <div className="flex items-center justify-between gap-2 lg:block">
+                    <span className="text-xs lg:hidden">Coût fournisseur / valeur</span>
+                    <span className="font-medium text-white">{v.faceValue} {v.faceCurrency}</span>
+                  </div>
                 )}
-                <span className="font-semibold text-white">{v.priceMad} MAD</span>
-                <span className={`text-xs ${v.stockMode === "force_out_of_stock" ? "text-yellow-500" : v.stockMode === "force_in_stock" ? "text-green-400" : "text-muted"}`}>
-                  {v.stockMode === "force_in_stock" ? "↑ En stock" : v.stockMode === "force_out_of_stock" ? "↓ En rupture" : `${v.inventoryUnused} codes`}
-                </span>
-                <ToggleSwitch
-                  checked={v.active}
-                  checkedLabel="Actif"
-                  uncheckedLabel="Masqué"
-                  onChange={(checked) => updateVariant(orig.slug, "active", checked)}
-                  disabled={saving}
-                  size="sm"
-                />
-                <ToggleSwitch
-                  checked={v.featured}
-                  checkedLabel="Mis en avant"
-                  uncheckedLabel="Non mis en avant"
-                  onChange={(checked) => updateVariant(orig.slug, "featured", checked)}
-                  disabled={saving}
-                  size="sm"
-                />
-                <select
-                  value={v.stockMode}
-                  onChange={(event) => updateVariant(orig.slug, "stockMode", event.target.value)}
-                  className="h-8 rounded-lg border border-border bg-surface px-2 text-xs text-white outline-none transition hover:border-border-strong focus:border-accent"
-                  disabled={saving}
-                  title={`Mode de stock : ${stockModeLabel(v.stockMode)}`}
-                >
-                  {STOCK_MODE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <label className="inline-flex items-center gap-1.5 text-xs">
-                  <span>MAD</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={v.priceMad}
-                    onChange={(event) => updateVariant(orig.slug, "priceMad", Number(event.target.value))}
-                    className="h-8 w-20 rounded-lg border border-border bg-surface px-2 text-xs text-white outline-none transition hover:border-border-strong focus:border-accent"
+                <span className="hidden font-semibold text-white lg:inline">{v.priceMad} MAD</span>
+                <div className="flex items-center justify-between gap-2 lg:block">
+                  <span className="text-xs lg:hidden">Stock / codes</span>
+                  <span className={`text-xs ${v.stockMode === "force_out_of_stock" ? "text-yellow-500" : v.stockMode === "force_in_stock" ? "text-green-400" : "text-muted"}`}>
+                    {v.stockMode === "force_in_stock" ? "↑ En stock" : v.stockMode === "force_out_of_stock" ? "↓ En rupture" : `${v.inventoryUnused} codes`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 lg:block">
+                  <span className="text-xs lg:hidden">Actif</span>
+                  <ToggleSwitch
+                    checked={v.active}
+                    checkedLabel="Actif"
+                    uncheckedLabel="Masqué"
+                    onChange={(checked) => updateVariant(orig.slug, "active", checked)}
                     disabled={saving}
+                    size="sm"
                   />
-                </label>
-                <span className={`chip ${status.className}`}>{status.label}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 lg:block">
+                  <span className="text-xs lg:hidden">Mis en avant</span>
+                  <ToggleSwitch
+                    checked={v.featured}
+                    checkedLabel="Mis en avant"
+                    uncheckedLabel="Non mis en avant"
+                    onChange={(checked) => updateVariant(orig.slug, "featured", checked)}
+                    disabled={saving}
+                    size="sm"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2 lg:block">
+                  <span className="text-xs lg:hidden">Mode de stock</span>
+                  <select
+                    value={v.stockMode}
+                    onChange={(event) => updateVariant(orig.slug, "stockMode", event.target.value)}
+                    className="h-9 max-w-[60%] rounded-lg border border-border bg-surface px-2 text-xs text-white outline-none transition hover:border-border-strong focus:border-accent lg:h-8 lg:max-w-none"
+                    disabled={saving}
+                    title={`Mode de stock : ${stockModeLabel(v.stockMode)}`}
+                  >
+                    {STOCK_MODE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center justify-between gap-2 lg:block">
+                  <span className="text-xs lg:hidden">Prix de vente</span>
+                  <label className="inline-flex items-center gap-1.5 text-xs">
+                    <span>MAD</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={v.priceMad}
+                      onChange={(event) => updateVariant(orig.slug, "priceMad", Number(event.target.value))}
+                      className="h-9 w-24 rounded-lg border border-border bg-surface px-2 text-xs text-white outline-none transition hover:border-border-strong focus:border-accent lg:h-8 lg:w-20"
+                      disabled={saving}
+                    />
+                  </label>
+                </div>
+                <span className={`chip hidden whitespace-nowrap lg:inline-flex ${status.className}`}>{status.label}</span>
                 {isDirty && (
                   <button
                     type="button"
                     onClick={() => onSaveVariant(orig.slug)}
-                    className="btn-primary h-8 px-3 text-xs"
+                    className="btn-primary h-10 w-full px-3 text-xs lg:h-8 lg:w-auto"
                     disabled={saving}
                   >
                     {saving ? "Enregistrement..." : "Enregistrer"}
                   </button>
                 )}
                 {isEditing ? (
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => setEditingVariant(null)} className="btn-ghost py-1 text-xs" disabled={saving}>
+                  <div className="flex gap-2 border-t border-border/60 pt-2.5 lg:gap-1 lg:border-t-0 lg:pt-0">
+                    <button type="button" onClick={() => setEditingVariant(null)} className="btn-ghost w-full py-2 text-xs lg:w-auto lg:py-1" disabled={saving}>
                       Annuler
                     </button>
-                    <button type="button" onClick={() => onSaveVariant(orig.slug)} className="btn-primary py-1 text-xs" disabled={saving}>
+                    <button type="button" onClick={() => onSaveVariant(orig.slug)} className="btn-primary w-full py-2 text-xs lg:w-auto lg:py-1" disabled={saving}>
                       {saving ? "…" : "Enregistrer"}
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 lg:justify-start lg:border-t-0 lg:pt-0">
                     <button
                       type="button"
                       onClick={() => { setEditingVariant(orig.slug); setConfirmDelete(null); }}
-                      className="text-xs font-medium text-accent hover:text-accent-hover"
+                      className="px-1 py-1.5 text-xs font-medium text-accent hover:text-accent-hover lg:p-0"
                       disabled={saving}
                     >
                       Modifier
@@ -1834,18 +1853,18 @@ function VariantsTab({
                     <button
                       type="button"
                       onClick={() => onDuplicateVariant(orig.slug)}
-                      className="text-xs font-medium text-muted hover:text-white"
+                      className="px-1 py-1.5 text-xs font-medium text-muted hover:text-white lg:p-0"
                       disabled={saving}
                     >
                       Dupliquer
                     </button>
                     {isConfirming ? (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2 lg:gap-1">
                         <span className="text-xs text-red-400">Supprimer ?</span>
                         <button
                           type="button"
                           onClick={async () => { setConfirmDelete(null); await onDeleteVariant(orig.slug); }}
-                          className="text-xs font-semibold text-red-400 hover:text-red-300"
+                          className="px-1 py-1.5 text-xs font-semibold text-red-400 hover:text-red-300 lg:p-0"
                           disabled={saving}
                         >
                           Oui
@@ -1853,7 +1872,7 @@ function VariantsTab({
                         <button
                           type="button"
                           onClick={() => setConfirmDelete(null)}
-                          className="text-xs text-muted hover:text-white"
+                          className="px-1 py-1.5 text-xs text-muted hover:text-white lg:p-0"
                         >
                           Non
                         </button>
@@ -1862,7 +1881,7 @@ function VariantsTab({
                       <button
                         type="button"
                         onClick={() => setConfirmDelete(orig.slug)}
-                        className="text-xs text-red-500/70 hover:text-red-400"
+                        className="px-1 py-1.5 text-xs text-red-500/70 hover:text-red-400 lg:p-0"
                         disabled={saving}
                       >
                         Supprimer
