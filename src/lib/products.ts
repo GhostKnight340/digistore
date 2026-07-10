@@ -22,27 +22,6 @@ export const categories: Category[] = [
     gradient: "from-[#0e7a0d] to-[#16c60c]",
     icon: "🟢",
   },
-  {
-    id: "nintendo",
-    name: "Nintendo eShop",
-    tagline: "Jeux Switch et contenus additionnels",
-    gradient: "from-[#b30000] to-[#ff4554]",
-    icon: "🔴",
-  },
-  {
-    id: "roblox",
-    name: "Roblox",
-    tagline: "Cartes Robux",
-    gradient: "from-[#2b2b2b] to-[#5a5a5a]",
-    icon: "🟥",
-  },
-  {
-    id: "valorant",
-    name: "Valorant Points",
-    tagline: "VP et points Riot Games",
-    gradient: "from-[#7a1320] to-[#ff4655]",
-    icon: "🎯",
-  },
 ];
 
 export function getCategory(id: string): Category | undefined {
@@ -123,58 +102,6 @@ export const products: Product[] = [
     deliveryType: "Code numérique - livraison rapide",
     description:
       "Ajoutez 200 MAD à votre compte Xbox pour jeux, abonnements et contenus numériques.",
-  },
-  {
-    id: "nintendo-150",
-    name: "Nintendo eShop 150 MAD",
-    category: "nintendo",
-    region: "EU",
-    price: 150,
-    deliveryType: "Code numérique - livraison rapide",
-    description:
-      "Ajoutez des fonds à votre compte Nintendo pour acheter jeux Switch et contenus depuis le Nintendo eShop.",
-  },
-  {
-    id: "roblox-100",
-    name: "Roblox Gift Card 100 MAD",
-    category: "roblox",
-    region: "GLOBAL",
-    price: 100,
-    deliveryType: "Code numérique - livraison rapide",
-    description:
-      "Échangez cette carte contre des Robux ou un abonnement Premium sur Roblox.",
-    featured: true,
-  },
-  {
-    id: "roblox-200",
-    name: "Roblox Gift Card 200 MAD",
-    category: "roblox",
-    region: "GLOBAL",
-    price: 200,
-    deliveryType: "Code numérique - livraison rapide",
-    description:
-      "Échangez 200 MAD contre des Robux ou un abonnement Premium sur Roblox.",
-  },
-  {
-    id: "valorant-100",
-    name: "Valorant Points 100 MAD",
-    category: "valorant",
-    region: "",
-    price: 100,
-    deliveryType: "Code numérique - livraison rapide",
-    description:
-      "Échangez des Valorant Points pour skins, passes de combat et agents.",
-    featured: true,
-  },
-  {
-    id: "valorant-200",
-    name: "Valorant Points 200 MAD",
-    category: "valorant",
-    region: "",
-    price: 200,
-    deliveryType: "Code numérique - livraison rapide",
-    description:
-      "Échangez 200 MAD de Valorant Points pour skins et passes de combat.",
   },
 ];
 
