@@ -22,6 +22,7 @@ import ProductArt from "@/components/ProductArt";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import { REGION_LIST, getRegion } from "@/lib/regions";
+import { variantSku } from "@/lib/pricing/variant-identity";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
 
@@ -1080,6 +1081,26 @@ function generateSku(value: string) {
   return next || "SKU";
 }
 
+/**
+ * Canonical variant SKU: parent slug + country + denomination, via the same
+ * `variantSku` helper the Reloadly importer and SKU-cleanup script use, so the
+ * "Régénérer" button produces a collision-safe SKU (e.g. "google-play-fr-10-eur")
+ * rather than a bare name-derived one ("10-eur") that drops the parent/country.
+ * Falls back to a parent-prefixed name slug for base variants without a
+ * denomination.
+ */
+function regenerateVariantSku(parentSlug: string, v: VariantDTO): string {
+  if (v.faceValue != null && v.faceCurrency) {
+    return variantSku(parentSlug, {
+      faceValue: v.faceValue,
+      faceCurrency: v.faceCurrency,
+      reloadlyProductId: v.reloadlyProductId,
+      reloadlyCountryCode: v.reloadlyCountryCode,
+    });
+  }
+  return slugify([parentSlug, v.name].filter(Boolean).join("-")) || generateSku(v.name);
+}
+
 function normalizeSkuInput(value: string) {
   return value
     .normalize("NFD")
@@ -1303,10 +1324,12 @@ function VariantForm({
   v,
   onChange,
   parentRegion,
+  parentSlug,
 }: {
   v: VariantDTO;
   onChange: <K extends keyof VariantDTO>(k: K, val: VariantDTO[K]) => void;
   parentRegion: string;
+  parentSlug: string;
 }) {
   const { settings } = useStoreSettings();
   const inventoryOn = isInventoryEnabled(settings);
@@ -1323,7 +1346,7 @@ function VariantForm({
             />
             <button
               type="button"
-              onClick={() => onChange("slug", generateSku(v.name))}
+              onClick={() => onChange("slug", regenerateVariantSku(parentSlug, v))}
               className="btn-ghost shrink-0 px-3 text-xs"
             >
               Régénérer
@@ -1596,10 +1619,11 @@ function VariantsTab({
           <VariantForm
             v={newVariantDraft}
             parentRegion={draft.region}
+            parentSlug={draft.slug}
             onChange={(k, val) => {
               const next = { ...newVariantDraft, [k]: val };
               if (k === "name" && typeof val === "string" && !newVariantDraft.slug.trim()) {
-                next.slug = generateSku(val);
+                next.slug = regenerateVariantSku(draft.slug, next);
               }
               onNewVariantChange(next);
             }}
@@ -1812,6 +1836,7 @@ function VariantsTab({
                 <VariantForm
                   v={v}
                   parentRegion={draft.region}
+                  parentSlug={draft.slug}
                   onChange={(k, val) => updateVariant(orig.slug, k, val)}
                 />
               </div>
