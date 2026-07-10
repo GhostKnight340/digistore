@@ -51,6 +51,7 @@ const TYPE_BADGE: Record<CommandSearchGroupKey, { label: string; fg: string; bg:
   customers: { label: "CUS", fg: "#5BC98C", bg: "rgba(46,160,103,0.16)" },
   products: { label: "PRD", fg: "#E8A838", bg: "rgba(232,168,56,0.14)" },
   variants: { label: "VAR", fg: "#C79BEA", bg: "rgba(160,110,220,0.18)" },
+  expenses: { label: "DEP", fg: "#E8A838", bg: "rgba(232,168,56,0.14)" },
   pages: { label: "PG", fg: "#9AA3B2", bg: "rgba(255,255,255,0.08)" },
   settings: { label: "SET", fg: "#56C7C7", bg: "rgba(64,180,180,0.14)" },
 };
@@ -60,6 +61,7 @@ const GROUP_LABEL: Record<CommandSearchGroupKey, string> = {
   customers: "Clients",
   products: "Produits",
   variants: "Variantes",
+  expenses: "Dépenses",
   pages: "Pages",
   settings: "Paramètres",
 };
@@ -69,6 +71,7 @@ const GROUP_HINT: Record<CommandSearchGroupKey, string> = {
   customers: "Ouvrir",
   products: "Modifier",
   variants: "Modifier",
+  expenses: "Ouvrir",
   pages: "Aller",
   settings: "Ouvrir",
 };
@@ -78,22 +81,29 @@ const GROUP_OVERFLOW_HREF: Partial<Record<CommandSearchGroupKey, string>> = {
   customers: "/admin?tab=customers",
   products: "/admin?tab=products",
   variants: "/admin?tab=products",
+  expenses: "/admin?tab=expenses",
 };
 
 /* Local index — pages & settings resolve instantly, no server round-trip. */
 type LocalEntry = { title: string; subtitle: string; href: string; keywords: string };
 
+/* Mirrors the AdminShell sidebar registry — every authorized admin route must
+   be findable here even when no DB record matches. Keep in sync when adding a
+   nav entry (see AdminShell NAV/STANDALONE definitions). */
 const PAGES_INDEX: LocalEntry[] = [
   { title: "Vue d'ensemble", subtitle: "Tableau de bord", href: "/admin", keywords: "overview dashboard accueil vue" },
   { title: "Produits", subtitle: "Catalogue", href: "/admin?tab=products", keywords: "products produits catalogue" },
   { title: "Catégories", subtitle: "Catalogue", href: "/admin?tab=categories", keywords: "categories catégories" },
   { title: "Produits populaires", subtitle: "Catalogue", href: "/admin?tab=featured", keywords: "featured populaires vedette" },
+  { title: "Tarification", subtitle: "Catalogue", href: "/admin?tab=pricing", keywords: "pricing tarification prix marges fx taux" },
+  { title: "Importer Reloadly", subtitle: "Catalogue", href: "/admin/catalog/import-reloadly", keywords: "reloadly import importer catalogue giftcards fournisseur" },
   { title: "Toutes les commandes", subtitle: "Commandes", href: "/admin?tab=orders", keywords: "orders commandes" },
   { title: "Revue paiements", subtitle: "Commandes", href: "/admin?tab=payments", keywords: "payments paiements revue review" },
   { title: "Traitement", subtitle: "Commandes", href: "/admin?tab=fulfillment", keywords: "fulfillment traitement livraison" },
   { title: "Remboursements", subtitle: "Commandes", href: "/admin?tab=refunds", keywords: "refunds remboursements" },
   { title: "Stock", subtitle: "Inventaire & codes", href: "/admin?tab=inventory", keywords: "stock inventory inventaire codes" },
   { title: "Clients", subtitle: "Comptes clients", href: "/admin?tab=customers", keywords: "customers clients comptes" },
+  { title: "Dépenses", subtitle: "Finance", href: "/admin?tab=expenses", keywords: "expenses dépenses depenses abonnements coûts couts finance" },
   { title: "Éditeur d'accueil", subtitle: "Page d'accueil", href: "/admin/editor", keywords: "editor éditeur accueil homepage" },
   { title: "Pages légales", subtitle: "Contenu", href: "/admin?tab=legal-pages", keywords: "legal légales cgv confidentialité" },
 ];
@@ -103,7 +113,7 @@ const SETTINGS_INDEX: LocalEntry[] = [
   { title: "Paiements", subtitle: "Banques · USDT · PayPal", href: "/admin?tab=payment-settings", keywords: "payment methods paiements banque bank usdt paypal carte" },
   { title: "Templates email", subtitle: "Emails transactionnels", href: "/admin?tab=email-templates", keywords: "email templates mails" },
   { title: "Mode maintenance", subtitle: "Boutique hors ligne", href: "/admin?tab=maintenance", keywords: "maintenance mode offline" },
-  { title: "API fournisseur", subtitle: "Intégrations", href: "/admin?tab=suppliers", keywords: "api fournisseur supplier" },
+  { title: "Provider API", subtitle: "Intégrations", href: "/admin?tab=suppliers", keywords: "provider api fournisseur supplier suppliers reloadly intégrations" },
   { title: "Outils développeur", subtitle: "Debug & données", href: "/admin?tab=developer", keywords: "developer développeur debug outils" },
 ];
 
@@ -115,14 +125,21 @@ function searchLocal(query: string): CommandSearchGroup[] {
   const build = (group: CommandSearchGroupKey, index: LocalEntry[]): CommandSearchGroup | null => {
     const hits = index.filter(match);
     if (hits.length === 0) return null;
+    // Exact title matches rank first (and float to the top of the whole list).
+    const ranked = [...hits].sort((a, b) => {
+      const aExact = a.title.toLowerCase() === q ? 0 : 1;
+      const bExact = b.title.toLowerCase() === q ? 0 : 1;
+      return aExact - bExact;
+    });
     return {
       group,
       hasMore: false,
-      items: hits.slice(0, 5).map((entry) => ({
+      items: ranked.slice(0, 5).map((entry) => ({
         id: entry.href + entry.title,
         title: entry.title,
         subtitle: entry.subtitle,
         href: entry.href,
+        exact: entry.title.toLowerCase() === q,
       })),
     };
   };
@@ -186,6 +203,7 @@ const GROUP_ORDER: CommandSearchGroupKey[] = [
   "customers",
   "products",
   "variants",
+  "expenses",
   "pages",
   "settings",
 ];
@@ -511,7 +529,9 @@ export default function CommandSearch({
     setRetryTick((tick) => tick + 1);
   }, [query]);
 
-  const showError = hasQuery && error;
+  /* A server outage must not hide instantly-resolved navigation matches —
+     only surface the error screen when there is nothing at all to show. */
+  const showError = hasQuery && error && rows.length === 0;
   const showSkeletonBody = hasQuery && !showError && showSkeleton && rows.length === 0;
   const showNoResults = hasQuery && !showError && !loading && rows.length === 0;
   const resultCount = rows.filter((row) => row.kind === "item").length;
@@ -1043,7 +1063,7 @@ export default function CommandSearch({
                       Aucun résultat pour «&nbsp;<span style={{ color: T.textBright }}>{query.trim()}</span>&nbsp;»
                     </div>
                     <div style={{ fontSize: "13px", color: T.text2 }}>
-                      Essayez un numéro de commande, un email client ou un nom de produit.
+                      Recherchez une page, une commande, un produit, un client ou une dépense.
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>

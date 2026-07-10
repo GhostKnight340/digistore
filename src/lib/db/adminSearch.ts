@@ -22,6 +22,7 @@ export type CommandSearchGroupKey =
   | "customers"
   | "products"
   | "variants"
+  | "expenses"
   | "pages"
   | "settings";
 
@@ -250,6 +251,8 @@ async function searchVariants(query: string): Promise<CommandSearchGroup | null>
       OR: [
         { name: { contains: query, mode: "insensitive" } },
         { product: { name: { contains: query, mode: "insensitive" } } },
+        // ProductVariant.id IS the SKU — admins paste SKUs directly.
+        { id: { contains: query, mode: "insensitive" } },
       ],
     },
     select: {
@@ -271,7 +274,7 @@ async function searchVariants(query: string): Promise<CommandSearchGroup | null>
       return {
         id: variant.id,
         title: `${variant.product.name} · ${variant.name}`,
-        subtitle: `${variant.priceMad} MAD`,
+        subtitle: `${variant.id} · ${variant.priceMad} MAD`,
         mono: true,
         status: !variant.active
           ? { text: "inactif", tone: "red" as const }
@@ -284,9 +287,61 @@ async function searchVariants(query: string): Promise<CommandSearchGroup | null>
   };
 }
 
+/** Expense ledger: recurring subscriptions + standalone entries by service
+ *  name or category. All rows open the admin Dépenses panel. */
+async function searchExpenses(query: string): Promise<CommandSearchGroup | null> {
+  const where = {
+    OR: [
+      { name: { contains: query, mode: "insensitive" as const } },
+      { category: { contains: query, mode: "insensitive" as const } },
+    ],
+  };
+  const [recurrings, entries] = await Promise.all([
+    prisma.recurringExpense.findMany({
+      take: GROUP_LIMIT + 1,
+      orderBy: { nextBillingDate: "asc" },
+      where,
+      select: { id: true, name: true, category: true, status: true, currency: true, amount: true },
+    }),
+    prisma.expenseEntry.findMany({
+      take: GROUP_LIMIT + 1,
+      orderBy: { createdAt: "desc" },
+      where: { ...where, recurringExpenseId: null },
+      select: { id: true, name: true, category: true, status: true, currency: true, amountOriginal: true },
+    }),
+  ]);
+  if (recurrings.length === 0 && entries.length === 0) return null;
+
+  const items: CommandSearchItem[] = [
+    ...recurrings.map((expense) => ({
+      id: `recur-${expense.id}`,
+      title: expense.name,
+      subtitle: `Abonnement · ${expense.category}${expense.amount != null ? ` · ${Number(expense.amount)} ${expense.currency}` : ""}`,
+      status:
+        expense.status === "cancelled"
+          ? { text: "résilié", tone: "red" as const }
+          : expense.status === "paused"
+          ? { text: "en pause", tone: "amber" as const }
+          : { text: "actif", tone: "green" as const },
+      href: "/admin?tab=expenses",
+    })),
+    ...entries.map((entry) => ({
+      id: `entry-${entry.id}`,
+      title: entry.name,
+      subtitle: `Dépense · ${entry.category}${entry.amountOriginal != null ? ` · ${Number(entry.amountOriginal)} ${entry.currency}` : ""}`,
+      href: "/admin?tab=expenses",
+    })),
+  ];
+  return {
+    group: "expenses",
+    hasMore: items.length > GROUP_LIMIT,
+    items: items.slice(0, GROUP_LIMIT),
+  };
+}
+
 /**
  * Grouped admin command-palette search over server data
- * (orders, customers, products, variants). Pages and settings are a
+ * (orders, customers, products, variants, expenses). Pages and settings are a
  * static index resolved instantly on the client.
  */
 export async function adminCommandSearch(rawQuery: string): Promise<CommandSearchResult> {
@@ -297,14 +352,15 @@ export async function adminCommandSearch(rawQuery: string): Promise<CommandSearc
   const isOrderLookup = /^#?\d+$/.test(query);
   const isEmailish = query.includes("@");
 
-  const [orders, customers, products, variants] = await Promise.all([
+  const [orders, customers, products, variants, expenses] = await Promise.all([
     searchOrders(query),
     isOrderLookup ? Promise.resolve(null) : searchCustomers(query),
     isOrderLookup || isEmailish ? Promise.resolve(null) : searchProducts(query),
     isOrderLookup || isEmailish ? Promise.resolve(null) : searchVariants(query),
+    isOrderLookup || isEmailish ? Promise.resolve(null) : searchExpenses(query),
   ]);
 
-  const groups = [orders, customers, products, variants].filter(
+  const groups = [orders, customers, products, variants, expenses].filter(
     (group): group is CommandSearchGroup => group !== null,
   );
   return { query, groups };
