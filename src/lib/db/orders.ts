@@ -566,9 +566,10 @@ export async function getAdminStats(): Promise<{
 export async function getAdminNavCounts(): Promise<{
   activeOrders: number;
   paymentReview: number;
+  supportOpen: number;
 }> {
   await ensureDatabaseReady();
-  const [activeOrders, paymentReview] = await Promise.all([
+  const [activeOrders, paymentReview, supportOpen] = await Promise.all([
     timeAdmin(
       "admin.navCounts",
       "order.count.active",
@@ -581,8 +582,14 @@ export async function getAdminNavCounts(): Promise<{
       () => prisma.order.count({ where: { status: "payment_submitted" } }),
       (count) => count,
     ),
+    timeAdmin(
+      "admin.navCounts",
+      "supportTicket.count.open",
+      () => prisma.supportTicket.count({ where: { status: "open" } }),
+      (count) => count,
+    ),
   ]);
-  return { activeOrders, paymentReview };
+  return { activeOrders, paymentReview, supportOpen };
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {

@@ -27,6 +27,7 @@ const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"
 const SuppliersPanel = lazy(() => import("@/components/admin/SuppliersPanel"));
 const PricingPanel = lazy(() => import("@/components/admin/PricingPanel"));
 const ExpensesPanel = lazy(() => import("@/components/admin/ExpensesPanel"));
+const SupportTicketsPanel = lazy(() => import("@/components/admin/SupportTicketsPanel"));
 
 const panelFallback = (
   <section className="card p-6 text-sm text-muted">Chargement de la section...</section>
@@ -60,6 +61,8 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
       return <PricingPanel />;
     case "expenses":
       return <ExpensesPanel />;
+    case "support":
+      return <SupportTicketsPanel />;
     case "inventory":
       return inventoryOn ? (
         <InventoryPanel />

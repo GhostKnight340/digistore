@@ -104,6 +104,7 @@ const PAGES_INDEX: LocalEntry[] = [
   { title: "Stock", subtitle: "Inventaire & codes", href: "/admin?tab=inventory", keywords: "stock inventory inventaire codes" },
   { title: "Clients", subtitle: "Comptes clients", href: "/admin?tab=customers", keywords: "customers clients comptes" },
   { title: "Dépenses", subtitle: "Finance", href: "/admin?tab=expenses", keywords: "expenses dépenses depenses abonnements coûts couts finance" },
+  { title: "Support", subtitle: "Demandes clients", href: "/admin?tab=support", keywords: "support tickets demandes réclamations sav aide" },
   { title: "Éditeur d'accueil", subtitle: "Page d'accueil", href: "/admin/editor", keywords: "editor éditeur accueil homepage" },
   { title: "Pages légales", subtitle: "Contenu", href: "/admin?tab=legal-pages", keywords: "legal légales cgv confidentialité" },
 ];

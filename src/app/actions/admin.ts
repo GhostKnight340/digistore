@@ -185,6 +185,7 @@ export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderSumma
 export async function getAdminNavCountsAction(): Promise<{
   activeOrders: number;
   paymentReview: number;
+  supportOpen: number;
 }> {
   await assertAdminAccess();
   return getAdminNavCounts();

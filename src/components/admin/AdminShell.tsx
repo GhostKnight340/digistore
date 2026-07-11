@@ -28,7 +28,7 @@ const C = {
   borderStrong: "rgba(255,255,255,0.1)",
 };
 
-export type NavCounts = { activeOrders: number; paymentReview: number };
+export type NavCounts = { activeOrders: number; paymentReview: number; supportOpen: number };
 
 /**
  * Nav ids that are their own standalone route rather than an in-place ?tab=
@@ -45,7 +45,7 @@ type NavItem = {
   id: string;
   label: string;
   icon: ReactNode;
-  badge?: "activeOrders" | "paymentReview";
+  badge?: "activeOrders" | "paymentReview" | "supportOpen";
   badgeTone?: "accent" | "warning";
 };
 
@@ -192,6 +192,19 @@ const NAV: NavGroup[] = [
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
             <circle cx="9" cy="7" r="4" />
             <path d="M23 21v-2a4 4 0 0 0-3-3.9" />
+          </>,
+        ),
+      },
+      {
+        id: "support",
+        label: "Support",
+        badge: "supportOpen",
+        badgeTone: "warning",
+        icon: icon(
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <circle cx="12" cy="12" r="3.5" />
+            <path d="M5.7 5.7l4 4M14.3 14.3l4 4M18.3 5.7l-4 4M9.7 14.3l-4 4" />
           </>,
         ),
       },

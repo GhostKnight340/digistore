@@ -139,20 +139,6 @@ export default function SupportFlow({
       return copy;
     });
   };
-  const reset = () => {
-    setStep("category");
-    setHist([]);
-    setCat(null);
-    setSub(null);
-    setOrder(null);
-    setManual("");
-    setForm({ name: initialName, email: initialEmail, phone: "", message: "" });
-    setFiles([]);
-    setFileError(null);
-    setSubmitError(null);
-    setReference(null);
-  };
-
   const pickCat = (key: string) => {
     setCat(key);
     setSub(null);
@@ -620,18 +606,17 @@ export default function SupportFlow({
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/"
+                href={`/support/suivi?ref=${encodeURIComponent(reference ?? "")}`}
                 className="min-w-[170px] flex-1 rounded-[13px] border border-[rgba(120,170,255,0.6)] bg-gradient-to-b from-[#3f83ff] to-[#2f6cf0] px-4 py-3.5 text-[14.5px] font-bold text-white shadow-[0_6px_20px_rgba(47,108,240,0.35)] transition hover:-translate-y-px hover:brightness-105"
+              >
+                Suivre ma demande
+              </Link>
+              <Link
+                href="/"
+                className="min-w-[170px] flex-1 rounded-[13px] border border-white/[0.09] bg-white/[0.04] px-4 py-3.5 text-[14.5px] font-semibold text-[#c8cdda] transition hover:bg-white/[0.07] hover:text-white"
               >
                 Retour à l'accueil
               </Link>
-              <button
-                type="button"
-                onClick={reset}
-                className="min-w-[170px] flex-1 rounded-[13px] border border-white/[0.09] bg-white/[0.04] px-4 py-3.5 text-[14.5px] font-semibold text-[#c8cdda] transition hover:bg-white/[0.07] hover:text-white"
-              >
-                Nouvelle demande
-              </button>
             </div>
           </div>
         )}

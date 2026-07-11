@@ -1,7 +1,12 @@
 "use server";
 
 import { getCurrentCustomer } from "@/lib/auth";
-import { createSupportTicket, type SupportAttachment } from "@/lib/db/supportTickets";
+import {
+  createSupportTicket,
+  findSupportTicketForCustomer,
+  type SupportAttachment,
+  type SupportTicketStatusDTO,
+} from "@/lib/db/supportTickets";
 import { notifySupportTicket } from "@/lib/discord/notify";
 import { findSupportCategory, findSupportSubIssue } from "@/lib/support/config";
 
@@ -99,4 +104,24 @@ export async function submitSupportTicketAction(
   });
 
   return { ok: true, reference: ticket.reference };
+}
+
+/**
+ * Public ticket-status lookup. Requires the reference AND the submitting
+ * e-mail: a GH-S-XXXXXX reference is enumerable and is never treated as
+ * authentication on its own (same rule as delivery pages). Returns null for
+ * any non-match — no distinction between "unknown reference" and "wrong
+ * e-mail" to avoid confirming which references exist.
+ */
+export async function lookupSupportTicketAction(
+  reference: string,
+  email: string,
+): Promise<SupportTicketStatusDTO | null> {
+  if (!EMAIL_RE.test((email ?? "").trim())) return null;
+  try {
+    return await findSupportTicketForCustomer(reference ?? "", email);
+  } catch (error) {
+    console.error("[support:lookup]", error instanceof Error ? error.message : error);
+    return null;
+  }
 }
