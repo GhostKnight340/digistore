@@ -313,6 +313,43 @@ export function notifyAccountCreated(
 }
 
 // ---------------------------------------------------------------------------
+// #support
+// ---------------------------------------------------------------------------
+
+export type SupportTicketNotification = {
+  reference: string;
+  categoryLabel: string;
+  subIssueLabel: string;
+  orderRef: string | null;
+  name: string;
+  email: string;
+  phone: string | null;
+  message: string | null;
+  attachmentCount: number;
+};
+
+export function notifySupportTicket(input: SupportTicketNotification): Promise<void> {
+  return safeSend("support", () =>
+    embed({
+      title: `🎫 Nouvelle demande support — ${input.reference}`,
+      color: COLOR.blue,
+      fields: [
+        { name: "Sujet", value: input.categoryLabel, inline: true },
+        { name: "Problème", value: input.subIssueLabel, inline: true },
+        ...(input.orderRef ? [{ name: "Commande", value: input.orderRef, inline: true }] : []),
+        { name: "Client", value: input.name, inline: true },
+        { name: "E-mail", value: input.email, inline: true },
+        ...(input.phone ? [{ name: "Téléphone", value: input.phone, inline: true }] : []),
+        ...(input.message ? [{ name: "Message", value: input.message.slice(0, 1000) }] : []),
+        ...(input.attachmentCount > 0
+          ? [{ name: "Pièces jointes", value: String(input.attachmentCount), inline: true }]
+          : []),
+      ],
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // #stock-alerts
 // ---------------------------------------------------------------------------
 

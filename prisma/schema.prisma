@@ -397,6 +397,38 @@ model EmailLog {
 
 // Customer-uploaded payment proof (PNG / JPG / JPEG / PDF).
 // Stored as base64 in PostgreSQL until object storage is configured.
+// Guided-support request submitted from /support. Standalone (no hard FK to
+// Order — the customer may reference any order string or none). Attachments
+// are stored inline as base64 like PaymentProof until object storage exists.
+model SupportTicket {
+  id        String  @id @default(cuid())
+  // Public reference shown to the customer, e.g. "GH-S-482913".
+  reference String  @unique
+  // Category key: paiement | livraison | code | commande | remboursement | compte | technique | autre
+  category  String
+  // Sub-issue id (p1, l2, …) + its French label frozen at submit time.
+  subIssue      String
+  subIssueLabel String
+  // Optional order reference chosen/typed by the customer (e.g. "#000128").
+  orderRef String?
+  name     String
+  email    String
+  phone    String?
+  message  String?
+  // [{ fileName, mimeType, dataBase64 }] — capped by the server action.
+  attachments Json?
+  // Logged-in customer when available (soft link, ticket survives deletion).
+  customerId String?
+  // status: "open" | "answered" | "closed"
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@index([customerId])
+}
+
 model PaymentProof {
   id         String   @id @default(cuid())
   orderId    String   @unique
