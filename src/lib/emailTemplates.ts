@@ -41,10 +41,17 @@ function variableString(variables: Variables, key: string) {
   return String(variables[key] ?? "");
 }
 
-function emailLogoUrl() {
-  // Navigator horizontal lockup (PNG — no SVG in e-mail). Source is 1800×500,
-  // rendered at 130×36 so it stays within the ≤36px-tall header banner.
-  return absoluteAppUrl("/brand/ghostma-navigator-horizontal.png");
+function brandHeaderHtml() {
+  // Light-theme header: the transparent mascot icon + an HTML wordmark. The
+  // horizontal PNG lockup has near-white text (invisible on a light background),
+  // so the wordmark is rendered as text with a dark "ghost" and a blue ".ma".
+  return `
+    <a href="${escapeHtml(absoluteAppUrl("/"))}" style="display: inline-block; text-decoration: none; border: 0;">
+      <img src="${escapeHtml(
+        absoluteAppUrl("/brand/navigator-icon-64.png"),
+      )}" width="30" height="30" alt="" style="display: inline-block; vertical-align: middle; border: 0;" />
+      <span style="display: inline-block; vertical-align: middle; margin-left: 9px; font-family: Arial, sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: #0f1729;">ghost<span style="color: #3e7bfa;">.ma</span></span>
+    </a>`;
 }
 
 function brandedButton(label: string, href: string) {
@@ -75,7 +82,7 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
               (link) =>
                 `<a href="${escapeHtml(link.href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(
                   link.ariaLabel,
-                )}" style="display: inline-block; width: 34px; height: 34px; margin: 0 4px; border: 1px solid #2f3954; border-radius: 999px; background: #151a25; text-decoration: none;">
+                )}" style="display: inline-block; width: 34px; height: 34px; margin: 0 4px; border: 1px solid #e2e6ee; border-radius: 999px; background: #f3f5f9; text-decoration: none;">
                   <img src="${escapeHtml(emailIconUrl(link.iconPath))}" width="16" height="16" alt="${escapeHtml(
                     link.label,
                   )}" style="display: block; width: 16px; height: 16px; margin: 9px auto; border: 0;" />
@@ -92,7 +99,7 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
           ${paymentBadges
             .map(
               (badge) =>
-                `<span style="display: inline-block; margin: 0 4px 8px; border: 1px solid #2f3954; border-radius: 8px; padding: 6px 9px; color: #aab4c8; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700; letter-spacing: .02em;">${escapeHtml(
+                `<span style="display: inline-block; margin: 0 4px 8px; border: 1px solid #e2e6ee; border-radius: 8px; padding: 6px 9px; color: #6b7280; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700; letter-spacing: .02em;">${escapeHtml(
                   badge.label,
                 )}</span>`,
             )
@@ -104,14 +111,14 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
   return `
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td style="padding: 22px 8px 0; color: #7f899c; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.7; text-align: center;">
+        <td style="padding: 22px 8px 0; color: #6b7280; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.7; text-align: center;">
           Besoin d’aide ? Contactez-nous à
-          <a href="mailto:${escapeHtml(supportEmail)}" style="color: #9fb4ff;">${escapeHtml(supportEmail)}</a>
+          <a href="mailto:${escapeHtml(supportEmail)}" style="color: #3e7bfa;">${escapeHtml(supportEmail)}</a>
           ${
             supportWhatsappUrl
               ? `ou <a href="${escapeHtml(
                   supportWhatsappUrl,
-                )}" target="_blank" rel="noopener noreferrer" style="color: #9fb4ff;">WhatsApp</a>`
+                )}" target="_blank" rel="noopener noreferrer" style="color: #3e7bfa;">WhatsApp</a>`
               : ""
           }.
         </td>
@@ -119,7 +126,7 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
       ${socialHtml}
       ${paymentHtml}
       <tr>
-        <td align="center" style="padding: 12px 8px 0; color: #69758b; font-family: Arial, sans-serif; font-size: 12px;">
+        <td align="center" style="padding: 12px 8px 0; color: #9aa3b2; font-family: Arial, sans-serif; font-size: 12px;">
           <img src="${escapeHtml(
             absoluteAppUrl("/brand/navigator-icon-32.png"),
           )}" width="18" height="18" alt="" style="display: inline-block; vertical-align: middle; margin-right: 7px; border: 0;" />
@@ -172,11 +179,11 @@ function motifBlockHtml(reason: string, label: string) {
   return `
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0 0;">
       <tr>
-        <td style="border: 1px solid #2f3954; border-radius: 12px; background: #0a0d14; padding: 14px 16px;">
-          <p style="margin: 0 0 6px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;">
+        <td style="border: 1px solid #e6e9f0; border-radius: 12px; background: #f7f9fc; padding: 14px 16px;">
+          <p style="margin: 0 0 6px; color: #3e7bfa; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;">
             ${escapeHtml(label)}
           </p>
-          <p style="margin: 0; color: #d9e2ff; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6;">
+          <p style="margin: 0; color: #1f2937; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6;">
             ${escapeHtml(reason).replace(/\r?\n/g, "<br />")}
           </p>
         </td>
@@ -203,7 +210,6 @@ function brandedEmailHtml(
   const supportUrl = variableString(variables, "support_url");
   const feedbackUrl = variableString(variables, "feedback_url");
   const reason = variableString(variables, "reason").trim();
-  const logoUrl = emailLogoUrl();
 
   const config: Record<
     string,
@@ -336,62 +342,57 @@ function brandedEmailHtml(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Tell dark-mode-capable clients (Apple Mail, iOS Mail, Outlook, Gmail
-         where supported) that this email is already dark-designed, so they do
-         NOT auto-invert its dark background to white. -->
-    <meta name="color-scheme" content="dark" />
-    <meta name="supported-color-schemes" content="dark" />
+    <!-- Light-by-design: declaring the email light-optimized keeps clients
+         (incl. dark modes) from re-tinting it, so it renders consistently on
+         every client — Gmail's app force-inverts dark emails to white, which is
+         why the shell is light rather than dark. -->
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
     <style>
-      :root { color-scheme: dark; supported-color-schemes: dark; }
-      /* Keep the intended dark palette if a client applies a dark-mode pass. */
-      @media (prefers-color-scheme: dark) {
-        body, .gmail-fix { background: #080a0f !important; }
-      }
+      :root { color-scheme: light only; supported-color-schemes: light; }
     </style>
     <title>${escapeHtml(subject)}</title>
   </head>
-  <body style="margin: 0; padding: 0; background: #080a0f; color: #f6f7fb;">
+  <body style="margin: 0; padding: 0; background: #eef1f7; color: #1f2937;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
       ${escapeHtml(selected.intro)}
     </div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #080a0f; padding: 32px 16px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #eef1f7; padding: 32px 16px;">
       <tr>
         <td align="center">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 620px;">
             <tr>
               <td style="padding: 0 0 18px;">
-                <a href="${escapeHtml(absoluteAppUrl("/"))}" style="display: inline-block; text-decoration: none; border: 0;">
-                  <img src="${escapeHtml(logoUrl)}" width="130" height="36" alt="Ghost.ma" style="display: block; width: 130px; height: 36px; border: 0;" />
-                </a>
+                ${brandHeaderHtml()}
               </td>
             </tr>
             <tr>
-              <td style="border: 1px solid #232838; border-radius: 18px; background: #11141d; padding: 34px 30px; box-shadow: 0 24px 70px rgba(0,0,0,0.28);">
-                <p style="margin: 0 0 12px; color: #9fb4ff; font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;">
+              <td style="border: 1px solid #e6e9f0; border-radius: 18px; background: #ffffff; padding: 34px 30px; box-shadow: 0 20px 48px rgba(16,23,41,0.08);">
+                <p style="margin: 0 0 12px; color: #3e7bfa; font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;">
                   Compte client
                 </p>
-                <h1 style="margin: 0; color: #ffffff; font-family: Arial, sans-serif; font-size: 28px; line-height: 1.2;">
+                <h1 style="margin: 0; color: #0f1729; font-family: Arial, sans-serif; font-size: 28px; line-height: 1.2;">
                   ${escapeHtml(selected.title)}
                 </h1>
-                <p style="margin: 20px 0 0; color: #d9e2ff; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7;">
+                <p style="margin: 20px 0 0; color: #1f2937; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7;">
                   Bonjour ${escapeHtml(customerName)},
                 </p>
-                <p style="margin: 10px 0 0; color: #c4cce0; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7;">
+                <p style="margin: 10px 0 0; color: #4b5563; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7;">
                   ${escapeHtml(selected.intro).replace(/\r?\n/g, "<br />")}
                 </p>
                 ${REVIEW_TEMPLATE_META[key] ? motifBlockHtml(reason, REVIEW_TEMPLATE_META[key]!.motifLabel) : ""}
                 ${brandedButton(selected.ctaLabel ?? "Ouvrir ghost.ma", selected.ctaUrl ?? "")}
                 ${
                   fallbackUrl && selected.fallbackLabel
-                    ? `<p style="margin: 16px 0 0; color: #8f9bb3; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
+                    ? `<p style="margin: 16px 0 0; color: #6b7280; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
                         ${escapeHtml(selected.fallbackLabel)}<br />
-                        <a href="${escapeHtml(fallbackUrl)}" style="color: #7ba7ff; word-break: break-all;">${escapeHtml(fallbackUrl)}</a>
+                        <a href="${escapeHtml(fallbackUrl)}" style="color: #3e7bfa; word-break: break-all;">${escapeHtml(fallbackUrl)}</a>
                       </p>`
                     : ""
                 }
                 ${
                   selected.notice
-                    ? `<p style="margin: 20px 0 0; border-radius: 12px; background: rgba(62,123,250,0.10); padding: 14px 16px; color: #cbd6ee; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
+                    ? `<p style="margin: 20px 0 0; border-radius: 12px; background: #eff4ff; padding: 14px 16px; color: #33415c; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
                         ${escapeHtml(selected.notice)}
                       </p>`
                     : ""
