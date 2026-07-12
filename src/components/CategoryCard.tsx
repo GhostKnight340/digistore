@@ -15,7 +15,8 @@ export default function CategoryCard({
   stockStatus?: StockStatus;
 }) {
   const productCount = count ?? category.productCount ?? 0;
-  const media = thumbnail ?? category.coverImageUrl ?? category.iconUrl ?? null;
+  const media =
+    thumbnail ?? category.coverImageUrl ?? category.iconUrl ?? category.fallbackImageUrl ?? null;
   const accent = resolveBrandColor(category.slug ?? category.id, category.accentColor);
   return (
     <Link
