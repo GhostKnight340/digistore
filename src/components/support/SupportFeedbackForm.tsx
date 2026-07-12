@@ -95,7 +95,7 @@ export default function SupportFeedbackForm({
           rows={4}
           maxLength={2000}
           placeholder="Dites-nous ce qui s'est bien passé ou ce que nous pourrions améliorer."
-          className="mt-1.5 w-full resize-y rounded-lg border border-border bg-base px-3 py-2.5 text-sm text-white placeholder:text-faint focus:border-accent focus:outline-none"
+          className="input mt-1.5 min-h-[84px] resize-y"
         />
       </div>
 

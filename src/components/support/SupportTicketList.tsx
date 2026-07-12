@@ -96,7 +96,7 @@ export default function SupportTicketList({
         const canGiveFeedback = closed && !t.feedbackGiven && t.feedbackToken;
 
         return (
-          <div key={t.reference} className="overflow-hidden rounded-[13px] border border-border bg-base">
+          <div key={t.reference} className="overflow-hidden rounded-[13px] border border-border bg-canvas">
             <button
               type="button"
               onClick={() => setOpenRef(isOpen ? null : t.reference)}
@@ -182,7 +182,7 @@ export default function SupportTicketList({
                       rows={3}
                       maxLength={4000}
                       placeholder="Écrivez votre message à notre équipe…"
-                      className="mt-1.5 w-full resize-y rounded-lg border border-border bg-base px-3 py-2.5 text-sm text-white placeholder:text-faint focus:border-accent focus:outline-none"
+                      className="input mt-1.5 min-h-[84px] resize-y"
                     />
                     {error?.ref === t.reference && (
                       <p className="mt-1.5 text-[13px] text-red-400">{error.text}</p>
