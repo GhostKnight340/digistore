@@ -39,7 +39,9 @@ function variableString(variables: Variables, key: string) {
 }
 
 function emailLogoUrl() {
-  return absoluteAppUrl("/ghost-logo.png");
+  // Navigator horizontal lockup (PNG — no SVG in e-mail). Source is 1800×500,
+  // rendered at 130×36 so it stays within the ≤36px-tall header banner.
+  return absoluteAppUrl("/brand/ghostma-navigator-horizontal.png");
 }
 
 function brandedButton(label: string, href: string) {
@@ -114,8 +116,11 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
       ${socialHtml}
       ${paymentHtml}
       <tr>
-        <td align="center" style="padding: 8px 8px 0; color: #69758b; font-family: Arial, sans-serif; font-size: 12px;">
-          © ${escapeHtml(currentYear)} ghost.ma
+        <td align="center" style="padding: 12px 8px 0; color: #69758b; font-family: Arial, sans-serif; font-size: 12px;">
+          <img src="${escapeHtml(
+            absoluteAppUrl("/brand/navigator-icon-32.png"),
+          )}" width="18" height="18" alt="" style="display: inline-block; vertical-align: middle; margin-right: 7px; border: 0;" />
+          <span style="vertical-align: middle;">© ${escapeHtml(currentYear)} ghost.ma</span>
         </td>
       </tr>
     </table>`;
@@ -311,7 +316,7 @@ function brandedEmailHtml(
             <tr>
               <td style="padding: 0 0 18px;">
                 <a href="${escapeHtml(absoluteAppUrl("/"))}" style="display: inline-block; text-decoration: none; border: 0;">
-                  <img src="${escapeHtml(logoUrl)}" width="181" height="36" alt="ghost.ma" style="display: block; width: 181px; height: 36px; border: 0;" />
+                  <img src="${escapeHtml(logoUrl)}" width="130" height="36" alt="Ghost.ma" style="display: block; width: 130px; height: 36px; border: 0;" />
                 </a>
               </td>
             </tr>

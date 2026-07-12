@@ -44,12 +44,24 @@ export default function Navbar({
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-base/75 backdrop-blur-xl">
       <nav className="container-page flex min-h-[66px] flex-wrap items-center gap-2 py-2 sm:gap-4 sm:py-0 md:flex-nowrap md:gap-7">
-        {/* Logo */}
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-accent to-[#2b5fd9] shadow-glow">
-            <span className="h-3 w-3 rounded-[3px] border-2 border-white" />
-          </span>
-          <span className="hidden text-lg font-semibold tracking-tight text-text sm:block">
+        {/* Logo — Navigator mascot lockup. Mascot renders bare (no tile/border),
+            32×32 desktop / 28×28 mobile; wordmark drops below 360px. The whole
+            lockup is one link to home with the accessible name on the link. */}
+        <Link
+          href="/"
+          aria-label="Ghost.ma — accueil"
+          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center gap-[9px]"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/navigator-icon-64.png"
+            alt=""
+            width={32}
+            height={32}
+            className="h-7 w-7 sm:h-8 sm:w-8"
+            fetchPriority="high"
+          />
+          <span className="hidden text-lg font-semibold tracking-tight text-text min-[360px]:block">
             {settings.branding.logoText}
           </span>
         </Link>

@@ -21,9 +21,16 @@ export default function Footer() {
       <div className="container-page grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="grid h-[26px] w-[26px] place-items-center rounded-[7px] bg-gradient-to-br from-accent to-[#2b5fd9]">
-              <span className="h-[9px] w-[9px] rounded-sm border-2 border-white" />
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/navigator-icon-64.png"
+              alt=""
+              width={26}
+              height={26}
+              className="h-[26px] w-[26px]"
+              loading="lazy"
+              decoding="async"
+            />
             <span className="text-base font-semibold text-white">
               {settings.branding.logoText}
             </span>

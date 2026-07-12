@@ -256,6 +256,14 @@ export default function SupportFlow({
         {step === "category" && (
           <div>
             <div className="max-w-[680px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/navigator-profile-circle-512.png"
+                alt=""
+                width={72}
+                height={72}
+                className="mb-4 h-[72px] w-[72px] rounded-full"
+              />
               <p className="mb-3 text-[12.5px] font-bold uppercase tracking-[0.14em] text-[#4d7fff]">GHOST.MA</p>
               <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-[38px]">
                 Comment pouvons-nous vous aider&nbsp;?

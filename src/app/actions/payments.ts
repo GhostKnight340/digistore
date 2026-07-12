@@ -14,6 +14,7 @@ import {
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import { getPublicPaymentMethods, getAdminPaymentMethods } from "@/lib/db/paymentMethods";
 import { getCustomerOrder } from "@/lib/db/orders";
+import { isOrderingCurrentlyEnabled, ORDERING_DISABLED_RESULT } from "@/lib/db/ordering";
 import { requireAdminCustomer } from "@/lib/auth";
 import type {
   ActionResult,
@@ -34,22 +35,40 @@ const PROOF_TYPE_BY_EXTENSION: Record<string, string> = {
 export interface PaymentPageDataDTO {
   order: CustomerOrderDTO;
   config: PaymentConfigDTO;
+  /** False while the global "Accept customer orders" toggle is OFF. Drives the
+   *  payment page's "orders unavailable" state for still-unpaid orders. */
+  orderingEnabled: boolean;
 }
 
 /** Customer: fetch order + payment config in one shot for the payment page. */
 export async function getPaymentPageDataAction(
   orderId: string,
 ): Promise<PaymentPageDataDTO | null> {
-  const [order, config] = await Promise.all([
+  const [order, config, orderingEnabled] = await Promise.all([
     getCustomerOrder(orderId),
     getPublicPaymentMethods(),
+    isOrderingCurrentlyEnabled(),
   ]);
   if (!order) return null;
-  return { order, config };
+  // When ordering is disabled, never expose actionable payment instructions
+  // (bank details, crypto wallets, PayPal) for an unpaid order. Already-paid or
+  // delivered orders keep their config so status/receipts still render, but no
+  // payment action is offered (nothing to pay).
+  const isUnpaid =
+    order.status === "pending_payment" ||
+    order.status === "payment_submitted" ||
+    order.status === "payment_issue" ||
+    order.status === "rejected";
+  const safeConfig: PaymentConfigDTO =
+    !orderingEnabled && isUnpaid ? { ...config, methods: [] } : config;
+  return { order, config: safeConfig, orderingEnabled };
 }
 
 /** Customer: submit payment (with optional proof file via FormData). */
 export async function submitPaymentAction(formData: FormData): Promise<ActionResult> {
+  // Pre-launch guard: no payment submission / proof upload while ordering is off.
+  if (!(await isOrderingCurrentlyEnabled())) return ORDERING_DISABLED_RESULT;
+
   const orderId = formData.get("orderId") as string | null;
   if (!orderId) return { ok: false, error: "Missing orderId." };
 
@@ -87,6 +106,8 @@ export async function changePaymentMethodAction(
   orderId: string,
   methodId: string,
 ): Promise<ActionResult> {
+  // Pre-launch guard: selecting/switching a payment method is part of paying.
+  if (!(await isOrderingCurrentlyEnabled())) return ORDERING_DISABLED_RESULT;
   if (!orderId || !methodId) return { ok: false, error: "Paramètres manquants." };
   return changeOrderPaymentMethod(orderId, methodId);
 }
@@ -231,4 +252,16 @@ export async function getAdminPaymentConfigAction() {
   return getAdminPaymentMethods();
 }
 
-export { getPublicPaymentMethods as getPaymentConfigAction };
+/**
+ * Public payment config for the checkout/cart preview. While ordering is
+ * disabled we return the support block but NO methods, so bank details, crypto
+ * wallets and PayPal can never be enumerated via a direct action call during
+ * pre-launch — not just hidden in the UI.
+ */
+export async function getPaymentConfigAction(): Promise<PaymentConfigDTO> {
+  const [config, orderingEnabled] = await Promise.all([
+    getPublicPaymentMethods(),
+    isOrderingCurrentlyEnabled(),
+  ]);
+  return orderingEnabled ? config : { ...config, methods: [] };
+}

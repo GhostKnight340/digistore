@@ -239,6 +239,18 @@ const NAV: NavGroup[] = [
         ),
       },
       {
+        // Store on/off — blocks the public storefront (browsing, cart, and new
+        // orders) while admin and existing order-tracking links stay open.
+        id: "maintenance",
+        label: "Maintenance",
+        icon: icon(
+          <>
+            <line x1="12" y1="2" x2="12" y2="12" />
+            <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
+          </>,
+        ),
+      },
+      {
         id: "payment-settings",
         label: "Paiements",
         icon: icon(
@@ -435,20 +447,15 @@ export default function AdminShell({
             flexShrink: 0,
           }}
         >
-          <div
-            style={{
-              width: "30px",
-              height: "30px",
-              borderRadius: "8px",
-              background: "linear-gradient(145deg,#3E7BFA,#2B5FD9)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(62,123,250,0.35)",
-            }}
-          >
-            <div style={{ width: "11px", height: "11px", border: "2px solid #fff", borderRadius: "3px" }} />
-          </div>
+          {/* Navigator mascot — bare, unmodified (no tile/border), 28px. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/navigator-icon-64.png"
+            alt=""
+            width={28}
+            height={28}
+            style={{ width: "28px", height: "28px", flexShrink: 0 }}
+          />
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
             <span style={{ fontSize: "15px", fontWeight: 600, letterSpacing: "-0.01em" }}>ghost.ma</span>
             <span style={{ fontSize: "11px", color: C.faint, fontFamily: "var(--font-mono)" }}>admin</span>

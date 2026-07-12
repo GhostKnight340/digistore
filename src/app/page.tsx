@@ -34,8 +34,8 @@ export default async function HomePage() {
       <div aria-hidden className="home-hero-glow" />
       {settings.homepage.showHero && (
         <section className="relative py-8 sm:py-14 lg:py-16">
-          <div className="relative min-w-0">
-            <div className="min-w-0 max-w-3xl">
+          <div className="relative flex min-w-0 flex-col items-center gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
+            <div className="order-2 min-w-0 max-w-3xl lg:order-1">
               <span className="chip">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_10px_var(--tw-shadow-color)] shadow-accent" />
                 Produits numériques
@@ -54,6 +54,21 @@ export default async function HomePage() {
                   {settings.branding.secondaryCtaLabel}
                 </Link>
               </div>
+            </div>
+
+            {/* Navigator mascot: centered above the headline on mobile (120px,
+                no animation), floating to the right on desktop (220px) with a
+                faint blue halo. Decorative — the copy carries all meaning. */}
+            <div className="home-hero-mascot order-1 shrink-0 lg:order-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/navigator-master-transparent-2048.png"
+                alt=""
+                width={220}
+                height={220}
+                className="home-hero-mascot__img h-[120px] w-[120px] sm:h-[180px] sm:w-[180px] lg:h-[220px] lg:w-[220px]"
+                fetchPriority="high"
+              />
             </div>
           </div>
         </section>
@@ -119,16 +134,34 @@ export default async function HomePage() {
           <p className="mt-1 text-sm text-muted">
             {settings.homepage.howItWorksSubtitle}
           </p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            {steps.map((step) => (
-              <div key={step.n} className="card p-6">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-lg font-bold text-accent">
-                  {step.n}
-                </span>
-                <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
-                <p className="mt-1 text-sm text-muted">{step.text}</p>
-              </div>
-            ))}
+          <div className="mt-6 flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
+            {/* Guide mascot — 130px desktop / 110px tablet, hidden on mobile. */}
+            <figure className="hidden shrink-0 md:block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/navigator-master-transparent-2048.png"
+                alt=""
+                width={130}
+                height={130}
+                className="w-[110px] lg:w-[130px]"
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption className="mt-3 max-w-[130px] text-sm leading-snug text-muted">
+                Le Navigateur vous guide à chaque étape
+              </figcaption>
+            </figure>
+            <div className="grid flex-1 gap-4 sm:grid-cols-3">
+              {steps.map((step) => (
+                <div key={step.n} className="card p-6">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-lg font-bold text-accent">
+                    {step.n}
+                  </span>
+                  <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
+                  <p className="mt-1 text-sm text-muted">{step.text}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}

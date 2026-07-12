@@ -5,11 +5,12 @@ import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   defaultStoreSettings,
   isInventoryEnabled,
+  isOrderingEnabled,
   type FooterPaymentBadgeSetting,
   type StoreSettings,
 } from "@/lib/storeSettings";
 import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
-import { getPaymentConfigAction } from "@/app/actions/payments";
+import { getAdminPaymentConfigAction } from "@/app/actions/payments";
 import { announcedPaymentMethods } from "@/lib/paymentMethod";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { uploadImageFile } from "@/lib/clientUpload";
@@ -60,10 +61,15 @@ export default function SettingsPanel() {
     // Offer one badge toggle per customer-facing payment method (banks
     // collapsed into the single "Virement bancaire" entry). New options start
     // disabled; they only persist once the admin toggles and saves.
-    getPaymentConfigAction()
+    // Admin-gated source (unaffected by the public "orders unavailable" guard).
+    // Mirror the customer-visible filter so badge options match checkout.
+    getAdminPaymentConfigAction()
       .then((config) => {
+        const usable = config.methods.filter(
+          (method) => method.status === "active" && method.visible && !method.archivedAt,
+        );
         setMethodBadgeOptions(
-          announcedPaymentMethods(config.methods).map((method) => ({
+          announcedPaymentMethods(usable).map((method) => ({
             id: `method:${method.id}`,
             label: method.name,
             enabled: false,
@@ -157,6 +163,23 @@ export default function SettingsPanel() {
           </p>
         )}
       </div>
+
+      <Panel title="Commandes clients">
+        <ToggleSwitch
+          className="rounded-xl border border-border bg-base px-3 py-3"
+          label="Accepter les commandes clients"
+          checkedLabel="Commandes ouvertes"
+          uncheckedLabel="Commandes suspendues"
+          checked={isOrderingEnabled(draft)}
+          onChange={(checked) => update("ordersEnabled", checked)}
+        />
+        <p className="mt-3 text-sm text-muted">
+          Lorsque les commandes sont suspendues, le catalogue et les prix restent visibles, mais
+          l&apos;ajout au panier, le paiement et les justificatifs sont désactivés (côté client et
+          serveur), et aucune coordonnée de paiement n&apos;est exposée. Les commandes déjà payées
+          restent accessibles. Réactivez pour rétablir immédiatement l&apos;achat, sans redéploiement.
+        </p>
+      </Panel>
 
       <Panel title="Système d'inventaire">
         <ToggleSwitch

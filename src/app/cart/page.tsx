@@ -3,20 +3,27 @@
 import Link from "next/link";
 import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isOrderingEnabled } from "@/lib/storeSettings";
 import { formatDH } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
+import NavigatorLoader from "@/components/NavigatorLoader";
 import PaymentMethodsPreview from "@/components/PaymentMethodsPreview";
+import OrdersUnavailableNotice from "@/components/store/OrdersUnavailableNotice";
+import OrdersDisabledPurchase from "@/components/store/OrdersDisabledPurchase";
 import RegionBadge from "@/components/RegionBadge";
 import { getRegion } from "@/lib/regions";
 
 export default function CartPage() {
   const { cart, ready, cartTotal, setQuantity, removeFromCart } = useStore();
   const { getProduct } = useProductCatalog();
+  const { settings } = useStoreSettings();
+  const orderingEnabled = isOrderingEnabled(settings);
 
   if (!ready) {
     return (
-      <div className="container-page py-20 text-center text-muted">
-        Chargement...
+      <div className="container-page">
+        <NavigatorLoader label="Chargement de votre panier…" />
       </div>
     );
   }
@@ -26,9 +33,14 @@ export default function CartPage() {
       <div className="container-page py-10">
         <h1 className="text-3xl font-bold text-white">Votre panier</h1>
         <div className="card mt-8 grid place-items-center px-6 py-20 text-center">
-          <span className="text-4xl" aria-hidden>
-            🛒
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/navigator-watermark-40pct.png"
+            alt=""
+            width={84}
+            height={84}
+            style={{ width: 84, height: 84 }}
+          />
           <p className="mt-4 text-lg font-semibold text-white">
             Votre panier est vide
           </p>
@@ -46,6 +58,8 @@ export default function CartPage() {
   return (
     <div className="container-page py-10">
       <h1 className="text-3xl font-bold text-white">Votre panier</h1>
+
+      {!orderingEnabled && <OrdersUnavailableNotice className="mt-6" />}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
         <ul className="space-y-4">
@@ -145,11 +159,17 @@ export default function CartPage() {
               <span>Total</span>
               <span>{formatDH(cartTotal)}</span>
             </div>
-            <PaymentMethodsPreview />
+            {orderingEnabled ? (
+              <>
+                <PaymentMethodsPreview />
 
-            <Link href="/checkout" className="btn-primary mt-6 w-full">
-              Passer au paiement
-            </Link>
+                <Link href="/checkout" className="btn-primary mt-6 w-full">
+                  Passer au paiement
+                </Link>
+              </>
+            ) : (
+              <OrdersDisabledPurchase className="mt-6" primaryHeightClass="h-11" />
+            )}
             <Link
               href="/products"
               className="mt-3 block text-center text-sm text-muted hover:text-white"

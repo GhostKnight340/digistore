@@ -77,6 +77,80 @@ body {
   color: #fff;
 }
 
+/*
+ * Navigator hero mascot: a faint blue radial halo sits behind the mascot and
+ * the art floats ±6px on desktop only. The global reduced-motion rule above
+ * neutralizes the float for users who prefer reduced motion.
+ */
+@keyframes navigator-float {
+  0%,
+  100% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+.home-hero-mascot {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.home-hero-mascot::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260px;
+  height: 260px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(59, 130, 246, 0.14),
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+.home-hero-mascot__img {
+  position: relative;
+}
+
+@media (min-width: 1024px) {
+  .home-hero-mascot__img {
+    animation: navigator-float 5s ease-in-out infinite;
+  }
+}
+
+/* Navigator loading state: a 92px ring spins around a bobbing 48px mascot. */
+@keyframes navigator-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes navigator-bob {
+  0%,
+  100% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+.navigator-loader__ring {
+  animation: navigator-spin 1.1s linear infinite;
+}
+
+.navigator-loader__mascot {
+  animation: navigator-bob 2.4s ease-in-out infinite;
+}
+
 /* Respect users who prefer reduced motion: neutralize animations/transitions. */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,0 +1,62 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+/**
+ * Floating Navigator support pill, bottom-right on all storefront pages.
+ * Desktop: circle avatar (36px) + two-line prompt. Mobile: avatar-only 44px
+ * circle button (≥44px tap target). Hidden on the support flow itself, where
+ * the prompt would be redundant. The avatar is the circle-safe profile mark.
+ */
+export default function SupportPill() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/support")) return null;
+
+  return (
+    <>
+      {/* Desktop / tablet: full pill */}
+      <Link
+        href="/support"
+        className="fixed bottom-5 right-5 z-40 hidden items-center gap-3 rounded-full border border-border bg-card/95 py-1.5 pl-1.5 pr-4 shadow-card backdrop-blur-xl transition hover:border-accent/50 sm:flex"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/navigator-profile-circle-256.png"
+          alt=""
+          width={36}
+          height={36}
+          className="h-9 w-9 rounded-full"
+          loading="lazy"
+          decoding="async"
+        />
+        <span className="leading-tight">
+          <span className="block text-[13px] font-semibold text-white">
+            Besoin d&apos;aide&nbsp;?
+          </span>
+          <span className="block text-[11.5px] text-muted">
+            Le Navigateur répond en quelques minutes
+          </span>
+        </span>
+      </Link>
+
+      {/* Mobile: avatar-only 44px circle */}
+      <Link
+        href="/support"
+        aria-label="Besoin d'aide ? Contacter le support"
+        className="fixed bottom-4 right-4 z-40 grid h-11 w-11 place-items-center rounded-full border border-border bg-card shadow-card sm:hidden"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/navigator-profile-circle-256.png"
+          alt=""
+          width={44}
+          height={44}
+          className="h-11 w-11 rounded-full"
+          loading="lazy"
+          decoding="async"
+        />
+      </Link>
+    </>
+  );
+}
