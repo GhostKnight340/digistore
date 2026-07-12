@@ -59,6 +59,7 @@ import {
   deleteCategory,
   getAdminCategories,
   getCategoryOptions,
+  getCategoryProductMedia,
   reorderCategories,
   saveCategory,
   seedBrandLanding,
@@ -358,6 +359,15 @@ export async function getAdminCategoriesAction(): Promise<AdminCategoryDTO[]> {
 export async function getCategoryOptionsAction(): Promise<AdminCategoryDTO[]> {
   await assertAdminAccess();
   return getCategoryOptions();
+}
+
+/** Products in a category that have an image, so the admin can reuse one as the
+ *  category cover. */
+export async function getCategoryProductMediaAction(
+  categoryId: string,
+): Promise<{ id: string; name: string; imageUrl: string }[]> {
+  await assertAdminAccess();
+  return getCategoryProductMedia(categoryId);
 }
 
 export async function createCategoryQuickAction(

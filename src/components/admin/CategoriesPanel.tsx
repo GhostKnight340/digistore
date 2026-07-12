@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   deleteCategoryAction,
   getAdminCategoriesAction,
+  getCategoryProductMediaAction,
   reorderCategoriesAction,
   saveCategoryAction,
   seedBrandLandingAction,
@@ -61,6 +62,11 @@ export default function CategoriesPanel() {
   // pick where those products go (Product.category is a required FK).
   const [reassignOpen, setReassignOpen] = useState(false);
   const [reassignTo, setReassignTo] = useState<string>("");
+  // Products of the selected category that have an image — offered as a source
+  // for the category cover so a single-product category can reuse its visual.
+  const [productMedia, setProductMedia] = useState<
+    { id: string; name: string; imageUrl: string }[]
+  >([]);
 
   const selected = useMemo(
     () => categories.find((category) => category.id === selectedId) ?? null,
@@ -82,6 +88,26 @@ export default function CategoriesPanel() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load the selected category's product images (source for the cover). Only
+  // saved categories have products; a brand-new draft has none yet.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedId) {
+      setProductMedia([]);
+      return;
+    }
+    getCategoryProductMediaAction(selectedId)
+      .then((media) => {
+        if (!cancelled) setProductMedia(media);
+      })
+      .catch(() => {
+        if (!cancelled) setProductMedia([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
   function selectCategory(category: AdminCategoryDTO) {
     setSelectedId(category.id);
@@ -400,6 +426,14 @@ export default function CategoriesPanel() {
               />
             </div>
 
+            {productMedia.length > 0 && (
+              <ProductMediaPicker
+                media={productMedia}
+                selectedUrl={draft.coverImageUrl}
+                onPick={(url) => update("coverImageUrl", url)}
+              />
+            )}
+
             <LandingEditor
               landing={draft.landing}
               categories={categories}
@@ -473,6 +507,62 @@ export default function CategoriesPanel() {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Lets the admin reuse a product's own image as the category cover instead of
+ * uploading a separate one — the common case when a category holds a single
+ * product. Clicking a thumbnail sets the cover URL to that product's image.
+ */
+function ProductMediaPicker({
+  media,
+  selectedUrl,
+  onPick,
+}: {
+  media: { id: string; name: string; imageUrl: string }[];
+  selectedUrl: string | null;
+  onPick: (url: string) => void;
+}) {
+  const single = media.length === 1;
+  return (
+    <div className="rounded-xl border border-border bg-base p-3">
+      <p className="text-xs font-medium text-muted">Réutiliser le visuel d&apos;un produit</p>
+      <p className="mt-0.5 text-[11px] text-faint">
+        {single
+          ? "Cette catégorie a un seul produit — utilisez son visuel comme couverture."
+          : "Choisissez un produit de la catégorie pour utiliser son visuel comme couverture."}
+      </p>
+      <div className="mt-2.5 flex flex-wrap gap-2.5">
+        {media.map((item) => {
+          const active = selectedUrl === item.imageUrl;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onPick(item.imageUrl)}
+              title={item.name}
+              className={`group relative w-24 overflow-hidden rounded-lg border p-1 text-left transition ${
+                active ? "border-accent bg-accent/10" : "border-border hover:border-accent/60"
+              }`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                className="h-16 w-full rounded object-contain"
+              />
+              <span className="mt-1 block truncate text-[10px] text-muted">{item.name}</span>
+              {active && (
+                <span className="absolute right-1 top-1 rounded bg-accent px-1 text-[9px] font-bold text-white">
+                  ✓
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
