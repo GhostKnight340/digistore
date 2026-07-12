@@ -26,7 +26,12 @@ import {
 import type { Category } from "@/lib/types";
 import { REGION_LIST } from "@/lib/regions";
 
-export const revalidate = 3600;
+// Render fresh on every request (no page-level ISR / CDN caching), so admin
+// edits to a category's landing content appear immediately on reload instead of
+// being held behind a stale `s-maxage` window. DB reads stay cheap: the data
+// layer (getCatalogPage / getCategoryDetail / getRegionCounts) is still cached
+// via `unstable_cache` under CATALOG_TAG and invalidated on admin save.
+export const dynamic = "force-dynamic";
 
 type SearchParams = { category?: string; region?: string; q?: string; page?: string };
 
