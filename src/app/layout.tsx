@@ -6,6 +6,7 @@ import { StoreSettingsProvider } from "@/context/StoreSettingsContext";
 import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import SupportPill from "@/components/support/SupportPill";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
@@ -116,6 +117,7 @@ export default async function RootLayout({
                   )}
                   <main className="flex-1">{children}</main>
                   {pathname.startsWith("/admin") ? null : <Footer />}
+                  {pathname.startsWith("/admin") ? null : <SupportPill />}
                 </div>
               )}
             </StoreProvider>

@@ -26,9 +26,14 @@ export default function CartPage() {
       <div className="container-page py-10">
         <h1 className="text-3xl font-bold text-white">Votre panier</h1>
         <div className="card mt-8 grid place-items-center px-6 py-20 text-center">
-          <span className="text-4xl" aria-hidden>
-            🛒
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/navigator-watermark-40pct.png"
+            alt=""
+            width={84}
+            height={84}
+            style={{ width: 84, height: 84 }}
+          />
           <p className="mt-4 text-lg font-semibold text-white">
             Votre panier est vide
           </p>
