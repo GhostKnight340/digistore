@@ -42,15 +42,21 @@ function variableString(variables: Variables, key: string) {
 }
 
 function brandHeaderHtml() {
-  // Logo as an IMAGE, not HTML text: Gmail's dark mode recolors text (it flipped
-  // a dark "ghost" wordmark to white, making it vanish on the light header) but
-  // never recolors images. This lockup bakes the wordmark onto its own navy tile,
-  // so it renders identically in every client regardless of dark mode.
+  // Black logo chip: the brand lockup is an IMAGE (white "ghost" + blue ".ma"),
+  // so Gmail's dark mode can't recolor it the way it hid the HTML wordmark, and
+  // it sits on a pure-black cell (explicit bgcolor, robustly preserved) for a
+  // clean on-brand tile on the light email.
   return `
-    <a href="${escapeHtml(absoluteAppUrl("/"))}" style="display: inline-block; text-decoration: none; border: 0;">
-      <img src="${escapeHtml(
-        absoluteAppUrl("/brand/ghostma-navigator-horizontal-dark.png"),
-      )}" width="150" height="42" alt="ghost.ma" style="display: block; width: 150px; height: 42px; border: 0; border-radius: 10px;" />
+    <a href="${escapeHtml(absoluteAppUrl("/"))}" style="text-decoration: none; border: 0;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="display: inline-block;">
+        <tr>
+          <td bgcolor="#0a0b0d" style="background: #0a0b0d; border-radius: 12px; padding: 12px 18px;">
+            <img src="${escapeHtml(
+              absoluteAppUrl("/brand/ghostma-navigator-horizontal.png"),
+            )}" width="140" height="39" alt="ghost.ma" style="display: block; width: 140px; height: 39px; border: 0;" />
+          </td>
+        </tr>
+      </table>
     </a>`;
 }
 
