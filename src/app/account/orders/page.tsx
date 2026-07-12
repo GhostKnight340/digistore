@@ -7,6 +7,7 @@ import {
   requireCustomer,
   isProfileIncomplete,
 } from "@/lib/auth";
+import { countSupportTicketsForCustomer } from "@/lib/db/supportTickets";
 import { formatDH } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
@@ -43,6 +44,7 @@ function itemSummary(order: AccountOrder) {
 export default async function AccountOrdersPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
+  const supportCount = await countSupportTicketsForCustomer(customer.id);
   const incomplete = isProfileIncomplete(customer);
 
   return (
@@ -54,6 +56,7 @@ export default async function AccountOrdersPage() {
           active="orders"
           verified={!incomplete && customer.emailVerified}
           ordersCount={orders.length}
+          supportCount={supportCount}
         />
         <section className="space-y-5">
           <PageHeader

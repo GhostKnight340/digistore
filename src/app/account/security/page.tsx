@@ -6,6 +6,7 @@ import {
   getAccountOrders,
   isProfileIncomplete,
 } from "@/lib/auth";
+import { countSupportTicketsForCustomer } from "@/lib/db/supportTickets";
 import { formatDate } from "@/lib/format";
 import SecurityClient from "./SecurityClient";
 
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountSecurityPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
+  const supportCount = await countSupportTicketsForCustomer(customer.id);
   const incomplete = isProfileIncomplete(customer);
 
   return (
@@ -25,6 +27,7 @@ export default async function AccountSecurityPage() {
           active="security"
           verified={!incomplete && customer.emailVerified}
           ordersCount={orders.length}
+          supportCount={supportCount}
         />
         <section className="space-y-5">
           <PageHeader

@@ -24,6 +24,12 @@ export type CreateSupportTicketInput = {
 
 export type SupportTicketStatus = "open" | "answered" | "closed";
 
+/** Optional close outcome the admin picks when closing a ticket. */
+export type SupportTicketResolution = "resolved" | "cancelled" | "dismissed";
+
+/** One admin reply sent to the customer. */
+export type SupportReply = { body: string; createdAt: string };
+
 /** Safe customer-facing view — looked up by reference + email pair (a bare
  *  reference is enumerable, so it is never enough on its own). No attachment
  *  payloads, no internal ids. */
@@ -34,6 +40,10 @@ export type SupportTicketStatusDTO = {
   orderRef: string | null;
   message: string | null;
   status: string;
+  resolution: string | null;
+  replies: SupportReply[];
+  feedbackGiven: boolean;
+  feedbackToken: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -54,6 +64,10 @@ export type SupportTicketAdminDTO = {
   attachmentNames: string[];
   customerId: string | null;
   status: string;
+  resolution: string | null;
+  replies: SupportReply[];
+  feedbackRating: number | null;
+  feedbackComment: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -64,7 +78,15 @@ function attachmentList(value: unknown): StoredAttachment[] {
   return Array.isArray(value) ? (value as StoredAttachment[]) : [];
 }
 
-function toAdminDTO(t: {
+function replyList(value: unknown): SupportReply[] {
+  if (!Array.isArray(value)) return [];
+  return (value as Partial<SupportReply>[])
+    .filter((r) => r && typeof r.body === "string")
+    .map((r) => ({ body: String(r.body), createdAt: String(r.createdAt ?? "") }));
+}
+
+/** Full row shape shared by the admin + customer DTO mappers. */
+type SupportTicketRow = {
   id: string;
   reference: string;
   category: string;
@@ -78,9 +100,19 @@ function toAdminDTO(t: {
   attachments: unknown;
   customerId: string | null;
   status: string;
+  resolution: string | null;
+  replies: unknown;
+  discordMessageId: string | null;
+  discordThreadId: string | null;
+  feedbackToken: string | null;
+  feedbackRating: number | null;
+  feedbackComment: string | null;
+  feedbackAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-}): SupportTicketAdminDTO {
+};
+
+function toAdminDTO(t: SupportTicketRow): SupportTicketAdminDTO {
   return {
     id: t.id,
     reference: t.reference,
@@ -95,6 +127,30 @@ function toAdminDTO(t: {
     attachmentNames: attachmentList(t.attachments).map((a, i) => a.fileName || `fichier-${i + 1}`),
     customerId: t.customerId,
     status: t.status,
+    resolution: t.resolution,
+    replies: replyList(t.replies),
+    feedbackRating: t.feedbackRating,
+    feedbackComment: t.feedbackComment,
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+  };
+}
+
+/** Owner-facing view (status lookup + account page). Access is always gated by
+ *  proof of ownership (reference+email, or a linked customerId), so the
+ *  feedback token — which lets the owner rate a closed ticket — is included. */
+function toCustomerDTO(t: SupportTicketRow): SupportTicketStatusDTO {
+  return {
+    reference: t.reference,
+    category: t.category,
+    subIssueLabel: t.subIssueLabel,
+    orderRef: t.orderRef,
+    message: t.message,
+    status: t.status,
+    resolution: t.resolution,
+    replies: replyList(t.replies),
+    feedbackGiven: t.feedbackAt != null,
+    feedbackToken: t.feedbackToken,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
   };
@@ -113,16 +169,29 @@ export async function findSupportTicketForCustomer(
   if (!ref || !normalizedEmail) return null;
   const ticket = await prisma.supportTicket.findUnique({ where: { reference: ref } });
   if (!ticket || ticket.email.trim().toLowerCase() !== normalizedEmail) return null;
-  return {
-    reference: ticket.reference,
-    category: ticket.category,
-    subIssueLabel: ticket.subIssueLabel,
-    orderRef: ticket.orderRef,
-    message: ticket.message,
-    status: ticket.status,
-    createdAt: ticket.createdAt.toISOString(),
-    updatedAt: ticket.updatedAt.toISOString(),
-  };
+  return toCustomerDTO(ticket);
+}
+
+/** All tickets linked to a logged-in customer, newest first — the account
+ *  "Support" page. Ownership is the customerId link, so replies + feedback
+ *  token are safe to surface here. */
+export async function listSupportTicketsForCustomer(
+  customerId: string,
+): Promise<SupportTicketStatusDTO[]> {
+  await ensureDatabaseReady();
+  if (!customerId) return [];
+  const tickets = await prisma.supportTicket.findMany({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  return tickets.map(toCustomerDTO);
+}
+
+export async function countSupportTicketsForCustomer(customerId: string): Promise<number> {
+  if (!customerId) return 0;
+  await ensureDatabaseReady();
+  return prisma.supportTicket.count({ where: { customerId } });
 }
 
 export async function listSupportTickets(
@@ -141,12 +210,132 @@ export async function countOpenSupportTickets(): Promise<number> {
   return prisma.supportTicket.count({ where: { status: "open" } });
 }
 
+/** Full row returned by the mutation helpers so the action layer can build the
+ *  Discord card + reply/close emails without a second query. */
+export type SupportTicketRecord = SupportTicketRow;
+
+/** Public mapper so server actions can hand the client a clean admin DTO. */
+export function supportTicketAdminDTO(row: SupportTicketRecord): SupportTicketAdminDTO {
+  return toAdminDTO(row);
+}
+
+export async function getSupportTicketRecord(id: string): Promise<SupportTicketRecord | null> {
+  await ensureDatabaseReady();
+  return prisma.supportTicket.findUnique({ where: { id } });
+}
+
 export async function updateSupportTicketStatus(
   id: string,
   status: SupportTicketStatus,
-): Promise<SupportTicketAdminDTO> {
-  const updated = await prisma.supportTicket.update({ where: { id }, data: { status } });
-  return toAdminDTO(updated);
+): Promise<SupportTicketRecord> {
+  // Reopening drops any prior close resolution so a re-closed ticket isn't
+  // stamped with a stale outcome.
+  return prisma.supportTicket.update({
+    where: { id },
+    data: status === "open" ? { status, resolution: null } : { status },
+  });
+}
+
+/** Appends an admin reply and flips the ticket to "answered". The reply text is
+ *  what the customer sees on the tracking/account pages and in the reply email. */
+export async function addSupportTicketReply(
+  id: string,
+  body: string,
+): Promise<SupportTicketRecord> {
+  await ensureDatabaseReady();
+  const existing = await prisma.supportTicket.findUnique({
+    where: { id },
+    select: { replies: true },
+  });
+  if (!existing) throw new Error("Demande introuvable.");
+  const replies: SupportReply[] = [
+    ...replyList(existing.replies),
+    { body, createdAt: new Date().toISOString() },
+  ];
+  return prisma.supportTicket.update({
+    where: { id },
+    data: {
+      status: "answered",
+      replies: replies as unknown as Prisma.InputJsonValue,
+    },
+  });
+}
+
+function randomFeedbackToken(): string {
+  return crypto.randomUUID().replace(/-/g, "");
+}
+
+/** Closes a ticket with an optional resolution and guarantees a feedback token
+ *  exists (so the close email can link to the feedback page). */
+export async function closeSupportTicket(
+  id: string,
+  resolution: SupportTicketResolution | null,
+): Promise<SupportTicketRecord> {
+  await ensureDatabaseReady();
+  const existing = await prisma.supportTicket.findUnique({
+    where: { id },
+    select: { feedbackToken: true },
+  });
+  if (!existing) throw new Error("Demande introuvable.");
+  return prisma.supportTicket.update({
+    where: { id },
+    data: {
+      status: "closed",
+      resolution,
+      feedbackToken: existing.feedbackToken ?? randomFeedbackToken(),
+    },
+  });
+}
+
+/** Persists the Discord card/thread ids after they are created — mirrors the
+ *  order-thread persistence step. */
+export async function persistSupportDiscordIds(
+  id: string,
+  discordMessageId: string | null,
+  discordThreadId: string | null,
+): Promise<void> {
+  await prisma.supportTicket.update({
+    where: { id },
+    data: { discordMessageId, discordThreadId },
+  });
+}
+
+/** Public feedback lookup — the token is the only credential (it is unguessable
+ *  and single-purpose). Returns null once feedback was already submitted. */
+export async function getSupportTicketByFeedbackToken(
+  token: string,
+): Promise<{ reference: string; feedbackGiven: boolean } | null> {
+  await ensureDatabaseReady();
+  const t = (token ?? "").trim();
+  if (!t) return null;
+  const ticket = await prisma.supportTicket.findUnique({
+    where: { feedbackToken: t },
+    select: { reference: true, feedbackAt: true },
+  });
+  if (!ticket) return null;
+  return { reference: ticket.reference, feedbackGiven: ticket.feedbackAt != null };
+}
+
+/** Stores a customer's post-close rating (1-5) + optional comment, keyed by the
+ *  feedback token. Idempotency: refuses a second submission. */
+export async function saveSupportTicketFeedback(
+  token: string,
+  rating: number,
+  comment: string | null,
+): Promise<SupportTicketRecord | null> {
+  await ensureDatabaseReady();
+  const t = (token ?? "").trim();
+  if (!t || rating < 1 || rating > 5) return null;
+  const ticket = await prisma.supportTicket.findUnique({ where: { feedbackToken: t } });
+  if (!ticket || ticket.feedbackAt != null) return null;
+  return prisma.supportTicket.update({
+    where: { feedbackToken: t },
+    data: {
+      feedbackRating: Math.round(rating),
+      feedbackComment: comment?.trim().slice(0, 2000) || null,
+      feedbackAt: new Date(),
+    },
+  });
 }
 
 /** One attachment's payload for an admin download. */

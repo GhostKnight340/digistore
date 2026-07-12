@@ -426,6 +426,21 @@ model SupportTicket {
   customerId String?
   // status: "open" | "answered" | "closed"
   status    String   @default("open")
+  // Optional close outcome chosen by the admin: "resolved" | "cancelled" | "dismissed".
+  resolution String?
+  // Admin replies sent to the customer: [{ body, createdAt }] — the customer
+  // sees these on the account/tracking pages; each also triggers a reply email.
+  replies   Json?
+  // Discord #support card/thread tracking — one card per ticket (edited in
+  // place as status changes) with a thread holding the full conversation.
+  discordMessageId String?
+  discordThreadId  String?
+  // Post-close feedback: a random token gates the public feedback page, then
+  // the customer's rating (1-5) and comment are stored back here.
+  feedbackToken   String?   @unique
+  feedbackRating  Int?
+  feedbackComment String?
+  feedbackAt      DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

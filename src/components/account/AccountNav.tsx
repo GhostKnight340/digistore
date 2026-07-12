@@ -8,6 +8,7 @@ import {
   ShieldIcon,
   LogoutIcon,
   CheckIcon,
+  LifebuoyIcon,
 } from "@/components/account/icons";
 
 async function logout() {
@@ -16,11 +17,12 @@ async function logout() {
   redirect("/login");
 }
 
-type AccountView = "dashboard" | "orders" | "security";
+type AccountView = "dashboard" | "orders" | "support" | "security";
 
 const NAV: { view: AccountView; href: string; label: string; Icon: typeof GridIcon }[] = [
   { view: "dashboard", href: "/account", label: "Tableau de bord", Icon: GridIcon },
   { view: "orders", href: "/account/orders", label: "Commandes", Icon: BagIcon },
+  { view: "support", href: "/account/support", label: "Support", Icon: LifebuoyIcon },
   { view: "security", href: "/account/security", label: "Sécurité", Icon: ShieldIcon },
 ];
 
@@ -30,12 +32,14 @@ export default function AccountNav({
   active,
   verified = false,
   ordersCount,
+  supportCount,
 }: {
   name: string;
   email: string;
   active: AccountView;
   verified?: boolean;
   ordersCount?: number;
+  supportCount?: number;
 }) {
   const hasEmail = Boolean(email) && !isPlaceholderEmail(email);
   const initial = name.slice(0, 1).toUpperCase() || "?";
@@ -77,7 +81,7 @@ export default function AccountNav({
       <nav className="mt-4 space-y-1">
         {NAV.map(({ view, href, label, Icon }) => {
           const isActive = view === active;
-          const count = view === "orders" ? ordersCount : undefined;
+          const count = view === "orders" ? ordersCount : view === "support" ? supportCount : undefined;
           return (
             <Link
               key={view}
