@@ -6,6 +6,7 @@ import {
   getAdminCategoriesAction,
   reorderCategoriesAction,
   saveCategoryAction,
+  seedBrandLandingAction,
 } from "@/app/actions/admin";
 import { uploadImageFile } from "@/lib/clientUpload";
 import type { AdminCategoryDTO, SaveCategoryInput } from "@/lib/dto";
@@ -144,6 +145,45 @@ export default function CategoriesPanel() {
     setSaving(false);
   }
 
+  async function seedLanding() {
+    if (
+      !window.confirm(
+        "Remplir automatiquement le contenu des pages catégorie pour les marques connues (Steam, PlayStation, Xbox, Nintendo, Google Play, Apple, Netflix, Roblox, PUBG, Free Fire) ?\n\nSeules les catégories encore vides seront remplies — votre contenu existant n'est pas modifié.",
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const result = await seedBrandLandingAction(false);
+      if (result.ok) {
+        setMessage({
+          text: `${result.filled} marque${result.filled > 1 ? "s" : ""} remplie${
+            result.filled > 1 ? "s" : ""
+          }, ${result.skipped} déjà remplie${result.skipped > 1 ? "s" : ""} (ignorée${
+            result.skipped > 1 ? "s" : ""
+          }).`,
+          ok: true,
+        });
+        await load();
+        if (selectedId) {
+          const refreshed = (await getAdminCategoriesAction()).find((c) => c.id === selectedId);
+          if (refreshed) setDraft(refreshed);
+        }
+      } else {
+        setMessage({ text: result.error ?? "Remplissage impossible.", ok: false });
+      }
+    } catch (error) {
+      setMessage({
+        text: error instanceof Error ? error.message : "Remplissage impossible.",
+        ok: false,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function move(category: AdminCategoryDTO, direction: -1 | 1) {
     const index = categories.findIndex((item) => item.id === category.id);
     const target = index + direction;
@@ -210,13 +250,24 @@ export default function CategoriesPanel() {
   return (
     <section className="grid gap-6 lg:grid-cols-[320px_1fr]">
       <aside className="card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div>
-            <h2 className="font-bold text-white">Catégories</h2>
-            <p className="text-xs text-muted">{categories.length} catégorie{categories.length > 1 ? "s" : ""}</p>
+        <div className="border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-white">Catégories</h2>
+              <p className="text-xs text-muted">{categories.length} catégorie{categories.length > 1 ? "s" : ""}</p>
+            </div>
+            <button type="button" onClick={createNew} className="btn-primary py-1.5 text-xs">
+              + Créer
+            </button>
           </div>
-          <button type="button" onClick={createNew} className="btn-primary py-1.5 text-xs">
-            + Créer
+          <button
+            type="button"
+            onClick={seedLanding}
+            disabled={saving}
+            className="btn-ghost mt-3 w-full py-1.5 text-xs disabled:opacity-50"
+            title="Remplit les pages catégorie des marques connues (catégories vides uniquement)"
+          >
+            ✨ Remplir le contenu des marques
           </button>
         </div>
         {loading ? (

@@ -61,6 +61,7 @@ import {
   getCategoryOptions,
   reorderCategories,
   saveCategory,
+  seedBrandLanding,
 } from "@/lib/db/categories";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { adminCommandSearch, type CommandSearchResult } from "@/lib/db/adminSearch";
@@ -391,6 +392,26 @@ export async function reorderCategoriesAction(ids: string[]): Promise<ActionResu
     revalidatePath("/admin");
   }
   return result;
+}
+
+export async function seedBrandLandingAction(
+  force = false,
+): Promise<ActionResult & { filled: number; skipped: number; unmatched: number }> {
+  await assertAdminAccess();
+  try {
+    const { filled, skipped, unmatched } = await seedBrandLanding({ force });
+    revalidateStorefrontCatalog();
+    revalidatePath("/admin");
+    return { ok: true, filled: filled.length, skipped: skipped.length, unmatched };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Remplissage impossible.",
+      filled: 0,
+      skipped: 0,
+      unmatched: 0,
+    };
+  }
 }
 
 export async function deleteCategoryAction(

@@ -3,7 +3,9 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import type { ActionResult, AdminCategoryDTO, SaveCategoryInput } from "@/lib/dto";
-import { normalizeCategoryLanding } from "@/lib/categoryLanding";
+import { normalizeCategoryLanding, hasLandingContent } from "@/lib/categoryLanding";
+import { canonicalBrandKey } from "@/lib/brandAssets";
+import { CONTENT, buildLanding, resolveContentKey } from "@/lib/categoryLandingContent";
 
 const FALLBACK_ACCENTS: Record<string, string> = {
   steam: "#2a475e",
@@ -203,6 +205,68 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
     }
     return { ok: false, error: error instanceof Error ? error.message : "Enregistrement impossible." };
   }
+}
+
+/**
+ * Populate the rich landing content for the known brand categories from the
+ * predefined French copy (src/lib/categoryLandingContent). Updates ONLY the
+ * `landing` column, ONLY for categories that already exist and match a brand
+ * (by id/slug/alias). By default fills categories whose landing is currently
+ * empty so admin edits are never clobbered; `force` overwrites. Related links
+ * are resolved to real existing categories. Used by the admin "Remplir les
+ * marques" button and the CLI seed script (same content source).
+ */
+export async function seedBrandLanding(
+  options: { force?: boolean } = {},
+): Promise<{ filled: string[]; skipped: string[]; unmatched: number }> {
+  await ensureDatabaseReady();
+  const categories = await prisma.category.findMany({
+    select: { id: true, slug: true, name: true, landing: true },
+  });
+
+  // Map every existing category to a real id under several keys so both content
+  // matching and related-link resolution work regardless of exact id/slug.
+  const keyToId = new Map<string, string>();
+  for (const c of categories) {
+    keyToId.set(canonicalBrandKey(c.slug ?? c.id), c.id);
+    keyToId.set(c.id.toLowerCase(), c.id);
+    if (c.slug) keyToId.set(c.slug.toLowerCase(), c.id);
+  }
+
+  const filled: string[] = [];
+  const skipped: string[] = [];
+  let unmatched = 0;
+
+  for (const category of categories) {
+    const brandKey = canonicalBrandKey(category.slug ?? category.id);
+    const content = resolveContentKey(brandKey, category.id, category.slug ?? "");
+    if (!content) {
+      unmatched++;
+      continue;
+    }
+    if (!options.force && hasLandingContent(normalizeCategoryLanding(category.landing))) {
+      skipped.push(category.id);
+      continue;
+    }
+
+    const relatedContent = CONTENT[brandKey] ?? content;
+    const relatedIds = Array.from(
+      new Set(
+        relatedContent.related
+          .map((key) => keyToId.get(key))
+          .filter((id): id is string => Boolean(id) && id !== category.id),
+      ),
+    );
+    const landing = buildLanding(content, relatedIds);
+
+    await prisma.category.update({
+      where: { id: category.id },
+      data: { landing: landing as unknown as Prisma.InputJsonValue },
+    });
+    filled.push(category.id);
+  }
+
+  return { filled, skipped, unmatched };
 }
 
 export async function reorderCategories(ids: string[]): Promise<ActionResult> {
