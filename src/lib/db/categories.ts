@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import type { ActionResult, AdminCategoryDTO, SaveCategoryInput } from "@/lib/dto";
+import { normalizeCategoryLanding } from "@/lib/categoryLanding";
 
 const FALLBACK_ACCENTS: Record<string, string> = {
   steam: "#2a475e",
@@ -40,6 +41,7 @@ function toDTO(row: {
   accentColor: string;
   active: boolean;
   sortOrder: number;
+  landing?: unknown;
   _count?: { products: number };
 }): AdminCategoryDTO {
   return {
@@ -54,6 +56,7 @@ function toDTO(row: {
     active: row.active,
     sortOrder: row.sortOrder,
     productCount: row._count?.products ?? 0,
+    landing: normalizeCategoryLanding(row.landing),
   };
 }
 
@@ -147,6 +150,8 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
     accentColor: normalizeColor(input.accentColor),
     active: input.active,
     sortOrder: input.sortOrder,
+    // Normalize on write so the persisted blob is always clean and bounded.
+    landing: normalizeCategoryLanding(input.landing) as unknown as Prisma.InputJsonValue,
   };
 
   try {

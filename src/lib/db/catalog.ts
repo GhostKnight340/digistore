@@ -11,6 +11,7 @@ import {
   type StoreSettings,
 } from "@/lib/storeSettings";
 import { variantTitle } from "@/lib/pricing/variant-identity";
+import { normalizeCategoryLanding } from "@/lib/categoryLanding";
 
 /** Subset of settings the stock helpers need. */
 type StockOpts = Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">;
@@ -287,6 +288,41 @@ export const getActiveCategories = unstable_cache(
     return rows.map(toCategory);
   },
   ["active-categories"],
+  { tags: [CATALOG_TAG] },
+);
+
+/**
+ * A single category resolved by id OR slug, including its normalized rich
+ * landing content. Used by the category landing view (`/products?category=`)
+ * and its `generateMetadata`. Returns null when no such active-or-inactive
+ * category exists. Cached under CATALOG_TAG so admin category edits (which call
+ * revalidateTag(CATALOG_TAG)) refresh it.
+ */
+export const getCategoryDetail = unstable_cache(
+  async function getCategoryDetail(idOrSlug: string): Promise<Category | null> {
+    await ensureDatabaseReady();
+    const key = idOrSlug.trim();
+    if (!key) return null;
+    const row = await prisma.category.findFirst({
+      where: { OR: [{ id: key }, { slug: key }] },
+      include: {
+        _count: {
+          select: {
+            products: {
+              where: {
+                active: true,
+                categoryRecord: { is: { active: true } },
+                variants: { some: { active: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!row) return null;
+    return { ...toCategory(row), landing: normalizeCategoryLanding(row.landing) };
+  },
+  ["category-detail"],
   { tags: [CATALOG_TAG] },
 );
 

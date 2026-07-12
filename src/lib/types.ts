@@ -15,6 +15,8 @@ export interface Category {
   active?: boolean;
   sortOrder?: number;
   productCount?: number;
+  /** Optional rich landing-page content; present on detail fetches. */
+  landing?: import("./categoryLanding").CategoryLanding;
 }
 
 export interface Product {

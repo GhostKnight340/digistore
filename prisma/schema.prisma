@@ -64,6 +64,11 @@ model Category {
   // Optional category-level margin override for the suggested-price engine
   // only. Percentage. Does not affect any published price directly.
   marginPctOverride Decimal? @db.Decimal(6, 3)
+  // Optional rich category landing-page content (hero, intro, info points,
+  // Navigator tip, FAQ, related categories, SEO). Stored as a single JSON blob
+  // — see src/lib/categoryLanding.ts for the shape and normalizer. Null / absent
+  // means the category renders as a plain product grid (no landing sections).
+  landing           Json?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now()) @updatedAt
 

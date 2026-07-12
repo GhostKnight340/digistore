@@ -10,6 +10,17 @@ import {
 import { uploadImageFile } from "@/lib/clientUpload";
 import type { AdminCategoryDTO, SaveCategoryInput } from "@/lib/dto";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
+import {
+  defaultCategoryLanding,
+  isValidCtaUrl,
+  APPROVED_INFO_ICONS,
+  NAVIGATOR_TIP_TYPES,
+  MAX_INFO_ITEMS,
+  type CategoryLanding,
+  type CategoryInfoItem,
+  type CategoryFaqItem,
+  type InfoIconKey,
+} from "@/lib/categoryLanding";
 
 function emptyCategory(sortOrder: number): AdminCategoryDTO {
   return {
@@ -24,6 +35,7 @@ function emptyCategory(sortOrder: number): AdminCategoryDTO {
     active: true,
     sortOrder,
     productCount: 0,
+    landing: defaultCategoryLanding(),
   };
 }
 
@@ -118,6 +130,7 @@ export default function CategoriesPanel() {
       accentColor: draft.accentColor,
       active: draft.active,
       sortOrder: draft.sortOrder,
+      landing: draft.landing ?? defaultCategoryLanding(),
     };
     const result = await saveCategoryAction(input);
     if (result.ok && result.category) {
@@ -330,6 +343,14 @@ export default function CategoriesPanel() {
               />
             </div>
 
+            <LandingEditor
+              landing={draft.landing}
+              categories={categories}
+              currentId={selected?.id}
+              disabled={saving}
+              onChange={(next) => update("landing", next)}
+            />
+
             {message ? (
               <p className={`text-sm ${message.ok ? "text-green-400" : "text-red-400"}`}>{message.text}</p>
             ) : null}
@@ -455,6 +476,669 @@ function UploadField({
             Retirer
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Category landing-page content editor. All fields live under the single
+// `landing` JSON blob on the category; edits flow through the parent's normal
+// draft state + the one existing "Enregistrer" button (no separate save flow).
+// ---------------------------------------------------------------------------
+
+const INFO_ICON_LABELS: Record<InfoIconKey, string> = {
+  bolt: "Éclair",
+  shield: "Bouclier",
+  globe: "Globe / région",
+  support: "Support",
+  lock: "Cadenas",
+  check: "Coche",
+  card: "Carte",
+  sparkle: "Étoile",
+};
+
+const TIP_TYPE_LABELS: Record<(typeof NAVIGATOR_TIP_TYPES)[number], string> = {
+  information: "Information",
+  compatibility: "Compatibilité",
+  warning: "Attention",
+  security: "Sécurité",
+};
+
+function tempId(prefix: string) {
+  const rand =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.floor(Math.random() * 1e9).toString(36);
+  return `${prefix}-${rand}`;
+}
+
+function moveInList<T>(arr: T[], index: number, dir: -1 | 1): T[] {
+  const target = index + dir;
+  if (target < 0 || target >= arr.length) return arr;
+  const next = [...arr];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next.map((item, i) =>
+    typeof (item as { sortOrder?: number }).sortOrder === "number"
+      ? { ...item, sortOrder: i }
+      : item,
+  );
+}
+
+function LandingEditor({
+  landing,
+  categories,
+  currentId,
+  disabled,
+  onChange,
+}: {
+  landing: CategoryLanding;
+  categories: AdminCategoryDTO[];
+  currentId?: string;
+  disabled: boolean;
+  onChange: (next: CategoryLanding) => void;
+}) {
+  const set = (patch: Partial<CategoryLanding>) => onChange({ ...landing, ...patch });
+
+  const nameById = new Map(categories.map((c) => [c.id, c.name]));
+  const relatedAvailable = categories.filter(
+    (c) => c.id !== currentId && !landing.relatedCategoryIds.includes(c.id),
+  );
+
+  return (
+    <div className="rounded-xl border border-border bg-base p-4">
+      <h3 className="text-sm font-bold text-white">Contenu de la page catégorie</h3>
+      <p className="mt-0.5 text-xs text-muted">
+        Sections optionnelles. Laissez vide pour afficher la grille de produits seule.
+      </p>
+
+      <div className="mt-4 space-y-6">
+        {/* HERO */}
+        <Group title="Hero">
+          <Field label="Sous-titre">
+            <input
+              className="input"
+              value={landing.heroSubtitle}
+              onChange={(e) => set({ heroSubtitle: e.target.value })}
+              placeholder="Ajoutez facilement des fonds à votre portefeuille."
+            />
+          </Field>
+          <LandingImageField
+            label="Image du hero"
+            value={landing.heroImageUrl}
+            disabled={disabled}
+            onChange={(url) => set({ heroImageUrl: url })}
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="CTA principal — libellé">
+              <input
+                className="input"
+                value={landing.primaryCtaLabel}
+                onChange={(e) => set({ primaryCtaLabel: e.target.value })}
+                placeholder="Voir les cartes"
+              />
+            </Field>
+            <Field label="CTA principal — action">
+              <select
+                className="input"
+                value={landing.primaryCtaMode}
+                onChange={(e) =>
+                  set({ primaryCtaMode: e.target.value === "url" ? "url" : "products" })
+                }
+              >
+                <option value="products">Défiler vers les produits</option>
+                <option value="url">Lien interne / URL</option>
+              </select>
+            </Field>
+          </div>
+          {landing.primaryCtaMode === "url" && (
+            <UrlField
+              label="CTA principal — URL"
+              value={landing.primaryCtaUrl}
+              onChange={(v) => set({ primaryCtaUrl: v })}
+            />
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="CTA secondaire — libellé">
+              <input
+                className="input"
+                value={landing.secondaryCtaLabel}
+                onChange={(e) => set({ secondaryCtaLabel: e.target.value })}
+                placeholder="Comment ça fonctionne"
+              />
+            </Field>
+            <UrlField
+              label="CTA secondaire — URL"
+              value={landing.secondaryCtaUrl}
+              onChange={(v) => set({ secondaryCtaUrl: v })}
+            />
+          </div>
+        </Group>
+
+        {/* INTRODUCTION */}
+        <Group title="Introduction">
+          <Field label="Texte (Markdown ou HTML simple)">
+            <textarea
+              className="input min-h-28 resize-y"
+              value={landing.introText}
+              onChange={(e) => set({ introText: e.target.value })}
+              placeholder="Décrivez brièvement la catégorie, à qui elle s'adresse, les cas d'usage courants…"
+            />
+          </Field>
+        </Group>
+
+        {/* QUICK INFO */}
+        <Group
+          title={`Informations rapides (${landing.infoItems.length}/${MAX_INFO_ITEMS})`}
+          action={
+            landing.infoItems.length < MAX_INFO_ITEMS ? (
+              <button
+                type="button"
+                className="btn-ghost h-8 px-3 text-xs"
+                onClick={() =>
+                  set({
+                    infoItems: [
+                      ...landing.infoItems,
+                      {
+                        id: tempId("info"),
+                        icon: "bolt",
+                        title: "",
+                        description: "",
+                        active: true,
+                        sortOrder: landing.infoItems.length,
+                      },
+                    ],
+                  })
+                }
+              >
+                + Ajouter
+              </button>
+            ) : null
+          }
+        >
+          {landing.infoItems.length === 0 ? (
+            <EmptyHint>Aucun point d&apos;information.</EmptyHint>
+          ) : (
+            landing.infoItems.map((item, index) => (
+              <RowCard
+                key={item.id}
+                index={index}
+                count={landing.infoItems.length}
+                onMove={(dir) => set({ infoItems: moveInList(landing.infoItems, index, dir) })}
+                onRemove={() =>
+                  set({ infoItems: landing.infoItems.filter((_, i) => i !== index) })
+                }
+                active={item.active}
+                onToggle={(v) =>
+                  set({
+                    infoItems: patchAt(landing.infoItems, index, { active: v }),
+                  })
+                }
+              >
+                <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+                  <select
+                    className="input"
+                    value={item.icon}
+                    onChange={(e) =>
+                      set({
+                        infoItems: patchAt(landing.infoItems, index, {
+                          icon: e.target.value as InfoIconKey,
+                        }),
+                      })
+                    }
+                  >
+                    {APPROVED_INFO_ICONS.map((key) => (
+                      <option key={key} value={key}>
+                        {INFO_ICON_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    value={item.title}
+                    placeholder="Titre"
+                    onChange={(e) =>
+                      set({
+                        infoItems: patchAt(landing.infoItems, index, { title: e.target.value }),
+                      })
+                    }
+                  />
+                </div>
+                <input
+                  className="input mt-2"
+                  value={item.description}
+                  placeholder="Description (optionnelle, une ligne)"
+                  onChange={(e) =>
+                    set({
+                      infoItems: patchAt(landing.infoItems, index, {
+                        description: e.target.value,
+                      }),
+                    })
+                  }
+                />
+              </RowCard>
+            ))
+          )}
+        </Group>
+
+        {/* NAVIGATOR TIP */}
+        <Group
+          title="Conseil du Navigator"
+          action={
+            <ToggleSwitch
+              checked={landing.navigatorTip.enabled}
+              checkedLabel="Activé"
+              uncheckedLabel="Masqué"
+              size="sm"
+              onChange={(v) =>
+                set({ navigatorTip: { ...landing.navigatorTip, enabled: v } })
+              }
+            />
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Titre">
+              <input
+                className="input"
+                value={landing.navigatorTip.title}
+                onChange={(e) =>
+                  set({ navigatorTip: { ...landing.navigatorTip, title: e.target.value } })
+                }
+                placeholder="Conseil du Navigator"
+              />
+            </Field>
+            <Field label="Type">
+              <select
+                className="input"
+                value={landing.navigatorTip.type}
+                onChange={(e) =>
+                  set({
+                    navigatorTip: {
+                      ...landing.navigatorTip,
+                      type: e.target.value as CategoryLanding["navigatorTip"]["type"],
+                    },
+                  })
+                }
+              >
+                {NAVIGATOR_TIP_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {TIP_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <Field label="Message">
+            <textarea
+              className="input min-h-20 resize-y"
+              value={landing.navigatorTip.message}
+              onChange={(e) =>
+                set({ navigatorTip: { ...landing.navigatorTip, message: e.target.value } })
+              }
+              placeholder="Vérifiez que la région de votre compte correspond à celle de la carte."
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="CTA — libellé">
+              <input
+                className="input"
+                value={landing.navigatorTip.ctaLabel}
+                onChange={(e) =>
+                  set({ navigatorTip: { ...landing.navigatorTip, ctaLabel: e.target.value } })
+                }
+                placeholder="Voir le guide"
+              />
+            </Field>
+            <UrlField
+              label="CTA — URL"
+              value={landing.navigatorTip.ctaUrl}
+              onChange={(v) => set({ navigatorTip: { ...landing.navigatorTip, ctaUrl: v } })}
+            />
+          </div>
+        </Group>
+
+        {/* FAQ */}
+        <Group
+          title="FAQ"
+          action={
+            <button
+              type="button"
+              className="btn-ghost h-8 px-3 text-xs"
+              onClick={() =>
+                set({
+                  faqItems: [
+                    ...landing.faqItems,
+                    {
+                      id: tempId("faq"),
+                      question: "",
+                      answer: "",
+                      active: true,
+                      sortOrder: landing.faqItems.length,
+                    },
+                  ],
+                })
+              }
+            >
+              + Ajouter
+            </button>
+          }
+        >
+          {landing.faqItems.length === 0 ? (
+            <EmptyHint>Aucune question.</EmptyHint>
+          ) : (
+            landing.faqItems.map((item, index) => (
+              <RowCard
+                key={item.id}
+                index={index}
+                count={landing.faqItems.length}
+                onMove={(dir) => set({ faqItems: moveInList(landing.faqItems, index, dir) })}
+                onRemove={() =>
+                  set({ faqItems: landing.faqItems.filter((_, i) => i !== index) })
+                }
+                active={item.active}
+                onToggle={(v) =>
+                  set({ faqItems: patchAt(landing.faqItems, index, { active: v }) })
+                }
+              >
+                <input
+                  className="input"
+                  value={item.question}
+                  placeholder="Question"
+                  onChange={(e) =>
+                    set({ faqItems: patchAt(landing.faqItems, index, { question: e.target.value }) })
+                  }
+                />
+                <textarea
+                  className="input mt-2 min-h-16 resize-y"
+                  value={item.answer}
+                  placeholder="Réponse"
+                  onChange={(e) =>
+                    set({ faqItems: patchAt(landing.faqItems, index, { answer: e.target.value }) })
+                  }
+                />
+              </RowCard>
+            ))
+          )}
+        </Group>
+
+        {/* RELATED CATEGORIES */}
+        <Group title="Catégories associées">
+          {landing.relatedCategoryIds.length === 0 ? (
+            <EmptyHint>Aucune catégorie associée.</EmptyHint>
+          ) : (
+            <div className="space-y-2">
+              {landing.relatedCategoryIds.map((id, index) => (
+                <div
+                  key={id}
+                  className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2"
+                >
+                  <span className="w-5 text-xs text-muted">{index + 1}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-white">
+                    {nameById.get(id) ?? id}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-ghost h-7 px-2 text-xs disabled:opacity-40"
+                    disabled={index === 0}
+                    onClick={() =>
+                      set({ relatedCategoryIds: moveInList(landing.relatedCategoryIds, index, -1) })
+                    }
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost h-7 px-2 text-xs disabled:opacity-40"
+                    disabled={index === landing.relatedCategoryIds.length - 1}
+                    onClick={() =>
+                      set({ relatedCategoryIds: moveInList(landing.relatedCategoryIds, index, 1) })
+                    }
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="h-7 rounded px-2 text-xs font-medium text-red-300 hover:bg-red-500/10"
+                    onClick={() =>
+                      set({
+                        relatedCategoryIds: landing.relatedCategoryIds.filter((x) => x !== id),
+                      })
+                    }
+                  >
+                    Retirer
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {relatedAvailable.length > 0 && (
+            <select
+              className="input mt-2"
+              value=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                set({ relatedCategoryIds: [...landing.relatedCategoryIds, e.target.value] });
+              }}
+            >
+              <option value="">+ Ajouter une catégorie…</option>
+              {relatedAvailable.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Group>
+
+        {/* SEO */}
+        <Group title="SEO">
+          <Field label="Titre SEO">
+            <input
+              className="input"
+              value={landing.seo.title}
+              onChange={(e) => set({ seo: { ...landing.seo, title: e.target.value } })}
+              placeholder="Laissez vide pour utiliser le nom de la catégorie"
+            />
+          </Field>
+          <Field label="Méta description">
+            <textarea
+              className="input min-h-16 resize-y"
+              value={landing.seo.description}
+              onChange={(e) => set({ seo: { ...landing.seo, description: e.target.value } })}
+            />
+          </Field>
+          <LandingImageField
+            label="Image sociale (Open Graph)"
+            value={landing.seo.imageUrl}
+            disabled={disabled}
+            onChange={(url) => set({ seo: { ...landing.seo, imageUrl: url } })}
+          />
+        </Group>
+      </div>
+    </div>
+  );
+}
+
+function patchAt<T>(arr: T[], index: number, patch: Partial<T>): T[] {
+  return arr.map((item, i) => (i === index ? { ...item, ...patch } : item));
+}
+
+function Group({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-t border-border pt-4 first:border-t-0 first:pt-0">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h4>
+        {action}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function EmptyHint({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted">
+      {children}
+    </p>
+  );
+}
+
+function RowCard({
+  index,
+  count,
+  onMove,
+  onRemove,
+  active,
+  onToggle,
+  children,
+}: {
+  index: number;
+  count: number;
+  onMove: (dir: -1 | 1) => void;
+  onRemove: () => void;
+  active: boolean;
+  onToggle: (value: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <ToggleSwitch
+          checked={active}
+          checkedLabel="Actif"
+          uncheckedLabel="Masqué"
+          size="sm"
+          onChange={onToggle}
+        />
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="btn-ghost h-7 px-2 text-xs disabled:opacity-40"
+            disabled={index === 0}
+            onClick={() => onMove(-1)}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className="btn-ghost h-7 px-2 text-xs disabled:opacity-40"
+            disabled={index === count - 1}
+            onClick={() => onMove(1)}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className="h-7 rounded px-2 text-xs font-medium text-red-300 hover:bg-red-500/10"
+            onClick={onRemove}
+          >
+            Retirer
+          </button>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function UrlField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const invalid = value.trim().length > 0 && !isValidCtaUrl(value);
+  return (
+    <Field label={label}>
+      <input
+        className={`input ${invalid ? "border-red-500/60" : ""}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="/products ou https://…"
+      />
+      {invalid && (
+        <span className="mt-1 block text-[11px] text-red-400">
+          URL invalide — utilisez un chemin interne (/…) ou https://
+        </span>
+      )}
+    </Field>
+  );
+}
+
+function LandingImageField({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (url: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(file: File | null) {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      onChange(await uploadImageFile(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import impossible.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-medium text-muted">{label}</p>
+      <div className="rounded-xl border border-border bg-surface p-3">
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" className="mb-3 h-24 w-full rounded-lg object-contain" />
+        ) : (
+          <div className="mb-3 grid h-24 place-items-center rounded-lg bg-base text-xs text-muted">
+            Aucune image
+          </div>
+        )}
+        <input
+          className="input h-9 text-xs"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="/uploads/image.png"
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <label className="btn-ghost h-8 cursor-pointer px-3 text-xs">
+            {uploading ? "Import…" : "Importer"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={disabled || uploading}
+              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          {value && (
+            <button type="button" className="btn-ghost h-8 px-3 text-xs" onClick={() => onChange("")}>
+              Retirer
+            </button>
+          )}
+        </div>
+        {error && <p className="mt-1 text-[11px] text-red-400">{error}</p>}
       </div>
     </div>
   );

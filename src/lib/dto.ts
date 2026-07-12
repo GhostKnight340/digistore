@@ -1,4 +1,5 @@
 import type { OrderStatus } from "./types";
+import type { CategoryLanding } from "./categoryLanding";
 
 // Plain serializable shapes passed between server (DB) and client components.
 // `productId` always refers to the catalog SLUG (e.g. "steam-100") so existing
@@ -226,6 +227,7 @@ export interface AdminCategoryDTO {
   active: boolean;
   sortOrder: number;
   productCount: number;
+  landing: CategoryLanding;
 }
 
 export interface SaveCategoryInput {
@@ -239,6 +241,7 @@ export interface SaveCategoryInput {
   accentColor: string;
   active: boolean;
   sortOrder: number;
+  landing: CategoryLanding;
 }
 
 export interface DeleteParentProductInput {
