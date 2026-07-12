@@ -170,7 +170,7 @@ export default function SettingsPanel() {
 
       <Panel title="Commandes clients">
         <ToggleSwitch
-          className="rounded-xl border border-border bg-base px-3 py-3"
+          className="rounded-xl border border-border bg-canvas px-3 py-3"
           label="Accepter les commandes clients"
           checkedLabel="Commandes ouvertes"
           uncheckedLabel="Commandes suspendues"
@@ -187,7 +187,7 @@ export default function SettingsPanel() {
 
       <Panel title="Système d'inventaire">
         <ToggleSwitch
-          className="rounded-xl border border-border bg-base px-3 py-3"
+          className="rounded-xl border border-border bg-canvas px-3 py-3"
           label="Système d'inventaire"
           checked={isInventoryEnabled(draft)}
           onChange={(checked) => update("inventoryEnabled", checked)}
@@ -250,7 +250,7 @@ export default function SettingsPanel() {
           {homepageSectionKeys.map((key) => (
               <ToggleSwitch
                 key={key}
-                className="rounded-xl border border-border bg-base px-3 py-3"
+                className="rounded-xl border border-border bg-canvas px-3 py-3"
                 label={sectionLabels[key]}
                 checked={draft.homepage[key]}
                 onChange={(checked) =>
@@ -285,10 +285,10 @@ export default function SettingsPanel() {
       <Panel title="Arguments de confiance">
         <div className="space-y-4">
           {draft.trustItems.map((item, index) => (
-            <div key={item.id} className="rounded-xl border border-border bg-base p-4">
+            <div key={item.id} className="rounded-xl border border-border bg-canvas p-4">
               <div className="mb-3">
                 <ToggleSwitch
-                  className="rounded-xl border border-border bg-base px-3 py-3"
+                  className="rounded-xl border border-border bg-canvas px-3 py-3"
                   label="Élément de confiance"
                   checkedLabel="Activé"
                   uncheckedLabel="Désactivé"
@@ -330,7 +330,7 @@ export default function SettingsPanel() {
           {products.map((product) => (
             <ToggleSwitch
               key={product.id}
-              className="rounded-xl border border-border bg-base px-3 py-3"
+              className="rounded-xl border border-border bg-canvas px-3 py-3"
               label={`${product.name} (${product.id})`}
               checkedLabel="Mis en avant"
               uncheckedLabel="Non mis en avant"
@@ -357,7 +357,7 @@ export default function SettingsPanel() {
               className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
                 draft.featuredOutOfStock === opt
                   ? "border-accent bg-accent/5"
-                  : "border-border bg-base hover:border-border-strong"
+                  : "border-border bg-canvas hover:border-border-strong"
               }`}
             >
               <input
@@ -392,7 +392,7 @@ export default function SettingsPanel() {
             const mode: StockMode = draft.categoryStockModes?.[cat.id] ?? "automatic";
             const autoStatus = autoStockStatuses[cat.id];
             return (
-              <div key={cat.id} className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-base p-4">
+              <div key={cat.id} className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-canvas p-4">
                 <div className="min-w-[120px]">
                   <p className="text-sm font-medium text-white">{cat.name}</p>
                   {autoStatus && (
@@ -426,7 +426,7 @@ export default function SettingsPanel() {
           {(Object.keys(draft.paymentMethods) as PaymentMethod[]).map((method) => (
             <ToggleSwitch
               key={method}
-              className="rounded-xl border border-border bg-base px-3 py-3"
+              className="rounded-xl border border-border bg-canvas px-3 py-3"
               label={paymentLabels[method]}
               checked={draft.paymentMethods[method]}
               onChange={(checked) =>
@@ -483,7 +483,7 @@ export default function SettingsPanel() {
             {footerBadgeOptions.map((badge) => (
               <ToggleSwitch
                 key={badge.id}
-                className="rounded-xl border border-border bg-base px-3 py-3"
+                className="rounded-xl border border-border bg-canvas px-3 py-3"
                 label={badge.label}
                 checked={badge.enabled}
                 onChange={(checked) =>
@@ -604,7 +604,7 @@ function CategoryMediaRow({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-base p-4">
+    <div className="rounded-xl border border-border bg-canvas p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-white">{label}</span>
         {value && (

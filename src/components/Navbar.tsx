@@ -42,7 +42,7 @@ export default function Navbar({
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-base/75 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-border bg-canvas/75 backdrop-blur-xl">
       <nav className="container-page flex min-h-[66px] flex-wrap items-center gap-2 py-2 sm:gap-4 sm:py-0 md:flex-nowrap md:gap-7">
         {/* Logo — Navigator mascot lockup. Mascot renders bare (no tile/border),
             32×32 desktop / 28×28 mobile; wordmark drops below 360px. The whole

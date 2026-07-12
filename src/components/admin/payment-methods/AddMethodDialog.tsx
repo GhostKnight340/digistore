@@ -16,7 +16,7 @@ export default function AddMethodDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
-      <div className="w-full max-w-[720px] rounded-2xl border border-border bg-base shadow-[0_40px_120px_rgba(0,0,0,0.6)]">
+      <div className="w-full max-w-[720px] rounded-2xl border border-border bg-canvas shadow-[0_40px_120px_rgba(0,0,0,0.6)]">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
             <h2 className="text-base font-semibold text-white">Nouveau mode de paiement</h2>

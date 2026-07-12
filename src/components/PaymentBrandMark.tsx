@@ -22,7 +22,7 @@ export default function PaymentBrandMark({
   return (
     <span
       className={`grid place-items-center overflow-hidden rounded-2xl border text-sm font-black ${className} ${
-        active ? "text-white" : "border-border bg-base"
+        active ? "text-white" : "border-border bg-canvas"
       }`}
       style={style}
     >

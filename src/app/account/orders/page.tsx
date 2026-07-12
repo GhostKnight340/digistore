@@ -84,7 +84,7 @@ export default async function AccountOrdersPage() {
                   <Link
                     key={order.id}
                     href={`/order/${order.publicOrderPathSegment}`}
-                    className="flex items-center gap-3.5 rounded-[13px] border border-border bg-base px-4 py-3 transition-colors hover:border-border-strong"
+                    className="flex items-center gap-3.5 rounded-[13px] border border-border bg-canvas px-4 py-3 transition-colors hover:border-border-strong"
                   >
                     <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[11px] border border-border bg-surface text-faint">
                       <BagIcon className="h-5 w-5" />

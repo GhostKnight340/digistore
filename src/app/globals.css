@@ -196,12 +196,7 @@ body {
   }
 
   .legal-content {
-    /* NOTE: use text-[1rem], NOT text-base. The theme defines a `base` color
-       (#0a0b0d, the page background), which makes `text-base` ambiguous — it
-       emits both font-size AND `color: base`, painting body text the same color
-       as the background. The arbitrary size avoids that color injection so the
-       `text-muted` color actually applies. */
-    @apply mt-8 text-[1rem] leading-8 text-muted sm:text-[17px] sm:leading-8;
+    @apply mt-8 text-base leading-8 text-muted sm:text-[17px] sm:leading-8;
   }
 
   .legal-content h2 {

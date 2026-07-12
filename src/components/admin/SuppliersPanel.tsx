@@ -656,7 +656,7 @@ function ProviderOrderDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={onClose}>
       <div
-        className="h-full w-full max-w-md overflow-y-auto border-l border-border bg-base p-6"
+        className="h-full w-full max-w-md overflow-y-auto border-l border-border bg-canvas p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

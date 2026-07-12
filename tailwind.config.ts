@@ -8,8 +8,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Neutral, near-black base with layered surfaces.
-        base: "#0a0b0d",
+        // Neutral, near-black page background with layered surfaces.
+        // NOTE: named `canvas`, not `base` — a `base` color key collides with
+        // Tailwind's built-in `text-base` font-size utility and makes it also
+        // emit `color: <this>`, painting text the background color.
+        canvas: "#0a0b0d",
         surface: "#121319",
         surface2: "#171922",
         elevated: "#1b1d27",

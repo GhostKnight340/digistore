@@ -40,7 +40,7 @@ export default function Drawer({
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative flex h-full flex-col border-l border-border bg-base shadow-[0_0_80px_rgba(0,0,0,0.6)] ${widthClassName}`}
+        className={`relative flex h-full flex-col border-l border-border bg-canvas shadow-[0_0_80px_rgba(0,0,0,0.6)] ${widthClassName}`}
       >
         {children}
       </div>

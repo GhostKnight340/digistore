@@ -20,7 +20,7 @@ export default function MaintenancePanel() {
 
   return (
     <section className="space-y-5">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-base/95 p-4 backdrop-blur">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-canvas/95 p-4 backdrop-blur">
         <div>
           <h2 className="text-xl font-bold text-white">Mode maintenance</h2>
           <p className="text-sm text-muted">Bloque la vitrine publique sans couper l'admin ni les pages client existantes.</p>

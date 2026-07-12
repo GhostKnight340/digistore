@@ -503,7 +503,7 @@ function UploadField({
   return (
     <div>
       <p className="mb-1.5 text-xs font-medium text-muted">{label}</p>
-      <div className="rounded-xl border border-border bg-base p-3">
+      <div className="rounded-xl border border-border bg-canvas p-3">
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={value} alt="" className="mb-3 h-28 w-full rounded-lg object-contain" />
@@ -603,7 +603,7 @@ function LandingEditor({
   );
 
   return (
-    <div className="rounded-xl border border-border bg-base p-4">
+    <div className="rounded-xl border border-border bg-canvas p-4">
       <h3 className="text-sm font-bold text-white">Contenu de la page catégorie</h3>
       <p className="mt-0.5 text-xs text-muted">
         Sections optionnelles. Laissez vide pour afficher la grille de produits seule.
@@ -1168,7 +1168,7 @@ function LandingImageField({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={value} alt="" className="mb-3 h-24 w-full rounded-lg object-contain" />
         ) : (
-          <div className="mb-3 grid h-24 place-items-center rounded-lg bg-base text-xs text-muted">
+          <div className="mb-3 grid h-24 place-items-center rounded-lg bg-canvas text-xs text-muted">
             Aucune image
           </div>
         )}

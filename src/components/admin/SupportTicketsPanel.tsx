@@ -187,7 +187,7 @@ export default function SupportTicketsPanel() {
                     {t.message && (
                       <div>
                         <p className="text-xs uppercase tracking-wide text-faint">Message</p>
-                        <p className="mt-1 whitespace-pre-wrap rounded-lg border border-border bg-base px-3 py-2.5 text-sm leading-relaxed text-white">
+                        <p className="mt-1 whitespace-pre-wrap rounded-lg border border-border bg-canvas px-3 py-2.5 text-sm leading-relaxed text-white">
                           {t.message}
                         </p>
                       </div>

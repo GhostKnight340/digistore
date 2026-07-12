@@ -290,7 +290,7 @@ function ActivationModal({
           Copiez ce code puis envoyez-le au bot Ghost.ma sur Discord.
         </p>
 
-        <div className="mt-4 rounded-xl border border-border bg-base px-4 py-5 text-center">
+        <div className="mt-4 rounded-xl border border-border bg-canvas px-4 py-5 text-center">
           {loadError ? (
             <p className="text-sm text-red-400">{loadError}</p>
           ) : code ? (

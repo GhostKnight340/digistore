@@ -437,7 +437,7 @@ export default function CheckoutClient({
             <p className="mt-3.5 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
           )}
 
-          <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-base via-base/95 to-transparent px-4 pb-[max(env(safe-area-inset-bottom),14px)] pt-3">
+          <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-canvas via-canvas/95 to-transparent px-4 pb-[max(env(safe-area-inset-bottom),14px)] pt-3">
             <div className="rounded-2xl border border-white/[0.09] bg-[#12141B] p-3.5 shadow-[0_-8px_30px_rgba(0,0,0,0.4)]">
               <div className="mb-[11px] flex items-baseline justify-between">
                 <span className="text-[12.5px] text-muted">Total à payer</span>

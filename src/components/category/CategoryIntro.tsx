@@ -13,10 +13,7 @@ export default function CategoryIntro({ intro }: { intro: string }) {
   return (
     <section className="mt-8 sm:mt-10">
       <div
-        // Use text-[1rem], not text-base: the theme's `base` color collides
-        // with Tailwind's text-base and injects the background color (see
-        // globals.css .legal-content). Arbitrary sizes avoid that.
-        className="legal-content !mt-0 max-w-3xl text-[15px] sm:text-[1rem]"
+        className="legal-content !mt-0 max-w-3xl text-[15px] sm:text-base"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </section>

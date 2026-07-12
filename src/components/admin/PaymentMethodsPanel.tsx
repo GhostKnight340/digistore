@@ -514,7 +514,7 @@ function DeleteConfirmDialog({
 }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-base p-6 shadow-[0_40px_120px_rgba(0,0,0,0.6)]">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-canvas p-6 shadow-[0_40px_120px_rgba(0,0,0,0.6)]">
         <h3 className="text-base font-semibold text-white">Supprimer « {method.name} » ?</h3>
         <p className="mt-2 text-sm text-muted">
           Si des commandes utilisent cette méthode, la suppression sera refusée. Nous recommandons

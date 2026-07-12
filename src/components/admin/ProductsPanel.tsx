@@ -821,7 +821,7 @@ function DeleteParentDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
-      <div className="w-full max-w-lg rounded-2xl border border-border-strong bg-base p-5 shadow-card">
+      <div className="w-full max-w-lg rounded-2xl border border-border-strong bg-canvas p-5 shadow-card">
         <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
           Supprimer le produit parent
         </p>
@@ -1219,7 +1219,7 @@ function CategoryCombobox({
         placeholder="Rechercher ou créer une catégorie"
       />
       {open ? (
-        <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-border bg-base p-1 shadow-card">
+        <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-border bg-canvas p-1 shadow-card">
           {filtered.map((category) => (
             <button
               key={category.id}
@@ -1285,7 +1285,7 @@ function RegionCombobox({ value, onChange }: { value: string; onChange: (value: 
         placeholder="Rechercher un pays ou une région"
       />
       {open ? (
-        <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-border bg-base p-1 shadow-card">
+        <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-border bg-canvas p-1 shadow-card">
           {filtered.map((region) => (
             <button
               key={region.code}
@@ -1599,7 +1599,7 @@ function VariantsTab({
   return (
     <div className="space-y-3">
       {parentOptions.length > 0 && (
-        <div className="rounded-xl border border-border bg-base px-4 py-3">
+        <div className="rounded-xl border border-border bg-canvas px-4 py-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="min-w-0 flex-1 sm:min-w-[220px]">
               <label className="mb-1.5 block text-xs font-medium text-white">
@@ -1659,7 +1659,7 @@ function VariantsTab({
 
       {/* New variant form */}
       {isAddingVariant && newVariantDraft && (
-        <div className="rounded-xl border border-accent/40 bg-base p-4">
+        <div className="rounded-xl border border-accent/40 bg-canvas p-4">
           <p className="mb-4 text-sm font-semibold text-white">Nouvelle variante</p>
           <VariantForm
             v={newVariantDraft}
@@ -1695,7 +1695,7 @@ function VariantsTab({
       )}
 
       {draft.variants.length === 0 && !isAddingVariant && (
-        <div className="rounded-xl border border-border bg-base px-6 py-10 text-center text-sm text-muted">
+        <div className="rounded-xl border border-border bg-canvas px-6 py-10 text-center text-sm text-muted">
           <p>Aucune variante pour le moment.</p>
           <p className="mt-1 text-xs">Cliquez sur « + Ajouter une variante » pour créer la première valeur.</p>
         </div>
@@ -1712,7 +1712,7 @@ function VariantsTab({
         const isLast = index === draft.variants.length - 1;
 
         return (
-          <div key={orig.slug} className="rounded-xl border border-border bg-base">
+          <div key={orig.slug} className="rounded-xl border border-border bg-canvas">
             {/* Row header — one inline row on lg+, a stacked labeled card below lg. */}
             <div className="flex min-w-0 flex-col gap-3 px-4 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">

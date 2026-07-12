@@ -209,7 +209,7 @@ function OrderRow({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3.5 rounded-[13px] border border-border bg-base px-4 py-3 transition-colors hover:border-border-strong"
+      className="flex items-center gap-3.5 rounded-[13px] border border-border bg-canvas px-4 py-3 transition-colors hover:border-border-strong"
     >
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[11px] border border-border bg-surface text-faint">
         <BagIcon className="h-5 w-5" />
@@ -234,7 +234,7 @@ function OrderRow({
 
 function EmptyOrders() {
   return (
-    <div className="flex flex-col items-center rounded-[13px] border border-border bg-base px-6 py-10 text-center">
+    <div className="flex flex-col items-center rounded-[13px] border border-border bg-canvas px-6 py-10 text-center">
       <span className="grid h-16 w-16 place-items-center rounded-2xl bg-accent-soft text-accent-strong">
         <BagIcon className="h-7 w-7" />
       </span>

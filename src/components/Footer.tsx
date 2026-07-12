@@ -17,7 +17,7 @@ export default function Footer() {
   const paymentBadges = getEnabledFooterPaymentBadges(settings);
 
   return (
-    <footer className="mt-20 border-t border-border bg-base/60">
+    <footer className="mt-20 border-t border-border bg-canvas/60">
       <div className="container-page grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-2.5">

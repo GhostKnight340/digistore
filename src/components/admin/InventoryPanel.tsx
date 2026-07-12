@@ -541,8 +541,8 @@ function ManageCodesPanel({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
-      <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-border-strong bg-base shadow-card">
-        <div className="sticky top-0 z-10 border-b border-border bg-base/95 px-5 py-4 backdrop-blur">
+      <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-border-strong bg-canvas shadow-card">
+        <div className="sticky top-0 z-10 border-b border-border bg-canvas/95 px-5 py-4 backdrop-blur">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted">{product.productName}</p>

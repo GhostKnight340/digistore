@@ -40,7 +40,7 @@ export default function CopyCode({
   }
 
   return (
-    <div className="rounded-2xl border border-border-strong bg-gradient-to-b from-surface2 to-base p-4 shadow-soft">
+    <div className="rounded-2xl border border-border-strong bg-gradient-to-b from-surface2 to-canvas p-4 shadow-soft">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wide text-faint">

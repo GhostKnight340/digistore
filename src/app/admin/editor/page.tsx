@@ -139,14 +139,14 @@ function FeaturedProductsManager({
           <p className="mb-2 text-xs font-medium uppercase text-muted">Currently featured</p>
           <div className="space-y-2">
             {selected.length === 0 ? (
-              <div className="rounded-lg border border-border bg-base px-4 py-6 text-center text-xs text-muted">
+              <div className="rounded-lg border border-border bg-canvas px-4 py-6 text-center text-xs text-muted">
                 No featured variants selected.
               </div>
             ) : (
               selected.map((option, index) => (
                 <div
                   key={option.id}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-base px-3 py-2"
+                  className="flex items-center gap-3 rounded-lg border border-border bg-canvas px-3 py-2"
                 >
                   <span className="w-5 text-xs text-muted">{index + 1}</span>
                   <VariantSummary option={option} />
@@ -194,14 +194,14 @@ function FeaturedProductsManager({
           />
           <div className="mt-3 space-y-2">
             {available.length === 0 ? (
-              <div className="rounded-lg border border-border bg-base px-4 py-6 text-center text-xs text-muted">
+              <div className="rounded-lg border border-border bg-canvas px-4 py-6 text-center text-xs text-muted">
                 No matching active variants.
               </div>
             ) : (
               available.map((option) => (
                 <div
                   key={option.id}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-base px-3 py-2"
+                  className="flex items-center gap-3 rounded-lg border border-border bg-canvas px-3 py-2"
                 >
                   <VariantSummary option={option} />
                   <button

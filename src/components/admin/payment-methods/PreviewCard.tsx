@@ -13,7 +13,7 @@ export default function PreviewCard({
 }) {
   const display = paymentMethodDisplay(method);
   const className = `flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
-    selected ? "shadow-[0_0_0_3px_rgba(62,123,250,0.12)]" : "border-border bg-base hover:border-border-strong"
+    selected ? "shadow-[0_0_0_3px_rgba(62,123,250,0.12)]" : "border-border bg-canvas hover:border-border-strong"
   }`;
   const style = selected ? { borderColor: display.accentColor } : undefined;
 
