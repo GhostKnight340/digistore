@@ -3,7 +3,7 @@ import BrandNav from "@/components/BrandNav";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
-import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 
 export const revalidate = 3600;
 
@@ -14,9 +14,10 @@ const steps = [
 ];
 
 export default async function HomePage() {
-  const [{ categories, products }, settings] = await Promise.all([
+  const [{ categories, products }, settings, brandCategories] = await Promise.all([
     getCatalogData(),
     getStoreSettings(),
+    getActiveCategories(),
   ]);
 
   const productsById = new Map(products.map((product) => [product.id, product]));
@@ -75,7 +76,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      {settings.homepage.showBrandNav && categories.length > 0 && (
+      {settings.homepage.showBrandNav && brandCategories.length > 0 && (
         <section className="mt-8 sm:mt-12">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight text-text">
@@ -85,7 +86,7 @@ export default async function HomePage() {
               {settings.homepage.brandNavSubtitle}
             </p>
           </div>
-          <BrandNav categories={categories} />
+          <BrandNav categories={brandCategories} />
         </section>
       )}
 

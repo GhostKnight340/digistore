@@ -257,6 +257,39 @@ export async function getCatalogData(): Promise<{
   return { categories, products };
 }
 
+/**
+ * All active categories, independent of whether they currently have products.
+ * The homepage brand quick-nav uses this so brand tiles appear even pre-launch
+ * (before any product exists) — unlike `getCatalogData`, which only surfaces
+ * categories with `productCount > 0`. `productCount` is still populated (active
+ * products only) for callers that want it.
+ */
+export const getActiveCategories = unstable_cache(
+  async function getActiveCategories(): Promise<Category[]> {
+    await ensureDatabaseReady();
+    const rows = await prisma.category.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        _count: {
+          select: {
+            products: {
+              where: {
+                active: true,
+                categoryRecord: { is: { active: true } },
+                variants: { some: { active: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    return rows.map(toCategory);
+  },
+  ["active-categories"],
+  { tags: [CATALOG_TAG] },
+);
+
 export const getRegionCounts = unstable_cache(
   async function getRegionCounts(
     options: { category?: string; query?: string } = {},
