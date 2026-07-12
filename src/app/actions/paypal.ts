@@ -6,6 +6,8 @@ import {
   type CreatePaypalOrderResult,
   type CapturePaypalOrderResult,
 } from "@/lib/paypal/operations";
+import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
+import { ORDERS_UNAVAILABLE_COPY } from "@/lib/storeSettings";
 
 /**
  * Customer: create a PayPal order for a Ghost order (pending_payment only).
@@ -14,6 +16,10 @@ import {
  * server.
  */
 export async function createPaypalOrderAction(orderId: string): Promise<CreatePaypalOrderResult> {
+  // Pre-launch guard: no PayPal/card payment while ordering is disabled.
+  if (!(await isOrderingCurrentlyEnabled())) {
+    return { ok: false, error: ORDERS_UNAVAILABLE_COPY.title };
+  }
   if (!orderId || typeof orderId !== "string") {
     return { ok: false, error: "Commande introuvable." };
   }
@@ -30,6 +36,10 @@ export async function capturePaypalOrderAction(
   orderId: string,
   paypalOrderId: string,
 ): Promise<CapturePaypalOrderResult> {
+  // Pre-launch guard: refuse to capture/settle a payment while ordering is off.
+  if (!(await isOrderingCurrentlyEnabled())) {
+    return { ok: false, error: ORDERS_UNAVAILABLE_COPY.title };
+  }
   if (!orderId || typeof orderId !== "string" || !paypalOrderId || typeof paypalOrderId !== "string") {
     return { ok: false, error: "Requête invalide." };
   }

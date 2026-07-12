@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { isOrderingCurrentlyEnabled } from "./ordering";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
@@ -951,6 +952,10 @@ export async function createOrder(
   input: CreateOrderInput,
 ): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
   await ensureDatabaseReady();
+  // Hard backstop for the global "Accept customer orders" toggle: refuse to
+  // create an order (no incomplete/partial row) while ordering is disabled,
+  // even if a caller bypassed the action-layer guard.
+  if (!(await isOrderingCurrentlyEnabled())) return null;
   const slugs = input.items.map((item) => item.productId);
   const [products, variants] = await Promise.all([
     prisma.product.findMany({

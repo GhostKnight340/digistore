@@ -6,6 +6,7 @@ import {
   getOrderSummaries,
   findOrderByEmailAndId,
 } from "@/lib/db/orders";
+import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
 import { customerOrderRedirectPath } from "@/lib/orderNumber";
 import type { CustomerOrderDTO } from "@/lib/dto";
 
@@ -18,6 +19,10 @@ export async function createOrderAction(input: {
   paymentMethod?: string;
   items: { productId: string; quantity: number }[];
 }): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
+  // Global pre-launch guard: never create an order while ordering is disabled.
+  // The DB layer re-checks this too, so a race or a direct call can't slip
+  // through (see createOrder in src/lib/db/orders.ts).
+  if (!(await isOrderingCurrentlyEnabled())) return null;
   return createOrder(input);
 }
 

@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
+import { useStoreSettings } from "@/context/StoreSettingsContext";
+import { isOrderingEnabled } from "@/lib/storeSettings";
+import OrdersUnavailableNotice from "@/components/store/OrdersUnavailableNotice";
+import OrdersDisabledPurchase from "@/components/store/OrdersDisabledPurchase";
 import type { CartIdentity } from "@/lib/cartIdentity";
 import { formatDH } from "@/lib/format";
 
@@ -17,6 +21,8 @@ export default function AddToCartForm({
   identity?: CartIdentity;
 }) {
   const { addToCart } = useStore();
+  const { settings } = useStoreSettings();
+  const orderingEnabled = isOrderingEnabled(settings);
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
@@ -68,16 +74,23 @@ export default function AddToCartForm({
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <button onClick={handleBuyNow} className="btn-primary h-[52px] w-full text-base">
-          Acheter maintenant
-        </button>
-        <button onClick={handleAdd} className="btn-ghost h-11 w-full">
-          {added ? "Ajouté au panier" : "Ajouter au panier"}
-        </button>
-      </div>
+      {orderingEnabled ? (
+        <div className="flex flex-col gap-3">
+          <button onClick={handleBuyNow} className="btn-primary h-[52px] w-full text-base">
+            Acheter maintenant
+          </button>
+          <button onClick={handleAdd} className="btn-ghost h-11 w-full">
+            {added ? "Ajouté au panier" : "Ajouter au panier"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <OrdersUnavailableNotice showContact={false} />
+          <OrdersDisabledPurchase />
+        </div>
+      )}
 
-      {added && (
+      {orderingEnabled && added && (
         <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-accent-soft px-3.5 py-3 text-[13.5px] text-accent-strong">
           <svg
             viewBox="0 0 24 24"

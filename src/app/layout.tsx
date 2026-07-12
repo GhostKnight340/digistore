@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { headers } from "next/headers";
 import "./globals.css";
+import { isOrderingEnabled, ORDERS_UNAVAILABLE_COPY } from "@/lib/storeSettings";
 import { StoreProvider } from "@/context/StoreContext";
 import { StoreSettingsProvider } from "@/context/StoreSettingsContext";
 import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
@@ -50,6 +52,18 @@ export default async function RootLayout({
     pathname.startsWith("/delivery") ||
     pathname.startsWith("/find-order");
   const showMaintenance = Boolean(settings?.maintenance.enabled && !maintenanceAllowed);
+  // Unintrusive site-wide pre-launch banner while ordering is off. Hidden on
+  // admin, during the maintenance splash, and on post-purchase/tracking routes
+  // (where the payment page shows its own dedicated notice).
+  const ordersBannerSuppressed =
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/payment") ||
+    pathname.startsWith("/order") ||
+    pathname.startsWith("/delivery") ||
+    pathname.startsWith("/find-order");
+  const showOrdersBanner = Boolean(
+    settings && !isOrderingEnabled(settings) && !showMaintenance && !ordersBannerSuppressed,
+  );
 
   return (
     <html lang="en">
@@ -115,6 +129,19 @@ export default async function RootLayout({
                       }
                     />
                   )}
+                  {showOrdersBanner ? (
+                    <div className="border-b border-accent/15 bg-accent-soft">
+                      <div className="container-page flex flex-wrap items-center justify-center gap-x-2 gap-y-1 py-2 text-center text-[13px] text-muted">
+                        <span>{ORDERS_UNAVAILABLE_COPY.banner}</span>
+                        <Link
+                          href={ORDERS_UNAVAILABLE_COPY.contactHref}
+                          className="font-semibold text-accent hover:underline"
+                        >
+                          {ORDERS_UNAVAILABLE_COPY.contactLabel}
+                        </Link>
+                      </div>
+                    </div>
+                  ) : null}
                   <main className="flex-1">{children}</main>
                   {pathname.startsWith("/admin") ? null : <Footer />}
                   {pathname.startsWith("/admin") ? null : <SupportPill />}

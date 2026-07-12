@@ -17,6 +17,7 @@ import RegionBadge from "@/components/RegionBadge";
 import OrderDiscordDelivery from "@/components/payment/OrderDiscordDelivery";
 import DeliveredOrderDiscord from "@/components/payment/DeliveredOrderDiscord";
 import OrderConfirmationMascot from "@/components/OrderConfirmationMascot";
+import OrdersUnavailableNotice from "@/components/store/OrdersUnavailableNotice";
 import { urlHasSensitiveToken } from "@/lib/deliveryFields";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
@@ -124,7 +125,7 @@ function PaymentExperience({
   error: string;
   setError: (e: string) => void;
 }) {
-  const { order, config } = data;
+  const { order, config, orderingEnabled } = data;
   const { getProduct } = useProductCatalog();
 
   const publicOrderNumber = getPublicOrderLabel(order);
@@ -165,6 +166,10 @@ function PaymentExperience({
   const isDelivered = status === "delivered";
   const isRejected = status === "rejected" || status === "payment_issue";
   const isCancelled = status === "cancelled";
+  // Pre-launch: an unpaid order can't be paid while ordering is disabled. The
+  // server also strips config.methods, so the payment modules render nothing —
+  // we replace them with the "orders unavailable" notice.
+  const purchaseBlocked = !orderingEnabled && (isPending || isRejected);
 
   const details = activeMethod?.details ?? {};
   const comingSoon = activeMethod?.type === "card" && Boolean(details.comingSoon);
@@ -172,7 +177,9 @@ function PaymentExperience({
     activeMethod?.type === "paypal" || (activeMethod?.type === "card" && !comingSoon);
   const proofRequired = activeMethod?.proofRequired ?? true;
   // A proof-upload method (bank/crypto/cash) rather than an automated one.
-  const proofFlow = !automated && !comingSoon && !chooserOpen;
+  // `purchaseBlocked` forces this off so no proof upload / sticky submit CTA is
+  // offered while ordering is disabled.
+  const proofFlow = !automated && !comingSoon && !chooserOpen && !purchaseBlocked;
   const proofBased = isPending && proofFlow;
   // A refused / flagged proof-based order can resubmit a new justificatif in-app.
   const canResubmitProof = isRejected && proofFlow;
@@ -277,7 +284,9 @@ function PaymentExperience({
         ? { label: orderStatusLabel(status), color: "#E8A6A6", bg: "rgba(224,92,92,0.12)", bd: "rgba(224,92,92,0.28)", dot: "#E05C5C" }
         : { label: "En attente de paiement", color: "#F0C466", bg: "rgba(232,168,56,0.12)", bd: "rgba(232,168,56,0.26)", dot: "#E8A838" };
 
-  const headerInstruction = isCancelled
+  const headerInstruction = purchaseBlocked
+    ? "Les achats sont momentanément suspendus. Aucun paiement n’est requis pour le moment."
+    : isCancelled
     ? "Cette commande a été annulée. Aucun paiement n’est requis."
     : isRejected
       ? "Nous n’avons pas pu valider votre paiement. Consultez le détail ci-dessous."
@@ -305,7 +314,9 @@ function PaymentExperience({
               {badge.label}
             </span>
             <h1 className="mt-3 text-[26px] font-semibold leading-tight tracking-[-0.025em] text-white min-[900px]:text-[29px]">
-              {isCancelled
+              {purchaseBlocked
+                ? "Commandes en pause"
+                : isCancelled
                 ? "Commande annulée"
                 : isRejected
                   ? "Vérifions votre paiement"
@@ -347,8 +358,11 @@ function PaymentExperience({
         <div className="grid grid-cols-1 items-start gap-6 min-[900px]:grid-cols-[1fr_356px]">
           {/* MAIN */}
           <div className="flex flex-col gap-5">
+            {/* Orders paused: replace all payment modules with the notice. */}
+            {purchaseBlocked && <OrdersUnavailableNotice />}
+
             {/* Method tabs */}
-            {isPending && !chooserOpen && orderedTypes.length > 1 && (
+            {!purchaseBlocked && isPending && !chooserOpen && orderedTypes.length > 1 && (
               <div className="flex gap-1.5 overflow-x-auto rounded-[13px] border border-white/[0.07] bg-[#0B0C10] p-[5px] [scrollbar-width:none] [&::-webkit-scrollbar]:h-0">
                 {orderedTypes.map((type) => {
                   const on = type === activeType;
@@ -624,16 +638,18 @@ function PaymentExperience({
             )}
 
             {/* After your payment */}
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1015] px-[18px] py-4">
-              <div className="mb-2.5 flex items-center gap-2">
-                <ClockIcon className="h-4 w-4 text-[#9FB8FF]" />
-                <h2 className="text-sm font-semibold text-white">Après votre paiement</h2>
+            {!purchaseBlocked && (
+              <div className="rounded-2xl border border-white/[0.07] bg-[#0F1015] px-[18px] py-4">
+                <div className="mb-2.5 flex items-center gap-2">
+                  <ClockIcon className="h-4 w-4 text-[#9FB8FF]" />
+                  <h2 className="text-sm font-semibold text-white">Après votre paiement</h2>
+                </div>
+                <p className="text-[12.5px] leading-relaxed text-[#9A9FAB]">
+                  Après l’envoi de votre justificatif, votre paiement sera vérifié. Vous pourrez suivre
+                  le statut de votre commande depuis cette page et votre espace client.
+                </p>
               </div>
-              <p className="text-[12.5px] leading-relaxed text-[#9A9FAB]">
-                Après l’envoi de votre justificatif, votre paiement sera vérifié. Vous pourrez suivre
-                le statut de votre commande depuis cette page et votre espace client.
-              </p>
-            </div>
+            )}
 
             {/* Change method */}
             {isPending && methods.length > 1 && (
