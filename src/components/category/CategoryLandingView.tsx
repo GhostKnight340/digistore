@@ -1,7 +1,7 @@
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import RegionBadge from "@/components/RegionBadge";
-import CategoryHero from "@/components/category/CategoryHero";
+import CategoryHero, { categoryHasBrandHero } from "@/components/category/CategoryHero";
 import CategoryIntro from "@/components/category/CategoryIntro";
 import CategoryInfoPoints from "@/components/category/CategoryInfoPoints";
 import NavigatorTip from "@/components/category/NavigatorTip";
@@ -46,7 +46,7 @@ export default async function CategoryLandingView({
 }) {
   const landing = category.landing ?? defaultCategoryLanding();
   const base = categoryHref(category);
-  const heroShown = hasHero(landing);
+  const heroShown = hasHero(landing) || categoryHasBrandHero(category);
   const infoItems = visibleInfoItems(landing);
   const faqItems = visibleFaqItems(landing);
 
