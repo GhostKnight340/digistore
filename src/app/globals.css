@@ -126,6 +126,31 @@ body {
   }
 }
 
+/* Navigator loading state: a 92px ring spins around a bobbing 48px mascot. */
+@keyframes navigator-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes navigator-bob {
+  0%,
+  100% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+.navigator-loader__ring {
+  animation: navigator-spin 1.1s linear infinite;
+}
+
+.navigator-loader__mascot {
+  animation: navigator-bob 2.4s ease-in-out infinite;
+}
+
 /* Respect users who prefer reduced motion: neutralize animations/transitions. */
 @media (prefers-reduced-motion: reduce) {
   *,

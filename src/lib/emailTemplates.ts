@@ -116,8 +116,11 @@ function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentY
       ${socialHtml}
       ${paymentHtml}
       <tr>
-        <td align="center" style="padding: 8px 8px 0; color: #69758b; font-family: Arial, sans-serif; font-size: 12px;">
-          © ${escapeHtml(currentYear)} ghost.ma
+        <td align="center" style="padding: 12px 8px 0; color: #69758b; font-family: Arial, sans-serif; font-size: 12px;">
+          <img src="${escapeHtml(
+            absoluteAppUrl("/brand/navigator-icon-32.png"),
+          )}" width="18" height="18" alt="" style="display: inline-block; vertical-align: middle; margin-right: 7px; border: 0;" />
+          <span style="vertical-align: middle;">© ${escapeHtml(currentYear)} ghost.ma</span>
         </td>
       </tr>
     </table>`;

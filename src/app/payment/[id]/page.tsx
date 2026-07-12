@@ -16,6 +16,7 @@ import PayPalButton from "@/components/PayPalButton";
 import RegionBadge from "@/components/RegionBadge";
 import OrderDiscordDelivery from "@/components/payment/OrderDiscordDelivery";
 import DeliveredOrderDiscord from "@/components/payment/DeliveredOrderDiscord";
+import OrderConfirmationMascot from "@/components/OrderConfirmationMascot";
 import { urlHasSensitiveToken } from "@/lib/deliveryFields";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
@@ -1546,9 +1547,9 @@ function TerminalConfirmed({
   return (
     <div className="overflow-hidden rounded-2xl border border-[rgba(91,201,140,0.28)] bg-[#0F1015]">
       <div className="p-[26px] text-center">
-        <span className="mb-4 inline-flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[rgba(91,201,140,0.36)] bg-[rgba(91,201,140,0.14)]">
-          <CheckIcon className="h-7 w-7" stroke="#5BC98C" width={2.4} />
-        </span>
+        <div className="mb-4 flex justify-center">
+          <OrderConfirmationMascot variant="pending" />
+        </div>
         <h2 className="text-[19px] font-semibold text-white">Paiement confirmé</h2>
         <p className="mx-auto mt-1.5 max-w-[340px] text-[13.5px] text-[#9A9FAB]">
           Votre paiement de <strong className="text-white">{formatDH(total)}</strong> a été vérifié.
@@ -1662,9 +1663,9 @@ function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-[rgba(91,201,140,0.28)] bg-[#0F1015] px-4 py-5 text-center">
-        <span className="mx-auto inline-flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[rgba(91,201,140,0.36)] bg-[rgba(91,201,140,0.14)]">
-          <CheckIcon className="h-7 w-7" stroke="#5BC98C" width={2.4} />
-        </span>
+        <div className="flex justify-center">
+          <OrderConfirmationMascot variant="delivered" />
+        </div>
         <p className="mt-3 text-[19px] font-semibold text-white">Commande livrée</p>
         <p className="mx-auto mt-1 max-w-[360px] text-sm text-[#9A9FAB]">
           Vos codes sont disponibles ci-dessous. Révélez-les uniquement lorsque vous êtes prêt à les

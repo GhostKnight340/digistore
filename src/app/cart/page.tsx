@@ -5,6 +5,7 @@ import { useStore } from "@/context/StoreContext";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { formatDH } from "@/lib/format";
 import ProductArt from "@/components/ProductArt";
+import NavigatorLoader from "@/components/NavigatorLoader";
 import PaymentMethodsPreview from "@/components/PaymentMethodsPreview";
 import RegionBadge from "@/components/RegionBadge";
 import { getRegion } from "@/lib/regions";
@@ -15,8 +16,8 @@ export default function CartPage() {
 
   if (!ready) {
     return (
-      <div className="container-page py-20 text-center text-muted">
-        Chargement...
+      <div className="container-page">
+        <NavigatorLoader label="Chargement de votre panier…" />
       </div>
     );
   }
