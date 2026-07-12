@@ -402,6 +402,21 @@ export function notifySupportTicketReply(
   );
 }
 
+/** A customer replied from their account — record it in the ticket thread and
+ *  refresh the card (the ticket returns to "open" for the team). */
+export function notifySupportTicketCustomerReply(
+  input: SupportTicketCardInput & { replyBody: string },
+): Promise<void> {
+  return postSupportThreadEvent(
+    toSupportCard(input),
+    embed({
+      title: "Réponse du client",
+      color: COLOR.amber,
+      fields: [{ name: "Message", value: input.replyBody.slice(0, 1000) }],
+    }),
+  );
+}
+
 /** Status transition (closed / reopened) — record it and refresh the card so a
  *  closed ticket's thread clearly reads as closed. */
 export function notifySupportTicketStatus(

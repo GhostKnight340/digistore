@@ -1,15 +1,23 @@
 "use server";
 
-import { getCurrentCustomer } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { getCurrentCustomer, isProfileIncomplete } from "@/lib/auth";
 import {
   createSupportTicket,
   findSupportTicketForCustomer,
   getSupportTicketByFeedbackToken,
   saveSupportTicketFeedback,
+  getCustomerTicketRecordByReference,
+  addCustomerSupportMessage,
+  supportTicketCustomerDTO,
   type SupportAttachment,
   type SupportTicketStatusDTO,
 } from "@/lib/db/supportTickets";
-import { notifySupportTicketCreated, notifySupportTicketFeedback } from "@/lib/discord/notify";
+import {
+  notifySupportTicketCreated,
+  notifySupportTicketFeedback,
+  notifySupportTicketCustomerReply,
+} from "@/lib/discord/notify";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { absoluteAppUrl } from "@/lib/orderNumber";
 import { findSupportCategory, findSupportSubIssue } from "@/lib/support/config";
@@ -213,4 +221,60 @@ export async function lookupSupportTicketAction(
     console.error("[support:lookup]", error instanceof Error ? error.message : error);
     return null;
   }
+}
+
+export type CustomerReplyResult =
+  | { ok: true; ticket: SupportTicketStatusDTO }
+  | { ok: false; error: string };
+
+/**
+ * A logged-in customer replies to their own ticket, turning it into a two-way
+ * conversation. Ownership is enforced (the ticket must be linked to the account
+ * or share its e-mail). The reply resurfaces the ticket for the support team
+ * and is posted into the ticket's Discord thread. Closed tickets are read-only.
+ */
+export async function replyToSupportTicketAction(
+  reference: string,
+  body: string,
+): Promise<CustomerReplyResult> {
+  const customer = await getCurrentCustomer().catch(() => null);
+  if (!customer) return { ok: false, error: "Connectez-vous pour répondre à votre demande." };
+
+  const text = (body ?? "").trim();
+  if (!text) return { ok: false, error: "Le message ne peut pas être vide." };
+
+  const accountEmail = isProfileIncomplete(customer) ? null : customer.email;
+
+  let updated;
+  try {
+    const ticket = await getCustomerTicketRecordByReference(reference, customer.id, accountEmail);
+    if (!ticket) return { ok: false, error: "Demande introuvable." };
+    if (ticket.status === "closed") {
+      return { ok: false, error: "Cette demande est clôturée. Ouvrez une nouvelle demande si besoin." };
+    }
+    updated = await addCustomerSupportMessage(ticket.id, customer.id, text.slice(0, 4000));
+  } catch (error) {
+    console.error("[support:customer-reply]", error instanceof Error ? error.message : error);
+    return { ok: false, error: "Une erreur est survenue. Réessayez dans un instant." };
+  }
+
+  void notifySupportTicketCustomerReply({
+    ticketId: updated.id,
+    reference: updated.reference,
+    categoryLabel: findSupportCategory(updated.category)?.label ?? updated.category,
+    subIssueLabel: updated.subIssueLabel,
+    orderRef: updated.orderRef,
+    name: updated.name,
+    email: updated.email,
+    status: updated.status,
+    resolution: updated.resolution,
+    adminUrl: absoluteAppUrl("/admin"),
+    discordMessageId: updated.discordMessageId,
+    discordThreadId: updated.discordThreadId,
+    replyBody: text.slice(0, 4000),
+  });
+
+  revalidatePath("/account/support");
+  revalidatePath("/support/suivi");
+  return { ok: true, ticket: supportTicketCustomerDTO(updated) };
 }

@@ -20,6 +20,7 @@ import type { SupportTicketAdminDTO } from "@/lib/db/supportTickets";
 import { findSupportCategory } from "@/lib/support/config";
 
 const VIEWS = [
+  { id: "active", label: "Actives" },
   { id: "open", label: "Ouvertes" },
   { id: "answered", label: "Répondues" },
   { id: "closed", label: "Fermées" },
@@ -81,7 +82,7 @@ function Stars({ rating }: { rating: number }) {
 
 export default function SupportTicketsPanel() {
   const [tickets, setTickets] = useState<SupportTicketAdminDTO[]>([]);
-  const [view, setView] = useState("open");
+  const [view, setView] = useState("active");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -293,15 +294,30 @@ export default function SupportTicketsPanel() {
                     {t.replies.length > 0 && (
                       <div>
                         <p className="text-xs uppercase tracking-wide text-faint">
-                          Réponses envoyées ({t.replies.length})
+                          Conversation ({t.replies.length})
                         </p>
                         <div className="mt-1.5 space-y-2">
-                          {t.replies.map((r, i) => (
-                            <div key={i} className="rounded-lg border border-accent/20 bg-accent/[0.06] px-3 py-2.5">
-                              <p className="whitespace-pre-wrap text-sm leading-relaxed text-white">{r.body}</p>
-                              <p className="mt-1 text-[11px] text-faint">{fmtDateTime(r.createdAt)}</p>
-                            </div>
-                          ))}
+                          {t.replies.map((r, i) => {
+                            const fromCustomer = r.author === "customer";
+                            return (
+                              <div
+                                key={i}
+                                className={`rounded-lg border px-3 py-2.5 ${
+                                  fromCustomer
+                                    ? "border-border bg-surface"
+                                    : "border-accent/20 bg-accent/[0.06]"
+                                }`}
+                              >
+                                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-faint">
+                                  {fromCustomer ? t.name || "Client" : "Équipe"}
+                                </p>
+                                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-white">
+                                  {r.body}
+                                </p>
+                                <p className="mt-1 text-[11px] text-faint">{fmtDateTime(r.createdAt)}</p>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

@@ -27,8 +27,15 @@ export type SupportTicketStatus = "open" | "answered" | "closed";
 /** Optional close outcome the admin picks when closing a ticket. */
 export type SupportTicketResolution = "resolved" | "cancelled" | "dismissed";
 
-/** One admin reply sent to the customer. */
-export type SupportReply = { body: string; createdAt: string };
+export type SupportMessageAuthor = "admin" | "customer";
+
+/** One message in a ticket's conversation. `author` distinguishes the support
+ *  team's replies from the customer's. Older rows stored admin-only replies
+ *  without an author — those are read back as "admin". */
+export type SupportMessage = { author: SupportMessageAuthor; body: string; createdAt: string };
+
+/** @deprecated kept as an alias while callers migrate to SupportMessage. */
+export type SupportReply = SupportMessage;
 
 /** Safe customer-facing view — looked up by reference + email pair (a bare
  *  reference is enumerable, so it is never enough on its own). No attachment
@@ -41,7 +48,7 @@ export type SupportTicketStatusDTO = {
   message: string | null;
   status: string;
   resolution: string | null;
-  replies: SupportReply[];
+  replies: SupportMessage[];
   feedbackGiven: boolean;
   feedbackToken: string | null;
   createdAt: string;
@@ -65,7 +72,7 @@ export type SupportTicketAdminDTO = {
   customerId: string | null;
   status: string;
   resolution: string | null;
-  replies: SupportReply[];
+  replies: SupportMessage[];
   feedbackRating: number | null;
   feedbackComment: string | null;
   createdAt: string;
@@ -78,11 +85,15 @@ function attachmentList(value: unknown): StoredAttachment[] {
   return Array.isArray(value) ? (value as StoredAttachment[]) : [];
 }
 
-function replyList(value: unknown): SupportReply[] {
+function messageList(value: unknown): SupportMessage[] {
   if (!Array.isArray(value)) return [];
-  return (value as Partial<SupportReply>[])
+  return (value as Partial<SupportMessage>[])
     .filter((r) => r && typeof r.body === "string")
-    .map((r) => ({ body: String(r.body), createdAt: String(r.createdAt ?? "") }));
+    .map((r) => ({
+      author: r.author === "customer" ? "customer" : "admin",
+      body: String(r.body),
+      createdAt: String(r.createdAt ?? ""),
+    }));
 }
 
 /** Full row shape shared by the admin + customer DTO mappers. */
@@ -128,7 +139,7 @@ function toAdminDTO(t: SupportTicketRow): SupportTicketAdminDTO {
     customerId: t.customerId,
     status: t.status,
     resolution: t.resolution,
-    replies: replyList(t.replies),
+    replies: messageList(t.replies),
     feedbackRating: t.feedbackRating,
     feedbackComment: t.feedbackComment,
     createdAt: t.createdAt.toISOString(),
@@ -148,7 +159,7 @@ function toCustomerDTO(t: SupportTicketRow): SupportTicketStatusDTO {
     message: t.message,
     status: t.status,
     resolution: t.resolution,
-    replies: replyList(t.replies),
+    replies: messageList(t.replies),
     feedbackGiven: t.feedbackAt != null,
     feedbackToken: t.feedbackToken,
     createdAt: t.createdAt.toISOString(),
@@ -215,8 +226,16 @@ export async function listSupportTickets(
   filter: { status?: string } = {},
 ): Promise<SupportTicketAdminDTO[]> {
   await ensureDatabaseReady();
+  // "active" = everything not yet closed (open + answered). Replying flips a
+  // ticket to "answered" but it must stay in the active list until closed.
+  const where =
+    filter.status === "active"
+      ? { status: { not: "closed" } }
+      : filter.status
+      ? { status: filter.status }
+      : undefined;
   const tickets = await prisma.supportTicket.findMany({
-    where: filter.status ? { status: filter.status } : undefined,
+    where,
     orderBy: { createdAt: "desc" },
     take: 200,
   });
@@ -234,6 +253,11 @@ export type SupportTicketRecord = SupportTicketRow;
 /** Public mapper so server actions can hand the client a clean admin DTO. */
 export function supportTicketAdminDTO(row: SupportTicketRecord): SupportTicketAdminDTO {
   return toAdminDTO(row);
+}
+
+/** Public mapper for the owner-facing (customer) DTO. */
+export function supportTicketCustomerDTO(row: SupportTicketRecord): SupportTicketStatusDTO {
+  return toCustomerDTO(row);
 }
 
 export async function getSupportTicketRecord(id: string): Promise<SupportTicketRecord | null> {
@@ -265,15 +289,68 @@ export async function addSupportTicketReply(
     select: { replies: true },
   });
   if (!existing) throw new Error("Demande introuvable.");
-  const replies: SupportReply[] = [
-    ...replyList(existing.replies),
-    { body, createdAt: new Date().toISOString() },
+  const replies: SupportMessage[] = [
+    ...messageList(existing.replies),
+    { author: "admin", body, createdAt: new Date().toISOString() },
   ];
   return prisma.supportTicket.update({
     where: { id },
     data: {
       status: "answered",
       replies: replies as unknown as Prisma.InputJsonValue,
+    },
+  });
+}
+
+/**
+ * A logged-in customer's ticket, looked up by its public reference and gated by
+ * ownership: the ticket's customerId matches, or (for a guest-opened ticket)
+ * the account e-mail matches the address on the ticket. Returns null otherwise.
+ */
+export async function getCustomerTicketRecordByReference(
+  reference: string,
+  customerId: string,
+  accountEmail: string | null,
+): Promise<SupportTicketRecord | null> {
+  await ensureDatabaseReady();
+  const ref = (reference ?? "").trim().toUpperCase();
+  if (!ref || !customerId) return null;
+  const ticket = await prisma.supportTicket.findUnique({ where: { reference: ref } });
+  if (!ticket) return null;
+  const ownsById = ticket.customerId === customerId;
+  const ownsByEmail = accountEmail
+    ? ticket.email.trim().toLowerCase() === accountEmail.trim().toLowerCase()
+    : false;
+  return ownsById || ownsByEmail ? ticket : null;
+}
+
+/**
+ * Appends a customer reply to the conversation and returns the ticket to the
+ * "open" state so it resurfaces for the support team. Also back-links the
+ * customer to a previously guest-opened ticket (matched by e-mail) so it stays
+ * tied to their account.
+ */
+export async function addCustomerSupportMessage(
+  id: string,
+  customerId: string,
+  body: string,
+): Promise<SupportTicketRecord> {
+  await ensureDatabaseReady();
+  const existing = await prisma.supportTicket.findUnique({
+    where: { id },
+    select: { replies: true, customerId: true },
+  });
+  if (!existing) throw new Error("Demande introuvable.");
+  const replies: SupportMessage[] = [
+    ...messageList(existing.replies),
+    { author: "customer", body, createdAt: new Date().toISOString() },
+  ];
+  return prisma.supportTicket.update({
+    where: { id },
+    data: {
+      status: "open",
+      replies: replies as unknown as Prisma.InputJsonValue,
+      ...(existing.customerId ? {} : { customerId }),
     },
   });
 }
