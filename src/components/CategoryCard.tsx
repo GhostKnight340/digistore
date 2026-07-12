@@ -15,15 +15,18 @@ export default function CategoryCard({
 }) {
   const productCount = count ?? category.productCount ?? 0;
   const media = thumbnail ?? category.coverImageUrl ?? category.iconUrl ?? null;
+  const accent = category.accentColor || "#3e7bfa";
   return (
     <Link
       href={`/products?category=${category.id}`}
-      className="group overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-border-strong hover:shadow-soft"
+      style={{ ["--brand" as string]: accent }}
+      className="group overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-[var(--brand)] hover:shadow-soft"
     >
       <ProductArt
         category={category.id}
         imageUrl={media}
         label={category.name}
+        accent={accent}
         className="aspect-[16/10] w-full rounded-t-[14px]"
       />
       <div className="flex items-center justify-between px-[18px] py-4">

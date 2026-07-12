@@ -6,16 +6,20 @@ export default function ProductArt({
   category,
   imageUrl,
   label,
+  accent,
   className = "",
 }: {
   category: string;
   imageUrl?: string | null;
   label?: string;
+  /** Brand accent color for the placeholder glow. Defaults to the store blue. */
+  accent?: string | null;
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const code = category.split(" ")[0].toUpperCase();
   const showImage = Boolean(imageUrl && !failed);
+  const glow = accent || "#3e7bfa";
 
   useEffect(() => {
     setFailed(false);
@@ -25,7 +29,12 @@ export default function ProductArt({
     <div
       className={`relative flex items-center justify-center overflow-hidden bg-[#09090b] ${className}`}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(62,123,250,0.22),rgba(62,123,250,0.08)_34%,rgba(9,9,11,0)_68%)]" />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage: `radial-gradient(circle at 50% 42%, color-mix(in srgb, ${glow} 22%, transparent), color-mix(in srgb, ${glow} 8%, transparent) 34%, rgba(9,9,11,0) 68%)`,
+        }}
+      />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.055),rgba(255,255,255,0)_42%),repeating-linear-gradient(135deg,rgba(255,255,255,0.018)_0_8px,transparent_8px_16px)]" />
       <div className="pointer-events-none absolute inset-px rounded-[inherit] border border-white/[0.035]" />
       {showImage ? (
@@ -41,7 +50,12 @@ export default function ProductArt({
         </div>
       ) : (
         <>
-          <div className="absolute h-40 w-56 rounded-[30px] bg-[radial-gradient(circle,rgba(62,123,250,0.24),transparent_64%)] blur-3xl" />
+          <div
+            className="absolute h-40 w-56 rounded-[30px] blur-3xl"
+            style={{
+              backgroundImage: `radial-gradient(circle, color-mix(in srgb, ${glow} 24%, transparent), transparent 64%)`,
+            }}
+          />
           <span className="relative font-mono text-sm tracking-[0.18em] text-[#697082] sm:text-lg">
             {code}
           </span>

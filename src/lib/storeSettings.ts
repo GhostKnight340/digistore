@@ -7,6 +7,15 @@ export type TrustItemSetting = {
   enabled: boolean;
 };
 
+export type StatItemSetting = {
+  id: string;
+  /** Large emphasised figure, e.g. "24/7", "MAD", "100%". */
+  value: string;
+  /** Supporting caption under the figure, e.g. "Livraison digitale". */
+  label: string;
+  enabled: boolean;
+};
+
 export type PaymentDisplaySetting = {
   displayName?: string;
   subtitle?: string;
@@ -53,6 +62,7 @@ export type StoreSettings = {
   homepage: {
     showHero: boolean;
     showTrustStrip: boolean;
+    showStats: boolean;
     showBrandNav: boolean;
     showCategories: boolean;
     showFeaturedProducts: boolean;
@@ -79,6 +89,7 @@ export type StoreSettings = {
   /** Whether to show or hide out-of-stock featured products on the homepage. */
   featuredOutOfStock: "show" | "hide";
   trustItems: TrustItemSetting[];
+  statItems: StatItemSetting[];
   featuredProductIds: string[];
   emailTemplates: Record<string, { subject: string; body: string }>;
   legalPages: Record<
@@ -153,6 +164,7 @@ export const defaultStoreSettings: StoreSettings = {
   homepage: {
     showHero: true,
     showTrustStrip: true,
+    showStats: true,
     showBrandNav: true,
     showCategories: true,
     showFeaturedProducts: true,
@@ -200,6 +212,11 @@ export const defaultStoreSettings: StoreSettings = {
       description: "Une équipe au Maroc, disponible en français et en arabe.",
       enabled: true,
     },
+  ],
+  statItems: [
+    { id: "delivery", value: "24/7", label: "Livraison digitale", enabled: true },
+    { id: "local-payment", value: "MAD", label: "Paiement local", enabled: true },
+    { id: "official-codes", value: "100%", label: "Codes officiels", enabled: true },
   ],
   featuredProductIds: [
     "steam-50",
@@ -455,6 +472,14 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
           ...(isObject(item) ? item : {}),
         }))
       : defaultStoreSettings.trustItems,
+    statItems: Array.isArray(value.statItems)
+      ? value.statItems.map((item, index) => ({
+          ...defaultStoreSettings.statItems[
+            index % defaultStoreSettings.statItems.length
+          ],
+          ...(isObject(item) ? item : {}),
+        }))
+      : defaultStoreSettings.statItems,
     featuredProductIds: Array.isArray(value.featuredProductIds)
       ? value.featuredProductIds.filter((id): id is string => typeof id === "string")
       : defaultStoreSettings.featuredProductIds,

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import BrandNav from "@/components/BrandNav";
+import StatStrip from "@/components/StatStrip";
+import FeaturedCarousel from "@/components/FeaturedCarousel";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
@@ -20,6 +22,11 @@ export default async function HomePage() {
     getActiveCategories(),
   ]);
 
+  // Brand accent per category id, so product/category cards glow in their
+  // brand color instead of a uniform blue.
+  const accentByCategory = new Map(
+    brandCategories.map((category) => [category.id, category.accentColor]),
+  );
   const productsById = new Map(products.map((product) => [product.id, product]));
   const featured = settings.featuredProductIds
     .map((id) => productsById.get(id))
@@ -73,6 +80,12 @@ export default async function HomePage() {
               />
             </div>
           </div>
+        </section>
+      )}
+
+      {settings.homepage.showStats && (
+        <section className="mt-2 sm:mt-4">
+          <StatStrip items={settings.statItems} />
         </section>
       )}
 
@@ -133,10 +146,17 @@ export default async function HomePage() {
               Aucun produit populaire n&apos;est disponible pour le moment.
             </div>
           ) : (
-            <div className="mt-6 grid grid-cols-1 gap-5 min-[430px]:grid-cols-2 sm:mt-7 sm:grid-cols-3 lg:grid-cols-4">
-              {featured.map((product) => (
-                <ProductCard key={product.id} product={product} featured />
-              ))}
+            <div className="mt-6 sm:mt-7">
+              <FeaturedCarousel>
+                {featured.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    accent={accentByCategory.get(product.category)}
+                    featured
+                  />
+                ))}
+              </FeaturedCarousel>
             </div>
           )}
         </section>

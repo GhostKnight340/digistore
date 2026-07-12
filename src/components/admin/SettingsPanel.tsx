@@ -29,6 +29,7 @@ const paymentLabels: Record<PaymentMethod, string> = {
 const homepageSectionKeys = [
   "showHero",
   "showTrustStrip",
+  "showStats",
   "showBrandNav",
   "showCategories",
   "showFeaturedProducts",
@@ -40,6 +41,7 @@ const homepageSectionKeys = [
 const sectionLabels: Record<(typeof homepageSectionKeys)[number], string> = {
   showHero: "Bannière",
   showTrustStrip: "Indicateurs de confiance",
+  showStats: "Statistiques",
   showBrandNav: "Marques",
   showCategories: "Catégories populaires",
   showFeaturedProducts: "Produits populaires",

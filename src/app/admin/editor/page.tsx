@@ -240,6 +240,7 @@ function VariantSummary({ option }: { option: FeaturedVariantOptionDTO }) {
 function EditorCanvas() {
   const { draft, previewMode, set, save } = useEditor();
   const { categories } = useProductCatalog();
+  const accentByCategory = new Map(categories.map((c) => [c.id, c.accentColor]));
   const s = draft;
 
   const [featured, setFeatured] = useState<Product[]>([]);
@@ -357,6 +358,48 @@ function EditorCanvas() {
       </SectionWrapper>
 
       <div className="container-page space-y-0">
+        {/* Stat tiles */}
+        <SectionWrapper sectionKey="showStats" label="Statistiques">
+          <section className="mt-4">
+            <div className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-[16px] border border-border bg-surface/60">
+              {s.statItems
+                .filter((item) => item.enabled)
+                .map((item) => (
+                  <div key={item.id} className="px-4 py-4 sm:px-6 sm:py-5">
+                    <EditableText
+                      as="span"
+                      value={item.value}
+                      onChange={(v) =>
+                        set((prev) => ({
+                          ...prev,
+                          statItems: prev.statItems.map((t) =>
+                            t.id === item.id ? { ...t, value: v } : t,
+                          ),
+                        }))
+                      }
+                      disabled={!editing}
+                      className="font-mono text-xl font-semibold tracking-tight text-text sm:text-2xl"
+                    />
+                    <EditableText
+                      as="span"
+                      value={item.label}
+                      onChange={(v) =>
+                        set((prev) => ({
+                          ...prev,
+                          statItems: prev.statItems.map((t) =>
+                            t.id === item.id ? { ...t, label: v } : t,
+                          ),
+                        }))
+                      }
+                      disabled={!editing}
+                      className="mt-1 text-[11px] uppercase tracking-wide text-muted sm:text-xs"
+                    />
+                  </div>
+                ))}
+            </div>
+          </section>
+        </SectionWrapper>
+
         {/* Brand quick-nav */}
         <SectionWrapper sectionKey="showBrandNav" label="Marques">
           <section className="mt-8">
@@ -467,7 +510,11 @@ function EditorCanvas() {
                 ? featured.filter((p) => p.stockStatus === "in_stock")
                 : featured
               ).map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  accent={accentByCategory.get(product.category)}
+                />
               ))}
             </div>
             {editing ? (
