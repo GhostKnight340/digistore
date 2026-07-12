@@ -28,8 +28,11 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
-  const supportCount = await countSupportTicketsForCustomer(customer.id);
   const incomplete = isProfileIncomplete(customer);
+  const supportCount = await countSupportTicketsForCustomer(
+    customer.id,
+    !incomplete && customer.emailVerified ? customer.email : null,
+  );
   const verified = !incomplete && customer.emailVerified;
   // Sidebar/metrics must never surface the internal placeholder email.
   const displayEmail = incomplete ? "" : customer.email;

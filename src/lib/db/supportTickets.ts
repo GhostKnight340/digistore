@@ -172,26 +172,43 @@ export async function findSupportTicketForCustomer(
   return toCustomerDTO(ticket);
 }
 
-/** All tickets linked to a logged-in customer, newest first — the account
- *  "Support" page. Ownership is the customerId link, so replies + feedback
+/**
+ * Which tickets belong to a logged-in customer for the account "Support" page.
+ * Matches the hard `customerId` link (set when the ticket was opened while
+ * signed in) OR — so guest tickets opened before/without signing in still show
+ * up — the account's own e-mail, but only when that e-mail is verified (an
+ * unverified address is never treated as proof of ownership).
+ */
+function customerTicketWhere(customerId: string, verifiedEmail?: string | null) {
+  const email = verifiedEmail?.trim();
+  if (!email) return { customerId };
+  return { OR: [{ customerId }, { email: { equals: email, mode: "insensitive" as const } }] };
+}
+
+/** All tickets owned by a logged-in customer, newest first. Ownership is the
+ *  customerId link or the account's verified e-mail, so replies + feedback
  *  token are safe to surface here. */
 export async function listSupportTicketsForCustomer(
   customerId: string,
+  verifiedEmail?: string | null,
 ): Promise<SupportTicketStatusDTO[]> {
   await ensureDatabaseReady();
   if (!customerId) return [];
   const tickets = await prisma.supportTicket.findMany({
-    where: { customerId },
+    where: customerTicketWhere(customerId, verifiedEmail),
     orderBy: { createdAt: "desc" },
     take: 100,
   });
   return tickets.map(toCustomerDTO);
 }
 
-export async function countSupportTicketsForCustomer(customerId: string): Promise<number> {
+export async function countSupportTicketsForCustomer(
+  customerId: string,
+  verifiedEmail?: string | null,
+): Promise<number> {
   if (!customerId) return 0;
   await ensureDatabaseReady();
-  return prisma.supportTicket.count({ where: { customerId } });
+  return prisma.supportTicket.count({ where: customerTicketWhere(customerId, verifiedEmail) });
 }
 
 export async function listSupportTickets(

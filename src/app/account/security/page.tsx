@@ -15,8 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function AccountSecurityPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
-  const supportCount = await countSupportTicketsForCustomer(customer.id);
   const incomplete = isProfileIncomplete(customer);
+  const supportCount = await countSupportTicketsForCustomer(
+    customer.id,
+    !incomplete && customer.emailVerified ? customer.email : null,
+  );
 
   return (
     <div className="container-page py-10">

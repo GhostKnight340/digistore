@@ -35,9 +35,10 @@ function formatFrenchDate(iso: string) {
 export default async function AccountSupportPage() {
   const customer = await requireCustomer();
   const incomplete = isProfileIncomplete(customer);
+  const verifiedEmail = !incomplete && customer.emailVerified ? customer.email : null;
   const [orders, tickets] = await Promise.all([
     getAccountOrders(customer.id),
-    listSupportTicketsForCustomer(customer.id),
+    listSupportTicketsForCustomer(customer.id, verifiedEmail),
   ]);
 
   return (

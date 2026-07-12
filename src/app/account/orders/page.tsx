@@ -44,8 +44,11 @@ function itemSummary(order: AccountOrder) {
 export default async function AccountOrdersPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
-  const supportCount = await countSupportTicketsForCustomer(customer.id);
   const incomplete = isProfileIncomplete(customer);
+  const supportCount = await countSupportTicketsForCustomer(
+    customer.id,
+    !incomplete && customer.emailVerified ? customer.email : null,
+  );
 
   return (
     <div className="container-page py-10">
