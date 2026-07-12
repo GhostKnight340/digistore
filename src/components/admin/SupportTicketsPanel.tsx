@@ -8,7 +8,7 @@
  * update the ticket's Discord thread; status changes never edit the customer's
  * submitted content.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listSupportTicketsAction,
   updateSupportTicketStatusAction,
@@ -104,6 +104,28 @@ export default function SupportTicketsPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Silent background refresh so a customer's reply appears without reloading
+  // the page — no spinner, and paused while the tab is hidden or an action is
+  // in flight (to avoid clobbering an optimistic state).
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+  useEffect(() => {
+    const refresh = async () => {
+      if (document.hidden || busyRef.current) return;
+      try {
+        setTickets(await listSupportTicketsAction(view ? { status: view } : {}));
+      } catch {
+        // Silent: a transient failure just retries on the next tick.
+      }
+    };
+    const interval = setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [view]);
 
   // Reset the per-ticket composer when the expanded ticket changes.
   useEffect(() => {

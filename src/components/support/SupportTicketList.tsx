@@ -7,11 +7,14 @@
  * can continue the conversation. Shared by the account "Support" page and the
  * logged-in view of "Suivre ma demande".
  */
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { replyToSupportTicketAction } from "@/app/actions/support";
+import { replyToSupportTicketAction, getMySupportTicketAction } from "@/app/actions/support";
 import type { SupportTicketStatusDTO } from "@/lib/db/supportTickets";
 import { findSupportCategory } from "@/lib/support/config";
+
+// How often an open conversation re-checks for new messages from the team.
+const POLL_MS = 12_000;
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   open: { label: "En cours", cls: "border-[#F7B14A]/30 bg-[#F7B14A]/10 text-[#F7B14A]" },
@@ -59,6 +62,34 @@ export default function SupportTicketList({
   const [busyRef, setBusyRef] = useState<string | null>(null);
   const [error, setError] = useState<{ ref: string; text: string } | null>(null);
 
+  // Replace one ticket's server-owned fields (status, messages…) in place. The
+  // reply drafts live in separate state, so a refresh never clobbers what the
+  // customer is typing.
+  const mergeTicket = useCallback((next: SupportTicketStatusDTO) => {
+    setTickets((prev) => prev.map((t) => (t.reference === next.reference ? next : t)));
+  }, []);
+
+  // Live-refresh the open conversation so replies from the team appear without a
+  // manual page reload: poll on an interval and whenever the tab regains focus.
+  const busyRefCurrent = useRef<string | null>(null);
+  busyRefCurrent.current = busyRef;
+  useEffect(() => {
+    if (!openRef) return;
+    let cancelled = false;
+    const refresh = async () => {
+      if (document.hidden || busyRefCurrent.current === openRef) return;
+      const fresh = await getMySupportTicketAction(openRef);
+      if (!cancelled && fresh) mergeTicket(fresh);
+    };
+    const interval = setInterval(refresh, POLL_MS);
+    window.addEventListener("focus", refresh);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [openRef, mergeTicket]);
+
   async function sendReply(reference: string) {
     const text = (drafts[reference] ?? "").trim();
     if (!text) return;
@@ -67,7 +98,7 @@ export default function SupportTicketList({
     try {
       const res = await replyToSupportTicketAction(reference, text);
       if (res.ok) {
-        setTickets((prev) => prev.map((t) => (t.reference === reference ? res.ticket : t)));
+        mergeTicket(res.ticket);
         setDrafts((prev) => ({ ...prev, [reference]: "" }));
       } else {
         setError({ ref: reference, text: res.error });

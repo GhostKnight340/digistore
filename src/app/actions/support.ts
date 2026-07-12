@@ -223,6 +223,26 @@ export async function lookupSupportTicketAction(
   }
 }
 
+/**
+ * Fetches a single owned ticket's current state for the logged-in customer,
+ * used to live-refresh an open conversation (polling / on focus) so replies from
+ * the support team appear without a manual page reload.
+ */
+export async function getMySupportTicketAction(
+  reference: string,
+): Promise<SupportTicketStatusDTO | null> {
+  const customer = await getCurrentCustomer().catch(() => null);
+  if (!customer) return null;
+  const accountEmail = isProfileIncomplete(customer) ? null : customer.email;
+  try {
+    const record = await getCustomerTicketRecordByReference(reference, customer.id, accountEmail);
+    return record ? supportTicketCustomerDTO(record) : null;
+  } catch (error) {
+    console.error("[support:my-ticket]", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 export type CustomerReplyResult =
   | { ok: true; ticket: SupportTicketStatusDTO }
   | { ok: false; error: string };
