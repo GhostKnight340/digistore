@@ -51,6 +51,11 @@ model Product {
 model Category {
   id                String   @id
   slug              String   @unique
+  // Keyword-rich localized URL slug for the public category landing page
+  // (/categorie/<seoSlug>, e.g. "carte-steam-au-maroc"). Distinct from `slug`
+  // (the id-ish key). Nullable: categories without one fall back to the
+  // ?category= filter URL. See src/lib/categoryUrl.ts.
+  seoSlug           String?  @unique
   name              String
   description       String   @default("")
   tagline           String   @default("")

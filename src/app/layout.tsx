@@ -12,10 +12,12 @@ import SupportPill from "@/components/support/SupportPill";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: "ghost.ma - Cartes de jeu au Maroc",
   description:
     "Cartes Steam, PlayStation, Xbox, Nintendo, Roblox et Valorant livrées rapidement après confirmation du paiement. Simple, sécurisé et adapté au Maroc.",

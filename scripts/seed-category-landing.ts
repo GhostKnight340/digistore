@@ -33,7 +33,7 @@ import { PrismaClient } from "@prisma/client";
 import { assertWriteAllowed } from "./lib/db-guard.mjs";
 import { canonicalBrandKey } from "../src/lib/brandAssets";
 import { normalizeCategoryLanding, hasLandingContent } from "../src/lib/categoryLanding";
-import { CONTENT, buildLanding, resolveContentKey } from "../src/lib/categoryLandingContent";
+import { CONTENT, buildLanding, resolveContentKey, BRAND_SEO_SLUGS } from "../src/lib/categoryLandingContent";
 
 const prisma = new PrismaClient();
 
@@ -44,7 +44,7 @@ async function main() {
   const force = process.argv.includes("--force");
 
   const categories = await prisma.category.findMany({
-    select: { id: true, slug: true, name: true, landing: true },
+    select: { id: true, slug: true, name: true, landing: true, seoSlug: true },
   });
 
   // Map every existing category to its canonical brand key so we can match
@@ -90,10 +90,12 @@ async function main() {
     );
 
     const landing = buildLanding(content, relatedIds);
+    const desiredSlug = BRAND_SEO_SLUGS[canonicalBrandKey(category.slug ?? category.id)];
+    const setSlug = Boolean(desiredSlug && (force || !category.seoSlug));
 
     if (dryRun) {
       console.log(
-        `  ~ ${category.id} (« ${category.name} »): ${content.faq.length} FAQ, ${landing.infoItems.length} infos, ${relatedIds.length} liées → ${relatedIds.join(", ") || "aucune"}`,
+        `  ~ ${category.id} (« ${category.name} »): ${content.faq.length} FAQ, ${landing.infoItems.length} infos, ${relatedIds.length} liées${setSlug ? `, slug → ${desiredSlug}` : ""}`,
       );
       updated++;
       continue;
@@ -101,7 +103,10 @@ async function main() {
 
     await prisma.category.update({
       where: { id: category.id },
-      data: { landing: landing as unknown as object },
+      data: {
+        landing: landing as unknown as object,
+        ...(setSlug ? { seoSlug: desiredSlug } : {}),
+      },
     });
     console.log(`  ✓ ${category.id} (« ${category.name} ») rempli.`);
     updated++;

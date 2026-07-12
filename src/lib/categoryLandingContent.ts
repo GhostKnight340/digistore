@@ -26,6 +26,24 @@ export type BrandContent = {
   seo: { title: string; description: string };
 };
 
+/**
+ * Keyword-rich localized URL slugs for the pretty category pages
+ * (/categorie/<slug>), keyed by canonical brand key. Used to auto-fill
+ * Category.seoSlug during the brand seed.
+ */
+export const BRAND_SEO_SLUGS: Record<string, string> = {
+  steam: "carte-steam-au-maroc",
+  playstation: "carte-playstation-au-maroc",
+  xbox: "carte-xbox-au-maroc",
+  nintendo: "carte-nintendo-au-maroc",
+  "google-play": "carte-google-play-au-maroc",
+  apple: "carte-itunes-apple-au-maroc",
+  netflix: "carte-netflix-au-maroc",
+  roblox: "carte-roblox-robux-au-maroc",
+  pubg: "recharge-uc-pubg-mobile-au-maroc",
+  "free-fire": "recharge-diamants-free-fire-au-maroc",
+};
+
 // Shared building blocks — accurate for digital codes delivered after payment
 // confirmation (NOT "instant"), sold with region choices.
 const DELIVERY = {

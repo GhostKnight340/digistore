@@ -3,6 +3,8 @@ export type CategoryId = string;
 export interface Category {
   id: string;
   slug?: string;
+  /** Keyword-rich URL slug for the /categorie/<seoSlug> landing page. */
+  seoSlug?: string | null;
   name: string;
   description?: string;
   tagline: string;

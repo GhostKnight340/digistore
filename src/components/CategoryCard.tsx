@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Category, StockStatus } from "@/lib/types";
 import { resolveBrandColor } from "@/lib/brandAssets";
+import { categoryHref } from "@/lib/categoryUrl";
 import ProductArt from "./ProductArt";
 
 export default function CategoryCard({
@@ -19,7 +20,7 @@ export default function CategoryCard({
   const accent = resolveBrandColor(category.slug ?? category.id, category.accentColor);
   return (
     <Link
-      href={`/products?category=${category.id}`}
+      href={categoryHref(category)}
       style={{ ["--brand" as string]: accent }}
       className="group overflow-hidden rounded-[14px] border border-border bg-surface transition duration-200 hover:-translate-y-[3px] hover:border-[var(--brand)] hover:shadow-soft"
     >

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getEnabledFooterPaymentBadges, getFooterSocialLinks } from "@/lib/footerConfig";
+import { categoryHref } from "@/lib/categoryUrl";
 
 export default function Footer() {
   const { settings } = useStoreSettings();
@@ -79,7 +80,7 @@ export default function Footer() {
         <FooterGroup
           title="Produits"
           links={categories.slice(0, 4).map((category) => ({
-            href: `/products?category=${category.id}`,
+            href: categoryHref(category),
             label: category.name,
           }))}
         />

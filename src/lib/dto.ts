@@ -218,6 +218,7 @@ export interface ProductListItemDTO {
 export interface AdminCategoryDTO {
   id: string;
   slug: string;
+  seoSlug: string;
   name: string;
   description: string;
   icon: string;
@@ -233,6 +234,7 @@ export interface AdminCategoryDTO {
 export interface SaveCategoryInput {
   originalId?: string;
   slug: string;
+  seoSlug: string;
   name: string;
   description: string;
   icon: string;

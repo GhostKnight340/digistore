@@ -27,6 +27,7 @@ function emptyCategory(sortOrder: number): AdminCategoryDTO {
   return {
     id: "",
     slug: "",
+    seoSlug: "",
     name: "",
     description: "",
     icon: "",
@@ -123,6 +124,7 @@ export default function CategoriesPanel() {
     const input: SaveCategoryInput = {
       originalId: selected?.id,
       slug: draft.slug || slugify(draft.name),
+      seoSlug: draft.seoSlug,
       name: draft.name,
       description: draft.description,
       icon: draft.icon,
@@ -372,6 +374,20 @@ export default function CategoriesPanel() {
                 <input className="input" value={draft.icon} onChange={(event) => update("icon", event.target.value)} placeholder="ST" />
               </Field>
             </div>
+
+            <Field label="Slug de la page (URL SEO)">
+              <input
+                className="input font-mono"
+                value={draft.seoSlug}
+                onChange={(event) => update("seoSlug", slugify(event.target.value))}
+                placeholder="carte-steam-au-maroc"
+              />
+              <span className="mt-1 block text-[11px] text-muted">
+                {draft.seoSlug
+                  ? `URL : ghost.ma/categorie/${draft.seoSlug}`
+                  : "Laissez vide pour garder l'ancienne URL (?category=). Renseignez un slug pour une URL optimisée SEO."}
+              </span>
+            </Field>
 
             <Field label="Description">
               <textarea

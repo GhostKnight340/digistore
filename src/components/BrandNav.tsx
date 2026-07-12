@@ -6,6 +6,7 @@ import {
   canonicalBrandKey,
   resolveBrandColor,
 } from "@/lib/brandAssets";
+import { categoryHref } from "@/lib/categoryUrl";
 
 /**
  * The brand quick-nav renders official logos from `public/marques/` (see
@@ -38,7 +39,7 @@ function BrandTile({ category }: { category: Category }) {
 
   return (
     <Link
-      href={`/products?category=${category.id}`}
+      href={categoryHref(category)}
       style={{ ["--brand" as string]: accent }}
       className="group relative flex min-w-[104px] shrink-0 snap-start flex-col items-center gap-3 rounded-[16px] border border-border bg-surface px-4 py-5 text-center transition duration-200 hover:-translate-y-[3px] hover:border-[var(--brand)] hover:shadow-soft sm:min-w-0"
     >

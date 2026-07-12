@@ -5,7 +5,12 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import type { ActionResult, AdminCategoryDTO, SaveCategoryInput } from "@/lib/dto";
 import { normalizeCategoryLanding, hasLandingContent } from "@/lib/categoryLanding";
 import { canonicalBrandKey } from "@/lib/brandAssets";
-import { CONTENT, buildLanding, resolveContentKey } from "@/lib/categoryLandingContent";
+import {
+  CONTENT,
+  buildLanding,
+  resolveContentKey,
+  BRAND_SEO_SLUGS,
+} from "@/lib/categoryLandingContent";
 
 const FALLBACK_ACCENTS: Record<string, string> = {
   steam: "#2a475e",
@@ -34,6 +39,7 @@ function normalizeColor(value: string) {
 function toDTO(row: {
   id: string;
   slug: string | null;
+  seoSlug?: string | null;
   name: string;
   description: string;
   tagline: string;
@@ -49,6 +55,7 @@ function toDTO(row: {
   return {
     id: row.id,
     slug: row.slug || row.id,
+    seoSlug: row.seoSlug ?? "",
     name: row.name,
     description: row.description || row.tagline,
     icon: row.icon,
@@ -141,8 +148,13 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
   const name = input.name.trim();
   if (!slug || !name) return { ok: false, error: "Le nom et le slug sont obligatoires." };
 
+  // Keyword URL slug: reuse slugify (lowercase [a-z0-9-]); empty → null so the
+  // unique index allows many categories without one.
+  const seoSlug = slugify(input.seoSlug || "") || null;
+
   const data = {
     slug,
+    seoSlug,
     name,
     description: input.description.trim(),
     tagline: input.description.trim(),
@@ -221,8 +233,11 @@ export async function seedBrandLanding(
 ): Promise<{ filled: string[]; skipped: string[]; unmatched: number }> {
   await ensureDatabaseReady();
   const categories = await prisma.category.findMany({
-    select: { id: true, slug: true, name: true, landing: true },
+    select: { id: true, slug: true, name: true, landing: true, seoSlug: true },
   });
+  const takenSeoSlugs = new Set(
+    categories.map((c) => c.seoSlug).filter((s): s is string => Boolean(s)),
+  );
 
   // Map every existing category to a real id under several keys so both content
   // matching and related-link resolution work regardless of exact id/slug.
@@ -259,10 +274,22 @@ export async function seedBrandLanding(
     );
     const landing = buildLanding(content, relatedIds);
 
+    // Auto-fill the pretty URL slug when the category has none (or on force),
+    // but never take a slug already used by another category.
+    const desiredSlug = BRAND_SEO_SLUGS[brandKey];
+    const setSlug =
+      desiredSlug &&
+      (options.force || !category.seoSlug) &&
+      (category.seoSlug === desiredSlug || !takenSeoSlugs.has(desiredSlug));
+
     await prisma.category.update({
       where: { id: category.id },
-      data: { landing: landing as unknown as Prisma.InputJsonValue },
+      data: {
+        landing: landing as unknown as Prisma.InputJsonValue,
+        ...(setSlug ? { seoSlug: desiredSlug } : {}),
+      },
     });
+    if (setSlug) takenSeoSlugs.add(desiredSlug);
     filled.push(category.id);
   }
 

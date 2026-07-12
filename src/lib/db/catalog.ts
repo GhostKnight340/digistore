@@ -181,6 +181,7 @@ function toParentProduct(
 function toCategory(row: {
   id: string;
   slug: string;
+  seoSlug?: string | null;
   name: string;
   description: string;
   tagline: string;
@@ -196,6 +197,7 @@ function toCategory(row: {
   return {
     id: row.id,
     slug: row.slug,
+    seoSlug: row.seoSlug ?? null,
     name: row.name,
     description: row.description,
     tagline: row.tagline,
@@ -304,7 +306,7 @@ export const getCategoryDetail = unstable_cache(
     const key = idOrSlug.trim();
     if (!key) return null;
     const row = await prisma.category.findFirst({
-      where: { OR: [{ id: key }, { slug: key }] },
+      where: { OR: [{ id: key }, { slug: key }, { seoSlug: key }] },
       include: {
         _count: {
           select: {
@@ -323,6 +325,27 @@ export const getCategoryDetail = unstable_cache(
     return { ...toCategory(row), landing: normalizeCategoryLanding(row.landing) };
   },
   ["category-detail"],
+  { tags: [CATALOG_TAG] },
+);
+
+/**
+ * Lightweight index of active categories for the sitemap and pretty-URL
+ * enumeration: id, name, and the SEO slug (may be empty). Cached under
+ * CATALOG_TAG.
+ */
+export const getCategorySeoIndex = unstable_cache(
+  async function getCategorySeoIndex(): Promise<
+    { id: string; name: string; seoSlug: string }[]
+  > {
+    await ensureDatabaseReady();
+    const rows = await prisma.category.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, seoSlug: true },
+    });
+    return rows.map((r) => ({ id: r.id, name: r.name, seoSlug: r.seoSlug ?? "" }));
+  },
+  ["category-seo-index"],
   { tags: [CATALOG_TAG] },
 );
 
