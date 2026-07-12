@@ -176,26 +176,26 @@ export async function findSupportTicketForCustomer(
  * Which tickets belong to a logged-in customer for the account "Support" page.
  * Matches the hard `customerId` link (set when the ticket was opened while
  * signed in) OR — so guest tickets opened before/without signing in still show
- * up — the account's own e-mail, but only when that e-mail is verified (an
- * unverified address is never treated as proof of ownership).
+ * up — the account's own e-mail (case-insensitive). Only ever called with the
+ * account's real address, never a Discord placeholder.
  */
-function customerTicketWhere(customerId: string, verifiedEmail?: string | null) {
-  const email = verifiedEmail?.trim();
+function customerTicketWhere(customerId: string, accountEmail?: string | null) {
+  const email = accountEmail?.trim();
   if (!email) return { customerId };
   return { OR: [{ customerId }, { email: { equals: email, mode: "insensitive" as const } }] };
 }
 
 /** All tickets owned by a logged-in customer, newest first. Ownership is the
- *  customerId link or the account's verified e-mail, so replies + feedback
- *  token are safe to surface here. */
+ *  customerId link or the account's e-mail, so replies + feedback token are
+ *  safe to surface here. */
 export async function listSupportTicketsForCustomer(
   customerId: string,
-  verifiedEmail?: string | null,
+  accountEmail?: string | null,
 ): Promise<SupportTicketStatusDTO[]> {
   await ensureDatabaseReady();
   if (!customerId) return [];
   const tickets = await prisma.supportTicket.findMany({
-    where: customerTicketWhere(customerId, verifiedEmail),
+    where: customerTicketWhere(customerId, accountEmail),
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -204,11 +204,11 @@ export async function listSupportTicketsForCustomer(
 
 export async function countSupportTicketsForCustomer(
   customerId: string,
-  verifiedEmail?: string | null,
+  accountEmail?: string | null,
 ): Promise<number> {
   if (!customerId) return 0;
   await ensureDatabaseReady();
-  return prisma.supportTicket.count({ where: customerTicketWhere(customerId, verifiedEmail) });
+  return prisma.supportTicket.count({ where: customerTicketWhere(customerId, accountEmail) });
 }
 
 export async function listSupportTickets(

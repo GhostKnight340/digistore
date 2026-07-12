@@ -31,7 +31,7 @@ export default async function AccountPage() {
   const incomplete = isProfileIncomplete(customer);
   const supportCount = await countSupportTicketsForCustomer(
     customer.id,
-    !incomplete && customer.emailVerified ? customer.email : null,
+    incomplete ? null : customer.email,
   );
   const verified = !incomplete && customer.emailVerified;
   // Sidebar/metrics must never surface the internal placeholder email.

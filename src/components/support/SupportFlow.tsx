@@ -454,6 +454,9 @@ export default function SupportFlow({
                 <div>
                   <label className="mb-1.5 block text-[12.5px] font-semibold text-[#a4aabb]">Adresse e-mail</label>
                   <input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} type="email" placeholder="vous@exemple.com" className="input" />
+                  <p className="mt-1.5 text-[11.5px] leading-snug text-[#8b93a7]">
+                    Vérifiez bien votre adresse e-mail : nos réponses y sont envoyées et une adresse incorrecte peut retarder le traitement de votre demande.
+                  </p>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-[12.5px] font-semibold text-[#a4aabb]">

@@ -18,7 +18,7 @@ export default async function AccountSecurityPage() {
   const incomplete = isProfileIncomplete(customer);
   const supportCount = await countSupportTicketsForCustomer(
     customer.id,
-    !incomplete && customer.emailVerified ? customer.email : null,
+    incomplete ? null : customer.email,
   );
 
   return (
