@@ -145,18 +145,15 @@ export default function CategoriesPanel() {
     setSaving(false);
   }
 
-  async function seedLanding() {
-    if (
-      !window.confirm(
-        "Remplir automatiquement le contenu des pages catégorie pour les marques connues (Steam, PlayStation, Xbox, Nintendo, Google Play, Apple, Netflix, Roblox, PUBG, Free Fire) ?\n\nSeules les catégories encore vides seront remplies — votre contenu existant n'est pas modifié.",
-      )
-    ) {
-      return;
-    }
+  async function seedLanding(force: boolean) {
+    const prompt = force
+      ? "Remplacer le contenu des pages catégorie des marques connues par le contenu prédéfini le plus récent ?\n\n⚠️ Cela ÉCRASE le contenu existant de ces marques (vos modifications manuelles seront perdues)."
+      : "Remplir automatiquement le contenu des pages catégorie pour les marques connues (Steam, PlayStation, Xbox, Nintendo, Google Play, Apple, Netflix, Roblox, PUBG, Free Fire) ?\n\nSeules les catégories encore vides seront remplies — votre contenu existant n'est pas modifié.";
+    if (!window.confirm(prompt)) return;
     setSaving(true);
     setMessage(null);
     try {
-      const result = await seedBrandLandingAction(false);
+      const result = await seedBrandLandingAction(force);
       if (result.ok) {
         setMessage({
           text: `${result.filled} marque${result.filled > 1 ? "s" : ""} remplie${
@@ -262,12 +259,21 @@ export default function CategoriesPanel() {
           </div>
           <button
             type="button"
-            onClick={seedLanding}
+            onClick={() => seedLanding(false)}
             disabled={saving}
             className="btn-ghost mt-3 w-full py-1.5 text-xs disabled:opacity-50"
             title="Remplit les pages catégorie des marques connues (catégories vides uniquement)"
           >
             ✨ Remplir le contenu des marques
+          </button>
+          <button
+            type="button"
+            onClick={() => seedLanding(true)}
+            disabled={saving}
+            className="mt-1.5 w-full text-center text-[11px] text-muted underline-offset-2 hover:text-white hover:underline disabled:opacity-50"
+            title="Remplace le contenu des marques par le contenu prédéfini le plus récent"
+          >
+            Mettre à jour / tout remplacer
           </button>
         </div>
         {loading ? (

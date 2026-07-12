@@ -62,7 +62,7 @@ export const CONTENT: Record<string, BrandContent> = {
     heroSubtitle:
       "Rechargez votre portefeuille Steam et payez vos jeux, DLC et objets en toute simplicité.",
     intro:
-      "Les cartes **Steam Wallet** ajoutent un solde à votre compte Steam, utilisable pour acheter des jeux, des extensions, des objets et du contenu sur la boutique Steam. Une solution simple si vous préférez ne pas utiliser de carte bancaire.",
+      "Les cartes **Steam Wallet** créditent votre compte Steam pour acheter des jeux, des extensions (DLC), des objets et tout le contenu de la boutique — sans carte bancaire.\n\n**À retenir :**\n- Choisissez le montant qui vous convient parmi les cartes disponibles ci-dessous.\n- Compatible PC, Mac et Steam Deck.\n- Sans date d'expiration : utilisez votre solde quand vous le souhaitez.\n- Idéale pour offrir à un joueur.\n- Le solde suit la devise de votre compte — vérifiez la région avant de commander.",
     info: [DELIVERY, OFFICIAL, REGIONS, SUPPORT],
     tip: {
       type: "compatibility",
@@ -93,7 +93,7 @@ export const CONTENT: Record<string, BrandContent> = {
     heroSubtitle:
       "Cartes PlayStation Store pour vos jeux, abonnements et achats sur le PSN.",
     intro:
-      "Les cartes **PlayStation Store** créditent votre portefeuille PSN pour acheter des jeux, des extensions, des abonnements PlayStation Plus et du contenu sur le PlayStation Store.",
+      "Les cartes **PlayStation Store** créditent votre portefeuille PSN pour acheter des jeux, des extensions, du contenu et des abonnements **PlayStation Plus** sur le PlayStation Store.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Fonctionne sur PS5 et PS4, et depuis le site PlayStation.\n- Sans carte bancaire, paiement local en dirham.\n- Cartes régionales : choisissez la région de votre compte PSN.\n- Parfaites comme cadeau.",
     info: [DELIVERY, OFFICIAL, REGIONS, SUPPORT],
     tip: {
       type: "compatibility",
@@ -124,7 +124,7 @@ export const CONTENT: Record<string, BrandContent> = {
     heroSubtitle:
       "Cartes cadeaux Xbox et Microsoft pour vos jeux, Game Pass et contenu.",
     intro:
-      "Les cartes **Xbox / Microsoft** créditent votre compte Microsoft pour acheter des jeux, des abonnements et du contenu sur le Microsoft Store et Xbox.",
+      "Les cartes **Xbox / Microsoft** créditent votre compte Microsoft pour les jeux, le contenu et les abonnements (dont **Game Pass**) sur Xbox et le Microsoft Store.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Compatible consoles Xbox et PC Windows.\n- Sans date d'expiration.\n- Choisissez la région de votre compte Microsoft.\n- Idéales pour offrir.",
     info: [DELIVERY, OFFICIAL, REGIONS, SUPPORT],
     tip: {
       type: "compatibility",
@@ -155,7 +155,7 @@ export const CONTENT: Record<string, BrandContent> = {
     heroSubtitle:
       "Cartes Nintendo eShop pour vos jeux et contenu sur Nintendo Switch.",
     intro:
-      "Les cartes **Nintendo eShop** ajoutent un solde à votre compte Nintendo pour acheter des jeux et du contenu sur le Nintendo eShop.",
+      "Les cartes **Nintendo eShop** ajoutent un solde à votre compte Nintendo pour acheter des jeux et du contenu sur le Nintendo eShop.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Pour Nintendo Switch (et la famille Switch).\n- Sans date d'expiration.\n- L'eShop est régional : choisissez la région de votre compte.\n- Une belle idée cadeau.",
     info: [DELIVERY, OFFICIAL, REGIONS, SUPPORT],
     tip: {
       type: "compatibility",
@@ -182,7 +182,7 @@ export const CONTENT: Record<string, BrandContent> = {
     heroSubtitle:
       "Cartes Google Play pour vos applications, jeux et achats intégrés.",
     intro:
-      "Les cartes **Google Play** créditent votre compte Google pour acheter des applications, des jeux, des achats intégrés, des films et des livres sur le Google Play Store.",
+      "Les cartes **Google Play** créditent votre compte Google pour les applications, jeux, achats intégrés, films et livres du Play Store.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Pour smartphones et tablettes Android.\n- Sans carte bancaire.\n- La carte doit correspondre au pays de votre compte Google.\n- Sans date d'expiration.",
     info: [DELIVERY, OFFICIAL, REGIONS, SUPPORT],
     tip: {
       type: "compatibility",
@@ -213,7 +213,7 @@ export const CONTENT: Record<string, BrandContent> = {
     heroSubtitle:
       "Cartes Apple / iTunes pour l'App Store, iCloud, la musique et vos abonnements.",
     intro:
-      "Les cartes **Apple / iTunes** créditent votre identifiant Apple pour l'App Store, iCloud+, Apple Music, les jeux et les abonnements.",
+      "Les cartes **Apple / iTunes** créditent votre identifiant Apple pour l'App Store, **iCloud+**, **Apple Music**, les jeux et les abonnements.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Pour iPhone, iPad et Mac.\n- Sans date d'expiration.\n- La carte doit correspondre au pays de votre identifiant Apple.\n- Idéale pour offrir.",
     info: [DELIVERY, OFFICIAL, REGIONS, SUPPORT],
     tip: {
       type: "compatibility",
@@ -243,7 +243,7 @@ export const CONTENT: Record<string, BrandContent> = {
   netflix: {
     heroSubtitle: "Cartes cadeaux Netflix pour régler votre abonnement streaming.",
     intro:
-      "Les cartes cadeaux **Netflix** ajoutent un crédit à votre compte Netflix, appliqué à votre abonnement mensuel. Une manière simple de payer Netflix sans carte bancaire.",
+      "Les cartes cadeaux **Netflix** ajoutent un crédit à votre compte, appliqué automatiquement à votre abonnement mensuel — une façon simple de payer Netflix sans carte bancaire.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- S'utilise sur un compte du même pays que la carte.\n- Le crédit couvre l'abonnement jusqu'à épuisement.\n- Idéale pour offrir un abonnement.",
     info: [DELIVERY, OFFICIAL, REGIONS, SUPPORT],
     tip: {
       type: "information",
@@ -269,7 +269,7 @@ export const CONTENT: Record<string, BrandContent> = {
   roblox: {
     heroSubtitle: "Cartes Roblox pour obtenir des Robux et du contenu premium.",
     intro:
-      "Les cartes **Roblox** créditent votre compte en Robux, la monnaie utilisée pour acheter des objets, des accessoires et des expériences dans Roblox.",
+      "Les cartes **Roblox** créditent votre compte en **Robux**, la monnaie pour acheter objets, accessoires et améliorations dans les expériences Roblox.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Robux crédités sur le compte qui saisit le code.\n- Certaines cartes incluent un objet virtuel bonus.\n- Multi-plateforme : mobile, PC, console.\n- Idéale pour offrir.",
     info: [DELIVERY, OFFICIAL, { icon: "sparkle", title: "Robux & bonus", description: "Crédité directement sur votre compte." }, SUPPORT],
     tip: {
       type: "information",
@@ -295,7 +295,7 @@ export const CONTENT: Record<string, BrandContent> = {
   pubg: {
     heroSubtitle: "Rechargez vos UC PUBG Mobile pour vos objets et Royale Pass.",
     intro:
-      "Les recharges **PUBG Mobile (UC)** créditent votre compte en Unknown Cash, utilisé pour le Royale Pass, les skins et les objets du jeu.",
+      "Les recharges **PUBG Mobile (UC)** créditent votre compte en **Unknown Cash**, pour le **Royale Pass**, les skins et les objets du jeu.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Recharge via votre ID de joueur ou par code, selon le produit.\n- Crédit disponible rapidement après confirmation du paiement.\n- Vérifiez votre identifiant de joueur avant de commander.",
     info: [DELIVERY, OFFICIAL, { icon: "card", title: "Recharge simple", description: "Par ID de joueur ou code selon le produit." }, SUPPORT],
     tip: {
       type: "information",
@@ -321,7 +321,7 @@ export const CONTENT: Record<string, BrandContent> = {
   "free-fire": {
     heroSubtitle: "Diamants Free Fire pour vos skins, personnages et Pass.",
     intro:
-      "Les recharges **Free Fire (Diamants)** créditent votre compte pour acheter des personnages, des skins et le Pass de niveau dans Garena Free Fire.",
+      "Les recharges **Free Fire (Diamants)** créditent votre compte pour débloquer personnages, skins et le **Pass** de niveau dans Garena Free Fire.\n\n**À retenir :**\n- Plusieurs montants disponibles ci-dessous.\n- Recharge via votre ID de joueur ou par code, selon le produit.\n- Crédit disponible rapidement après confirmation du paiement.\n- Vérifiez votre identifiant de joueur avant de commander.",
     info: [DELIVERY, OFFICIAL, { icon: "card", title: "Recharge simple", description: "Par ID de joueur ou code selon le produit." }, SUPPORT],
     tip: {
       type: "information",
