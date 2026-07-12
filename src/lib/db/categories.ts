@@ -82,6 +82,42 @@ export async function getCategoryOptions(): Promise<AdminCategoryDTO[]> {
   return getAdminCategories();
 }
 
+/**
+ * Products in a category that carry a usable image, so the admin can reuse a
+ * product's own media as the category cover (handy when a category holds a
+ * single product). The URL is resolved the same way the storefront resolves a
+ * product image (imageUrl, else the first media; data: URLs go through the
+ * product-image route), so it renders identically on the category card.
+ */
+export async function getCategoryProductMedia(
+  categoryId: string,
+): Promise<{ id: string; name: string; imageUrl: string }[]> {
+  await ensureDatabaseReady();
+  if (!categoryId) return [];
+  const products = await prisma.product.findMany({
+    where: { category: categoryId },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    take: 50,
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      imageUrl: true,
+      media: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], take: 1, select: { url: true } },
+    },
+  });
+  const out: { id: string; name: string; imageUrl: string }[] = [];
+  for (const p of products) {
+    const raw = p.imageUrl ?? p.media[0]?.url ?? null;
+    if (!raw) continue;
+    const url = raw.startsWith("data:")
+      ? `/api/product-image/${encodeURIComponent(p.slug)}`
+      : raw;
+    out.push({ id: p.id, name: p.name, imageUrl: url });
+  }
+  return out;
+}
+
 export async function createCategoryQuick(nameOrSlug: string): Promise<ActionResult & { category?: AdminCategoryDTO }> {
   await ensureDatabaseReady();
   const name = nameOrSlug.trim();

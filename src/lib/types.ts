@@ -13,6 +13,10 @@ export interface Category {
   icon: string;
   iconUrl?: string | null;
   coverImageUrl?: string | null;
+  /** Resolved from a product in the category when no cover/icon is set, so the
+   *  card shows real artwork instead of the placeholder. Never overrides an
+   *  admin-set cover. */
+  fallbackImageUrl?: string | null;
   accentColor?: string;
   active?: boolean;
   sortOrder?: number;

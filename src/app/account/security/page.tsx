@@ -6,6 +6,7 @@ import {
   getAccountOrders,
   isProfileIncomplete,
 } from "@/lib/auth";
+import { countSupportTicketsForCustomer } from "@/lib/db/supportTickets";
 import { formatDate } from "@/lib/format";
 import SecurityClient from "./SecurityClient";
 
@@ -15,6 +16,10 @@ export default async function AccountSecurityPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
   const incomplete = isProfileIncomplete(customer);
+  const supportCount = await countSupportTicketsForCustomer(
+    customer.id,
+    incomplete ? null : customer.email,
+  );
 
   return (
     <div className="container-page py-10">
@@ -25,6 +30,7 @@ export default async function AccountSecurityPage() {
           active="security"
           verified={!incomplete && customer.emailVerified}
           ordersCount={orders.length}
+          supportCount={supportCount}
         />
         <section className="space-y-5">
           <PageHeader

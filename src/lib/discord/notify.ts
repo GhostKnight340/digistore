@@ -9,6 +9,7 @@ import {
   type DiscordMessagePayload,
 } from "./client";
 import { createOrderCard, postOrderThreadEvent } from "./orderThread";
+import { createSupportCard, postSupportThreadEvent, type SupportCardData } from "./supportThread";
 import { getAdminPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 
@@ -316,22 +317,58 @@ export function notifyAccountCreated(
 // #support
 // ---------------------------------------------------------------------------
 
-export type SupportTicketNotification = {
+/** Everything the #support card/thread needs, shared by the create/reply/close
+ *  notifications. Mirrors the OrderCardData contract in orderThread.ts. */
+export type SupportTicketCardInput = {
+  ticketId: string;
   reference: string;
   categoryLabel: string;
   subIssueLabel: string;
   orderRef: string | null;
   name: string;
   email: string;
+  status: string;
+  resolution: string | null;
+  adminUrl: string;
+  discordMessageId: string | null;
+  discordThreadId: string | null;
+};
+
+function toSupportCard(input: SupportTicketCardInput): SupportCardData {
+  return {
+    ticketId: input.ticketId,
+    reference: input.reference,
+    categoryLabel: input.categoryLabel,
+    subIssueLabel: input.subIssueLabel,
+    orderRef: input.orderRef,
+    name: input.name,
+    email: input.email,
+    status: input.status,
+    resolution: input.resolution,
+    adminUrl: input.adminUrl,
+    discordMessageId: input.discordMessageId,
+    discordThreadId: input.discordThreadId,
+  };
+}
+
+const SUPPORT_RESOLUTION_LABEL: Record<string, string> = {
+  resolved: "Résolu",
+  cancelled: "Annulé",
+  dismissed: "Sans suite",
+};
+
+export type NewSupportTicketNotification = SupportTicketCardInput & {
   phone: string | null;
   message: string | null;
   attachmentCount: number;
 };
 
-export function notifySupportTicket(input: SupportTicketNotification): Promise<void> {
-  return safeSend("support", () =>
+/** Ticket submitted — create the #support card + thread and post the request. */
+export function notifySupportTicketCreated(input: NewSupportTicketNotification): Promise<void> {
+  return createSupportCard(
+    toSupportCard(input),
     embed({
-      title: `🎫 Nouvelle demande support — ${input.reference}`,
+      title: "Nouvelle demande",
       color: COLOR.blue,
       fields: [
         { name: "Sujet", value: input.categoryLabel, inline: true },
@@ -344,6 +381,76 @@ export function notifySupportTicket(input: SupportTicketNotification): Promise<v
         ...(input.attachmentCount > 0
           ? [{ name: "Pièces jointes", value: String(input.attachmentCount), inline: true }]
           : []),
+      ],
+    }),
+  ).catch((error) => {
+    console.error("[discord:notify:support:created]", error instanceof Error ? error.message : error);
+  });
+}
+
+/** An admin reply was sent — record it in the ticket thread and update the card. */
+export function notifySupportTicketReply(
+  input: SupportTicketCardInput & { replyBody: string },
+): Promise<void> {
+  return postSupportThreadEvent(
+    toSupportCard(input),
+    embed({
+      title: "Réponse envoyée",
+      color: COLOR.teal,
+      fields: [{ name: "Message", value: input.replyBody.slice(0, 1000) }],
+    }),
+  );
+}
+
+/** A customer replied from their account — record it in the ticket thread and
+ *  refresh the card (the ticket returns to "open" for the team). */
+export function notifySupportTicketCustomerReply(
+  input: SupportTicketCardInput & { replyBody: string },
+): Promise<void> {
+  return postSupportThreadEvent(
+    toSupportCard(input),
+    embed({
+      title: "Réponse du client",
+      color: COLOR.amber,
+      fields: [{ name: "Message", value: input.replyBody.slice(0, 1000) }],
+    }),
+  );
+}
+
+/** Status transition (closed / reopened) — record it and refresh the card so a
+ *  closed ticket's thread clearly reads as closed. */
+export function notifySupportTicketStatus(
+  input: SupportTicketCardInput & { note?: string },
+): Promise<void> {
+  const closed = input.status === "closed";
+  const title = closed
+    ? `Demande clôturée${input.resolution ? ` — ${SUPPORT_RESOLUTION_LABEL[input.resolution] ?? input.resolution}` : ""}`
+    : input.status === "open"
+    ? "Demande rouverte"
+    : "Statut mis à jour";
+  return postSupportThreadEvent(
+    toSupportCard(input),
+    embed({
+      title,
+      color: closed ? (input.resolution === "resolved" || !input.resolution ? COLOR.green : COLOR.gray) : COLOR.blue,
+      fields: input.note ? [{ name: "Note", value: input.note.slice(0, 1000) }] : undefined,
+    }),
+  );
+}
+
+/** The customer rated the support experience — post it into the ticket thread. */
+export function notifySupportTicketFeedback(
+  input: SupportTicketCardInput & { rating: number; comment: string | null },
+): Promise<void> {
+  const stars = "★".repeat(Math.max(0, Math.min(5, input.rating))).padEnd(5, "☆");
+  return postSupportThreadEvent(
+    toSupportCard(input),
+    embed({
+      title: "Avis client reçu",
+      color: input.rating >= 4 ? COLOR.green : input.rating >= 3 ? COLOR.amber : COLOR.gray,
+      fields: [
+        { name: "Note", value: `${stars} (${input.rating}/5)`, inline: true },
+        ...(input.comment ? [{ name: "Commentaire", value: input.comment.slice(0, 1000) }] : []),
       ],
     }),
   );

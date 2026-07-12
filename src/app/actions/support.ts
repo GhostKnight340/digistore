@@ -1,13 +1,25 @@
 "use server";
 
-import { getCurrentCustomer } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { getCurrentCustomer, isProfileIncomplete } from "@/lib/auth";
 import {
   createSupportTicket,
   findSupportTicketForCustomer,
+  getSupportTicketByFeedbackToken,
+  saveSupportTicketFeedback,
+  getCustomerTicketRecordByReference,
+  addCustomerSupportMessage,
+  supportTicketCustomerDTO,
   type SupportAttachment,
   type SupportTicketStatusDTO,
 } from "@/lib/db/supportTickets";
-import { notifySupportTicket } from "@/lib/discord/notify";
+import {
+  notifySupportTicketCreated,
+  notifySupportTicketFeedback,
+  notifySupportTicketCustomerReply,
+} from "@/lib/discord/notify";
+import { sendTransactionalEmail } from "@/lib/email/send-email";
+import { absoluteAppUrl } from "@/lib/orderNumber";
 import { findSupportCategory, findSupportSubIssue } from "@/lib/support/config";
 
 const EMAIL_RE = /.+@.+\..+/;
@@ -70,7 +82,7 @@ export async function submitSupportTicketAction(
 
   const customer = await getCurrentCustomer().catch(() => null);
 
-  let ticket: { reference: string };
+  let ticket: { id: string; reference: string };
   try {
     ticket = await createSupportTicket({
       category: category.key,
@@ -89,9 +101,10 @@ export async function submitSupportTicketAction(
     return { ok: false, error: "Une erreur est survenue. Réessayez dans un instant." };
   }
 
-  // Fire-and-forget by contract: safeSend never throws and must never block
-  // or fail the customer's submission.
-  await notifySupportTicket({
+  // Create the #support card + thread. Fire-and-forget by contract: the Discord
+  // layer never throws and must never block or fail the customer's submission.
+  await notifySupportTicketCreated({
+    ticketId: ticket.id,
     reference: ticket.reference,
     categoryLabel: category.label,
     subIssueLabel: sub.label,
@@ -101,9 +114,93 @@ export async function submitSupportTicketAction(
     phone,
     message,
     attachmentCount: attachments.length,
+    status: "open",
+    resolution: null,
+    adminUrl: absoluteAppUrl("/admin"),
+    discordMessageId: null,
+    discordThreadId: null,
   });
 
+  // Confirmation email — never let a delivery failure fail the submission.
+  try {
+    await sendTransactionalEmail({
+      to: email,
+      customerId: customer?.id ?? null,
+      templateKey: "support_received",
+      type: "support_received",
+      variables: {
+        customer_name: name,
+        reference: ticket.reference,
+        subject: `${category.label} — ${sub.label}`,
+        support_url: absoluteAppUrl("/support/suivi"),
+      },
+    });
+  } catch (error) {
+    console.error("[support:email:received]", error instanceof Error ? error.message : error);
+  }
+
   return { ok: true, reference: ticket.reference };
+}
+
+export type SupportFeedbackStatus = { reference: string; feedbackGiven: boolean };
+
+/** Public feedback-page loader — resolves a feedback token to the ticket
+ *  reference so the page can confirm which demand is being rated. */
+export async function getSupportFeedbackStatusAction(
+  token: string,
+): Promise<SupportFeedbackStatus | null> {
+  try {
+    return await getSupportTicketByFeedbackToken(token);
+  } catch (error) {
+    console.error("[support:feedback:status]", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+export type SubmitFeedbackResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Public post-close feedback submission. The unguessable token is the only
+ * credential; a rating of 1-5 is required, an optional comment is capped. One
+ * submission per ticket — a second attempt is refused.
+ */
+export async function submitSupportFeedbackAction(
+  token: string,
+  rating: number,
+  comment?: string | null,
+): Promise<SubmitFeedbackResult> {
+  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+    return { ok: false, error: "Choisissez une note entre 1 et 5 étoiles." };
+  }
+  let ticket;
+  try {
+    ticket = await saveSupportTicketFeedback(token, rating, comment ?? null);
+  } catch (error) {
+    console.error("[support:feedback:submit]", error instanceof Error ? error.message : error);
+    return { ok: false, error: "Une erreur est survenue. Réessayez dans un instant." };
+  }
+  if (!ticket) {
+    return { ok: false, error: "Ce lien n'est plus valide ou un avis a déjà été envoyé." };
+  }
+
+  void notifySupportTicketFeedback({
+    ticketId: ticket.id,
+    reference: ticket.reference,
+    categoryLabel: findSupportCategory(ticket.category)?.label ?? ticket.category,
+    subIssueLabel: ticket.subIssueLabel,
+    orderRef: ticket.orderRef,
+    name: ticket.name,
+    email: ticket.email,
+    status: ticket.status,
+    resolution: ticket.resolution,
+    adminUrl: absoluteAppUrl("/admin"),
+    discordMessageId: ticket.discordMessageId,
+    discordThreadId: ticket.discordThreadId,
+    rating: ticket.feedbackRating ?? rating,
+    comment: ticket.feedbackComment,
+  });
+
+  return { ok: true };
 }
 
 /**
@@ -124,4 +221,60 @@ export async function lookupSupportTicketAction(
     console.error("[support:lookup]", error instanceof Error ? error.message : error);
     return null;
   }
+}
+
+export type CustomerReplyResult =
+  | { ok: true; ticket: SupportTicketStatusDTO }
+  | { ok: false; error: string };
+
+/**
+ * A logged-in customer replies to their own ticket, turning it into a two-way
+ * conversation. Ownership is enforced (the ticket must be linked to the account
+ * or share its e-mail). The reply resurfaces the ticket for the support team
+ * and is posted into the ticket's Discord thread. Closed tickets are read-only.
+ */
+export async function replyToSupportTicketAction(
+  reference: string,
+  body: string,
+): Promise<CustomerReplyResult> {
+  const customer = await getCurrentCustomer().catch(() => null);
+  if (!customer) return { ok: false, error: "Connectez-vous pour répondre à votre demande." };
+
+  const text = (body ?? "").trim();
+  if (!text) return { ok: false, error: "Le message ne peut pas être vide." };
+
+  const accountEmail = isProfileIncomplete(customer) ? null : customer.email;
+
+  let updated;
+  try {
+    const ticket = await getCustomerTicketRecordByReference(reference, customer.id, accountEmail);
+    if (!ticket) return { ok: false, error: "Demande introuvable." };
+    if (ticket.status === "closed") {
+      return { ok: false, error: "Cette demande est clôturée. Ouvrez une nouvelle demande si besoin." };
+    }
+    updated = await addCustomerSupportMessage(ticket.id, customer.id, text.slice(0, 4000));
+  } catch (error) {
+    console.error("[support:customer-reply]", error instanceof Error ? error.message : error);
+    return { ok: false, error: "Une erreur est survenue. Réessayez dans un instant." };
+  }
+
+  void notifySupportTicketCustomerReply({
+    ticketId: updated.id,
+    reference: updated.reference,
+    categoryLabel: findSupportCategory(updated.category)?.label ?? updated.category,
+    subIssueLabel: updated.subIssueLabel,
+    orderRef: updated.orderRef,
+    name: updated.name,
+    email: updated.email,
+    status: updated.status,
+    resolution: updated.resolution,
+    adminUrl: absoluteAppUrl("/admin"),
+    discordMessageId: updated.discordMessageId,
+    discordThreadId: updated.discordThreadId,
+    replyBody: text.slice(0, 4000),
+  });
+
+  revalidatePath("/account/support");
+  revalidatePath("/support/suivi");
+  return { ok: true, ticket: supportTicketCustomerDTO(updated) };
 }

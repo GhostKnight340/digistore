@@ -267,6 +267,50 @@ export async function getCatalogData(): Promise<{
  * categories with `productCount > 0`. `productCount` is still populated (active
  * products only) for callers that want it.
  */
+/**
+ * For categories without a cover or icon, resolve one product's image so the
+ * card falls back to real artwork instead of the placeholder. Batched: one
+ * query for all the categories that need it, keeping the first active product
+ * (by sortOrder) that has a usable image. Image resolution matches the
+ * storefront's (imageUrl, else first media; data: URLs via the image route).
+ */
+async function resolveCategoryFallbackImages(
+  categoryIds: string[],
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (categoryIds.length === 0) return result;
+  const products = await prisma.product.findMany({
+    where: { category: { in: categoryIds }, active: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: {
+      category: true,
+      slug: true,
+      imageUrl: true,
+      media: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], take: 1, select: { url: true } },
+    },
+  });
+  for (const p of products) {
+    if (result.has(p.category)) continue; // first match per category wins
+    const url = catalogImageUrl(p.imageUrl ?? p.media[0]?.url ?? null, p.slug);
+    if (url) result.set(p.category, url);
+  }
+  return result;
+}
+
+/** Fills `fallbackImageUrl` on categories with no admin-set cover/icon, from a
+ *  product's image. Mutates + returns the same array. */
+async function withCategoryFallbackImages(categories: Category[]): Promise<Category[]> {
+  const needsFallback = categories.filter((c) => !c.coverImageUrl && !c.iconUrl);
+  if (needsFallback.length === 0) return categories;
+  const fallbacks = await resolveCategoryFallbackImages(needsFallback.map((c) => c.id));
+  for (const category of categories) {
+    if (!category.coverImageUrl && !category.iconUrl) {
+      category.fallbackImageUrl = fallbacks.get(category.id) ?? null;
+    }
+  }
+  return categories;
+}
+
 export const getActiveCategories = unstable_cache(
   async function getActiveCategories(): Promise<Category[]> {
     await ensureDatabaseReady();
@@ -287,7 +331,7 @@ export const getActiveCategories = unstable_cache(
         },
       },
     });
-    return rows.map(toCategory);
+    return withCategoryFallbackImages(rows.map(toCategory));
   },
   ["active-categories"],
   { tags: [CATALOG_TAG] },
@@ -441,9 +485,9 @@ const getCatalogPageCached = unstable_cache(
     .map((entry) => entry.product);
   const pagedProducts = variantProducts.slice((page - 1) * pageSize, page * pageSize);
 
-  const publicCategories = categoryRows
-    .map(toCategory)
-    .filter((category) => (category.productCount ?? 0) > 0);
+  const publicCategories = await withCategoryFallbackImages(
+    categoryRows.map(toCategory).filter((category) => (category.productCount ?? 0) > 0),
+  );
 
   return {
     categories: publicCategories,

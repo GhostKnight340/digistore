@@ -9,6 +9,7 @@ import { formatDate, formatDH } from "@/lib/format";
 import { orderStatusBadgeClass, orderStatusShort } from "@/lib/orderStatus";
 import { getPublicOrderLabel } from "@/lib/orderNumber";
 import { getDiscordApplicationId } from "@/lib/discord/config";
+import { countSupportTicketsForCustomer } from "@/lib/db/supportTickets";
 import AccountNav from "@/components/account/AccountNav";
 import PageHeader from "@/components/account/PageHeader";
 import AccountProfileForm from "./AccountProfileForm";
@@ -28,6 +29,10 @@ export default async function AccountPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
   const incomplete = isProfileIncomplete(customer);
+  const supportCount = await countSupportTicketsForCustomer(
+    customer.id,
+    incomplete ? null : customer.email,
+  );
   const verified = !incomplete && customer.emailVerified;
   // Sidebar/metrics must never surface the internal placeholder email.
   const displayEmail = incomplete ? "" : customer.email;
@@ -42,6 +47,7 @@ export default async function AccountPage() {
           active="dashboard"
           verified={verified}
           ordersCount={orders.length}
+          supportCount={supportCount}
         />
         <section className="space-y-5">
           <PageHeader

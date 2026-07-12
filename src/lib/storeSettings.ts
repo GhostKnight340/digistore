@@ -286,6 +286,24 @@ export const defaultStoreSettings: StoreSettings = {
       // (from the reason) and the "Suivre ma commande" CTA.
       body: "Voici une mise à jour concernant le remboursement de votre commande {{order_number}}.",
     },
+    support_received: {
+      subject: "Votre demande {{reference}} a bien été reçue",
+      // Body only — the shell adds the greeting once and the "Suivre ma
+      // demande" CTA button.
+      body: "Nous avons bien reçu votre demande {{reference}} concernant « {{subject}} ». Notre équipe vous répondra dans les plus brefs délais, généralement sous 24 h. Vous pouvez suivre l'état de votre demande à tout moment.",
+    },
+    support_reply: {
+      subject: "Réponse à votre demande {{reference}}",
+      // Body only — the shell adds the greeting once, the "Réponse de notre
+      // équipe" block (from the reply text) and the "Voir ma demande" CTA.
+      body: "Notre équipe a répondu à votre demande {{reference}}.",
+    },
+    support_closed: {
+      subject: "Votre demande {{reference}} a été clôturée",
+      // Body only — the shell adds the greeting once, an optional "Statut de
+      // clôture" block (from the resolution) and the "Donner mon avis" CTA.
+      body: "Votre demande {{reference}} a été clôturée. Votre avis compte beaucoup pour nous : dites-nous comment s'est passée votre expérience avec notre support en laissant une note et un commentaire. Cela nous aide à nous améliorer.",
+    },
   },
   legalPages: {
     terms: {

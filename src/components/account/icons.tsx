@@ -115,3 +115,24 @@ export function PencilIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function LifebuoyIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="m4.9 4.9 4.2 4.2" />
+      <path d="m14.9 14.9 4.2 4.2" />
+      <path d="m14.9 9.1 4.2-4.2" />
+      <path d="m4.9 19.1 4.2-4.2" />
+    </svg>
+  );
+}
+
+export function StarIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z" />
+    </svg>
+  );
+}

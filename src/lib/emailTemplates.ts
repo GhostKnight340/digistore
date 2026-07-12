@@ -15,7 +15,10 @@ export type EmailTemplateKey =
   | "payment_rejected"
   | "payment_confirmed"
   | "order_delivered"
-  | "refund_update";
+  | "refund_update"
+  | "support_received"
+  | "support_reply"
+  | "support_closed";
 
 type Variables = Record<string, string | number | boolean | null | undefined>;
 
@@ -151,6 +154,16 @@ const REVIEW_TEMPLATE_META: Partial<
     ctaText: "Suivez votre commande ici :",
     ctaUrlVar: "order_url",
   },
+  support_reply: {
+    motifLabel: "Réponse de notre équipe",
+    ctaText: "Consultez votre demande ici :",
+    ctaUrlVar: "support_url",
+  },
+  support_closed: {
+    motifLabel: "Statut de clôture",
+    ctaText: "Partagez votre avis sur notre support ici :",
+    ctaUrlVar: "feedback_url",
+  },
 };
 
 /** Optional labelled reason block. Rendered only when a reason exists. */
@@ -187,6 +200,8 @@ function brandedEmailHtml(
   const orderUrl = variableString(variables, "order_url");
   const paymentUrl = variableString(variables, "payment_url");
   const deliveryUrl = variableString(variables, "delivery_url");
+  const supportUrl = variableString(variables, "support_url");
+  const feedbackUrl = variableString(variables, "feedback_url");
   const reason = variableString(variables, "reason").trim();
   const logoUrl = emailLogoUrl();
 
@@ -289,6 +304,24 @@ function brandedEmailHtml(
       intro: text,
       ctaLabel: "Suivre ma commande",
       ctaUrl: orderUrl,
+    },
+    support_received: {
+      title: subject,
+      intro: text,
+      ctaLabel: "Suivre ma demande",
+      ctaUrl: supportUrl,
+    },
+    support_reply: {
+      title: subject,
+      intro: text,
+      ctaLabel: "Voir ma demande",
+      ctaUrl: supportUrl,
+    },
+    support_closed: {
+      title: subject,
+      intro: text,
+      ctaLabel: "Donner mon avis",
+      ctaUrl: feedbackUrl,
     },
   };
 
@@ -458,6 +491,9 @@ export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateKey, string> = {
   payment_confirmed: "Paiement confirmé",
   order_delivered: "Commande livrée",
   refund_update: "Mise à jour du remboursement",
+  support_received: "Support — demande reçue",
+  support_reply: "Support — réponse envoyée",
+  support_closed: "Support — demande clôturée",
 };
 
 type TemplateVariable = { key: string; sample: string };
@@ -533,6 +569,24 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
     { key: "order_url", sample: "https://ghost.ma/order/example" },
     { key: "reason", sample: "Remboursement partiel" },
     { key: "total", sample: "250 DH" },
+  ],
+  support_received: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "reference", sample: "GH-S-482913" },
+    { key: "subject", sample: "Livraison — Je n'ai rien reçu" },
+    { key: "support_url", sample: "https://ghost.ma/support/suivi" },
+  ],
+  support_reply: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "reference", sample: "GH-S-482913" },
+    { key: "reason", sample: "Bonjour, votre code a été renvoyé à votre adresse e-mail." },
+    { key: "support_url", sample: "https://ghost.ma/support/suivi" },
+  ],
+  support_closed: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "reference", sample: "GH-S-482913" },
+    { key: "reason", sample: "Résolu" },
+    { key: "feedback_url", sample: "https://ghost.ma/support/feedback?token=example" },
   ],
 };
 
