@@ -69,6 +69,18 @@ export default function SupportTicketList({
     setTickets((prev) => prev.map((t) => (t.reference === next.reference ? next : t)));
   }, []);
 
+  // Apply a polled refresh, but never let a momentarily stale read drop messages
+  // we already show unless the status itself changed (e.g. a close still lands).
+  const applyPoll = useCallback((fresh: SupportTicketStatusDTO) => {
+    setTickets((prev) =>
+      prev.map((t) => {
+        if (t.reference !== fresh.reference) return t;
+        if (fresh.status === t.status && fresh.replies.length < t.replies.length) return t;
+        return fresh;
+      }),
+    );
+  }, []);
+
   // Live-refresh the open conversation so replies from the team appear without a
   // manual page reload: poll on an interval and whenever the tab regains focus.
   const busyRefCurrent = useRef<string | null>(null);
@@ -79,7 +91,7 @@ export default function SupportTicketList({
     const refresh = async () => {
       if (document.hidden || busyRefCurrent.current === openRef) return;
       const fresh = await getMySupportTicketAction(openRef);
-      if (!cancelled && fresh) mergeTicket(fresh);
+      if (!cancelled && fresh) applyPoll(fresh);
     };
     const interval = setInterval(refresh, POLL_MS);
     window.addEventListener("focus", refresh);
@@ -88,7 +100,7 @@ export default function SupportTicketList({
       clearInterval(interval);
       window.removeEventListener("focus", refresh);
     };
-  }, [openRef, mergeTicket]);
+  }, [openRef, applyPoll]);
 
   async function sendReply(reference: string) {
     const text = (drafts[reference] ?? "").trim();

@@ -277,29 +277,46 @@ export async function updateSupportTicketStatus(
   });
 }
 
+/**
+ * Atomically appends one message to a ticket's `replies` JSON at the DB level
+ * (`replies || <msg>`), avoiding the lost-update race a read-modify-write would
+ * cause when the customer and the support team reply at nearly the same time —
+ * concurrent appends would otherwise clobber each other. Returns the fresh row.
+ */
+async function appendSupportMessage(
+  id: string,
+  message: SupportMessage,
+  status: SupportTicketStatus,
+  extraSet: Prisma.Sql = Prisma.empty,
+): Promise<SupportTicketRecord> {
+  await ensureDatabaseReady();
+  // `jsonb || <object>` appends the object as a single array element;
+  // COALESCE handles a null/absent replies column.
+  const affected = await prisma.$executeRaw`
+    UPDATE "SupportTicket"
+    SET "replies" = COALESCE("replies", '[]'::jsonb) || ${JSON.stringify(message)}::jsonb,
+        "status" = ${status},
+        "updatedAt" = NOW()
+        ${extraSet}
+    WHERE "id" = ${id}
+  `;
+  if (affected === 0) throw new Error("Demande introuvable.");
+  const row = await prisma.supportTicket.findUnique({ where: { id } });
+  if (!row) throw new Error("Demande introuvable.");
+  return row;
+}
+
 /** Appends an admin reply and flips the ticket to "answered". The reply text is
  *  what the customer sees on the tracking/account pages and in the reply email. */
 export async function addSupportTicketReply(
   id: string,
   body: string,
 ): Promise<SupportTicketRecord> {
-  await ensureDatabaseReady();
-  const existing = await prisma.supportTicket.findUnique({
-    where: { id },
-    select: { replies: true },
-  });
-  if (!existing) throw new Error("Demande introuvable.");
-  const replies: SupportMessage[] = [
-    ...messageList(existing.replies),
+  return appendSupportMessage(
+    id,
     { author: "admin", body, createdAt: new Date().toISOString() },
-  ];
-  return prisma.supportTicket.update({
-    where: { id },
-    data: {
-      status: "answered",
-      replies: replies as unknown as Prisma.InputJsonValue,
-    },
-  });
+    "answered",
+  );
 }
 
 /**
@@ -335,24 +352,14 @@ export async function addCustomerSupportMessage(
   customerId: string,
   body: string,
 ): Promise<SupportTicketRecord> {
-  await ensureDatabaseReady();
-  const existing = await prisma.supportTicket.findUnique({
-    where: { id },
-    select: { replies: true, customerId: true },
-  });
-  if (!existing) throw new Error("Demande introuvable.");
-  const replies: SupportMessage[] = [
-    ...messageList(existing.replies),
+  // COALESCE keeps an existing customerId; only a guest-opened ticket gets
+  // back-linked to this account.
+  return appendSupportMessage(
+    id,
     { author: "customer", body, createdAt: new Date().toISOString() },
-  ];
-  return prisma.supportTicket.update({
-    where: { id },
-    data: {
-      status: "open",
-      replies: replies as unknown as Prisma.InputJsonValue,
-      ...(existing.customerId ? {} : { customerId }),
-    },
-  });
+    "open",
+    Prisma.sql`, "customerId" = COALESCE("customerId", ${customerId})`,
+  );
 }
 
 function randomFeedbackToken(): string {
