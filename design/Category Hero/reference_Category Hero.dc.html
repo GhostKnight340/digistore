@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #07090f; font-family: 'Sora', system-ui, sans-serif; }
+    a { color: #7db8ff; text-decoration: none; }
+    a:hover { color: #a8cfff; }
+  </style>
+</helmet>
+
+<div data-screen-label="Category Hero" style="position: relative; width: 100%; min-height: 720px; background: #07090f; overflow: hidden; color: #f2f5fa; box-sizing: border-box;">
+
+  <!-- ambient background: brand-tinted halo bleeding from the right -->
+  <div style="position: absolute; inset: 0; background: radial-gradient(900px 640px at 78% 42%, {{ halo1 }}, {{ halo2 }} 45%, transparent 70%), radial-gradient(700px 500px at 95% 85%, rgba(37,99,235,0.10), transparent 65%); pointer-events: none;"></div>
+  <div style="position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(800px 600px at 75% 45%, rgba(0,0,0,0.9), transparent 75%); -webkit-mask-image: radial-gradient(800px 600px at 75% 45%, rgba(0,0,0,0.9), transparent 75%); pointer-events: none;"></div>
+
+  <!-- fanned cards, bleeding off the right edge -->
+  <sc-if value="{{ showCards }}" hint-placeholder-val="{{ true }}">
+    <div aria-hidden="true" style="position: absolute; top: 50%; right: 0; transform: translateY(-54%); width: 640px; height: 560px; pointer-events: none;">
+
+      <!-- back card -->
+      <div style="position: absolute; top: 40px; right: 300px; width: 340px; height: 214px; border-radius: 18px; transform: rotate(-14deg); background: linear-gradient(135deg, #101722 0%, #0b1119 60%); border: 1px solid {{ border1 }}; box-shadow: 0 30px 60px rgba(0,0,0,0.55); opacity: 0.55; padding: 22px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
+        <img src="{{ logoMuted }}" alt="" style="width: 34px; height: 34px; object-fit: contain; opacity: 0.7;">
+        <div style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="font-size: 34px; font-weight: 800; letter-spacing: -0.02em;">{{ d3 }}</span>
+          <span style="font-size: 15px; font-weight: 600; color: #9fb2c8;">{{ unit }}</span>
+        </div>
+      </div>
+
+      <!-- middle card -->
+      <div style="position: absolute; top: 130px; right: 150px; width: 360px; height: 226px; border-radius: 18px; transform: rotate(-6deg); background: linear-gradient(135deg, #16202e 0%, #0d141e 55%); border: 1px solid {{ border2 }}; box-shadow: 0 34px 70px rgba(0,0,0,0.6); opacity: 0.8; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <img src="{{ logoMuted }}" alt="" style="width: 36px; height: 36px; object-fit: contain; opacity: 0.85;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; color: #7f93ab; text-transform: uppercase;">Carte cadeau</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="font-size: 38px; font-weight: 800; letter-spacing: -0.02em;">{{ d2 }}</span>
+          <span style="font-size: 16px; font-weight: 600; color: #9fb2c8;">{{ unit }}</span>
+        </div>
+      </div>
+
+      <!-- front card -->
+      <div style="position: absolute; top: 240px; right: 44px; width: 380px; height: 238px; border-radius: 20px; transform: rotate(3deg); background: linear-gradient(135deg, #1b2a3d 0%, #101a27 55%, #0c1420 100%); border: 1px solid {{ border3 }}; box-shadow: 0 40px 90px rgba(0,0,0,0.7), 0 0 60px {{ glow }}; padding: 26px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="{{ logoFront }}" alt="{{ brandName }}" style="width: 40px; height: 40px; object-fit: contain;">
+            <span style="font-size: 15px; font-weight: 700; letter-spacing: 0.02em;">{{ brandName }}</span>
+          </div>
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; color: {{ accent }}; text-transform: uppercase;">Code digital</span>
+        </div>
+        <div style="display: flex; align-items: flex-end; justify-content: space-between;">
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="font-size: 44px; font-weight: 800; letter-spacing: -0.02em;">{{ d1 }}</span>
+            <span style="font-size: 17px; font-weight: 600; color: #9fb2c8;">{{ unit }}</span>
+          </div>
+          <span style="font-size: 12px; color: {{ accent }}; font-weight: 600;">Livré par e-mail</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- left fade so text stays readable over the artwork -->
+  <div style="position: absolute; inset: 0; background: linear-gradient(90deg, #07090f 0%, #07090f 34%, rgba(7,9,15,0.55) 55%, transparent 75%); pointer-events: none;"></div>
+
+  <!-- content -->
+  <div style="position: relative; max-width: 1200px; margin: 0 auto; padding: 96px 48px 72px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px;">
+
+    <div style="display: flex; align-items: center; gap: 8px; align-self: flex-start; padding: 7px 14px; border-radius: 999px; background: {{ badgeBg }}; border: 1px solid {{ border2 }};">
+      <span style="width: 7px; height: 7px; border-radius: 50%; background: {{ accent }}; display: inline-block;"></span>
+      <span style="font-size: 12.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: {{ badgeText }};">{{ badge }}</span>
+    </div>
+
+    <h1 style="margin: 0; max-width: 620px; font-size: 64px; line-height: 1.04; font-weight: 800; letter-spacing: -0.025em; text-wrap: balance;">{{ headline }}</h1>
+
+    <p style="margin: 0; max-width: 520px; font-size: 17px; line-height: 1.65; color: #a7b4c6;">{{ subcopy }}</p>
+
+    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+      <a href="#produits" style="display: inline-flex; align-items: center; gap: 8px; padding: 15px 28px; border-radius: 12px; background: #2563eb; color: #ffffff; font-size: 15px; font-weight: 700; box-shadow: 0 8px 24px rgba(37,99,235,0.35);" style-hover="background: #1d4ed8; color: #ffffff;">Voir les produits<span style="font-size: 17px; line-height: 1;">→</span></a>
+      <a href="#support" style="display: inline-flex; align-items: center; padding: 15px 28px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); color: #e6ecf4; font-size: 15px; font-weight: 600;" style-hover="background: rgba(255,255,255,0.09); color: #ffffff;">Contacter le support</a>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1440, &quot;height&quot;: 760 },
+  &quot;brand&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;steam&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;steam&quot;, &quot;playstation&quot;, &quot;xbox&quot;, &quot;google-play&quot;, &quot;itunes&quot;, &quot;apple&quot;, &quot;netflix&quot;, &quot;pubg&quot;, &quot;free-fire&quot;], &quot;section&quot;: &quot;Marque&quot; },
+  &quot;showCards&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Hero&quot; }
+}">
+class Component extends DCLogic {
+  static BRANDS = {
+    'steam': {
+      name: 'Steam Wallet', badge: 'Steam Wallet Maroc', accent: '#66C0F4',
+      logo: 'assets/marques/steam.svg', logoMuted: 'assets/marques/white/steam.svg',
+      denoms: [5, 20, 100], unit: 'EUR',
+      headline: 'Rechargez votre Steam Wallet',
+      subcopy: 'Choisissez votre montant \u2014 5, 10, 20, 50 ou 100 \u20ac \u2014 payez avec un moyen de paiement marocain et recevez votre code officiel par e-mail en quelques minutes.',
+    },
+    'playstation': {
+      name: 'PlayStation Store', badge: 'PlayStation Store Maroc', accent: '#4a9eff',
+      logo: 'assets/marques/playstation.svg', logoMuted: 'assets/marques/white/playstation.svg',
+      denoms: [10, 25, 50], unit: 'EUR',
+      headline: 'Cartes PlayStation Store',
+      subcopy: 'Jeux, extensions et abonnements PlayStation Plus sur le PSN \u2014 payez en dirhams et recevez votre code officiel par e-mail en quelques minutes.',
+    },
+    'xbox': {
+      name: 'Xbox', badge: 'Xbox Maroc', accent: '#3fae3f',
+      logo: 'assets/marques/xbox.svg', logoMuted: 'assets/marques/white/xbox.svg',
+      denoms: [5, 25, 100], unit: 'EUR',
+      headline: 'Cartes cadeaux Xbox',
+      subcopy: 'Jeux, Game Pass et contenus sur le Microsoft Store \u2014 payez en dirhams et recevez votre code officiel par e-mail en quelques minutes.',
+    },
+    'google-play': {
+      name: 'Google Play', badge: 'Google Play Maroc', accent: '#00F076',
+      logo: 'assets/marques/google-play.svg', logoMuted: 'assets/marques/white/google-play.svg',
+      denoms: [5, 25, 100], unit: 'EUR',
+      headline: 'Cartes cadeaux Google Play',
+      subcopy: 'Applications, jeux et abonnements sur le Play Store \u2014 payez en dirhams et recevez votre code officiel par e-mail en quelques minutes.',
+    },
+    'itunes': {
+      name: 'iTunes', badge: 'iTunes Maroc', accent: '#FB5BC5',
+      logo: 'assets/marques/itunes.svg', logoMuted: 'assets/marques/white/itunes.svg',
+      denoms: [5, 25, 100], unit: 'EUR',
+      headline: 'Cartes cadeaux iTunes',
+      subcopy: 'Musique, films, apps et services Apple \u2014 payez en dirhams et recevez votre code officiel par e-mail en quelques minutes.',
+    },
+    'apple': {
+      name: 'Apple Gift Card', badge: 'Apple Maroc', accent: '#c9d1d9',
+      logo: 'assets/marques/apple.svg', logoMuted: 'assets/marques/white/apple.svg',
+      denoms: [5, 25, 100], unit: 'EUR',
+      headline: 'Apple Gift Card',
+      subcopy: "Apps, jeux, iCloud+ et tout l'\u00e9cosyst\u00e8me Apple \u2014 payez en dirhams et recevez votre code officiel par e-mail en quelques minutes.",
+    },
+    'netflix': {
+      name: 'Netflix', badge: 'Netflix Maroc', accent: '#E50914',
+      logo: 'assets/marques/netflix.svg', logoMuted: 'assets/marques/white/netflix.svg',
+      denoms: [15, 25, 50], unit: 'EUR',
+      headline: 'Cartes cadeaux Netflix',
+      subcopy: 'Cr\u00e9ditez votre compte Netflix sans carte bancaire \u2014 payez en dirhams et recevez votre code officiel par e-mail en quelques minutes.',
+    },
+    'pubg': {
+      name: 'PUBG Mobile', badge: 'PUBG Mobile Maroc', accent: '#F2A900',
+      logo: 'assets/marques/pubg.svg', logoMuted: 'assets/marques/white/pubg.svg',
+      denoms: [60, 325, 660], unit: 'UC',
+      headline: 'UC PUBG Mobile',
+      subcopy: 'Rechargez vos UC directement sur votre compte PUBG Mobile \u2014 paiement marocain, livraison par e-mail en quelques minutes.',
+    },
+    'free-fire': {
+      name: 'Free Fire', badge: 'Free Fire Maroc', accent: '#FFB300',
+      logo: 'assets/marques/free-fire.png', logoMuted: 'assets/marques/free-fire.png',
+      denoms: [100, 310, 520], unit: 'Diamants',
+      headline: 'Diamants Free Fire',
+      subcopy: 'Rechargez vos diamants directement sur votre compte Free Fire \u2014 paiement marocain, livraison par e-mail en quelques minutes.',
+    },
+  };
+
+  rgba(hex, a) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h, 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+
+  renderVals() {
+    const b = Component.BRANDS[this.props.brand ?? 'steam'] || Component.BRANDS['steam'];
+    return {
+      showCards: this.props.showCards ?? true,
+      brandName: b.name,
+      badge: b.badge,
+      headline: b.headline,
+      subcopy: b.subcopy,
+      logoFront: b.logo,
+      logoMuted: b.logoMuted,
+      unit: b.unit,
+      d1: b.denoms[0], d2: b.denoms[1], d3: b.denoms[2],
+      accent: b.accent,
+      badgeBg: this.rgba(b.accent, 0.08),
+      badgeText: this.rgba(b.accent, 0.9),
+      border1: this.rgba(b.accent, 0.18),
+      border2: this.rgba(b.accent, 0.28),
+      border3: this.rgba(b.accent, 0.4),
+      glow: this.rgba(b.accent, 0.12),
+      halo1: this.rgba(b.accent, 0.16),
+      halo2: this.rgba(b.accent, 0.05),
+    };
+  }
+}
+</script>
+</body>
+</html>
