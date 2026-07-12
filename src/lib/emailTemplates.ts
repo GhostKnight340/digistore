@@ -42,13 +42,15 @@ function variableString(variables: Variables, key: string) {
 }
 
 function brandHeaderHtml() {
-  // Monochrome black mark (transparent PNG) — reads cleanly on the light email
-  // and, being an image, is immune to Gmail dark mode's text recoloring.
+  // Light-background lockup: the monochrome black mark + a black "ghost" / blue
+  // ".ma" wordmark, baked into one transparent PNG. It must be an image (not
+  // HTML text) so Gmail dark mode can't recolor the wordmark — plain text made
+  // the dark "ghost" vanish. Source box is 281×72 (~3.9:1).
   return `
     <a href="${escapeHtml(absoluteAppUrl("/"))}" style="display: inline-block; text-decoration: none; border: 0;">
       <img src="${escapeHtml(
-        absoluteAppUrl("/brand/navigator-monochrome-dark.png"),
-      )}" width="46" height="46" alt="ghost.ma" style="display: block; width: 46px; height: 46px; border: 0;" />
+        absoluteAppUrl("/brand/ghostma-navigator-horizontal-light.png"),
+      )}" width="156" height="40" alt="ghost.ma" style="display: block; width: 156px; height: 40px; border: 0;" />
     </a>`;
 }
 
