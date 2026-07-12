@@ -239,6 +239,18 @@ const NAV: NavGroup[] = [
         ),
       },
       {
+        // Store on/off — blocks the public storefront (browsing, cart, and new
+        // orders) while admin and existing order-tracking links stay open.
+        id: "maintenance",
+        label: "Maintenance",
+        icon: icon(
+          <>
+            <line x1="12" y1="2" x2="12" y2="12" />
+            <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
+          </>,
+        ),
+      },
+      {
         id: "payment-settings",
         label: "Paiements",
         icon: icon(
