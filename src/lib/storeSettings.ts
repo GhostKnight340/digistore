@@ -53,11 +53,14 @@ export type StoreSettings = {
   homepage: {
     showHero: boolean;
     showTrustStrip: boolean;
+    showBrandNav: boolean;
     showCategories: boolean;
     showFeaturedProducts: boolean;
     showHowItWorks: boolean;
     showWhyChooseUs: boolean;
     showFooter: boolean;
+    brandNavTitle: string;
+    brandNavSubtitle: string;
     categoriesTitle: string;
     categoriesSubtitle: string;
     featuredTitle: string;
@@ -150,11 +153,14 @@ export const defaultStoreSettings: StoreSettings = {
   homepage: {
     showHero: true,
     showTrustStrip: true,
+    showBrandNav: true,
     showCategories: true,
     showFeaturedProducts: true,
     showHowItWorks: true,
     showWhyChooseUs: true,
     showFooter: true,
+    brandNavTitle: "Parcourir par marque",
+    brandNavSubtitle: "Accédez directement à vos plateformes préférées.",
     categoriesTitle: "Catégories populaires",
     categoriesSubtitle: "Les produits numériques les plus demandés au Maroc.",
     featuredTitle: "Produits populaires",

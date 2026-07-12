@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BrandNav from "@/components/BrandNav";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
@@ -71,6 +72,20 @@ export default async function HomePage() {
               />
             </div>
           </div>
+        </section>
+      )}
+
+      {settings.homepage.showBrandNav && categories.length > 0 && (
+        <section className="mt-8 sm:mt-12">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-text">
+              {settings.homepage.brandNavTitle}
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              {settings.homepage.brandNavSubtitle}
+            </p>
+          </div>
+          <BrandNav categories={categories} />
         </section>
       )}
 

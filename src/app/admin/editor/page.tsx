@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
+import BrandNav from "@/components/BrandNav";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import HeroDeliveryCard from "@/components/HeroDeliveryCard";
@@ -356,6 +357,27 @@ function EditorCanvas() {
       </SectionWrapper>
 
       <div className="container-page space-y-0">
+        {/* Brand quick-nav */}
+        <SectionWrapper sectionKey="showBrandNav" label="Marques">
+          <section className="mt-8">
+            <EditableText
+              as="h2"
+              value={s.homepage.brandNavTitle}
+              onChange={(v) => setHomepage("brandNavTitle", v)}
+              disabled={!editing}
+              className="text-2xl font-semibold tracking-tight text-text"
+            />
+            <EditableText
+              as="p"
+              value={s.homepage.brandNavSubtitle}
+              onChange={(v) => setHomepage("brandNavSubtitle", v)}
+              disabled={!editing}
+              className="mt-1 text-sm text-muted"
+            />
+            <BrandNav categories={categories} />
+          </section>
+        </SectionWrapper>
+
         {/* Categories */}
         <SectionWrapper sectionKey="showCategories" label="Categories">
           <section className="mt-7">
