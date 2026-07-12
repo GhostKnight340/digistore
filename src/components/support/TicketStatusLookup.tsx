@@ -41,7 +41,7 @@ function formatDate(iso: string): string {
   }).format(new Date(iso));
 }
 
-export default function TicketStatusLookup() {
+export default function TicketStatusLookup({ heading }: { heading?: string }) {
   const params = useSearchParams();
   const [reference, setReference] = useState(params.get("ref") ?? "");
   const [email, setEmail] = useState("");
@@ -69,7 +69,7 @@ export default function TicketStatusLookup() {
     <div className="container-page pb-20 pt-12">
       <div className="mx-auto max-w-[560px]">
         <p className="mb-3 text-[12.5px] font-bold uppercase tracking-[0.14em] text-[#4d7fff]">GHOST.MA</p>
-        <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-white">Suivre ma demande</h1>
+        <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-white">{heading ?? "Suivre ma demande"}</h1>
         <p className="mt-2.5 text-[15px] leading-relaxed text-muted">
           Saisissez votre référence et l'adresse e-mail utilisée lors de la demande.
         </p>
