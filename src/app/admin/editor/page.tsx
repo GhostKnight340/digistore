@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import BrandNav from "@/components/BrandNav";
+import { resolveBrandColor } from "@/lib/brandAssets";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import HeroDeliveryCard from "@/components/HeroDeliveryCard";
@@ -240,7 +241,9 @@ function VariantSummary({ option }: { option: FeaturedVariantOptionDTO }) {
 function EditorCanvas() {
   const { draft, previewMode, set, save } = useEditor();
   const { categories } = useProductCatalog();
-  const accentByCategory = new Map(categories.map((c) => [c.id, c.accentColor]));
+  const accentByCategory = new Map(
+    categories.map((c) => [c.id, resolveBrandColor(c.slug ?? c.id, c.accentColor)]),
+  );
   const s = draft;
 
   const [featured, setFeatured] = useState<Product[]>([]);

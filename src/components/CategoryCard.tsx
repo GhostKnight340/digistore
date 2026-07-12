@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Category, StockStatus } from "@/lib/types";
+import { resolveBrandColor } from "@/lib/brandAssets";
 import ProductArt from "./ProductArt";
 
 export default function CategoryCard({
@@ -15,7 +16,7 @@ export default function CategoryCard({
 }) {
   const productCount = count ?? category.productCount ?? 0;
   const media = thumbnail ?? category.coverImageUrl ?? category.iconUrl ?? null;
-  const accent = category.accentColor || "#3e7bfa";
+  const accent = resolveBrandColor(category.slug ?? category.id, category.accentColor);
   return (
     <Link
       href={`/products?category=${category.id}`}

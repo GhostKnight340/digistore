@@ -6,6 +6,7 @@ import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import TrustStrip from "@/components/TrustStrip";
 import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import { resolveBrandColor } from "@/lib/brandAssets";
 
 export const revalidate = 3600;
 
@@ -25,7 +26,10 @@ export default async function HomePage() {
   // Brand accent per category id, so product/category cards glow in their
   // brand color instead of a uniform blue.
   const accentByCategory = new Map(
-    brandCategories.map((category) => [category.id, category.accentColor]),
+    brandCategories.map((category) => [
+      category.id,
+      resolveBrandColor(category.slug ?? category.id, category.accentColor),
+    ]),
   );
   const productsById = new Map(products.map((product) => [product.id, product]));
   const featured = settings.featuredProductIds
