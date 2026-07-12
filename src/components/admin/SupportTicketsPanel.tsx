@@ -348,7 +348,7 @@ export default function SupportTicketsPanel() {
                         rows={4}
                         maxLength={4000}
                         placeholder="Écrivez votre réponse. Elle sera envoyée par e-mail au client et ajoutée au fil Discord."
-                        className="mt-1.5 w-full resize-y rounded-lg border border-border bg-base px-3 py-2.5 text-sm text-white placeholder:text-faint focus:border-accent focus:outline-none"
+                        className="input mt-1.5 min-h-[96px] resize-y"
                       />
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <button
@@ -369,7 +369,7 @@ export default function SupportTicketsPanel() {
                           <select
                             value={resolution}
                             onChange={(e) => setResolution(e.target.value)}
-                            className="rounded-lg border border-border bg-base px-2.5 py-1.5 text-xs text-white focus:border-accent focus:outline-none"
+                            className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-xs text-white focus:border-accent focus:outline-none"
                           >
                             <option value="">Clôture (sans statut)</option>
                             {RESOLUTION_OPTIONS.map((o) => (

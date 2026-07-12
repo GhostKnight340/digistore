@@ -542,7 +542,7 @@ function ProductMediaPicker({
 }) {
   const single = media.length === 1;
   return (
-    <div className="rounded-xl border border-border bg-base p-3">
+    <div className="rounded-xl border border-border bg-canvas p-3">
       <p className="text-xs font-medium text-muted">Réutiliser le visuel d&apos;un produit</p>
       <p className="mt-0.5 text-[11px] text-faint">
         {single
