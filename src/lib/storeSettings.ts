@@ -30,6 +30,14 @@ export type StoreSettings = {
    * preserved and reappears when re-enabled. */
   inventoryEnabled: boolean;
   inventoryMode: "automatic" | "manual";
+  /** Global "Accept customer orders" switch. When false, the catalog stays
+   * fully browsable but every path that could create or pay for an order is
+   * disabled (frontend and server-side), and no payment instructions are
+   * exposed. Existing orders remain viewable. Products, prices and payment
+   * configuration are untouched, so flipping this back on restores the normal
+   * purchase flow with no further changes. Defaults to OFF (see
+   * `isOrderingEnabled` — legacy blobs without the field are treated as OFF). */
+  ordersEnabled: boolean;
   maintenance: {
     enabled: boolean;
     message: string;
@@ -123,6 +131,8 @@ export type StoreSettings = {
 export const defaultStoreSettings: StoreSettings = {
   inventoryEnabled: true,
   inventoryMode: "automatic",
+  // Ordering is OFF until live fulfilment is ready (pre-launch mode).
+  ordersEnabled: false,
   maintenance: {
     enabled: false,
     message:
@@ -353,6 +363,36 @@ export function isInventoryEnabled(
 }
 
 /**
+ * Single source of truth for the global "Accept customer orders" toggle. Use
+ * this everywhere (server actions, API routes, product/cart/checkout/payment
+ * pages) instead of reading the raw field, so the behaviour stays consistent.
+ * Strict `=== true`: any settings blob predating the toggle — or with the field
+ * missing/malformed — is treated as ordering DISABLED (pre-launch default).
+ */
+export function isOrderingEnabled(
+  settings: Pick<StoreSettings, "ordersEnabled">,
+): boolean {
+  return settings.ordersEnabled === true;
+}
+
+/**
+ * Centralized customer-facing copy for the "orders unavailable" state. Shared
+ * by the product page, cart, checkout, payment page and the site-wide banner so
+ * the wording stays identical everywhere.
+ */
+export const ORDERS_UNAVAILABLE_COPY = {
+  title: "Les commandes sont temporairement indisponibles.",
+  body: "Notre catalogue reste accessible, mais les achats sont momentanément suspendus pendant la finalisation de nos intégrations. Revenez bientôt.",
+  /** Label for the disabled purchase button that replaces add-to-cart/buy. */
+  buttonLabel: "Commandes temporairement indisponibles",
+  /** Optional secondary action pointing at the contact page. */
+  contactLabel: "Nous contacter",
+  contactHref: "/contact",
+  /** Compact one-liner for the unintrusive site-wide banner. */
+  banner: "Les commandes sont temporairement indisponibles — le catalogue reste consultable.",
+} as const;
+
+/**
  * True only when stock quantities should be tracked and may block a purchase:
  * inventory globally enabled AND not in the "manual" (always in-stock) mode.
  * When false, availability is decided solely by manual active/inactive fields.
@@ -385,6 +425,10 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
       typeof value.inventoryEnabled === "boolean"
         ? value.inventoryEnabled
         : defaultStoreSettings.inventoryEnabled,
+    ordersEnabled:
+      typeof value.ordersEnabled === "boolean"
+        ? value.ordersEnabled
+        : defaultStoreSettings.ordersEnabled,
     inventoryMode:
       value.inventoryMode === "manual" || value.inventoryMode === "automatic"
         ? value.inventoryMode
