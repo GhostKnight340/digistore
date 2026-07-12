@@ -336,6 +336,18 @@ function brandedEmailHtml(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Tell dark-mode-capable clients (Apple Mail, iOS Mail, Outlook, Gmail
+         where supported) that this email is already dark-designed, so they do
+         NOT auto-invert its dark background to white. -->
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <style>
+      :root { color-scheme: dark; supported-color-schemes: dark; }
+      /* Keep the intended dark palette if a client applies a dark-mode pass. */
+      @media (prefers-color-scheme: dark) {
+        body, .gmail-fix { background: #080a0f !important; }
+      }
+    </style>
     <title>${escapeHtml(subject)}</title>
   </head>
   <body style="margin: 0; padding: 0; background: #080a0f; color: #f6f7fb;">
