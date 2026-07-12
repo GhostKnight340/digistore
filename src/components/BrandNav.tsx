@@ -3,11 +3,12 @@ import type { ReactNode } from "react";
 import type { Category } from "@/lib/types";
 
 /**
- * Bundled inline brand marks, keyed by normalized category id/slug. These keep the
- * quick-nav visually on-brand (like the competitor's platform strip) without adding
- * any `public/` assets or network fetches. `currentColor` is driven by each tile's
- * accent tint. Any category without a bundled mark falls back to its uploaded
- * `iconUrl`, then its emoji `icon`.
+ * Bundled inline brand marks, keyed by normalized category id/slug. These are the
+ * default visual for the major platforms (like the competitor's platform strip)
+ * without adding any `public/` assets or network fetches. `currentColor` is driven
+ * by each tile's accent tint. An admin-uploaded `iconUrl` always takes precedence
+ * over the bundled mark (see BrandTile), so brand media stays controllable from
+ * Admin → Catégories; the bundled mark is the fallback, then the emoji `icon`.
  */
 const BRAND_LOGOS: Record<string, ReactNode> = {
   playstation: (
@@ -82,9 +83,7 @@ function BrandTile({ category }: { category: Category }) {
         className="relative grid h-11 w-11 place-items-center text-[color:var(--brand)]"
         style={{ color: accent }}
       >
-        {logo ? (
-          <span className="h-8 w-8">{logo}</span>
-        ) : category.iconUrl ? (
+        {category.iconUrl ? (
           <img
             src={category.iconUrl}
             alt=""
@@ -92,6 +91,8 @@ function BrandTile({ category }: { category: Category }) {
             loading="lazy"
             decoding="async"
           />
+        ) : logo ? (
+          <span className="h-8 w-8">{logo}</span>
         ) : (
           <span className="text-2xl leading-none">{category.icon || "🎮"}</span>
         )}
