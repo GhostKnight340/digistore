@@ -42,15 +42,15 @@ function variableString(variables: Variables, key: string) {
 }
 
 function brandHeaderHtml() {
-  // Light-theme header: the transparent mascot icon + an HTML wordmark. The
-  // horizontal PNG lockup has near-white text (invisible on a light background),
-  // so the wordmark is rendered as text with a dark "ghost" and a blue ".ma".
+  // Logo as an IMAGE, not HTML text: Gmail's dark mode recolors text (it flipped
+  // a dark "ghost" wordmark to white, making it vanish on the light header) but
+  // never recolors images. This lockup bakes the wordmark onto its own navy tile,
+  // so it renders identically in every client regardless of dark mode.
   return `
     <a href="${escapeHtml(absoluteAppUrl("/"))}" style="display: inline-block; text-decoration: none; border: 0;">
       <img src="${escapeHtml(
-        absoluteAppUrl("/brand/navigator-icon-64.png"),
-      )}" width="30" height="30" alt="" style="display: inline-block; vertical-align: middle; border: 0;" />
-      <span style="display: inline-block; vertical-align: middle; margin-left: 9px; font-family: Arial, sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: #0f1729;">ghost<span style="color: #3e7bfa;">.ma</span></span>
+        absoluteAppUrl("/brand/ghostma-navigator-horizontal-dark.png"),
+      )}" width="150" height="42" alt="ghost.ma" style="display: block; width: 150px; height: 42px; border: 0; border-radius: 10px;" />
     </a>`;
 }
 
