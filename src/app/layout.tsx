@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
@@ -16,6 +16,19 @@ export const metadata: Metadata = {
   title: "ghost.ma - Cartes de jeu au Maroc",
   description:
     "Cartes Steam, PlayStation, Xbox, Nintendo, Roblox et Valorant livrées rapidement après confirmation du paiement. Simple, sécurisé et adapté au Maroc.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/brand/navigator-icon-16.png", type: "image/png", sizes: "16x16" },
+      { url: "/brand/navigator-icon-32.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#05070d",
 };
 
 export default async function RootLayout({
@@ -65,6 +78,15 @@ export default async function RootLayout({
               {showMaintenance ? (
                 <main className="grid min-h-screen place-items-center px-6 py-12">
                   <section className="w-full max-w-xl rounded-2xl border border-border bg-card p-8 text-center shadow-card">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/brand/navigator-master-transparent-2048.png"
+                      alt=""
+                      width={96}
+                      height={96}
+                      className="mx-auto mb-6 h-24 w-24"
+                      style={{ filter: "saturate(0.55) brightness(0.85)" }}
+                    />
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
                       Maintenance
                     </p>
