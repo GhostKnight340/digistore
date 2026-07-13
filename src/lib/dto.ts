@@ -315,6 +315,32 @@ export interface SaveCollectionInput {
   productIds: string[];
 }
 
+/** One planned collection from the "generate from catalogue" tool. */
+export interface AutoCollectionPlanDTO {
+  slug: string;
+  name: string;
+  productCount: number;
+  /** Names of the products that would be included, in order. */
+  productNames: string[];
+  showOnHomepage: boolean;
+  sortOrder: number;
+  skipped: boolean;
+  /** Why it was skipped (e.g. fewer than 3 eligible products). */
+  reason?: string;
+  /** Set only when applied: what happened to this collection. */
+  status?: "created" | "updated" | "unchanged";
+}
+
+/** Result of a preview (applied=false) or apply (applied=true) run of the
+ *  "generate collections from catalogue" admin tool. */
+export interface AutoCollectionResultDTO {
+  applied: boolean;
+  plans: AutoCollectionPlanDTO[];
+  /** Products excluded because they are not storefront-eligible. */
+  ineligibleCount: number;
+  summary: { created: number; updated: number; unchanged: number; skipped: number };
+}
+
 /** Lightweight parent-product option for the collection product picker. */
 export interface CollectionProductOptionDTO {
   productId: string;

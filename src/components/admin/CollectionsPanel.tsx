@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   deleteCollectionAction,
   duplicateCollectionAction,
+  generateCollectionsAction,
   getAdminCollectionsAction,
   getCollectionProductOptionsAction,
   reorderCollectionsAction,
@@ -12,6 +13,7 @@ import {
 } from "@/app/actions/collections";
 import type {
   AdminCollectionDTO,
+  AutoCollectionResultDTO,
   CollectionProductOptionDTO,
   SaveCollectionInput,
 } from "@/lib/dto";
@@ -114,6 +116,9 @@ export default function CollectionsPanel() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  // "Generate from catalogue" preview/apply modal.
+  const [autoResult, setAutoResult] = useState<AutoCollectionResultDTO | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
 
   const load = useCallback(async (focusId?: string) => {
     setLoading(true);
@@ -224,6 +229,37 @@ export default function CollectionsPanel() {
     }
   }
 
+  async function openAutoPreview() {
+    setAutoBusy(true);
+    setMessage(null);
+    try {
+      const result = await generateCollectionsAction(false);
+      setAutoResult(result);
+    } catch {
+      setMessage({ text: "Aperçu impossible.", ok: false });
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
+  async function applyAuto() {
+    setAutoBusy(true);
+    try {
+      const result = await generateCollectionsAction(true);
+      setAutoResult(result);
+      const { created, updated } = result.summary;
+      setMessage({
+        text: `Collections générées : ${created} créée(s), ${updated} mise(s) à jour.`,
+        ok: true,
+      });
+      await load();
+    } catch {
+      setMessage({ text: "Génération impossible.", ok: false });
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
   async function uploadBanner(file: File) {
     setUploading(true);
     try {
@@ -282,12 +318,32 @@ export default function CollectionsPanel() {
             collection est curatée et peut évoluer dans le temps.
           </p>
         </div>
-        {message ? (
-          <p className={`text-xs ${message.ok ? "text-emerald-300" : "text-red-300"}`}>
-            {message.text}
-          </p>
-        ) : null}
+        <div className="flex flex-col items-end gap-2">
+          <button
+            type="button"
+            onClick={openAutoPreview}
+            disabled={autoBusy}
+            className="btn-ghost h-9 px-3 text-xs disabled:opacity-50"
+            title="Créer automatiquement des collections à partir du catalogue existant"
+          >
+            {autoBusy && !autoResult ? "Analyse…" : "✨ Générer depuis le catalogue"}
+          </button>
+          {message ? (
+            <p className={`text-xs ${message.ok ? "text-emerald-300" : "text-red-300"}`}>
+              {message.text}
+            </p>
+          ) : null}
+        </div>
       </div>
+
+      {autoResult ? (
+        <AutoGenerateModal
+          result={autoResult}
+          busy={autoBusy}
+          onApply={applyAuto}
+          onClose={() => setAutoResult(null)}
+        />
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* ── Master list ─────────────────────────────────────────────── */}
@@ -713,6 +769,113 @@ export default function CollectionsPanel() {
         )}
       </div>
     </section>
+  );
+}
+
+function AutoGenerateModal({
+  result,
+  busy,
+  onApply,
+  onClose,
+}: {
+  result: AutoCollectionResultDTO;
+  busy: boolean;
+  onApply: () => void;
+  onClose: () => void;
+}) {
+  const buildable = result.plans.filter((p) => !p.skipped);
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Générer des collections depuis le catalogue"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-border px-5 py-4">
+          <h3 className="text-base font-bold text-white">
+            Générer des collections depuis le catalogue
+          </h3>
+          <p className="mt-1 text-xs text-muted">
+            {result.applied
+              ? `Terminé : ${result.summary.created} créée(s), ${result.summary.updated} mise(s) à jour, ${result.summary.unchanged} inchangée(s).`
+              : "Aperçu — construit à partir des produits réels et éligibles. Rien n'est enregistré tant que vous ne confirmez pas."}
+          </p>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
+          {result.plans.map((plan) => (
+            <div
+              key={plan.slug}
+              className={`rounded-xl border px-4 py-3 ${
+                plan.skipped ? "border-border bg-surface2/40" : "border-border bg-surface"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-white">{plan.name}</span>
+                {plan.skipped ? (
+                  <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                    ignorée
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-faint">
+                    {plan.productCount} produit{plan.productCount === 1 ? "" : "s"}
+                  </span>
+                )}
+                {plan.showOnHomepage && !plan.skipped ? (
+                  <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-300">
+                    accueil
+                  </span>
+                ) : null}
+                {plan.status ? (
+                  <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                    {plan.status === "created"
+                      ? "créée"
+                      : plan.status === "updated"
+                        ? "mise à jour"
+                        : "inchangée"}
+                  </span>
+                ) : null}
+              </div>
+              {plan.skipped ? (
+                <p className="mt-1 text-xs text-muted">{plan.reason}</p>
+              ) : (
+                <p className="mt-1 line-clamp-2 text-xs text-muted">
+                  {plan.productNames.join(" · ")}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
+          <span className="text-xs text-faint">
+            {result.applied
+              ? null
+              : `${buildable.length} collection(s) seront créées ou mises à jour · ${result.ineligibleCount} produit(s) exclus`}
+          </span>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-ghost h-9 px-4 text-sm">
+              {result.applied ? "Fermer" : "Annuler"}
+            </button>
+            {!result.applied ? (
+              <button
+                type="button"
+                onClick={onApply}
+                disabled={busy || buildable.length === 0}
+                className="btn-primary h-9 px-4 text-sm disabled:opacity-50"
+              >
+                {busy ? "Génération…" : `Créer / mettre à jour (${buildable.length})`}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
