@@ -134,15 +134,9 @@ export default async function HomePage() {
         </section>
       )}
 
-      {settings.homepage.showCollections &&
-        homepageCollections.map((collection) => (
-          <CollectionSection
-            key={collection.slug}
-            collection={collection}
-            accentByCategory={accentByCategory}
-          />
-        ))}
-
+      {/* Existing "Produits populaires" (from featuredProductIds) stays first,
+          then the curated collection sections, matching the recommended
+          homepage order. */}
       {settings.homepage.showFeaturedProducts && (
         <section className="mt-7 sm:mt-10">
           <div className="flex items-end justify-between gap-4 sm:gap-6">
@@ -178,6 +172,15 @@ export default async function HomePage() {
           )}
         </section>
       )}
+
+      {settings.homepage.showCollections &&
+        homepageCollections.map((collection) => (
+          <CollectionSection
+            key={collection.slug}
+            collection={collection}
+            accentByCategory={accentByCategory}
+          />
+        ))}
 
       {settings.homepage.showHowItWorks && (
         <section id="how-it-works" className="mt-16 scroll-mt-20">

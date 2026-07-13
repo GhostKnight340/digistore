@@ -17,6 +17,7 @@
     "reloadly:smoke-test": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/reloadly-smoke-test.ts",
     "reloadly:cost-sync": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/reloadly-cost-sync.ts",
     "seed:category-landing": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/seed-category-landing.ts",
+    "seed:collections": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/seed-collections.ts",
     "prod:status": "node scripts/prod-op.mjs migrate status",
     "prod:migrate": "node scripts/prod-op.mjs migrate deploy",
     "test": "node --conditions=react-server --import tsx --test \"test/**/*.test.ts\"",

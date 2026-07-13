@@ -4,6 +4,11 @@ import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { getPublicParentCards } from "./catalog";
 import { collectionState, isCollectionPublic } from "@/lib/collections/schedule";
+import {
+  slugifyCollection as slugify,
+  clampHomepageLimit as clampLimit,
+  normalizeCollectionAliases as normalizeAliases,
+} from "@/lib/collections/normalize";
 import type {
   ActionResult,
   AdminCollectionDTO,
@@ -12,36 +17,6 @@ import type {
   SaveCollectionInput,
 } from "@/lib/dto";
 import type { Product, StorefrontCollection } from "@/lib/types";
-
-function slugify(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
-
-/** Clamp the homepage item limit to a sane bound. */
-function clampLimit(value: number): number {
-  if (!Number.isFinite(value)) return 8;
-  return Math.min(24, Math.max(1, Math.round(value)));
-}
-
-/** Trim, lowercase, drop empties, and de-duplicate aliases on one record. */
-function normalizeAliases(aliases: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of aliases) {
-    const value = raw.trim().toLowerCase();
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    out.push(value);
-  }
-  return out;
-}
 
 function parseDate(value: string | null): Date | null {
   if (!value) return null;
