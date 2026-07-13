@@ -69,6 +69,49 @@ export interface ProductSearchResult {
   imageUrl?: string | null;
 }
 
+/**
+ * A collection resolved for the storefront: metadata plus its live parent
+ * product cards (already visibility-filtered and, for the homepage, limited).
+ */
+export interface StorefrontCollection {
+  slug: string;
+  name: string;
+  shortDescription: string;
+  longDescription: string;
+  imageUrl?: string | null;
+  ctaLabel: string;
+  /** Section title for the homepage (falls back to `name`). */
+  homepageTitle: string;
+  seoTitle: string;
+  seoDescription: string;
+  socialImageUrl?: string | null;
+  products: Product[];
+}
+
+/** A category match in the public grouped search. */
+export interface CategorySearchResult {
+  id: string;
+  name: string;
+  href: string;
+}
+
+/** A collection match in the public grouped search. */
+export interface CollectionSearchResult {
+  slug: string;
+  name: string;
+  href: string;
+}
+
+/** Grouped public-search payload returned by /api/search and the results page. */
+export interface SearchGroupsResult {
+  query: string;
+  products: ProductSearchResult[];
+  categories: CategorySearchResult[];
+  collections: CollectionSearchResult[];
+  /** More product matches exist beyond the previewed slice. */
+  hasMore: boolean;
+}
+
 export interface ProductVariantOption {
   id: string;
   name: string;

@@ -3,7 +3,7 @@ import { permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import RegionBadge from "@/components/RegionBadge";
-import { getCatalogPage, getCategoryDetail, getRegionCounts } from "@/lib/db/catalog";
+import { getCatalogPage, getCategoryDetail, getRegionCounts, searchStorefront } from "@/lib/db/catalog";
 import { categoryHref } from "@/lib/categoryUrl";
 import { REGION_LIST } from "@/lib/regions";
 
@@ -11,9 +11,26 @@ import { REGION_LIST } from "@/lib/regions";
 // edits appear immediately. Data reads stay cached via unstable_cache/CATALOG_TAG.
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Catalogue - ghost.ma" };
-
 type SearchParams = { category?: string; region?: string; q?: string; page?: string };
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const { q } = await searchParams;
+  const query = (q ?? "").trim();
+  if (query) {
+    // Arbitrary internal search-result URLs are intentionally not indexed (they
+    // are low-value, near-infinite query permutations). Links are still
+    // followed so product/category/collection pages keep their crawl paths.
+    return {
+      title: `Recherche : ${query} - ghost.ma`,
+      robots: { index: false, follow: true },
+    };
+  }
+  return { title: "Catalogue - ghost.ma" };
+}
 
 export default async function ProductsPage({
   searchParams,
@@ -38,12 +55,18 @@ export default async function ProductsPage({
     }
   }
 
-  const [{ categories, products: filtered, total, pageSize }, regionCounts] = await Promise.all([
-    getCatalogPage({ category, region, query, page, take: 24 }),
-    getRegionCounts({ category, query }),
-  ]);
+  const [{ categories, products: filtered, total, pageSize }, regionCounts, searchGroups] =
+    await Promise.all([
+      getCatalogPage({ category, region, query, page, take: 24 }),
+      getRegionCounts({ category, query }),
+      // Only needed to surface matching categories/collections when searching;
+      // productLimit 0 skips the product payload (the grid already shows those).
+      query ? searchStorefront(query, { productLimit: 0 }) : null,
+    ]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const totalRegionCount = Object.values(regionCounts).reduce((sum, n) => sum + n, 0);
+  const matchedCategories = searchGroups?.categories ?? [];
+  const matchedCollections = searchGroups?.collections ?? [];
 
   return (
     <div className="container-page pt-6 pb-20 sm:py-10">
@@ -59,6 +82,43 @@ export default async function ProductsPage({
           )}
         </p>
       </header>
+
+      {query && (matchedCategories.length > 0 || matchedCollections.length > 0) && (
+        <div className="mb-6 space-y-3">
+          {matchedCategories.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 font-mono text-xs uppercase tracking-wide text-faint">
+                Catégories
+              </span>
+              {matchedCategories.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="rounded-full border border-border px-3.5 py-1.5 text-[13px] font-medium text-muted transition hover:border-accent hover:text-white"
+                >
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+          )}
+          {matchedCollections.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 font-mono text-xs uppercase tracking-wide text-faint">
+                Collections
+              </span>
+              {matchedCollections.map((item) => (
+                <Link
+                  key={item.slug}
+                  href={item.href}
+                  className="rounded-full border border-border px-3.5 py-1.5 text-[13px] font-medium text-muted transition hover:border-accent hover:text-white"
+                >
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
@@ -119,8 +179,14 @@ export default async function ProductsPage({
 
       {filtered.length === 0 ? (
         <div className="card grid place-items-center px-6 py-20 text-center">
-          <p className="text-lg font-semibold text-white">Aucun produit trouvé</p>
-          <p className="mt-1 text-sm text-muted">Essayez une autre catégorie ou un autre terme.</p>
+          <p className="text-lg font-semibold text-white">
+            {query ? <>Aucun résultat pour « {q} »</> : "Aucun produit trouvé"}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            {query
+              ? "Essayez le nom de la plateforme, du produit ou de la région."
+              : "Essayez une autre catégorie ou un autre terme."}
+          </p>
           <Link href="/products" className="btn-primary mt-6">Réinitialiser</Link>
         </div>
       ) : (

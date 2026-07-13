@@ -1,16 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import type { ProductSearchResult } from "@/lib/types";
+import type {
+  CategorySearchResult,
+  CollectionSearchResult,
+  ProductSearchResult,
+} from "@/lib/types";
 import { formatDH } from "@/lib/format";
 import { getRegion } from "@/lib/regions";
+import { trackEvent } from "@/lib/analytics";
 import RegionBadge from "./RegionBadge";
 
 type Variant = "desktop" | "mobile";
 
 const DEBOUNCE_MS = 220;
 const MIN_QUERY = 2;
+
+type FlatOption =
+  | { index: number; kind: "product"; data: ProductSearchResult }
+  | { index: number; kind: "category"; data: CategorySearchResult }
+  | { index: number; kind: "collection"; data: CollectionSearchResult }
+  | { index: number; kind: "viewall" };
 
 export default function HeaderSearch({
   variant,
@@ -25,9 +36,12 @@ export default function HeaderSearch({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const noResultTracked = useRef<string>("");
 
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ProductSearchResult[]>([]);
+  const [products, setProducts] = useState<ProductSearchResult[]>([]);
+  const [categories, setCategories] = useState<CategorySearchResult[]>([]);
+  const [collections, setCollections] = useState<CollectionSearchResult[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -36,32 +50,53 @@ export default function HeaderSearch({
   const trimmed = query.trim();
   const ready = trimmed.length >= MIN_QUERY;
   const showDropdown = open && ready;
-  // "Voir tous les résultats" is a real, selectable row when there are extra
-  // matches beyond the preview; keyboard navigation can land on it.
-  const showViewAll = hasMore && results.length > 0;
-  const optionCount = results.length + (showViewAll ? 1 : 0);
-  const viewAllIndex = showViewAll ? results.length : -1;
+  const totalResults = products.length + categories.length + collections.length;
+
+  // A single flat option list backs the combobox: one contiguous index space
+  // across all three groups plus the trailing "view all" row, so keyboard
+  // navigation and aria-activedescendant work seamlessly across groups.
+  const flat = useMemo<FlatOption[]>(() => {
+    const out: FlatOption[] = [];
+    products.forEach((data) => out.push({ index: out.length, kind: "product", data }));
+    categories.forEach((data) => out.push({ index: out.length, kind: "category", data }));
+    collections.forEach((data) => out.push({ index: out.length, kind: "collection", data }));
+    if (hasMore && products.length > 0) out.push({ index: out.length, kind: "viewall" });
+    return out;
+  }, [products, categories, collections, hasMore]);
 
   const goToCatalogue = useCallback(() => {
     setOpen(false);
     inputRef.current?.blur();
+    trackEvent("search", { search_term: trimmed });
     router.push(`/products?q=${encodeURIComponent(trimmed)}`);
   }, [router, trimmed]);
 
-  const goToResult = useCallback(
-    (result: ProductSearchResult) => {
+  const selectOption = useCallback(
+    (option: FlatOption) => {
+      if (option.kind === "viewall") {
+        goToCatalogue();
+        return;
+      }
       setOpen(false);
       inputRef.current?.blur();
-      router.push(result.href);
+      trackEvent("select_search_result", {
+        search_term: trimmed,
+        result_type: option.kind,
+      });
+      if (option.kind === "product") router.push(option.data.href);
+      else if (option.kind === "category") router.push(option.data.href);
+      else router.push(option.data.href);
     },
-    [router],
+    [goToCatalogue, router, trimmed],
   );
 
   // Debounced fetch. Aborts the in-flight request on each keystroke and ignores
   // stale responses so results always match the latest query.
   useEffect(() => {
     if (!ready) {
-      setResults([]);
+      setProducts([]);
+      setCategories([]);
+      setCollections([]);
       setHasMore(false);
       setLoading(false);
       return;
@@ -76,14 +111,31 @@ export default function HeaderSearch({
         });
         if (!res.ok) throw new Error("search_failed");
         const data = (await res.json()) as {
-          results: ProductSearchResult[];
-          hasMore: boolean;
+          products?: ProductSearchResult[];
+          categories?: CategorySearchResult[];
+          collections?: CollectionSearchResult[];
+          hasMore?: boolean;
         };
-        setResults(data.results ?? []);
+        const nextProducts = data.products ?? [];
+        const nextCategories = data.categories ?? [];
+        const nextCollections = data.collections ?? [];
+        setProducts(nextProducts);
+        setCategories(nextCategories);
+        setCollections(nextCollections);
         setHasMore(Boolean(data.hasMore));
+        // Fire a no-results event once per distinct empty query.
+        if (
+          nextProducts.length + nextCategories.length + nextCollections.length === 0 &&
+          noResultTracked.current !== trimmed
+        ) {
+          noResultTracked.current = trimmed;
+          trackEvent("search_no_results", { search_term: trimmed });
+        }
       } catch (error) {
         if ((error as Error).name === "AbortError") return;
-        setResults([]);
+        setProducts([]);
+        setCategories([]);
+        setCollections([]);
         setHasMore(false);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -99,7 +151,7 @@ export default function HeaderSearch({
   // Reset the keyboard highlight whenever the option set changes.
   useEffect(() => {
     setActiveIndex(-1);
-  }, [results, showViewAll]);
+  }, [flat.length]);
 
   // Close on route change (e.g. after opening a result).
   useEffect(() => {
@@ -139,28 +191,30 @@ export default function HeaderSearch({
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
       setOpen(false);
+      inputRef.current?.blur();
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      if (!showDropdown || optionCount === 0) return;
+      if (!showDropdown || flat.length === 0) return;
       event.preventDefault();
       setOpen(true);
       setActiveIndex((current) => {
         const delta = event.key === "ArrowDown" ? 1 : -1;
         const next = current + delta;
-        if (next < 0) return optionCount - 1;
-        if (next >= optionCount) return 0;
+        if (next < 0) return flat.length - 1;
+        if (next >= flat.length) return 0;
         return next;
       });
       return;
     }
     if (event.key === "Enter") {
-      if (activeIndex >= 0 && activeIndex < results.length) {
+      if (activeIndex >= 0 && activeIndex < flat.length) {
         event.preventDefault();
-        goToResult(results[activeIndex]);
-      } else if (activeIndex === viewAllIndex && showViewAll) {
+        selectOption(flat[activeIndex]);
+      } else if (flat.length > 0 && flat[0].kind !== "viewall") {
+        // Enter with nothing highlighted opens the top relevant result.
         event.preventDefault();
-        goToCatalogue();
+        selectOption(flat[0]);
       } else if (ready) {
         event.preventDefault();
         goToCatalogue();
@@ -176,6 +230,8 @@ export default function HeaderSearch({
     variant === "desktop"
       ? "h-full w-full rounded-[10px] border border-border bg-surface pl-10 pr-4 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25"
       : "h-10 w-full rounded-[10px] border border-border bg-surface pl-10 pr-4 text-sm text-text outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/25";
+
+  const optId = (index: number) => `${listboxId}-opt-${index}`;
 
   return (
     <div ref={containerRef} className={wrapperClass}>
@@ -209,9 +265,7 @@ export default function HeaderSearch({
           aria-expanded={showDropdown}
           aria-controls={listboxId}
           aria-autocomplete="list"
-          aria-activedescendant={
-            activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
-          }
+          aria-activedescendant={activeIndex >= 0 ? optId(activeIndex) : undefined}
           autoComplete="off"
         />
         <svg
@@ -232,50 +286,91 @@ export default function HeaderSearch({
           id={listboxId}
           role="listbox"
           aria-label="Résultats de recherche"
-          className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(70vh,420px)] overflow-y-auto overscroll-contain rounded-xl border border-border bg-card shadow-card"
+          className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[min(72vh,460px)] overflow-y-auto overscroll-contain rounded-xl border border-border bg-card shadow-card"
         >
-          {loading && results.length === 0 ? (
+          {/* aria-live count for assistive tech */}
+          <span className="sr-only" role="status" aria-live="polite">
+            {loading
+              ? "Recherche en cours"
+              : `${totalResults} résultat${totalResults === 1 ? "" : "s"}`}
+          </span>
+
+          {loading && totalResults === 0 ? (
             <SkeletonRows />
-          ) : results.length === 0 ? (
-            <div className="px-4 py-5 text-center">
-              <p className="text-sm text-muted">
-                Aucun produit trouvé pour{" "}
-                <span className="font-medium text-white">
-                  « {trimmed} »
-                </span>
-              </p>
-              <button
-                type="button"
-                onClick={goToCatalogue}
-                className="mt-3 text-sm font-medium text-accent transition hover:text-accent-hover"
-              >
-                Voir tout le catalogue
-              </button>
-            </div>
+          ) : totalResults === 0 ? (
+            <EmptyState query={trimmed} onCatalogue={goToCatalogue} />
           ) : (
-            <>
-              <ul className="p-1.5">
-                {results.map((result, index) => (
-                  <ResultRow
-                    key={result.id}
-                    id={`${listboxId}-opt-${index}`}
-                    result={result}
-                    active={activeIndex === index}
-                    onSelect={() => goToResult(result)}
-                    onHover={() => setActiveIndex(index)}
-                  />
-                ))}
-              </ul>
-              {showViewAll && (
+            <div className="py-1.5">
+              {products.length > 0 && (
+                <Group label="Produits">
+                  <ul>
+                    {flat
+                      .filter((o): o is Extract<FlatOption, { kind: "product" }> => o.kind === "product")
+                      .map((option) => (
+                        <ProductRow
+                          key={option.data.id}
+                          id={optId(option.index)}
+                          result={option.data}
+                          active={activeIndex === option.index}
+                          onSelect={() => selectOption(option)}
+                          onHover={() => setActiveIndex(option.index)}
+                        />
+                      ))}
+                  </ul>
+                </Group>
+              )}
+
+              {categories.length > 0 && (
+                <Group label="Catégories">
+                  <ul>
+                    {flat
+                      .filter((o): o is Extract<FlatOption, { kind: "category" }> => o.kind === "category")
+                      .map((option) => (
+                        <SimpleRow
+                          key={`cat-${option.data.id}`}
+                          id={optId(option.index)}
+                          label={option.data.name}
+                          icon="category"
+                          active={activeIndex === option.index}
+                          onSelect={() => selectOption(option)}
+                          onHover={() => setActiveIndex(option.index)}
+                        />
+                      ))}
+                  </ul>
+                </Group>
+              )}
+
+              {collections.length > 0 && (
+                <Group label="Collections">
+                  <ul>
+                    {flat
+                      .filter((o): o is Extract<FlatOption, { kind: "collection" }> => o.kind === "collection")
+                      .map((option) => (
+                        <SimpleRow
+                          key={`col-${option.data.slug}`}
+                          id={optId(option.index)}
+                          label={option.data.name}
+                          icon="collection"
+                          active={activeIndex === option.index}
+                          onSelect={() => selectOption(option)}
+                          onHover={() => setActiveIndex(option.index)}
+                        />
+                      ))}
+                  </ul>
+                </Group>
+              )}
+
+              {flat.some((o) => o.kind === "viewall") && (
                 <button
                   type="button"
-                  id={`${listboxId}-opt-${viewAllIndex}`}
+                  id={optId(flat[flat.length - 1].index)}
                   role="option"
-                  aria-selected={activeIndex === viewAllIndex}
-                  onMouseEnter={() => setActiveIndex(viewAllIndex)}
+                  aria-selected={activeIndex === flat[flat.length - 1].index}
+                  onMouseEnter={() => setActiveIndex(flat[flat.length - 1].index)}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={goToCatalogue}
                   className={`flex w-full items-center justify-between gap-2 border-t border-border px-4 py-3 text-left text-sm font-medium transition ${
-                    activeIndex === viewAllIndex
+                    activeIndex === flat[flat.length - 1].index
                       ? "bg-surface text-white"
                       : "text-accent hover:bg-surface"
                   }`}
@@ -287,7 +382,7 @@ export default function HeaderSearch({
                   <span aria-hidden>{"→"}</span>
                 </button>
               )}
-            </>
+            </div>
           )}
         </div>
       )}
@@ -295,7 +390,18 @@ export default function HeaderSearch({
   );
 }
 
-function ResultRow({
+function Group({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="px-1.5">
+      <p className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-faint">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function ProductRow({
   id,
   result,
   active,
@@ -313,7 +419,6 @@ function ResultRow({
     <li role="option" aria-selected={active} id={id}>
       <button
         type="button"
-        // Keep focus in the input so keyboard nav and blur behave predictably.
         onMouseDown={(event) => event.preventDefault()}
         onMouseEnter={onHover}
         onClick={onSelect}
@@ -321,15 +426,9 @@ function ResultRow({
           active ? "bg-surface" : "hover:bg-surface"
         }`}
       >
-        <SearchThumb
-          category={result.category}
-          imageUrl={result.imageUrl}
-          label={result.name}
-        />
+        <SearchThumb category={result.category} imageUrl={result.imageUrl} label={result.name} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate text-sm font-medium text-text">
-            {result.name}
-          </span>
+          <span className="truncate text-sm font-medium text-text">{result.name}</span>
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-faint">
             <span className="truncate">{result.categoryName}</span>
             {region.kind !== "unknown" && (
@@ -341,15 +440,88 @@ function ResultRow({
           </span>
         </span>
         <span className="shrink-0 text-right">
-          <span className="block text-[11px] leading-none text-faint">
-            {"À partir de"}
-          </span>
+          <span className="block text-[11px] leading-none text-faint">{"À partir de"}</span>
           <span className="mt-1 block font-mono text-sm font-semibold text-text">
             {formatDH(result.price)}
           </span>
         </span>
       </button>
     </li>
+  );
+}
+
+function SimpleRow({
+  id,
+  label,
+  icon,
+  active,
+  onSelect,
+  onHover,
+}: {
+  id: string;
+  label: string;
+  icon: "category" | "collection";
+  active: boolean;
+  onSelect: () => void;
+  onHover: () => void;
+}) {
+  return (
+    <li role="option" aria-selected={active} id={id}>
+      <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        onMouseEnter={onHover}
+        onClick={onSelect}
+        className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition ${
+          active ? "bg-surface" : "hover:bg-surface"
+        }`}
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface2 text-faint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4" aria-hidden>
+            {icon === "category" ? (
+              <>
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </>
+            ) : (
+              <>
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+              </>
+            )}
+          </svg>
+        </span>
+        <span className="truncate text-sm font-medium text-text">{label}</span>
+      </button>
+    </li>
+  );
+}
+
+function EmptyState({ query, onCatalogue }: { query: string; onCatalogue: () => void }) {
+  return (
+    <div className="px-4 py-5 text-center">
+      <p className="text-sm text-muted">
+        Aucun résultat pour{" "}
+        <span className="font-medium text-white">« {query} »</span>
+      </p>
+      <p className="mt-2 text-xs text-faint">
+        Essayez le nom de la plateforme, du produit ou de la région.
+      </p>
+      <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onCatalogue}
+        className="mt-3 text-sm font-medium text-accent transition hover:text-accent-hover"
+      >
+        Voir tout le catalogue
+      </button>
+    </div>
   );
 }
 
@@ -384,9 +556,7 @@ function SearchThumb({
           onError={() => setFailed(true)}
         />
       ) : (
-        <span className="font-mono text-[10px] tracking-[0.14em] text-[#697082]">
-          {code}
-        </span>
+        <span className="font-mono text-[10px] tracking-[0.14em] text-[#697082]">{code}</span>
       )}
     </span>
   );

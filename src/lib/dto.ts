@@ -246,6 +246,87 @@ export interface SaveCategoryInput {
   landing: CategoryLanding;
 }
 
+// ─── Collections (curated merchandising groups) ──────────────────────────────
+
+export type CollectionLifecycleState = "inactive" | "upcoming" | "live" | "expired";
+
+/** A parent product referenced by a collection, with live display context. */
+export interface CollectionProductRefDTO {
+  productId: string;
+  slug: string;
+  name: string;
+  category: string;
+  categoryName: string;
+  region: string;
+  /** Lowest current price (MAD) across public variants; null when none. */
+  priceFrom: number | null;
+  active: boolean;
+  /** False when the product has no public/active variant, so it would not
+   *  render on the storefront. Admin-only hint (never hides the row here). */
+  eligible: boolean;
+}
+
+export interface AdminCollectionDTO {
+  id: string;
+  slug: string;
+  name: string;
+  shortDescription: string;
+  longDescription: string;
+  imageUrl: string | null;
+  active: boolean;
+  sortOrder: number;
+  /** ISO strings; null means no bound. */
+  startAt: string | null;
+  endAt: string | null;
+  showOnHomepage: boolean;
+  homepageTitle: string;
+  homepageLimit: number;
+  ctaLabel: string;
+  seoTitle: string;
+  seoDescription: string;
+  socialImageUrl: string | null;
+  aliases: string[];
+  productCount: number;
+  /** Live lifecycle state for the admin status badge. */
+  state: CollectionLifecycleState;
+  items: CollectionProductRefDTO[];
+}
+
+export interface SaveCollectionInput {
+  originalId?: string;
+  slug: string;
+  name: string;
+  shortDescription: string;
+  longDescription: string;
+  imageUrl: string | null;
+  active: boolean;
+  sortOrder: number;
+  startAt: string | null;
+  endAt: string | null;
+  showOnHomepage: boolean;
+  homepageTitle: string;
+  homepageLimit: number;
+  ctaLabel: string;
+  seoTitle: string;
+  seoDescription: string;
+  socialImageUrl: string | null;
+  aliases: string[];
+  /** Ordered parent-product ids that make up the collection. */
+  productIds: string[];
+}
+
+/** Lightweight parent-product option for the collection product picker. */
+export interface CollectionProductOptionDTO {
+  productId: string;
+  slug: string;
+  name: string;
+  category: string;
+  categoryName: string;
+  region: string;
+  priceFrom: number | null;
+  active: boolean;
+}
+
 export interface DeleteParentProductInput {
   slug: string;
   variantStrategy: "delete" | "move";

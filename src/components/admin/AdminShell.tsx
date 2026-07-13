@@ -109,6 +109,19 @@ const NAV: NavGroup[] = [
         ),
       },
       {
+        id: "collections",
+        label: "Collections",
+        icon: icon(
+          <>
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <path d="M6.5 6.5h0M17.5 6.5h0" />
+          </>,
+        ),
+      },
+      {
         id: "pricing",
         label: "Tarification",
         icon: icon(

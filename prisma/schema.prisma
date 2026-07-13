@@ -37,15 +37,83 @@ model Product {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now()) @updatedAt
 
-  categoryRecord Category?        @relation(fields: [category], references: [id])
-  digitalCodes   DigitalCode[]
-  orderItems     OrderItem[]
-  deliveredCodes DeliveredCode[]
-  media          ProductMedia[]
-  variants       ProductVariant[]
+  categoryRecord  Category?           @relation(fields: [category], references: [id])
+  digitalCodes    DigitalCode[]
+  orderItems      OrderItem[]
+  deliveredCodes  DeliveredCode[]
+  media           ProductMedia[]
+  variants        ProductVariant[]
+  collectionItems CollectionProduct[]
 
   @@index([active, sortOrder])
   @@index([category, active])
+}
+
+// Curated storefront merchandising group (e.g. "Tendances", "Meilleures ventes",
+// "Cartes cadeaux"). Distinct from Category: a Category describes WHAT a product
+// is (a required FK on Product), while a Collection is an admin-curated group
+// that can change over time and a product may belong to many. Membership is
+// parent-product level (see CollectionProduct) so one product family is not
+// repeated once per denomination. Collections carry their own storefront
+// visibility window, homepage placement, SEO, and search aliases. All display
+// data (price, media, region, stock) is always read live from the referenced
+// Product — never duplicated here.
+model Collection {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  shortDescription String   @default("")
+  longDescription  String   @default("")
+  // Optional compact banner/hero artwork (URL or data: URI, like ProductMedia).
+  imageUrl         String?
+  // Publication state. Defaults to false so an imported/created collection is
+  // never auto-published — an admin must explicitly activate it.
+  active           Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  // Optional schedule window. Visibility is computed at render/query time from
+  // active + startAt/endAt vs. now (no cron needed). Before startAt: hidden;
+  // after endAt: expired/hidden. Null bounds mean "no lower/upper limit".
+  startAt          DateTime?
+  endAt            DateTime?
+  // Homepage placement.
+  showOnHomepage   Boolean  @default(false)
+  // Optional homepage section-title override (falls back to `name`).
+  homepageTitle    String   @default("")
+  homepageLimit    Int      @default(8)
+  // Optional "Voir tout" CTA label override on the homepage section.
+  ctaLabel         String   @default("")
+  // SEO for the public /collections/<slug> page (fall back to name/description).
+  seoTitle         String   @default("")
+  seoDescription   String   @default("")
+  socialImageUrl   String?
+  // Centralized, admin-maintained search aliases matched by the public search
+  // (accent/case-insensitive). Never rendered as visible product data.
+  aliases          String[] @default([])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  items CollectionProduct[]
+
+  @@index([active, sortOrder])
+}
+
+// Ordered parent-product membership for a Collection. A safe join model: it
+// stores only the reference + display order, never a price/media snapshot, so
+// the storefront always reads current product data. Unique (collectionId,
+// productId) prevents duplicate membership.
+model CollectionProduct {
+  id           String   @id @default(cuid())
+  collectionId String
+  productId    String
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, productId])
+  @@index([collectionId])
+  @@index([productId])
 }
 
 model Category {

@@ -12,14 +12,21 @@ import {
 } from "@/lib/storeSettings";
 import { variantTitle } from "@/lib/pricing/variant-identity";
 import { normalizeCategoryLanding } from "@/lib/categoryLanding";
+import { scoreMatch, normalizeSearch } from "@/lib/search/text";
+import { isCollectionPublic } from "@/lib/collections/schedule";
+import { categoryHref } from "@/lib/categoryUrl";
+import { collectionHref } from "@/lib/collectionUrl";
 
 /** Subset of settings the stock helpers need. */
 type StockOpts = Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">;
 import type {
   Category,
+  CategorySearchResult,
+  CollectionSearchResult,
   Product,
   ProductSearchResult,
   ProductVariantOption,
+  SearchGroupsResult,
   StockMode,
   StockStatus,
 } from "@/lib/types";
@@ -104,7 +111,7 @@ function toVariantOption(
  * DTO both bloats every response AND blows past the 2 MB `unstable_cache` limit
  * (which silently fails the cache write and throws). Serve those via the
  * cacheable image endpoint instead; plain URLs pass through. Mirrors the same
- * rule already applied in searchProductsPreview.
+ * rule already applied in searchStorefront.
  */
 function catalogImageUrl(rawImage: string | null, slug: string): string | null {
   if (!rawImage) return null;
@@ -508,34 +515,29 @@ export async function getCatalogPage(
 }
 
 /**
- * Header autocomplete search. Reuses the catalogue visibility rules
- * (`getActiveProductRows` + `isVariantPublic`) so it can never surface a hidden,
- * inactive, or empty product, then collapses each parent to a single compact
- * row with an "à partir de" starting price. Deliberately parent-level (not the
- * per-variant flattening the catalogue grid uses) so variants of one product
- * don't produce duplicate dropdown rows.
+ * Parent-level product cards for a set of product ids (the real Product.id, not
+ * the slug), keyed by product id. Reuses the exact catalogue visibility rules so
+ * a collection can never surface a hidden/inactive/empty product, and collapses
+ * each parent to ONE card with an "à partir de" starting price (so a collection
+ * shows one entry per product family, not one per denomination). Products with
+ * no public variant are omitted. Uncached — callers wrap their own read in
+ * `unstable_cache` (CATALOG_TAG) or rely on page-level revalidation.
  */
-export async function searchProductsPreview(
-  rawQuery: string,
-  limit = 6,
-): Promise<{ results: ProductSearchResult[]; hasMore: boolean }> {
-  const query = rawQuery.trim();
-  if (query.length < 2) return { results: [], hasMore: false };
-  return searchProductsPreviewCached(query, limit);
-}
-
-const searchProductsPreviewCached = unstable_cache(
-  async (
-    query: string,
-    limit: number,
-  ): Promise<{ results: ProductSearchResult[]; hasMore: boolean }> => {
+export async function getPublicParentCards(
+  productIds: string[],
+): Promise<Map<string, Product>> {
+  const map = new Map<string, Product>();
+  if (productIds.length === 0) return map;
   const settings = await loadStoreSettings();
-  // Fetch a little wider than `limit`: some rows drop out once inventory/active
-  // visibility is applied, and the surplus tells us whether to offer "voir tous
-  // les résultats".
-  const rows = await getActiveProductRows({ query, take: 25 });
-
-  const matches: ProductSearchResult[] = [];
+  const rows = await prisma.product.findMany({
+    where: {
+      id: { in: productIds },
+      active: true,
+      categoryRecord: { is: { active: true } },
+      variants: { some: { active: true } },
+    },
+    include: productCatalogInclude,
+  });
   for (const row of rows) {
     const publicVariants = row.variants.filter((variant) =>
       isVariantPublic(row, variant, settings),
@@ -545,28 +547,202 @@ const searchProductsPreviewCached = unstable_cache(
       (min, variant) => (variant.priceMad < min ? variant.priceMad : min),
       publicVariants[0].priceMad,
     );
-    const rawImage = row.imageUrl ?? row.media[0]?.url ?? null;
-    matches.push({
+    const inStock = publicVariants.some(
+      (variant) => variantStockStatus(row, variant, settings) === "in_stock",
+    );
+    map.set(row.id, {
       id: row.slug,
+      parentId: row.slug,
       href: `/products/${row.slug}`,
       name: row.name,
       category: row.category,
       categoryName: row.categoryRecord?.name ?? row.category,
       region: row.region,
       price: startingPrice,
-      // Heavy base64 `data:` URIs are served via a cacheable image endpoint so
-      // they don't bloat this JSON on every keystroke; light URLs pass through.
-      imageUrl: rawImage
-        ? rawImage.startsWith("data:")
-          ? `/api/product-image/${encodeURIComponent(row.slug)}`
-          : rawImage
-        : null,
+      deliveryType: row.deliveryType,
+      description: row.description,
+      shortDescription: row.shortDescription,
+      longDescription: row.longDescription,
+      imageUrl: catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug),
+      featured: row.featured,
+      stockStatus: inStock ? "in_stock" : "out_of_stock",
     });
   }
+  return map;
+}
 
-  return { results: matches.slice(0, limit), hasMore: matches.length > limit };
+/**
+ * When a query is specific enough to name a denomination (e.g. "steam 20 eur"),
+ * deep-link the result to the product page with that variant/region
+ * preselected, reusing the existing `?region=&variant=` selection behavior — no
+ * new URL or variant page. Otherwise the plain parent path is returned.
+ */
+function searchProductHref(
+  row: ProductWithCategory,
+  publicVariants: ProductWithCategory["variants"],
+  query: string,
+): string {
+  const base = `/products/${row.slug}`;
+  const numbers = (normalizeSearch(query).match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+  if (numbers.length === 0) return base;
+  const match = publicVariants.find(
+    (variant) => variant.faceValue != null && numbers.includes(Number(variant.faceValue)),
+  );
+  if (!match) return base;
+  const region = match.region || row.region;
+  return `${base}?region=${encodeURIComponent(region)}&variant=${encodeURIComponent(match.id)}`;
+}
+
+/**
+ * Grouped public storefront search: products (parent-level, ranked), categories,
+ * and public collections. Reuses catalogue visibility, the shared accent/alias
+ * ranker (`scoreMatch`), and the same image/url helpers as the rest of the
+ * storefront. This is the single source for both the header autocomplete and the
+ * results page; it never exposes stock counts, variants, cost, or admin data.
+ *
+ * Strategy note: at the current catalogue size the ranker runs in JS over a
+ * bounded set of active rows (guaranteeing accent-insensitive + alias matching
+ * that a plain SQL `contains` cannot). It sits behind this one function so it
+ * can later be swapped for a DB/FTS index without touching the API or UI.
+ */
+export async function searchStorefront(
+  rawQuery: string,
+  opts: { productLimit?: number } = {},
+): Promise<SearchGroupsResult> {
+  const query = rawQuery.trim();
+  if (query.length < 2) {
+    return { query, products: [], categories: [], collections: [], hasMore: false };
+  }
+  return searchStorefrontCached(query, opts.productLimit ?? 6);
+}
+
+const searchStorefrontCached = unstable_cache(
+  async (query: string, productLimit: number): Promise<SearchGroupsResult> => {
+    const settings = await loadStoreSettings();
+    const [rows, categoryRows, collectionRows] = await Promise.all([
+      getActiveProductRows({ take: 300 }),
+      prisma.category.findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, description: true, tagline: true, seoSlug: true },
+      }),
+      prisma.collection.findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: {
+          slug: true,
+          name: true,
+          shortDescription: true,
+          aliases: true,
+          active: true,
+          startAt: true,
+          endAt: true,
+        },
+      }),
+    ]);
+    const now = new Date();
+
+    // ── Products (parent-level, ranked) ──────────────────────────────────────
+    const scoredProducts: { score: number; result: ProductSearchResult }[] = [];
+    for (const row of rows) {
+      const publicVariants = row.variants.filter((variant) =>
+        isVariantPublic(row, variant, settings),
+      );
+      if (publicVariants.length === 0) continue;
+      const inStock = publicVariants.some(
+        (variant) => variantStockStatus(row, variant, settings) === "in_stock",
+      );
+      const score = scoreMatch(
+        {
+          kind: "product",
+          title: row.name,
+          aliasText: [row.brand ?? "", row.categoryRecord?.name ?? row.category]
+            .filter(Boolean)
+            .join(" "),
+          haystack: [row.shortDescription ?? "", row.description].filter(Boolean).join(" "),
+          inStock,
+        },
+        query,
+      );
+      if (score <= 0) continue;
+      const startingPrice = publicVariants.reduce(
+        (min, variant) => (variant.priceMad < min ? variant.priceMad : min),
+        publicVariants[0].priceMad,
+      );
+      const rawImage = row.imageUrl ?? row.media[0]?.url ?? null;
+      scoredProducts.push({
+        score,
+        result: {
+          id: row.slug,
+          href: searchProductHref(row, publicVariants, query),
+          name: row.name,
+          category: row.category,
+          categoryName: row.categoryRecord?.name ?? row.category,
+          region: row.region,
+          price: startingPrice,
+          imageUrl: rawImage
+            ? rawImage.startsWith("data:")
+              ? `/api/product-image/${encodeURIComponent(row.slug)}`
+              : rawImage
+            : null,
+        },
+      });
+    }
+    scoredProducts.sort(
+      (a, b) => b.score - a.score || a.result.name.localeCompare(b.result.name),
+    );
+    const products = scoredProducts.slice(0, productLimit).map((entry) => entry.result);
+    const hasMore = scoredProducts.length > productLimit;
+
+    // ── Categories ───────────────────────────────────────────────────────────
+    const categories: CategorySearchResult[] = categoryRows
+      .map((category) => ({
+        score: scoreMatch(
+          {
+            kind: "category",
+            title: category.name,
+            haystack: [category.description, category.tagline].filter(Boolean).join(" "),
+          },
+          query,
+        ),
+        category,
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .map((entry) => ({
+        id: entry.category.id,
+        name: entry.category.name,
+        href: categoryHref({ id: entry.category.id, seoSlug: entry.category.seoSlug }),
+      }));
+
+    // ── Collections (public/current only) ────────────────────────────────────
+    const collections: CollectionSearchResult[] = collectionRows
+      .filter((collection) => isCollectionPublic(collection, now))
+      .map((collection) => ({
+        score: scoreMatch(
+          {
+            kind: "collection",
+            title: collection.name,
+            aliasText: (collection.aliases ?? []).join(" "),
+            haystack: collection.shortDescription,
+          },
+          query,
+        ),
+        collection,
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .map((entry) => ({
+        slug: entry.collection.slug,
+        name: entry.collection.name,
+        href: collectionHref(entry.collection.slug),
+      }));
+
+    return { query, products, categories, collections, hasMore };
   },
-  ["search-preview"],
+  ["storefront-search"],
   { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
 );
 

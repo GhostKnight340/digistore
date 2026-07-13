@@ -4,8 +4,10 @@ import StatStrip from "@/components/StatStrip";
 import FeaturedCarousel from "@/components/FeaturedCarousel";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
+import CollectionSection from "@/components/CollectionSection";
 import TrustStrip from "@/components/TrustStrip";
 import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import { getHomepageCollections } from "@/lib/db/collections";
 import { resolveBrandColor } from "@/lib/brandAssets";
 
 export const revalidate = 3600;
@@ -17,11 +19,13 @@ const steps = [
 ];
 
 export default async function HomePage() {
-  const [{ categories, products }, settings, brandCategories] = await Promise.all([
-    getCatalogData(),
-    getStoreSettings(),
-    getActiveCategories(),
-  ]);
+  const [{ categories, products }, settings, brandCategories, homepageCollections] =
+    await Promise.all([
+      getCatalogData(),
+      getStoreSettings(),
+      getActiveCategories(),
+      getHomepageCollections(),
+    ]);
 
   // Brand accent per category id, so product/category cards glow in their
   // brand color instead of a uniform blue.
@@ -129,6 +133,15 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {settings.homepage.showCollections &&
+        homepageCollections.map((collection) => (
+          <CollectionSection
+            key={collection.slug}
+            collection={collection}
+            accentByCategory={accentByCategory}
+          />
+        ))}
 
       {settings.homepage.showFeaturedProducts && (
         <section className="mt-7 sm:mt-10">

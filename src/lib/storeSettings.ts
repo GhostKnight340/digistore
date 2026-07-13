@@ -66,6 +66,10 @@ export type StoreSettings = {
     showBrandNav: boolean;
     showCategories: boolean;
     showFeaturedProducts: boolean;
+    /** Master switch for the curated collection sections on the homepage. Each
+     *  collection still has its own per-collection "Afficher sur l'accueil"
+     *  toggle; this hides all of them at once when off. */
+    showCollections: boolean;
     showHowItWorks: boolean;
     showWhyChooseUs: boolean;
     showFooter: boolean;
@@ -168,6 +172,7 @@ export const defaultStoreSettings: StoreSettings = {
     showBrandNav: true,
     showCategories: true,
     showFeaturedProducts: true,
+    showCollections: true,
     showHowItWorks: true,
     showWhyChooseUs: true,
     showFooter: true,
