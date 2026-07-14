@@ -11,18 +11,18 @@ import AddToCartForm from "@/components/AddToCartForm";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import RegionPanel from "@/components/RegionPanel";
 import RegionFlag from "@/components/RegionFlag";
+import NavigatorTips from "@/components/trust/NavigatorTips";
+import DeliverySteps from "@/components/trust/DeliverySteps";
+import AcceptedPayments from "@/components/trust/AcceptedPayments";
+import Faq from "@/components/trust/Faq";
 import { getRegion } from "@/lib/regions";
+import { getStoreSettings } from "@/lib/db/catalog";
+import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 
 export async function generateStaticParams() {
   const slugs = await getParentProductSlugs().catch(() => []);
   return slugs.map((id) => ({ id }));
 }
-
-const howItWorks = [
-  { n: "01", title: "Choisissez votre montant", text: "Sélectionnez la valeur ou la formule qui vous convient." },
-  { n: "02", title: "Payez en toute sécurité", text: "Choisissez un mode de paiement disponible." },
-  { n: "03", title: "Recevez votre produit numérique", text: "Disponible après confirmation du paiement." },
-];
 
 export default async function ProductDetailPage({
   params,
@@ -65,9 +65,22 @@ export default async function ProductDetailPage({
   const variantHref = (variantId: string) =>
     `/products/${product.id}?region=${encodeURIComponent(selectedRegion)}&variant=${encodeURIComponent(variantId)}`;
 
-  const related = (await getProductsByCategorySlug(product.category))
-    .filter((item) => item.parentId !== product.id)
-    .slice(0, 4);
+  const [related, settings, paymentConfig] = await Promise.all([
+    getProductsByCategorySlug(product.category).then((items) =>
+      items.filter((item) => item.parentId !== product.id).slice(0, 4),
+    ),
+    getStoreSettings(),
+    getPublicPaymentMethods().catch(() => ({ methods: [] })),
+  ]);
+
+  // Context keywords let the Navigator surface the right tip automatically
+  // (region, platform, category…) without hardcoding per-product logic.
+  const tipKeywords = [
+    product.category,
+    product.categoryName,
+    product.name,
+    displayRegion,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <div className="container-page pt-8 pb-20 sm:py-10">
@@ -99,29 +112,16 @@ export default async function ProductDetailPage({
             <ProductInfoCard text={product.longDescription || product.description} />
           )}
 
-          <section className="mt-10">
-            <h2 className="text-lg font-semibold tracking-tight text-text">
-              Comment ça marche
-            </h2>
-            <div className="mt-5 flex flex-col gap-2">
-              {howItWorks.map((step) => (
-                <article
-                  key={step.n}
-                  className="flex gap-4 rounded-[14px] border border-border bg-surface p-4"
-                >
-                  <span className="w-6 shrink-0 font-mono text-[13px] text-accent">
-                    {step.n}
-                  </span>
-                  <div>
-                    <h3 className="text-[14.5px] font-medium text-text">
-                      {step.title}
-                    </h3>
-                    <p className="mt-1 text-[13px] text-muted">{step.text}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
+          <NavigatorTips tips={settings.navigatorTips} keywords={tipKeywords} className="mt-8" />
+
+          {settings.homepage.showDelivery && (
+            <DeliverySteps
+              steps={settings.deliverySteps}
+              title="Comment se passe la livraison"
+              variant="compact"
+              className="mt-10"
+            />
+          )}
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
@@ -216,6 +216,17 @@ export default async function ProductDetailPage({
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
               Paiement sécurisé
             </div>
+            {paymentConfig.methods.length > 0 && (
+              <div className="mt-4 border-t border-border pt-4">
+                <p className="mb-2.5 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-faint">
+                  Moyens de paiement acceptés
+                </p>
+                <AcceptedPayments
+                  initialMethods={paymentConfig.methods}
+                  variant="inline"
+                />
+              </div>
+            )}
           </div>
 
           <div className="mt-[18px] grid gap-2.5 min-[420px]:grid-cols-2">
@@ -243,6 +254,18 @@ export default async function ProductDetailPage({
             ))}
           </div>
         </section>
+      )}
+
+      {settings.homepage.showFaq && (
+        <Faq
+          categories={settings.faqCategories}
+          items={settings.faqItems}
+          title="Questions fréquentes"
+          searchable={false}
+          showCategories={false}
+          limit={5}
+          className="mt-16"
+        />
       )}
     </div>
   );

@@ -1,4 +1,30 @@
 import type { PaymentMethod, StockMode } from "./types";
+import {
+  defaultWhyGhost,
+  defaultReviews,
+  defaultNavigatorTips,
+  defaultDeliverySteps,
+  defaultFaqCategories,
+  defaultFaqItems,
+  type WhyGhostItemSetting,
+  type WhyGhostIcon,
+  type ReviewSetting,
+  type ReviewStatus,
+  type NavigatorTipSetting,
+  type NavigatorTipType,
+  type DeliveryStepSetting,
+  type FaqCategorySetting,
+  type FaqItemSetting,
+} from "./trust/content";
+
+export type {
+  WhyGhostItemSetting,
+  ReviewSetting,
+  NavigatorTipSetting,
+  DeliveryStepSetting,
+  FaqCategorySetting,
+  FaqItemSetting,
+} from "./trust/content";
 
 export type TrustItemSetting = {
   id: string;
@@ -72,6 +98,12 @@ export type StoreSettings = {
     showCollections: boolean;
     showHowItWorks: boolean;
     showWhyChooseUs: boolean;
+    /** Customer Trust & Conversion sections. */
+    showWhyGhost: boolean;
+    showReviews: boolean;
+    showDelivery: boolean;
+    showPaymentMethods: boolean;
+    showFaq: boolean;
     showFooter: boolean;
     brandNavTitle: string;
     brandNavSubtitle: string;
@@ -86,6 +118,16 @@ export type StoreSettings = {
     howItWorksSubtitle: string;
     whyChooseUsTitle: string;
     whyChooseUsSubtitle: string;
+    whyGhostTitle: string;
+    whyGhostSubtitle: string;
+    reviewsTitle: string;
+    reviewsSubtitle: string;
+    deliveryTitle: string;
+    deliverySubtitle: string;
+    paymentMethodsTitle: string;
+    paymentMethodsSubtitle: string;
+    faqTitle: string;
+    faqSubtitle: string;
     ctaTitle: string;
     ctaSubtitle: string;
   };
@@ -97,6 +139,13 @@ export type StoreSettings = {
   featuredOutOfStock: "show" | "hide";
   trustItems: TrustItemSetting[];
   statItems: StatItemSetting[];
+  /** Customer Trust & Conversion content (admin-editable via the settings blob). */
+  whyGhost: WhyGhostItemSetting[];
+  reviews: ReviewSetting[];
+  navigatorTips: NavigatorTipSetting[];
+  deliverySteps: DeliveryStepSetting[];
+  faqCategories: FaqCategorySetting[];
+  faqItems: FaqItemSetting[];
   featuredProductIds: string[];
   emailTemplates: Record<string, { subject: string; body: string }>;
   legalPages: Record<
@@ -178,6 +227,11 @@ export const defaultStoreSettings: StoreSettings = {
     showCollections: true,
     showHowItWorks: true,
     showWhyChooseUs: true,
+    showWhyGhost: true,
+    showReviews: true,
+    showDelivery: true,
+    showPaymentMethods: true,
+    showFaq: true,
     showFooter: true,
     brandNavTitle: "Parcourir par marque",
     brandNavSubtitle: "Accédez directement à vos plateformes préférées.",
@@ -191,6 +245,16 @@ export const defaultStoreSettings: StoreSettings = {
     howItWorksSubtitle: "Trois étapes simples, sans friction.",
     whyChooseUsTitle: "Pourquoi choisir ghost.ma ?",
     whyChooseUsSubtitle: "Des produits numériques fiables, simples et rapides.",
+    whyGhostTitle: "Pourquoi acheter sur ghost.ma",
+    whyGhostSubtitle: "Des avantages concrets, pensés pour les acheteurs au Maroc.",
+    reviewsTitle: "Ce que disent nos clients",
+    reviewsSubtitle: "Des achats réels, vérifiés après la livraison.",
+    deliveryTitle: "Comment se passe la livraison",
+    deliverySubtitle: "De la commande à l'utilisation de votre code, en toute clarté.",
+    paymentMethodsTitle: "Moyens de paiement acceptés",
+    paymentMethodsSubtitle: "Seuls les moyens réellement disponibles sont affichés.",
+    faqTitle: "Questions fréquentes",
+    faqSubtitle: "Les réponses aux questions les plus posées avant l'achat.",
     ctaTitle: "Prêt à commencer ?",
     ctaSubtitle: "Choisissez un produit et suivez votre commande après paiement.",
   },
@@ -228,6 +292,12 @@ export const defaultStoreSettings: StoreSettings = {
     { id: "local-payment", value: "MAD", label: "Paiement local", enabled: true },
     { id: "official-codes", value: "100%", label: "Codes officiels", enabled: true },
   ],
+  whyGhost: defaultWhyGhost,
+  reviews: defaultReviews,
+  navigatorTips: defaultNavigatorTips,
+  deliverySteps: defaultDeliverySteps,
+  faqCategories: defaultFaqCategories,
+  faqItems: defaultFaqItems,
   featuredProductIds: [
     "steam-50",
     "steam-100",
@@ -458,6 +528,47 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function str(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function bool(value: unknown, fallback = true): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+/**
+ * Normalizes a stored content array (why-choose cards, reviews, tips, FAQ…).
+ * Unlike the legacy `trustItems`/`statItems` index-backfill, these items are
+ * self-contained and variable-length, so each object is mapped through a
+ * coercer and invalid entries are dropped. Non-arrays fall back to defaults.
+ */
+function mergeList<T>(
+  value: unknown,
+  fallback: T[],
+  coerce: (raw: Record<string, unknown>) => T | null,
+): T[] {
+  if (!Array.isArray(value)) return fallback;
+  return value
+    .map((item) => (isObject(item) ? coerce(item) : null))
+    .filter((item): item is T => item !== null);
+}
+
+const WHY_GHOST_ICONS: WhyGhostIcon[] = [
+  "official",
+  "payment",
+  "region",
+  "delivery",
+  "support",
+  "secure",
+];
+const NAVIGATOR_TIP_TYPES: NavigatorTipType[] = [
+  "information",
+  "compatibility",
+  "warning",
+  "security",
+];
+const REVIEW_STATUSES: ReviewStatus[] = ["approved", "pending", "hidden"];
+
 export function mergeStoreSettings(value: unknown): StoreSettings {
   if (!isObject(value)) return defaultStoreSettings;
 
@@ -508,6 +619,101 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
           ...(isObject(item) ? item : {}),
         }))
       : defaultStoreSettings.statItems,
+    whyGhost: mergeList(value.whyGhost, defaultStoreSettings.whyGhost, (raw) => {
+      const id = str(raw.id).trim();
+      const title = str(raw.title).trim();
+      if (!id || !title) return null;
+      const icon = raw.icon as WhyGhostIcon;
+      return {
+        id,
+        icon: WHY_GHOST_ICONS.includes(icon) ? icon : "secure",
+        title,
+        description: str(raw.description),
+        enabled: bool(raw.enabled),
+      };
+    }),
+    reviews: mergeList(value.reviews, defaultStoreSettings.reviews, (raw) => {
+      const id = str(raw.id).trim();
+      const name = str(raw.name).trim();
+      const text = str(raw.text).trim();
+      if (!id || !name || !text) return null;
+      const status = raw.status as ReviewStatus;
+      const rating =
+        typeof raw.rating === "number" && Number.isFinite(raw.rating)
+          ? Math.min(5, Math.max(1, Math.round(raw.rating)))
+          : 5;
+      return {
+        id,
+        name,
+        rating,
+        region: str(raw.region),
+        product: str(raw.product),
+        date: str(raw.date),
+        text,
+        imageUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
+        verified: bool(raw.verified, false),
+        status: REVIEW_STATUSES.includes(status) ? status : "pending",
+        seeded: bool(raw.seeded, false),
+      };
+    }),
+    navigatorTips: mergeList(
+      value.navigatorTips,
+      defaultStoreSettings.navigatorTips,
+      (raw) => {
+        const id = str(raw.id).trim();
+        const message = str(raw.message).trim();
+        if (!id || !message) return null;
+        const type = raw.type as NavigatorTipType;
+        return {
+          id,
+          contexts: Array.isArray(raw.contexts)
+            ? raw.contexts.filter((c): c is string => typeof c === "string")
+            : ["general"],
+          type: NAVIGATOR_TIP_TYPES.includes(type) ? type : "information",
+          title: str(raw.title),
+          message,
+          enabled: bool(raw.enabled),
+        };
+      },
+    ),
+    deliverySteps: mergeList(
+      value.deliverySteps,
+      defaultStoreSettings.deliverySteps,
+      (raw) => {
+        const id = str(raw.id).trim();
+        const title = str(raw.title).trim();
+        if (!id || !title) return null;
+        return {
+          id,
+          title,
+          text: str(raw.text),
+          enabled: bool(raw.enabled),
+        };
+      },
+    ),
+    faqCategories: mergeList(
+      value.faqCategories,
+      defaultStoreSettings.faqCategories,
+      (raw) => {
+        const id = str(raw.id).trim();
+        const label = str(raw.label).trim();
+        if (!id || !label) return null;
+        return { id, label };
+      },
+    ),
+    faqItems: mergeList(value.faqItems, defaultStoreSettings.faqItems, (raw) => {
+      const id = str(raw.id).trim();
+      const question = str(raw.question).trim();
+      const answer = str(raw.answer).trim();
+      if (!id || !question || !answer) return null;
+      return {
+        id,
+        category: str(raw.category, "support"),
+        question,
+        answer,
+        enabled: bool(raw.enabled),
+      };
+    }),
     featuredProductIds: Array.isArray(value.featuredProductIds)
       ? value.featuredProductIds.filter((id): id is string => typeof id === "string")
       : defaultStoreSettings.featuredProductIds,

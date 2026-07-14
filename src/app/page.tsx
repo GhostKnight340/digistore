@@ -6,27 +6,33 @@ import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import CollectionsExplorer from "@/components/CollectionsExplorer";
 import TrustStrip from "@/components/TrustStrip";
+import TrustBadges from "@/components/trust/TrustBadges";
+import WhyGhost from "@/components/trust/WhyGhost";
+import DeliverySteps from "@/components/trust/DeliverySteps";
+import CustomerReviews from "@/components/trust/CustomerReviews";
+import AcceptedPayments from "@/components/trust/AcceptedPayments";
+import Faq from "@/components/trust/Faq";
+import FaqJsonLd from "@/components/trust/FaqJsonLd";
 import GtaPreorderBanner from "@/components/gta/GtaPreorderBanner";
 import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getHomepageCollectionCards } from "@/lib/db/collections";
+import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveBrandColor } from "@/lib/brandAssets";
+import { visibleReviews } from "@/lib/trust/content";
 
 export const revalidate = 3600;
 
-const steps = [
-  { n: 1, title: "Choisissez un produit", text: "Sélectionnez le produit et la quantité." },
-  { n: 2, title: "Paiement sécurisé", text: "Renseignez votre e-mail et choisissez un mode de paiement." },
-  { n: 3, title: "Recevez votre produit numérique", text: "Votre produit est disponible après confirmation du paiement." },
-];
-
 export default async function HomePage() {
-  const [{ categories, products }, settings, brandCategories, collectionCards] =
+  const [{ categories, products }, settings, brandCategories, collectionCards, paymentConfig] =
     await Promise.all([
       getCatalogData(),
       getStoreSettings(),
       getActiveCategories(),
       getHomepageCollectionCards(),
+      getPublicPaymentMethods().catch(() => ({ methods: [] })),
     ]);
+
+  const approvedReviews = visibleReviews(settings.reviews);
 
   // Brand accent per category id, so product/category cards glow in their
   // brand color instead of a uniform blue.
@@ -95,6 +101,12 @@ export default async function HomePage() {
       {settings.homepage.showStats && (
         <section className="mt-2 sm:mt-4">
           <StatStrip items={settings.statItems} />
+        </section>
+      )}
+
+      {settings.homepage.showTrustStrip && (
+        <section className="mt-4 sm:mt-6">
+          <TrustBadges items={settings.trustItems} />
         </section>
       )}
 
@@ -209,22 +221,64 @@ export default async function HomePage() {
                 Le Navigateur vous guide à chaque étape
               </figcaption>
             </figure>
-            <div className="grid flex-1 gap-4 sm:grid-cols-3">
-              {steps.map((step) => (
-                <div key={step.n} className="card p-6">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-lg font-bold text-accent">
-                    {step.n}
-                  </span>
-                  <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
-                  <p className="mt-1 text-sm text-muted">{step.text}</p>
-                </div>
-              ))}
+            <div className="flex-1">
+              <DeliverySteps
+                steps={settings.deliverySteps}
+                variant="compact"
+                className=""
+              />
             </div>
           </div>
         </section>
       )}
 
+      {settings.homepage.showWhyGhost && (
+        <WhyGhost
+          items={settings.whyGhost}
+          title={settings.homepage.whyGhostTitle}
+          subtitle={settings.homepage.whyGhostSubtitle}
+        />
+      )}
+
+      {settings.homepage.showReviews && approvedReviews.length > 0 && (
+        <CustomerReviews
+          reviews={approvedReviews}
+          title={settings.homepage.reviewsTitle}
+          subtitle={settings.homepage.reviewsSubtitle}
+        />
+      )}
+
       {settings.homepage.showWhyChooseUs && <TrustStrip />}
+
+      {settings.homepage.showPaymentMethods && (
+        <AcceptedPayments
+          initialMethods={paymentConfig.methods}
+          title={settings.homepage.paymentMethodsTitle}
+          subtitle={settings.homepage.paymentMethodsSubtitle}
+        />
+      )}
+
+      {settings.homepage.showFaq && (
+        <>
+          <FaqJsonLd items={settings.faqItems} limit={8} />
+          <Faq
+            categories={settings.faqCategories}
+            items={settings.faqItems}
+            title={settings.homepage.faqTitle}
+            subtitle={settings.homepage.faqSubtitle}
+            limit={6}
+            searchable={false}
+          />
+          <div className="mt-6">
+            <Link
+              href="/faq"
+              className="text-sm font-medium text-accent hover:text-accent-hover"
+            >
+              Voir toutes les questions →
+            </Link>
+          </div>
+        </>
+      )}
 
       <section className="mt-16">
         <div className="relative overflow-hidden rounded-[20px] border border-accent/30 bg-gradient-to-br from-accent/20 to-surface px-6 py-12 text-center sm:py-16">

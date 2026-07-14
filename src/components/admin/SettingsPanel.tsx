@@ -35,6 +35,11 @@ const homepageSectionKeys = [
   "showFeaturedProducts",
   "showHowItWorks",
   "showWhyChooseUs",
+  "showWhyGhost",
+  "showReviews",
+  "showDelivery",
+  "showPaymentMethods",
+  "showFaq",
   "showFooter",
 ] as const;
 
@@ -47,6 +52,11 @@ const sectionLabels: Record<(typeof homepageSectionKeys)[number], string> = {
   showFeaturedProducts: "Produits populaires",
   showHowItWorks: "Comment ça marche",
   showWhyChooseUs: "Pourquoi nous choisir",
+  showWhyGhost: "Pourquoi ghost.ma",
+  showReviews: "Avis clients",
+  showDelivery: "Livraison (produit/FAQ)",
+  showPaymentMethods: "Moyens de paiement",
+  showFaq: "FAQ",
   showFooter: "Pied de page",
 };
 

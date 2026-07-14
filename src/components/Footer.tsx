@@ -5,6 +5,7 @@ import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getEnabledFooterPaymentBadges, getFooterSocialLinks } from "@/lib/footerConfig";
 import { categoryHref } from "@/lib/categoryUrl";
+import AcceptedPayments from "@/components/trust/AcceptedPayments";
 
 export default function Footer() {
   const { settings } = useStoreSettings();
@@ -53,6 +54,9 @@ export default function Footer() {
               </span>
             ))}
           </div>
+          {/* Real, admin-configured accepted methods — disabled methods vanish
+              automatically. Self-fetches (footer is a client component). */}
+          <AcceptedPayments variant="inline" showNote={false} className="mt-4" />
           {socialLinks.length > 0 && (
             <div className="mt-5 flex items-center gap-2">
               {socialLinks.map((link) => (
@@ -88,6 +92,7 @@ export default function Footer() {
           title="Aide"
           links={[
             { href: "/support", label: "Centre d'aide" },
+            { href: "/faq", label: "Questions fréquentes" },
             { href: "/#how-it-works", label: "Comment ça marche" },
             { href: "/contact", label: "Contact" },
             { href: "/account", label: "Statut des commandes" },
