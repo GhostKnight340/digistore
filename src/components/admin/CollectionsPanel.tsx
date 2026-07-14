@@ -644,6 +644,12 @@ export default function CollectionsPanel() {
                     </button>
                   ) : null}
                 </div>
+                <input
+                  className="input mt-2 h-9 py-0 text-sm"
+                  value={draft.imageUrl ?? ""}
+                  onChange={(e) => update("imageUrl", e.target.value || null)}
+                  placeholder="ou collez une URL, ex. /collections/gaming.webp"
+                />
               </Field>
 
               <div className="grid gap-4 sm:grid-cols-2">
