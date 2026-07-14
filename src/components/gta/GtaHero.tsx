@@ -98,12 +98,31 @@ export default function GtaHero({
       <div className="relative grid items-center gap-8 p-6 sm:p-10 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10">
         {/* Left: copy, countdown, CTAs */}
         <div className="min-w-0">
-          <p
-            className="text-[11px] font-bold uppercase tracking-[0.24em]"
-            style={{ color: "#ff5ca8" }}
+          {/* Shimmering badge — same treatment as the homepage banner. */}
+          <div
+            className="relative inline-flex self-start overflow-hidden rounded-full px-[13px] py-1.5"
+            style={{
+              background: "linear-gradient(90deg,rgba(233,64,168,0.18),rgba(56,150,255,0.18))",
+              border: "1px solid rgba(233,64,168,0.4)",
+            }}
           >
-            {hero.eyebrow}
-          </p>
+            <span
+              className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.18em]"
+              style={{
+                background: "linear-gradient(90deg,#ff8fd4,#7db8ff)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              {hero.eyebrow}
+            </span>
+            <span
+              aria-hidden
+              className="gta-shimmer absolute left-0 top-0 h-full w-2/5"
+              style={{ background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent)" }}
+            />
+          </div>
           <h1 className="mt-4 text-[clamp(2.1rem,6.4vw,3.4rem)] font-extrabold leading-[1.03] tracking-tight text-white">
             {hero.heading}
           </h1>
