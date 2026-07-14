@@ -16,6 +16,7 @@ import { scoreMatch, normalizeSearch } from "@/lib/search/text";
 import { isCollectionPublic } from "@/lib/collections/schedule";
 import { categoryHref } from "@/lib/categoryUrl";
 import { collectionHref } from "@/lib/collectionUrl";
+import { resolveCollectionIcon } from "@/lib/collections/icons";
 
 /** Subset of settings the stock helpers need. */
 type StockOpts = Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">;
@@ -523,6 +524,36 @@ export async function getCatalogPage(
  * no public variant are omitted. Uncached — callers wrap their own read in
  * `unstable_cache` (CATALOG_TAG) or rely on page-level revalidation.
  */
+/**
+ * The subset of the given product ids that are eligible/public PARENT products
+ * under the same catalogue rules as `getPublicParentCards` — but selecting only
+ * `id`, so it is a single lightweight query with no media/variant/stock
+ * hydration. Used to count eligible products for compact collection cards
+ * without resolving (and throwing away) full product cards.
+ *
+ * Eligibility here is: active product + active category + at least one active
+ * variant. This matches the card resolver's WHERE clause; it can only differ in
+ * the rare edge case where inventory is enabled and every active variant is
+ * force-out-of-stock (then the card resolver drops it but this still counts it).
+ * That is acceptable for a homepage count and avoids the heavy per-card read.
+ */
+export async function getEligibleParentIds(
+  productIds: string[],
+): Promise<Set<string>> {
+  const ids = [...new Set(productIds)];
+  if (ids.length === 0) return new Set();
+  const rows = await prisma.product.findMany({
+    where: {
+      id: { in: ids },
+      active: true,
+      categoryRecord: { is: { active: true } },
+      variants: { some: { active: true } },
+    },
+    select: { id: true },
+  });
+  return new Set(rows.map((row) => row.id));
+}
+
 export async function getPublicParentCards(
   productIds: string[],
 ): Promise<Map<string, Product>> {
@@ -634,6 +665,7 @@ const searchStorefrontCached = unstable_cache(
           name: true,
           shortDescription: true,
           aliases: true,
+          icon: true,
           active: true,
           startAt: true,
           endAt: true,
@@ -738,6 +770,12 @@ const searchStorefrontCached = unstable_cache(
         slug: entry.collection.slug,
         name: entry.collection.name,
         href: collectionHref(entry.collection.slug),
+        shortDescription: entry.collection.shortDescription,
+        icon: resolveCollectionIcon(
+          entry.collection.icon,
+          entry.collection.name,
+          entry.collection.aliases ?? [],
+        ),
       }));
 
     return { query, products, categories, collections, hasMore };

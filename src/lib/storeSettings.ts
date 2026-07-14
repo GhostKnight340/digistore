@@ -77,6 +77,9 @@ export type StoreSettings = {
     brandNavSubtitle: string;
     categoriesTitle: string;
     categoriesSubtitle: string;
+    /** Heading + subtitle for the compact "Explorer les collections" cards. */
+    collectionsTitle: string;
+    collectionsSubtitle: string;
     featuredTitle: string;
     featuredSubtitle: string;
     howItWorksTitle: string;
@@ -180,6 +183,8 @@ export const defaultStoreSettings: StoreSettings = {
     brandNavSubtitle: "Accédez directement à vos plateformes préférées.",
     categoriesTitle: "Catégories populaires",
     categoriesSubtitle: "Les produits numériques les plus demandés au Maroc.",
+    collectionsTitle: "Explorer les collections",
+    collectionsSubtitle: "Découvrez nos sélections par univers, usage ou région.",
     featuredTitle: "Produits populaires",
     featuredSubtitle: "Sélection vérifiée, livraison après confirmation du paiement.",
     howItWorksTitle: "Comment ça marche",

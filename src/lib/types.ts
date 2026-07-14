@@ -100,6 +100,31 @@ export interface CollectionSearchResult {
   slug: string;
   name: string;
   href: string;
+  /** Short description shown as a secondary line under the name. */
+  shortDescription: string;
+  /** Approved icon key for the result glyph (see collections/icons.ts). */
+  icon: import("./collections/icons").CollectionIconKey;
+}
+
+/**
+ * A compact collection card for the homepage "Explorer les collections" section
+ * and the /collections index — metadata + an eligible parent-product count only,
+ * never resolved product cards. Keeps the homepage light (no per-collection
+ * product queries).
+ */
+export interface HomepageCollectionCard {
+  slug: string;
+  /** Card title (homepageTitle override, else name). */
+  title: string;
+  shortDescription: string;
+  imageUrl: string | null;
+  /** Resolved approved icon key (admin icon → derived → fallback). */
+  icon: import("./collections/icons").CollectionIconKey;
+  /** Restrained accent hex, or null → default Ghost blue. */
+  accentColor: string | null;
+  ctaLabel: string;
+  /** Count of eligible/public PARENT products in this collection. */
+  productCount: number;
 }
 
 /** Grouped public-search payload returned by /api/search and the results page. */

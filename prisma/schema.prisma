@@ -89,6 +89,12 @@ model Collection {
   // Centralized, admin-maintained search aliases matched by the public search
   // (accent/case-insensitive). Never rendered as visible product data.
   aliases          String[] @default([])
+  // Homepage/compact-card visual identity. `icon` is an approved icon KEY (see
+  // src/lib/collections/icons.ts) — never raw SVG/HTML; empty means "derive from
+  // name or fall back". `accentColor` is an optional restrained accent hex for
+  // the card's glow/hover; null falls back to the Ghost blue.
+  icon             String   @default("")
+  accentColor      String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
 

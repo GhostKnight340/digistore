@@ -2,13 +2,18 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
-import { getPublicParentCards } from "./catalog";
+import { getEligibleParentIds, getPublicParentCards } from "./catalog";
 import { collectionState, isCollectionPublic } from "@/lib/collections/schedule";
 import {
   slugifyCollection as slugify,
   clampHomepageLimit as clampLimit,
   normalizeCollectionAliases as normalizeAliases,
 } from "@/lib/collections/normalize";
+import {
+  normalizeAccentColor,
+  normalizeCollectionIcon,
+  resolveCollectionIcon,
+} from "@/lib/collections/icons";
 import type {
   ActionResult,
   AdminCollectionDTO,
@@ -16,7 +21,11 @@ import type {
   CollectionProductRefDTO,
   SaveCollectionInput,
 } from "@/lib/dto";
-import type { Product, StorefrontCollection } from "@/lib/types";
+import type {
+  HomepageCollectionCard,
+  Product,
+  StorefrontCollection,
+} from "@/lib/types";
 
 function parseDate(value: string | null): Date | null {
   if (!value) return null;
@@ -98,6 +107,8 @@ function toDTO(
     seoDescription: row.seoDescription,
     socialImageUrl: row.socialImageUrl,
     aliases: row.aliases,
+    icon: normalizeCollectionIcon(row.icon),
+    accentColor: row.accentColor,
     productCount: items.length,
     state: collectionState(row, now),
     items,
@@ -167,6 +178,8 @@ function buildData(input: SaveCollectionInput) {
     seoDescription: input.seoDescription.trim(),
     socialImageUrl: input.socialImageUrl?.trim() || null,
     aliases: normalizeAliases(input.aliases),
+    icon: normalizeCollectionIcon(input.icon),
+    accentColor: normalizeAccentColor(input.accentColor),
   };
 }
 
@@ -256,6 +269,8 @@ export async function duplicateCollection(
       seoDescription: source.seoDescription,
       socialImageUrl: source.socialImageUrl,
       aliases: source.aliases,
+      icon: source.icon,
+      accentColor: source.accentColor,
       items: {
         create: source.items.map((item) => ({
           productId: item.productId,
@@ -308,10 +323,42 @@ function toStorefront(
   };
 }
 
-/** Active, in-window collections flagged for the homepage, each resolved to its
- *  live parent product cards and limited by `homepageLimit`. Collections with no
- *  eligible public product are dropped so an empty section never renders. */
-export async function getHomepageCollections(): Promise<StorefrontCollection[]> {
+/**
+ * Build compact collection cards from already-fetched rows (metadata + an
+ * efficient eligible parent-product count — NO resolved product cards). One
+ * lightweight count query is shared across all rows (no N+1, no per-collection
+ * product fetch). Collections with zero eligible products are dropped.
+ */
+async function buildCards(
+  rows: CollectionRowWithItems[],
+): Promise<HomepageCollectionCard[]> {
+  const allIds = [...new Set(rows.flatMap((row) => row.items.map((item) => item.productId)))];
+  const eligible = await getEligibleParentIds(allIds);
+  const out: HomepageCollectionCard[] = [];
+  for (const row of rows) {
+    const productCount = row.items.filter((item) => eligible.has(item.productId)).length;
+    if (productCount === 0) continue;
+    out.push({
+      slug: row.slug,
+      title: row.homepageTitle.trim() || row.name,
+      shortDescription: row.shortDescription,
+      imageUrl: row.imageUrl,
+      icon: resolveCollectionIcon(row.icon, row.name, row.aliases),
+      accentColor: normalizeAccentColor(row.accentColor),
+      ctaLabel: row.ctaLabel,
+      productCount,
+    });
+  }
+  return out;
+}
+
+/**
+ * Compact cards for the homepage "Explorer les collections" section: active,
+ * in-window collections flagged `showOnHomepage`, each with an eligible
+ * parent-product count. Replaces the old per-collection product-grid feeder —
+ * the homepage no longer resolves any product cards for collections.
+ */
+export async function getHomepageCollectionCards(): Promise<HomepageCollectionCard[]> {
   await ensureDatabaseReady();
   const now = new Date();
   const rows = await prisma.collection.findMany({
@@ -320,19 +367,7 @@ export async function getHomepageCollections(): Promise<StorefrontCollection[]> 
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
   const live = rows.filter((row) => isCollectionPublic(row, now));
-  const allIds = [...new Set(live.flatMap((row) => row.items.map((item) => item.productId)))];
-  const cards = await getPublicParentCards(allIds);
-
-  const out: StorefrontCollection[] = [];
-  for (const row of live) {
-    const products = row.items
-      .map((item) => cards.get(item.productId))
-      .filter((product): product is Product => Boolean(product))
-      .slice(0, clampLimit(row.homepageLimit));
-    if (products.length === 0) continue;
-    out.push(toStorefront(row, products));
-  }
-  return out;
+  return buildCards(live);
 }
 
 /** A single public collection (active + within its window) with all its live
@@ -357,11 +392,9 @@ export async function getCollectionBySlug(
   return toStorefront(row, products);
 }
 
-/** Compact listings of every public, non-empty collection for the /collections
- *  index page. Metadata + a product count only (no resolved cards). */
-export async function getPublicCollectionListings(): Promise<
-  { slug: string; name: string; shortDescription: string; imageUrl: string | null; productCount: number }[]
-> {
+/** Compact cards for every public, non-empty collection — the /collections index
+ *  page. Same light metadata + eligible count as the homepage cards. */
+export async function getPublicCollectionCards(): Promise<HomepageCollectionCard[]> {
   await ensureDatabaseReady();
   const now = new Date();
   const rows = await prisma.collection.findMany({
@@ -370,21 +403,12 @@ export async function getPublicCollectionListings(): Promise<
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
   const live = rows.filter((row) => isCollectionPublic(row, now));
-  const allIds = [...new Set(live.flatMap((row) => row.items.map((item) => item.productId)))];
-  const cards = await getPublicParentCards(allIds);
-  return live
-    .map((row) => ({
-      slug: row.slug,
-      name: row.name,
-      shortDescription: row.shortDescription,
-      imageUrl: row.imageUrl,
-      productCount: row.items.filter((item) => cards.has(item.productId)).length,
-    }))
-    .filter((listing) => listing.productCount > 0);
+  return buildCards(live);
 }
 
 /** Slugs of public collections that currently have at least one eligible
- *  product — for the sitemap. Excludes inactive, future, expired, and empty. */
+ *  product — for the sitemap. Excludes inactive, future, expired, and empty.
+ *  Uses the light eligible-id counter (no full card hydration). */
 export async function getActiveCollectionSlugs(): Promise<string[]> {
   await ensureDatabaseReady();
   const now = new Date();
@@ -395,8 +419,8 @@ export async function getActiveCollectionSlugs(): Promise<string[]> {
   });
   const live = rows.filter((row) => isCollectionPublic(row, now));
   const allIds = [...new Set(live.flatMap((row) => row.items.map((item) => item.productId)))];
-  const cards = await getPublicParentCards(allIds);
+  const eligible = await getEligibleParentIds(allIds);
   return live
-    .filter((row) => row.items.some((item) => cards.has(item.productId)))
+    .filter((row) => row.items.some((item) => eligible.has(item.productId)))
     .map((row) => row.slug);
 }

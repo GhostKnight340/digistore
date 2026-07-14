@@ -350,6 +350,7 @@ export default function HeaderSearch({
                           key={`col-${option.data.slug}`}
                           id={optId(option.index)}
                           label={option.data.name}
+                          subtitle={option.data.shortDescription}
                           icon="collection"
                           active={activeIndex === option.index}
                           onSelect={() => selectOption(option)}
@@ -453,6 +454,7 @@ function ProductRow({
 function SimpleRow({
   id,
   label,
+  subtitle,
   icon,
   active,
   onSelect,
@@ -460,6 +462,7 @@ function SimpleRow({
 }: {
   id: string;
   label: string;
+  subtitle?: string;
   icon: "category" | "collection";
   active: boolean;
   onSelect: () => void;
@@ -497,7 +500,12 @@ function SimpleRow({
             )}
           </svg>
         </span>
-        <span className="truncate text-sm font-medium text-text">{label}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-text">{label}</span>
+          {subtitle ? (
+            <span className="block truncate text-xs text-muted">{subtitle}</span>
+          ) : null}
+        </span>
       </button>
     </li>
   );

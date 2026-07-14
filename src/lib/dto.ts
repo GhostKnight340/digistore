@@ -286,6 +286,10 @@ export interface AdminCollectionDTO {
   seoDescription: string;
   socialImageUrl: string | null;
   aliases: string[];
+  /** Approved homepage-card icon key (empty = derive/fallback). */
+  icon: string;
+  /** Optional restrained accent hex for the homepage card, or null. */
+  accentColor: string | null;
   productCount: number;
   /** Live lifecycle state for the admin status badge. */
   state: CollectionLifecycleState;
@@ -311,6 +315,10 @@ export interface SaveCollectionInput {
   seoDescription: string;
   socialImageUrl: string | null;
   aliases: string[];
+  /** Approved homepage-card icon key (empty = derive/fallback). */
+  icon: string;
+  /** Optional restrained accent hex for the homepage card, or null. */
+  accentColor: string | null;
   /** Ordered parent-product ids that make up the collection. */
   productIds: string[];
 }

@@ -18,10 +18,76 @@ import type {
   SaveCollectionInput,
 } from "@/lib/dto";
 import { collectionState, collectionStateLabel } from "@/lib/collections/schedule";
+import {
+  APPROVED_COLLECTION_ICONS,
+  resolveCollectionIcon,
+  type CollectionIconKey,
+} from "@/lib/collections/icons";
 import { collectionHref } from "@/lib/collectionUrl";
 import { uploadImageFile } from "@/lib/clientUpload";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
+import CollectionIcon from "@/components/CollectionIcon";
 import { formatDH } from "@/lib/format";
+
+const ICON_LABELS: Record<CollectionIconKey, string> = {
+  collection: "Collection (générique)",
+  gaming: "Gaming (manette)",
+  gift: "Carte cadeau",
+  subscription: "Abonnement",
+  software: "Logiciel",
+  sparkle: "Nouveautés",
+  trending: "Populaire / tendance",
+  globe: "Global / région",
+  navigator: "Navigator",
+};
+
+/** Non-interactive homepage-card preview mirroring the storefront CollectionCard. */
+function CollectionCardPreview({ draft }: { draft: Draft }) {
+  const accent = draft.accentColor || "#3e7bfa";
+  const icon = resolveCollectionIcon(draft.icon, draft.name, draft.aliases);
+  const count = draft.productIds.length;
+  return (
+    <div
+      className="max-w-xs overflow-hidden rounded-[14px] border border-border bg-surface"
+      style={{ ["--brand" as string]: accent }}
+    >
+      {draft.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={draft.imageUrl} alt="" className="aspect-[16/9] w-full object-cover" />
+      ) : null}
+      <div className="p-[18px]">
+        <div className="flex items-center gap-3">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] border"
+            style={{
+              color: accent,
+              borderColor: `color-mix(in srgb, ${accent} 34%, transparent)`,
+              background: `color-mix(in srgb, ${accent} 12%, transparent)`,
+            }}
+          >
+            <CollectionIcon name={icon} className="h-[20px] w-[20px]" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text">
+            {draft.homepageTitle.trim() || draft.name || "Nom de la collection"}
+          </span>
+        </div>
+        {draft.shortDescription ? (
+          <p className="mt-2.5 line-clamp-2 text-[13px] leading-relaxed text-muted">
+            {draft.shortDescription}
+          </p>
+        ) : null}
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <span className="font-mono text-xs uppercase tracking-wide text-faint">
+            {count} produit{count === 1 ? "" : "s"}
+          </span>
+          <span className="text-[13px] font-medium" style={{ color: accent }}>
+            {draft.ctaLabel.trim() || "Explorer"} →
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type Draft = SaveCollectionInput & { originalId?: string };
 
@@ -55,6 +121,8 @@ function emptyCollection(sortOrder: number): Draft {
     seoDescription: "",
     socialImageUrl: null,
     aliases: [],
+    icon: "",
+    accentColor: null,
     productIds: [],
   };
 }
@@ -79,6 +147,8 @@ function toDraft(dto: AdminCollectionDTO): Draft {
     seoDescription: dto.seoDescription,
     socialImageUrl: dto.socialImageUrl,
     aliases: dto.aliases,
+    icon: dto.icon,
+    accentColor: dto.accentColor,
     productIds: dto.items.map((item) => item.productId),
   };
 }
@@ -574,6 +644,54 @@ export default function CollectionsPanel() {
                     </button>
                   ) : null}
                 </div>
+              </Field>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Icône de la carte (accueil)" hint="Utilisée quand aucune image n'est définie">
+                  <select
+                    className="input h-10 py-0 text-sm"
+                    value={draft.icon}
+                    onChange={(e) => update("icon", e.target.value)}
+                  >
+                    <option value="">Automatique (selon le nom)</option>
+                    {APPROVED_COLLECTION_ICONS.map((key) => (
+                      <option key={key} value={key}>
+                        {ICON_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Accent (optionnel)" hint="Couleur hex, ex. #3e7bfa">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      className="h-10 w-12 shrink-0 rounded-lg border border-border bg-surface"
+                      value={draft.accentColor || "#3e7bfa"}
+                      onChange={(e) => update("accentColor", e.target.value)}
+                      aria-label="Couleur d'accent"
+                    />
+                    <input
+                      className="input h-10 py-0 text-sm"
+                      value={draft.accentColor ?? ""}
+                      onChange={(e) => update("accentColor", e.target.value || null)}
+                      placeholder="#3e7bfa"
+                    />
+                    {draft.accentColor ? (
+                      <button
+                        type="button"
+                        onClick={() => update("accentColor", null)}
+                        className="shrink-0 text-xs text-red-300"
+                      >
+                        Retirer
+                      </button>
+                    ) : null}
+                  </div>
+                </Field>
+              </div>
+
+              {/* Card preview — how the collection appears on the homepage grid. */}
+              <Field label="Aperçu de la carte">
+                <CollectionCardPreview draft={draft} />
               </Field>
             </div>
 

@@ -4,11 +4,11 @@ import StatStrip from "@/components/StatStrip";
 import FeaturedCarousel from "@/components/FeaturedCarousel";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
-import CollectionSection from "@/components/CollectionSection";
+import CollectionsExplorer from "@/components/CollectionsExplorer";
 import TrustStrip from "@/components/TrustStrip";
 import GtaPreorderBanner from "@/components/gta/GtaPreorderBanner";
 import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
-import { getHomepageCollections } from "@/lib/db/collections";
+import { getHomepageCollectionCards } from "@/lib/db/collections";
 import { resolveBrandColor } from "@/lib/brandAssets";
 
 export const revalidate = 3600;
@@ -20,12 +20,12 @@ const steps = [
 ];
 
 export default async function HomePage() {
-  const [{ categories, products }, settings, brandCategories, homepageCollections] =
+  const [{ categories, products }, settings, brandCategories, collectionCards] =
     await Promise.all([
       getCatalogData(),
       getStoreSettings(),
       getActiveCategories(),
-      getHomepageCollections(),
+      getHomepageCollectionCards(),
     ]);
 
   // Brand accent per category id, so product/category cards glow in their
@@ -176,14 +176,13 @@ export default async function HomePage() {
         </section>
       )}
 
-      {settings.homepage.showCollections &&
-        homepageCollections.map((collection) => (
-          <CollectionSection
-            key={collection.slug}
-            collection={collection}
-            accentByCategory={accentByCategory}
-          />
-        ))}
+      {settings.homepage.showCollections && (
+        <CollectionsExplorer
+          cards={collectionCards}
+          title={settings.homepage.collectionsTitle}
+          subtitle={settings.homepage.collectionsSubtitle}
+        />
+      )}
 
       {settings.homepage.showHowItWorks && (
         <section id="how-it-works" className="mt-16 scroll-mt-20">
