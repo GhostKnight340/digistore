@@ -381,6 +381,17 @@ export default function CheckoutClient({
             </div>
           </section>
 
+          <PromoSection
+            promoInput={promoInput}
+            setPromoInput={setPromoInput}
+            promo={promo}
+            promoError={promoError}
+            promoRequiresLogin={promoRequiresLogin}
+            promoLoading={promoLoading}
+            onApply={handleApplyPromo}
+            onRemove={handleRemovePromo}
+          />
+
           <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
             <div className="border-b border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
               <h2 className="text-base font-semibold text-white">
@@ -440,17 +451,6 @@ export default function CheckoutClient({
               </span>
             </div>
           </section>
-
-          <PromoSection
-            promoInput={promoInput}
-            setPromoInput={setPromoInput}
-            promo={promo}
-            promoError={promoError}
-            promoRequiresLogin={promoRequiresLogin}
-            promoLoading={promoLoading}
-            onApply={handleApplyPromo}
-            onRemove={handleRemovePromo}
-          />
         </div>
 
         <aside className="hidden h-fit lg:sticky lg:top-[88px] lg:block">

@@ -388,17 +388,38 @@ function RowActions({
   onDelete: () => void;
 }) {
   const deletable = item.usedCount === 0;
+  const disabled = item.status === "disabled";
+  const archived = item.status === "archived";
   return (
     <div className="flex items-center justify-end gap-1.5">
-      <IconBtn label="Modifier" onClick={onEdit}>M</IconBtn>
-      <IconBtn label={item.status === "disabled" ? "Activer" : "Désactiver"} onClick={onToggle}>
-        {item.status === "disabled" ? "▶" : "❚❚"}
+      <IconBtn label="Modifier" onClick={onEdit}>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
       </IconBtn>
-      <IconBtn label="Dupliquer" onClick={onDuplicate}>⧉</IconBtn>
-      <IconBtn label={item.status === "archived" ? "Désarchiver" : "Archiver"} onClick={onArchive}>🗄</IconBtn>
+      <IconBtn label={disabled ? "Activer" : "Désactiver"} onClick={onToggle}>
+        {disabled ? (
+          <polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none" />
+        ) : (
+          <>
+            <line x1="9" y1="5" x2="9" y2="19" />
+            <line x1="15" y1="5" x2="15" y2="19" />
+          </>
+        )}
+      </IconBtn>
+      <IconBtn label="Dupliquer" onClick={onDuplicate}>
+        <rect x="9" y="9" width="11" height="11" rx="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </IconBtn>
+      <IconBtn label={archived ? "Désarchiver" : "Archiver"} onClick={onArchive}>
+        <rect x="3" y="4" width="18" height="4" rx="1" />
+        <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+        <line x1="10" y1="12" x2="14" y2="12" />
+      </IconBtn>
       {deletable && (
         <IconBtn label="Supprimer" onClick={onDelete} danger>
-          ✕
+          <path d="M3 6h18" />
+          <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+          <path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6" />
         </IconBtn>
       )}
     </div>
@@ -422,13 +443,24 @@ function IconBtn({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={`grid h-8 w-8 place-items-center rounded-lg border text-[12px] transition-colors ${
+      className={`grid h-8 w-8 place-items-center rounded-lg border transition-colors ${
         danger
           ? "border-red-500/30 text-red-300 hover:bg-red-500/10"
           : "border-border text-muted hover:border-border-strong hover:text-white"
       }`}
     >
-      {children}
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-[15px] w-[15px]"
+        aria-hidden
+      >
+        {children}
+      </svg>
     </button>
   );
 }
