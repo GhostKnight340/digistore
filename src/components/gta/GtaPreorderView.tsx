@@ -7,7 +7,12 @@ import PlatformTabs from "@/components/gta/PlatformTabs";
 import GtaGiftCard from "@/components/gta/GtaGiftCard";
 import ReleaseCountdown from "@/components/gta/ReleaseCountdown";
 import TrackedLink from "@/components/gta/TrackedLink";
-import { getProductBySlug } from "@/lib/db/catalog";
+import {
+  getActiveCategories,
+  getProductBySlug,
+  getProductsByCategorySlug,
+} from "@/lib/db/catalog";
+import { canonicalBrandKey } from "@/lib/brandAssets";
 import {
   GTA_CAMPAIGN_ID,
   GTA_PLATFORMS,
@@ -15,7 +20,7 @@ import {
   gtaFaqItems,
   gtaPreorderConfig,
   isReleased,
-  referencedProductSlugs,
+  referencedBrandKeys,
   type GtaPlatform,
 } from "@/lib/gtaPreorder";
 import type { Product } from "@/lib/types";
@@ -39,24 +44,52 @@ export default async function GtaPreorderView({
 }) {
   const config = gtaPreorderConfig;
 
-  // Resolve every referenced slug once, live, then bucket by platform. A slug
-  // that no longer resolves to an active/public product simply drops out.
-  const slugs = referencedProductSlugs(config);
-  const resolved = await Promise.all(slugs.map((slug) => getProductBySlug(slug)));
-  const bySlug = new Map<string, Product>();
-  slugs.forEach((slug, index) => {
-    const product = resolved[index];
-    if (product) bySlug.set(slug, product);
-  });
+  // Resolve each referenced catalogue brand to its live parent products, so the
+  // page shows the REAL PSN / Xbox gift cards already on the site (never a fixed
+  // slug list). Empty when a brand has no active/public product.
+  const categories = await getActiveCategories();
+  const categoryIdByBrand = new Map<string, string>();
+  for (const category of categories) {
+    const key = canonicalBrandKey(category.slug ?? category.id);
+    if (!categoryIdByBrand.has(key)) categoryIdByBrand.set(key, category.id);
+  }
+
+  const brandKeys = referencedBrandKeys(config);
+  const productsByBrand = new Map<string, Product[]>();
+  await Promise.all(
+    brandKeys.map(async (brandKey) => {
+      const categoryId = categoryIdByBrand.get(brandKey);
+      if (!categoryId) {
+        productsByBrand.set(brandKey, []);
+        return;
+      }
+      // The category query is variant-flattened; collapse to one card per parent
+      // product family (in catalogue order) and resolve each parent live.
+      const flat = await getProductsByCategorySlug(categoryId);
+      const parentSlugs = [
+        ...new Set(flat.map((p) => p.parentId).filter((s): s is string => Boolean(s))),
+      ];
+      const parents = await Promise.all(parentSlugs.map((slug) => getProductBySlug(slug)));
+      productsByBrand.set(
+        brandKey,
+        parents.filter((p): p is Product => Boolean(p)),
+      );
+    }),
+  );
 
   const platformProducts = (platform: GtaPlatform): Product[] =>
-    config.platforms[platform].productSlugs
-      .map((slug) => bySlug.get(slug))
-      .filter((p): p is Product => Boolean(p));
+    productsByBrand.get(config.platforms[platform].brandKey) ?? [];
 
-  const relatedProducts = config.relatedProductSlugs
-    .map((slug) => bySlug.get(slug))
-    .filter((p): p is Product => Boolean(p));
+  // Related: real products from the configured brands, deduped by id.
+  const relatedSeen = new Set<string>();
+  const relatedProducts: Product[] = [];
+  for (const brandKey of config.relatedBrandKeys) {
+    for (const product of productsByBrand.get(brandKey) ?? []) {
+      if (relatedSeen.has(product.id)) continue;
+      relatedSeen.add(product.id);
+      relatedProducts.push(product);
+    }
+  }
 
   const faqItems = gtaFaqItems(config);
   const released = isReleased(now);
@@ -171,7 +204,7 @@ export default async function GtaPreorderView({
         ) : recommended.length === 0 ? (
           <div className="card mt-6 grid place-items-center px-6 py-14 text-center">
             <p className="text-[15px] font-medium text-white">
-              Cartes {config.platforms[selectedPlatform].label} indisponibles
+              Cartes {config.platforms[selectedPlatform].storeName} indisponibles
               pour le moment
             </p>
             <p className="mt-1 max-w-md text-sm text-muted">

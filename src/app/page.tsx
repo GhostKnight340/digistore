@@ -6,6 +6,7 @@ import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import CollectionSection from "@/components/CollectionSection";
 import TrustStrip from "@/components/TrustStrip";
+import GtaPreorderBanner from "@/components/gta/GtaPreorderBanner";
 import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getHomepageCollections } from "@/lib/db/collections";
 import { resolveBrandColor } from "@/lib/brandAssets";
@@ -96,6 +97,8 @@ export default async function HomePage() {
           <StatStrip items={settings.statItems} />
         </section>
       )}
+
+      <GtaPreorderBanner />
 
       {settings.homepage.showBrandNav && brandCategories.length > 0 && (
         <section className="mt-8 sm:mt-12">

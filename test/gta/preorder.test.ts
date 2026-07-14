@@ -12,7 +12,7 @@ import {
   gtaReleaseDate,
   isReleased,
   parsePlatform,
-  referencedProductSlugs,
+  referencedBrandKeys,
 } from "../../src/lib/gtaPreorder";
 
 const BEFORE = new Date("2026-07-13T12:00:00.000Z");
@@ -69,35 +69,23 @@ test("no hardcoded unofficial game price is present in the config copy", () => {
   // The config must not assert any specific game/edition price; product prices
   // come live from the catalogue, never from this file.
   assert.equal(gtaPreorderConfig.seo.title.includes("DH"), false);
-  for (const platform of GTA_PLATFORMS) {
-    for (const slug of gtaPreorderConfig.platforms[platform].productSlugs) {
-      assert.equal(typeof slug, "string");
-      assert.ok(slug.length > 0);
-    }
-  }
 });
 
-test("PlayStation and Xbox reference distinct real product slugs", () => {
-  assert.deepEqual(gtaPreorderConfig.platforms.playstation.productSlugs, [
-    "psn-100",
-    "psn-250",
-  ]);
-  assert.deepEqual(gtaPreorderConfig.platforms.xbox.productSlugs, [
-    "xbox-100",
-    "xbox-200",
-  ]);
+test("recommendations are resolved by real catalogue brand, not fixed slugs", () => {
+  // The config points at brand keys (playstation/xbox) so the live PSN / Xbox
+  // gift-card products already on the site are what render — never a fixed slug
+  // list that could go stale.
+  assert.equal(gtaPreorderConfig.platforms.playstation.brandKey, "playstation");
+  assert.equal(gtaPreorderConfig.platforms.xbox.brandKey, "xbox");
+  const blob = JSON.stringify(gtaPreorderConfig);
+  assert.equal(blob.includes("psn-100"), false);
+  assert.equal(blob.includes("xbox-100"), false);
 });
 
-test("referencedProductSlugs is the deduped union of all referenced slugs", () => {
-  const slugs = referencedProductSlugs();
-  assert.deepEqual([...slugs].sort(), [
-    "psn-100",
-    "psn-250",
-    "xbox-100",
-    "xbox-200",
-  ]);
-  // No duplicates even though related repeats the platform slugs.
-  assert.equal(new Set(slugs).size, slugs.length);
+test("referencedBrandKeys is the deduped union of all referenced brands", () => {
+  const keys = referencedBrandKeys();
+  assert.deepEqual([...keys].sort(), ["playstation", "xbox"]);
+  assert.equal(new Set(keys).size, keys.length);
 });
 
 test("FAQ maps to active, ordered items with unique questions", () => {
