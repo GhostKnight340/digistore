@@ -16,6 +16,10 @@ import {
   getPopularParentIds,
   seedCollectionBySlug,
 } from "@/lib/db/collectionsSeed";
+import {
+  assignCollectionImages,
+  type AssignImagesResult,
+} from "@/lib/db/collectionImages";
 import { buildCollectionPlans } from "@/lib/collections/autobuild";
 import type {
   ActionResult,
@@ -151,5 +155,22 @@ export async function generateCollectionsAction(
   }
 
   if (apply) revalidateCollections();
+  return result;
+}
+
+/**
+ * Assign the bundled collection artwork (public/collections/*.webp) to matching
+ * collections by slug. Idempotent and non-destructive (see
+ * assignCollectionImages). `apply=false` previews; `apply=true` writes. Same
+ * logic as the `npm run assign:collection-images` CLI, exposed as an admin
+ * button. `force` replaces a collection that already has a different image.
+ */
+export async function assignCollectionImagesAction(
+  apply: boolean,
+  force = false,
+): Promise<AssignImagesResult> {
+  await requireAdminCustomer();
+  const result = await assignCollectionImages({ apply, force });
+  if (apply && result.set.length > 0) revalidateCollections();
   return result;
 }

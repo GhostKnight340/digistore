@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  assignCollectionImagesAction,
   deleteCollectionAction,
   duplicateCollectionAction,
   generateCollectionsAction,
@@ -189,6 +190,8 @@ export default function CollectionsPanel() {
   // "Generate from catalogue" preview/apply modal.
   const [autoResult, setAutoResult] = useState<AutoCollectionResultDTO | null>(null);
   const [autoBusy, setAutoBusy] = useState(false);
+  // "Assign collection images" button.
+  const [imagesBusy, setImagesBusy] = useState(false);
 
   const load = useCallback(async (focusId?: string) => {
     setLoading(true);
@@ -330,6 +333,26 @@ export default function CollectionsPanel() {
     }
   }
 
+  async function assignImages() {
+    setImagesBusy(true);
+    setMessage(null);
+    try {
+      const result = await assignCollectionImagesAction(true);
+      const parts = [`${result.set.length} attribuée(s)`];
+      if (result.unchanged.length) parts.push(`${result.unchanged.length} déjà à jour`);
+      if (result.kept.length) parts.push(`${result.kept.length} conservée(s)`);
+      setMessage({
+        text: `Images de collections : ${parts.join(", ")}.`,
+        ok: true,
+      });
+      if (result.set.length > 0) await load();
+    } catch {
+      setMessage({ text: "Attribution des images impossible.", ok: false });
+    } finally {
+      setImagesBusy(false);
+    }
+  }
+
   async function uploadBanner(file: File) {
     setUploading(true);
     try {
@@ -389,15 +412,26 @@ export default function CollectionsPanel() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <button
-            type="button"
-            onClick={openAutoPreview}
-            disabled={autoBusy}
-            className="btn-ghost h-9 px-3 text-xs disabled:opacity-50"
-            title="Créer automatiquement des collections à partir du catalogue existant"
-          >
-            {autoBusy && !autoResult ? "Analyse…" : "✨ Générer depuis le catalogue"}
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={assignImages}
+              disabled={imagesBusy}
+              className="btn-ghost h-9 px-3 text-xs disabled:opacity-50"
+              title="Attribuer les visuels fournis (public/collections) aux collections correspondantes"
+            >
+              {imagesBusy ? "Attribution…" : "🖼️ Assigner les images"}
+            </button>
+            <button
+              type="button"
+              onClick={openAutoPreview}
+              disabled={autoBusy}
+              className="btn-ghost h-9 px-3 text-xs disabled:opacity-50"
+              title="Créer automatiquement des collections à partir du catalogue existant"
+            >
+              {autoBusy && !autoResult ? "Analyse…" : "✨ Générer depuis le catalogue"}
+            </button>
+          </div>
           {message ? (
             <p className={`text-xs ${message.ok ? "text-emerald-300" : "text-red-300"}`}>
               {message.text}
