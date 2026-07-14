@@ -116,6 +116,12 @@ to match the ledger (never rewrites history). Admin read-only action:
   The pure money/ledger math and idempotency keys remain unit-tested
   (`test/promo/wallet.test.ts`, `test/promo/order-expiry.test.ts`).
 
+  Verified: all 9 concurrency scenarios pass against a real PostgreSQL 16
+  instance over concurrent connections (double-spend, duplicate order/webhook/
+  manual grant, twice-run expiry job, restore-after-lapse anti-avoidance,
+  refund+grant race, same-milestone double-cross, admin-grant-vs-spend), and the
+  safety guard was confirmed to refuse a target equal to `DATABASE_URL`.
+
 ### Reconciliation fix (whole-wallet expiry)
 
 `expireWalletIfDue` previously wrote its `expiration` debit as `status:"active"`

@@ -29,6 +29,13 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// Next's server async-storage shim reads `globalThis.AsyncLocalStorage`; Node
+// doesn't expose it there by default, so without this the shim falls back to a
+// fake whose `.run()` throws when the wallet code reads store settings through
+// `unstable_cache`. Must be set before any Next module is imported (below).
+(globalThis as unknown as { AsyncLocalStorage?: unknown }).AsyncLocalStorage ??= AsyncLocalStorage;
 
 const TEST_URL = process.env.WALLET_INTEGRATION_TEST_DATABASE_URL?.trim();
 
@@ -76,6 +83,21 @@ function registerSuite(url: string) {
   const createdMilestoneIds: string[] = [];
 
   before(async () => {
+    // The wallet functions read store settings through Next's `unstable_cache`,
+    // which needs an incremental cache from the request runtime we don't have in
+    // a bare node:test process. Provide an always-miss stub so the cached reads
+    // execute their underlying DB query directly (no stale values between tests).
+    (globalThis as unknown as { __incrementalCache?: unknown }).__incrementalCache = {
+      async generateCacheKey(k: string) {
+        return k;
+      },
+      async get() {
+        return null;
+      },
+      async set() {},
+      isOnDemandRevalidate: false,
+    };
+
     const { PrismaClient } = await import("@prisma/client");
     db = new PrismaClient({ datasources: { db: { url } } });
     (globalThis as unknown as { prisma?: unknown }).prisma = db;
@@ -165,13 +187,16 @@ function registerSuite(url: string) {
 
   function spend(customerId: string, orderId: string, amountMad: number) {
     // Real checkout debit path (order_spend, one per order via orderSpendKey).
+    // `orderId` drives only the idempotency key here; it is NOT written to the
+    // GhostCreditTransaction.orderId FK column, so scenarios that don't create a
+    // full Order row don't trip the foreign key. The release lookup keys off
+    // `credit-spend:{orderId}`, so this stays faithful to production.
     return db.$transaction((tx) =>
       ghostCredit.debitCreditTx(tx, {
         customerId,
         amountMad,
         reason: "order_spend",
         idempotencyKey: `credit-spend:${orderId}`,
-        orderId,
         allowNegative: false,
       }),
     );
@@ -218,7 +243,7 @@ function registerSuite(url: string) {
     const orderId = `ord-${randomUUID()}`;
     await Promise.all([spend(id, orderId, 40), spend(id, orderId, 40)]);
     assert.equal(await cached(id), 60);
-    assert.equal(await countLedger(id, { reason: "order_spend", orderId }), 1);
+    assert.equal(await countLedger(id, { idempotencyKey: `credit-spend:${orderId}` }), 1);
     await assertReconciled(id);
   });
 
@@ -288,7 +313,10 @@ function registerSuite(url: string) {
     await db.ghostCreditTransaction.create({
       data: {
         customerId: id,
-        amountMad: 0,
+        // Positive amount to satisfy the amount_positive check constraint; the
+        // anti-avoidance rule keys off reason+createdAt, not this amount, and the
+        // "expired" status keeps it out of the active-balance derivation.
+        amountMad: 1,
         direction: "debit",
         reason: "expiration",
         status: "expired",
