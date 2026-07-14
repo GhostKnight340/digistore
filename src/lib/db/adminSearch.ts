@@ -22,6 +22,7 @@ export type CommandSearchGroupKey =
   | "customers"
   | "products"
   | "variants"
+  | "promo"
   | "expenses"
   | "pages"
   | "settings";
@@ -287,6 +288,48 @@ async function searchVariants(query: string): Promise<CommandSearchGroup | null>
   };
 }
 
+/** Promo codes by code or internal name. Rows open the Codes promo panel. */
+async function searchPromoCodes(query: string): Promise<CommandSearchGroup | null> {
+  const promos = await prisma.promoCode.findMany({
+    take: GROUP_LIMIT + 1,
+    orderBy: [{ archivedAt: "asc" }, { createdAt: "desc" }],
+    where: {
+      OR: [
+        { code: { contains: query, mode: "insensitive" } },
+        { internalName: { contains: query, mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      code: true,
+      internalName: true,
+      active: true,
+      archivedAt: true,
+      rewardType: true,
+    },
+  });
+  if (promos.length === 0) return null;
+
+  const normalizedQuery = query.trim().toLowerCase();
+  return {
+    group: "promo",
+    hasMore: promos.length > GROUP_LIMIT,
+    items: promos.slice(0, GROUP_LIMIT).map((promo) => ({
+      id: promo.id,
+      title: promo.code,
+      subtitle: promo.internalName,
+      mono: true,
+      status: promo.archivedAt
+        ? { text: "archivé", tone: "red" as const }
+        : promo.active
+        ? { text: "actif", tone: "green" as const }
+        : { text: "désactivé", tone: "amber" as const },
+      href: "/admin?tab=promo-codes",
+      exact: promo.code.toLowerCase() === normalizedQuery,
+    })),
+  };
+}
+
 /** Expense ledger: recurring subscriptions + standalone entries by service
  *  name or category. All rows open the admin Dépenses panel. */
 async function searchExpenses(query: string): Promise<CommandSearchGroup | null> {
@@ -341,8 +384,8 @@ async function searchExpenses(query: string): Promise<CommandSearchGroup | null>
 
 /**
  * Grouped admin command-palette search over server data
- * (orders, customers, products, variants, expenses). Pages and settings are a
- * static index resolved instantly on the client.
+ * (orders, customers, products, variants, promo codes, expenses). Pages and
+ * settings are a static index resolved instantly on the client.
  */
 export async function adminCommandSearch(rawQuery: string): Promise<CommandSearchResult> {
   await ensureDatabaseReady();
@@ -352,15 +395,16 @@ export async function adminCommandSearch(rawQuery: string): Promise<CommandSearc
   const isOrderLookup = /^#?\d+$/.test(query);
   const isEmailish = query.includes("@");
 
-  const [orders, customers, products, variants, expenses] = await Promise.all([
+  const [orders, customers, products, variants, promo, expenses] = await Promise.all([
     searchOrders(query),
     isOrderLookup ? Promise.resolve(null) : searchCustomers(query),
     isOrderLookup || isEmailish ? Promise.resolve(null) : searchProducts(query),
     isOrderLookup || isEmailish ? Promise.resolve(null) : searchVariants(query),
+    isOrderLookup || isEmailish ? Promise.resolve(null) : searchPromoCodes(query),
     isOrderLookup || isEmailish ? Promise.resolve(null) : searchExpenses(query),
   ]);
 
-  const groups = [orders, customers, products, variants, expenses].filter(
+  const groups = [orders, customers, products, variants, promo, expenses].filter(
     (group): group is CommandSearchGroup => group !== null,
   );
   return { query, groups };

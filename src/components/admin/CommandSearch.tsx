@@ -51,6 +51,7 @@ const TYPE_BADGE: Record<CommandSearchGroupKey, { label: string; fg: string; bg:
   customers: { label: "CUS", fg: "#5BC98C", bg: "rgba(46,160,103,0.16)" },
   products: { label: "PRD", fg: "#E8A838", bg: "rgba(232,168,56,0.14)" },
   variants: { label: "VAR", fg: "#C79BEA", bg: "rgba(160,110,220,0.18)" },
+  promo: { label: "PRM", fg: "#9FB8FF", bg: "rgba(62,123,250,0.16)" },
   expenses: { label: "DEP", fg: "#E8A838", bg: "rgba(232,168,56,0.14)" },
   pages: { label: "PG", fg: "#9AA3B2", bg: "rgba(255,255,255,0.08)" },
   settings: { label: "SET", fg: "#56C7C7", bg: "rgba(64,180,180,0.14)" },
@@ -61,6 +62,7 @@ const GROUP_LABEL: Record<CommandSearchGroupKey, string> = {
   customers: "Clients",
   products: "Produits",
   variants: "Variantes",
+  promo: "Codes promo",
   expenses: "Dépenses",
   pages: "Pages",
   settings: "Paramètres",
@@ -71,6 +73,7 @@ const GROUP_HINT: Record<CommandSearchGroupKey, string> = {
   customers: "Ouvrir",
   products: "Modifier",
   variants: "Modifier",
+  promo: "Ouvrir",
   expenses: "Ouvrir",
   pages: "Aller",
   settings: "Ouvrir",
@@ -81,6 +84,7 @@ const GROUP_OVERFLOW_HREF: Partial<Record<CommandSearchGroupKey, string>> = {
   customers: "/admin?tab=customers",
   products: "/admin?tab=products",
   variants: "/admin?tab=products",
+  promo: "/admin?tab=promo-codes",
   expenses: "/admin?tab=expenses",
 };
 
