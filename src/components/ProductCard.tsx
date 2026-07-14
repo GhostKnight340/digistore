@@ -52,7 +52,9 @@ export default function ProductCard({
           </svg>
           Livraison rapide
         </span>
-        <h3 className={`line-clamp-2 font-medium leading-snug text-text ${featured ? "text-[15px]" : "text-[14.5px]"}`}>
+        {/* Reserve two lines so cards with a short name stay the same height as
+            cards whose name wraps (e.g. "App Store & iTunes France 5 EUR"). */}
+        <h3 className={`line-clamp-2 font-medium leading-snug text-text ${featured ? "min-h-[2.625rem] text-[15px]" : "min-h-[2.5rem] text-[14.5px]"}`}>
           {product.name}
           {suffix.label && <> <span className={suffix.className}>{suffix.label}</span></>}
         </h3>
