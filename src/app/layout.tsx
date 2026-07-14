@@ -18,9 +18,9 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
-  title: "ghost.ma - Cartes de jeu au Maroc",
+  title: "ghost.ma - Cartes cadeaux et recharges au Maroc",
   description:
-    "Cartes Steam, PlayStation, Xbox, Nintendo, Roblox et Valorant livrées rapidement après confirmation du paiement. Simple, sécurisé et adapté au Maroc.",
+    "Cartes cadeaux, recharges et codes numériques (Steam, PlayStation, Xbox, Nintendo, Roblox, Valorant et plus) livrés rapidement après confirmation du paiement. Simple, sécurisé et adapté au Maroc.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
