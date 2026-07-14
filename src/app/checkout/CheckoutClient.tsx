@@ -61,6 +61,7 @@ export default function CheckoutClient({
   const [email, setEmail] = useState(initialCustomer?.email ?? "");
   const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
   const [phoneLocal, setPhoneLocal] = useState(() => stripCountryPrefix(initialCustomer?.phone ?? ""));
+  const [editingPhone, setEditingPhone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [regionConfirmed, setRegionConfirmed] = useState(false);
@@ -352,7 +353,32 @@ export default function CheckoutClient({
                 </div>
               )}
 
-              {/* phone */}
+              {/* phone — collapsed to a compact saved row for a logged-in
+                  account that already has a number; opens on "Modifier". */}
+              {isLoggedIn && phoneValid && !editingPhone ? (
+                <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-[#0B0C10] p-3.5">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#5BC98C]/12 text-[#5BC98C]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className="h-[18px] w-[18px]" aria-hidden>
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
+                    </svg>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold text-white">Numéro de téléphone</div>
+                    <div className="font-mono text-[13px] text-muted">🇲🇦 +212 {phoneLocal}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingPhone(true)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/[0.08] px-3 py-2 text-[12.5px] font-medium text-[#9FB8FF] transition hover:bg-accent/[0.14]"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3" aria-hidden>
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                    Modifier
+                  </button>
+                </div>
+              ) : (
               <label className="block">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-[13px] font-semibold text-[#EAF0FF]">Numéro de téléphone</span>
@@ -390,6 +416,7 @@ export default function CheckoutClient({
                   Utilisé uniquement pour le suivi de votre commande si nécessaire.
                 </p>
               </label>
+              )}
             </div>
           </section>
 
@@ -919,16 +946,16 @@ function PromoSection({
             <>
               <div className="flex flex-col gap-2.5 sm:flex-row">
                 <input
-                  className="input flex-1 uppercase"
+                  className="input flex-1"
                   value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value)}
+                  onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       onApply();
                     }
                   }}
-                  placeholder="GHOST10"
+                  placeholder="Entrez votre code promo"
                   aria-label="Code promo"
                   autoCapitalize="characters"
                   autoComplete="off"
