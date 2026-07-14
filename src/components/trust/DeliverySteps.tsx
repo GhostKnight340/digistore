@@ -50,11 +50,23 @@ export default function DeliverySteps({
         </div>
       )}
 
+      {/*
+        Full variant (homepage, full-width): a single 5-across row connected by
+        arrows. Compact variant (product/collection/campaign pages) renders
+        inside a narrow content column, so it must WRAP into a readable
+        multi-row grid instead of cramming every card into a single row — a
+        forced 5-across row there clips the step titles. Arrows only make sense
+        in the single-row layout, so they are omitted in the compact variant.
+      */}
       <ol
-        className={`${title ? "mt-8" : "mt-2"} grid gap-3 sm:gap-4 md:auto-cols-fr md:grid-flow-col md:items-stretch`}
+        className={
+          isCompact
+            ? `${title ? "mt-6" : "mt-2"} grid gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3`
+            : `${title ? "mt-8" : "mt-2"} grid gap-3 sm:gap-4 md:auto-cols-fr md:grid-flow-col md:items-stretch`
+        }
       >
         {visible.map((step, index) => (
-          <li key={step.id} className="relative flex md:block">
+          <li key={step.id} className={isCompact ? "relative" : "relative flex md:block"}>
             <div className="flex h-full flex-col rounded-[14px] border border-border bg-surface p-5">
               <div className="flex items-center gap-3">
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-accent-soft text-[13px] font-bold text-accent">
@@ -64,7 +76,7 @@ export default function DeliverySteps({
               </div>
               <p className="mt-2.5 text-[13px] leading-relaxed text-muted">{step.text}</p>
             </div>
-            {index < visible.length - 1 && (
+            {!isCompact && index < visible.length - 1 && (
               <span
                 aria-hidden
                 className="pointer-events-none flex items-center justify-center px-2 text-faint md:absolute md:-right-3 md:top-1/2 md:z-10 md:-translate-y-1/2 md:px-0"
