@@ -11,6 +11,8 @@ import AddToCartForm from "@/components/AddToCartForm";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import RegionPanel from "@/components/RegionPanel";
 import RegionFlag from "@/components/RegionFlag";
+import NavigatorTips from "@/components/trust/NavigatorTips";
+import AcceptedPayments from "@/components/trust/AcceptedPayments";
 import { getRegion } from "@/lib/regions";
 
 export async function generateStaticParams() {
@@ -99,6 +101,8 @@ export default async function ProductDetailPage({
             <ProductInfoCard text={product.longDescription || product.description} />
           )}
 
+          <NavigatorTips context={[product.categoryName, product.name]} />
+
           <section className="mt-10">
             <h2 className="text-lg font-semibold tracking-tight text-text">
               Comment ça marche
@@ -122,6 +126,8 @@ export default async function ProductDetailPage({
               ))}
             </div>
           </section>
+
+          <AcceptedPayments className="mt-10" />
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">

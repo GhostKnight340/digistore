@@ -5,19 +5,18 @@ import FeaturedCarousel from "@/components/FeaturedCarousel";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import CollectionsExplorer from "@/components/CollectionsExplorer";
-import TrustStrip from "@/components/TrustStrip";
 import GtaPreorderBanner from "@/components/gta/GtaPreorderBanner";
+import WhyGhost from "@/components/trust/WhyGhost";
+import TrustBadges from "@/components/trust/TrustBadges";
+import DeliverySteps from "@/components/trust/DeliverySteps";
+import CustomerReviews from "@/components/trust/CustomerReviews";
+import AcceptedPayments from "@/components/trust/AcceptedPayments";
+import FaqAccordion from "@/components/trust/FaqAccordion";
 import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getHomepageCollectionCards } from "@/lib/db/collections";
 import { resolveBrandColor } from "@/lib/brandAssets";
 
 export const revalidate = 3600;
-
-const steps = [
-  { n: 1, title: "Choisissez un produit", text: "Sélectionnez le produit et la quantité." },
-  { n: 2, title: "Paiement sécurisé", text: "Renseignez votre e-mail et choisissez un mode de paiement." },
-  { n: 3, title: "Recevez votre produit numérique", text: "Votre produit est disponible après confirmation du paiement." },
-];
 
 export default async function HomePage() {
   const [{ categories, products }, settings, brandCategories, collectionCards] =
@@ -97,6 +96,10 @@ export default async function HomePage() {
           <StatStrip items={settings.statItems} />
         </section>
       )}
+
+      <section className="mt-4 sm:mt-5">
+        <TrustBadges />
+      </section>
 
       <GtaPreorderBanner />
 
@@ -185,46 +188,25 @@ export default async function HomePage() {
       )}
 
       {settings.homepage.showHowItWorks && (
-        <section id="how-it-works" className="mt-16 scroll-mt-20">
-          <h2 className="text-2xl font-semibold tracking-tight text-text">
-            {settings.homepage.howItWorksTitle}
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            {settings.homepage.howItWorksSubtitle}
-          </p>
-          <div className="mt-6 flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
-            {/* Guide mascot — 130px desktop / 110px tablet, hidden on mobile. */}
-            <figure className="hidden shrink-0 md:block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/navigator-master-transparent-2048.png"
-                alt=""
-                width={130}
-                height={130}
-                className="w-[110px] lg:w-[130px]"
-                loading="lazy"
-                decoding="async"
-              />
-              <figcaption className="mt-3 max-w-[130px] text-sm leading-snug text-muted">
-                Le Navigateur vous guide à chaque étape
-              </figcaption>
-            </figure>
-            <div className="grid flex-1 gap-4 sm:grid-cols-3">
-              {steps.map((step) => (
-                <div key={step.n} className="card p-6">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-lg font-bold text-accent">
-                    {step.n}
-                  </span>
-                  <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
-                  <p className="mt-1 text-sm text-muted">{step.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <DeliverySteps
+          id="how-it-works"
+          title={settings.homepage.howItWorksTitle}
+          subtitle={settings.homepage.howItWorksSubtitle}
+        />
       )}
 
-      {settings.homepage.showWhyChooseUs && <TrustStrip />}
+      {settings.homepage.showWhyChooseUs && (
+        <WhyGhost
+          title={settings.homepage.whyChooseUsTitle}
+          subtitle={settings.homepage.whyChooseUsSubtitle}
+        />
+      )}
+
+      <CustomerReviews />
+
+      <AcceptedPayments />
+
+      <FaqAccordion />
 
       <section className="mt-16">
         <div className="relative overflow-hidden rounded-[20px] border border-accent/30 bg-gradient-to-br from-accent/20 to-surface px-6 py-12 text-center sm:py-16">
