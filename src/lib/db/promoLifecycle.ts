@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { grantCreditTx, debitCreditTx } from "./ghostCredit";
+import { grantCreditTx, debitCreditTx, expireWalletIfDue } from "./ghostCredit";
 import {
   isGhostCreditReward,
   computeCreditReversal,
@@ -90,7 +90,8 @@ export async function finalizeOrderPromotion(orderId: string, existingTx?: Tx): 
       eligibleSubtotalMad: snapshot.eligibleSubtotalMad,
       configuredPercent: snapshot.configuredPercent ? Number(snapshot.configuredPercent.toString()) : null,
       configuredFixedMad: snapshot.configuredFixedMad,
-      expiresAt: snapshot.creditExpiresAt,
+      // Expiry is wallet-wide (60 days of inactivity), reset on every grant — no
+      // per-transaction expiry date (see ghostCredit.ts GHOST_CREDIT_EXPIRY_DAYS).
       source: "system",
       note: `Crédit Ghost — code ${snapshot.code}`,
     });
@@ -145,12 +146,42 @@ export async function applyPromoLifecycleForStatus(orderId: string, toStatus: st
       await finalizeOrderPromotion(orderId);
     } else if (toStatus === "cancelled" || toStatus === "rejected") {
       await releaseOrderPromotion(orderId);
+      // The order never completed → give back any Ghost Credit spent on it.
+      await refundSpentCreditForOrder(orderId);
     } else if (toStatus === "refunded") {
       await reverseOrderPromotionCredit(orderId);
+      // A refunded order is reversed → return the Ghost Credit spent on it.
+      await refundSpentCreditForOrder(orderId);
     }
   } catch (error) {
     console.error("[applyPromoLifecycleForStatus]", orderId, toStatus, error);
   }
+}
+
+/**
+ * Return Ghost Credit the customer spent on an order that did not complete
+ * (cancelled/rejected/refunded). Idempotent per order — a re-credit is granted
+ * at most once, and the grant resets the wallet's 60-day expiry like any credit.
+ */
+export async function refundSpentCreditForOrder(orderId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { customerId: true, ghostCreditAppliedMad: true },
+    });
+    if (!order || !order.customerId || order.ghostCreditAppliedMad <= 0) return;
+    // Refresh expiry state first so the re-credit sets a clean new deadline.
+    await expireWalletIfDue(tx, order.customerId);
+    await grantCreditTx(tx, {
+      customerId: order.customerId,
+      amountMad: order.ghostCreditAppliedMad,
+      reason: "order_spend_refund",
+      idempotencyKey: `credit-refund:${orderId}`,
+      orderId,
+      source: "system",
+      note: "Crédit Ghost restitué (commande non finalisée)",
+    });
+  });
 }
 
 /**

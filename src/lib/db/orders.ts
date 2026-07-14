@@ -4,6 +4,7 @@ import { ensureDatabaseReady, prisma } from "./prisma";
 import { isOrderingCurrentlyEnabled } from "./ordering";
 import { resolveCartLines } from "./promoResolve";
 import { reservePromoInTx } from "./promoCodes";
+import { debitCreditTx, expireWalletIfDue } from "./ghostCredit";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
@@ -946,6 +947,9 @@ interface CreateOrderInput {
   items: { productId: string; quantity: number }[];
   /** Optional promo code applied at checkout (re-validated server-side here). */
   promoCode?: string;
+  /** Optional Ghost Credit (whole MAD) the logged-in customer chose to spend.
+   *  Re-capped server-side to the live balance and the remaining total. */
+  ghostCreditToApplyMad?: number;
 }
 
 function normalizeOptionalPhone(value?: string) {
@@ -1043,24 +1047,58 @@ export async function createOrder(
           throw new PromoApplicationError(reservation.error ?? "Code promo invalide.");
         }
         discountMad = reservation.discountMad;
-        if (discountMad > 0) {
-          await tx.order.update({
-            where: { id: created.id },
-            data: { discountMad, totalMad: Math.max(0, subtotalMad - discountMad) },
+      }
+
+      // Spend Ghost Credit chosen by a logged-in customer. Re-checked here
+      // server-side (never trust the client amount): capped at the live wallet
+      // balance (after applying any due expiry) and at the remaining total, and
+      // debited from the ledger in this same transaction.
+      let creditAppliedMad = 0;
+      const requestedCredit = Math.floor(input.ghostCreditToApplyMad ?? 0);
+      if (sessionCustomer && requestedCredit > 0) {
+        await expireWalletIfDue(tx, customer.id);
+        const wallet = await tx.customer.findUnique({
+          where: { id: customer.id },
+          select: { ghostCreditBalanceMad: true },
+        });
+        const balance = wallet?.ghostCreditBalanceMad ?? 0;
+        const remainingTotal = Math.max(0, subtotalMad - discountMad);
+        creditAppliedMad = Math.max(0, Math.min(requestedCredit, balance, remainingTotal));
+        if (creditAppliedMad > 0) {
+          await debitCreditTx(tx, {
+            customerId: customer.id,
+            amountMad: creditAppliedMad,
+            reason: "order_spend",
+            idempotencyKey: `credit-spend:${created.id}`,
+            orderId: created.id,
+            source: "system",
+            note: "Crédit Ghost utilisé sur la commande",
+            allowNegative: false,
           });
         }
       }
 
+      const finalTotalMad = Math.max(0, subtotalMad - discountMad - creditAppliedMad);
+      if (discountMad > 0 || creditAppliedMad > 0) {
+        await tx.order.update({
+          where: { id: created.id },
+          data: { discountMad, ghostCreditAppliedMad: creditAppliedMad, totalMad: finalTotalMad },
+        });
+      }
+
+      const noteParts: string[] = [];
+      if (discountMad > 0) noteParts.push(`Promo -${discountMad} DH`);
+      if (creditAppliedMad > 0) noteParts.push(`Crédit Ghost -${creditAppliedMad} DH`);
       await tx.paymentEvent.create({
         data: {
           orderId: created.id,
           type: "status_change",
           toStatus: "pending_payment",
-          note: rawPromoCode ? `Order created. Promo appliqué (-${discountMad} DH).` : "Order created.",
+          note: noteParts.length ? `Order created. ${noteParts.join(", ")}.` : "Order created.",
         },
       });
 
-      return { order: created, totalMad: Math.max(0, subtotalMad - discountMad) };
+      return { order: created, totalMad: finalTotalMad };
     });
     const order = result.order;
     const totalMad = result.totalMad;

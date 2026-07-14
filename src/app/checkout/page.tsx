@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import CheckoutClient from "./CheckoutClient";
 import { getCurrentCustomer } from "@/lib/auth";
 import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
+import { getSpendableBalance } from "@/lib/db/ghostCredit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ export default async function CheckoutPage() {
   if (!(await isOrderingCurrentlyEnabled())) redirect("/cart");
 
   const customer = await getCurrentCustomer();
+  // Spendable Ghost Credit (after applying any due 60-day expiry) so the
+  // customer can choose to apply it toward this order.
+  const wallet = customer ? await getSpendableBalance(customer.id) : null;
   return (
     <CheckoutClient
       initialCustomer={
@@ -21,6 +25,7 @@ export default async function CheckoutPage() {
               email: customer.email,
               phone: customer.phone,
               emailVerified: customer.emailVerified,
+              ghostCreditBalanceMad: wallet?.balanceMad ?? 0,
             }
           : null
       }

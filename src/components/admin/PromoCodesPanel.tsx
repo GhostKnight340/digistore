@@ -589,29 +589,11 @@ function PromoEditor({
         </div>
 
         {credit && (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Expiration du crédit (jours après obtention, facultatif)">
-                <NumberInput
-                  value={draft.creditExpiresInDays}
-                  onChange={(v) => update("creditExpiresInDays", v)}
-                  placeholder="90"
-                />
-              </Field>
-              <Field label="Ou date d'expiration fixe (facultatif)">
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={toLocalInput(draft.creditExpiresAt ?? null)}
-                  onChange={(e) => update("creditExpiresAt", e.target.value || null)}
-                />
-              </Field>
-            </div>
-            <p className="rounded-lg border border-accent/20 bg-accent/[0.06] px-3 py-2 text-[12px] text-[#9FB8FF]">
-              Le crédit Ghost est calculé sur le sous-total éligible et attribué après confirmation du paiement.
-              Le client doit être connecté (option imposée automatiquement).
-            </p>
-          </>
+          <p className="rounded-lg border border-accent/20 bg-accent/[0.06] px-3 py-2 text-[12px] text-[#9FB8FF]">
+            Le crédit Ghost est calculé sur le sous-total éligible et attribué après confirmation du paiement.
+            Le client doit être connecté (option imposée automatiquement). Le crédit expire après 60 jours
+            d&apos;inactivité du portefeuille (chaque nouveau crédit relance ce délai).
+          </p>
         )}
         <p className="text-[12px] text-faint">
           Une réduction immédiate et un crédit Ghost ne peuvent pas être combinés dans un même code.

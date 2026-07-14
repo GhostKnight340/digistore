@@ -239,30 +239,34 @@ model DigitalCode {
 }
 
 model Order {
-  id            String   @id @default(cuid())
-  customerId    String?
-  customerName  String
-  customerEmail String
+  id                    String   @id @default(cuid())
+  customerId            String?
+  customerName          String
+  customerEmail         String
   // status: "pending_payment" | "payment_submitted" | "payment_confirmed"
   //       | "payment_issue" | "rejected" | "delivered" | "refunded" | "cancelled"
-  status        String   @default("pending_payment")
-  paymentMethod String
+  status                String   @default("pending_payment")
+  paymentMethod         String
   // The amount the customer actually owes/pays. When a promo with an immediate
   // discount is applied, this is the DISCOUNTED total (subtotal - discountMad),
   // so every payment surface (PayPal/bank/USDT) and revenue query keeps using
   // totalMad unchanged. Ghost Credit rewards never touch this — the customer
   // still pays the full amount. Subtotal is derivable as totalMad + discountMad.
-  totalMad      Int
+  totalMad              Int
   // Immediate promo discount applied to this order (whole MAD, 0 when none).
   // Additive with a safe default so every historical order stays untouched.
-  discountMad   Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  discountMad           Int      @default(0)
+  // Ghost Credit the customer chose to SPEND on this order (whole MAD, 0 when
+  // none). Reduces totalMad like the discount does. Debited from the wallet at
+  // order creation and re-credited if the order is cancelled/rejected/refunded.
+  ghostCreditAppliedMad Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now()) @updatedAt
   // Live DB column, auto-populated on every insert. Not read by application
   // code — public order numbers are computed on the fly from creation-order
   // sequence (see src/lib/orderNumber.ts) rather than this column. Kept here
   // only so the schema matches reality; not wired into any query.
-  orderNumber   Int      @unique @default(autoincrement())
+  orderNumber           Int      @unique @default(autoincrement())
 
   // Unguessable secret embedded in the "Voir ma livraison" email link. The
   // public order number is a sequential, enumerable value, so it is NOT
@@ -375,7 +379,13 @@ model Customer {
   // entries in GhostCreditTransaction, and can be re-derived from that ledger at
   // any time (see src/lib/db/ghostCredit.ts deriveBalance). Never the sole source
   // of truth — the ledger is. Additive with a safe default.
-  ghostCreditBalanceMad Int @default(0)
+  ghostCreditBalanceMad Int       @default(0)
+  // Wallet-wide expiry deadline. Ghost Credit expires after 60 days of
+  // INACTIVITY: every new credit grant resets this to now + 60 days for the
+  // WHOLE wallet; spending does not reset it. Null when the balance is 0 / no
+  // credit has been granted. Enforced lazily on read + spend (see ghostCredit.ts
+  // expireWalletIfDue). Additive, nullable — existing customers keep null.
+  ghostCreditExpiresAt  DateTime?
 
   orders                 Order[]
   emailLogs              EmailLog[]

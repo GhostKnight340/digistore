@@ -25,12 +25,16 @@ function reasonLabel(txn: GhostCreditTransactionDTO): string {
       return txn.promoCode ? `Crédit promo · ${txn.promoCode}` : "Crédit promo";
     case "promo_reversal":
       return "Reprise (remboursement)";
+    case "order_spend":
+      return "Utilisé sur une commande";
+    case "order_spend_refund":
+      return "Restitué (commande non finalisée)";
     case "admin_grant":
       return "Crédit manuel";
     case "admin_reversal":
       return "Reprise manuelle";
     case "expiration":
-      return "Expiration";
+      return "Expiré (60 j d'inactivité)";
     default:
       return txn.reason;
   }
@@ -96,8 +100,10 @@ export default async function AccountWalletPage() {
               </div>
             </div>
             <p className="relative mt-4 text-[12.5px] leading-relaxed text-muted">
-              Le crédit Ghost est ajouté après confirmation des commandes éligibles. Il n&apos;expire pas,
-              sauf mention contraire indiquée lors de l&apos;obtention.
+              Le crédit Ghost est ajouté après confirmation des commandes éligibles.
+              {wallet.balanceMad > 0 && wallet.expiresAt
+                ? ` Votre solde expire le ${formatFrenchDate(wallet.expiresAt)} s'il reste inactif — chaque nouveau crédit relance ce délai de 60 jours.`
+                : " Le solde expire après 60 jours d'inactivité ; chaque nouveau crédit relance ce délai."}
             </p>
           </div>
 
@@ -143,7 +149,6 @@ export default async function AccountWalletPage() {
                         </p>
                         <p className="mt-0.5 truncate font-mono text-[11.5px] text-faint">
                           {formatFrenchDate(txn.createdAt)}
-                          {txn.expiresAt ? ` · expire le ${formatFrenchDate(txn.expiresAt)}` : ""}
                         </p>
                       </div>
                       <span

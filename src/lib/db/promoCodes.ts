@@ -304,8 +304,9 @@ function sanitizeSaveInput(input: SavePromoCodeInput): {
         : null,
     maxDiscountMad: input.rewardType === "PERCENT_DISCOUNT" ? input.maxDiscountMad ?? null : null,
     maxCreditMad: input.rewardType === "PERCENT_GHOST_CREDIT" ? input.maxCreditMad ?? null : null,
-    creditExpiresInDays: credit ? input.creditExpiresInDays ?? null : null,
-    creditExpiresAt: credit && input.creditExpiresAt ? new Date(input.creditExpiresAt) : null,
+    // Ghost Credit expiry is wallet-wide (60 days of inactivity), never per code.
+    creditExpiresInDays: null,
+    creditExpiresAt: null,
     startAt: input.startAt ? new Date(input.startAt) : null,
     endAt: input.endAt ? new Date(input.endAt) : null,
     maxTotalUses: input.maxTotalUses ?? null,
@@ -744,12 +745,8 @@ export async function reservePromoInTx(tx: Tx, params: ReservePromoParams): Prom
     .map((a) => ({ orderItemId: params.lineKeyToOrderItemId.get(a.lineId) ?? null, discountMad: a.discountMad }))
     .filter((a) => a.orderItemId);
 
-  const creditExpiresAt = isGhostCreditReward(rewardType)
-    ? promo.creditExpiresAt ??
-      (promo.creditExpiresInDays != null
-        ? new Date(params.now.getTime() + promo.creditExpiresInDays * 24 * 60 * 60 * 1000)
-        : null)
-    : null;
+  // Ghost Credit expiry is wallet-wide (60 days of inactivity), not per order.
+  const creditExpiresAt = null;
 
   await tx.orderPromotionSnapshot.create({
     data: {

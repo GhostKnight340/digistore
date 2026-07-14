@@ -706,6 +706,8 @@ export interface GhostCreditTransactionDTO {
 
 export interface GhostCreditWalletDTO {
   balanceMad: number;
+  /** Wallet-wide expiry deadline (60 days after the last credit), or null. */
+  expiresAt: string | null;
   transactions: GhostCreditTransactionDTO[];
 }
 

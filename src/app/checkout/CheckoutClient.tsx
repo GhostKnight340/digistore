@@ -41,6 +41,7 @@ export default function CheckoutClient({
     email: string;
     phone?: string | null;
     emailVerified?: boolean;
+    ghostCreditBalanceMad?: number;
   } | null;
 }) {
   const { cart, ready, cartTotal, clearCart } = useStore();
@@ -73,7 +74,17 @@ export default function CheckoutClient({
 
   const promoDiscountMad = promo?.rewardKind === "discount" ? promo.discountMad : 0;
   const promoCreditMad = promo?.rewardKind === "credit" ? promo.creditMad : 0;
-  const totalToPay = Math.max(0, cartTotal - promoDiscountMad);
+
+  // ── Ghost Credit spend state ───────────────────────────────────────────────
+  const creditBalance = initialCustomer?.ghostCreditBalanceMad ?? 0;
+  const [useCredit, setUseCredit] = useState(false);
+  const [creditAmountInput, setCreditAmountInput] = useState("");
+  // Credit is capped at the balance and at what's left to pay after any discount.
+  const maxCreditApplicable = Math.max(0, Math.min(creditBalance, cartTotal - promoDiscountMad));
+  const requestedCredit = creditAmountInput.trim() === "" ? maxCreditApplicable : Math.floor(Number(creditAmountInput) || 0);
+  const creditAppliedMad = useCredit ? Math.max(0, Math.min(requestedCredit, maxCreditApplicable)) : 0;
+
+  const totalToPay = Math.max(0, cartTotal - promoDiscountMad - creditAppliedMad);
 
   async function handleApplyPromo() {
     const code = promoInput.trim();
@@ -227,6 +238,7 @@ export default function CheckoutClient({
           quantity: i.quantity,
         })),
         promoCode: promo ? promo.code : undefined,
+        ghostCreditToApplyMad: creditAppliedMad > 0 ? creditAppliedMad : undefined,
       });
 
       if (!order) {
@@ -392,6 +404,18 @@ export default function CheckoutClient({
             onRemove={handleRemovePromo}
           />
 
+          {isLoggedIn && creditBalance > 0 && (
+            <GhostCreditSection
+              balanceMad={creditBalance}
+              maxApplicableMad={maxCreditApplicable}
+              useCredit={useCredit}
+              setUseCredit={setUseCredit}
+              creditAmountInput={creditAmountInput}
+              setCreditAmountInput={setCreditAmountInput}
+              creditAppliedMad={creditAppliedMad}
+            />
+          )}
+
           <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
             <div className="border-b border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
               <h2 className="text-base font-semibold text-white">
@@ -461,6 +485,7 @@ export default function CheckoutClient({
             promo={promo}
             promoDiscountMad={promoDiscountMad}
             promoCreditMad={promoCreditMad}
+            creditAppliedMad={creditAppliedMad}
             totalToPay={totalToPay}
             restrictedItems={restrictedItems}
             regionConfirmed={regionConfirmed}
@@ -484,7 +509,12 @@ export default function CheckoutClient({
                 if (!product) return null;
                 return (
                   <li key={item.productId} className="flex items-center gap-3">
-                    <div className="h-10 w-10 shrink-0 rounded-[10px] border border-white/[0.06] bg-gradient-to-br from-[#1d2638] to-[#0d1017]" />
+                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[10px] border border-white/[0.06] bg-gradient-to-br from-[#1d2638] to-[#0d1017]">
+                      {product.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-medium text-white">{product.name}</div>
                       <div className="font-mono text-[11.5px] text-faint">Qté {item.quantity}</div>
@@ -522,6 +552,12 @@ export default function CheckoutClient({
                 <div className="mb-1 flex items-baseline justify-between text-[12px]">
                   <span className="text-[#8FE0B4]">{promo?.code} · réduction</span>
                   <span className="font-mono text-[#8FE0B4]">-{formatDH(promoDiscountMad)}</span>
+                </div>
+              )}
+              {creditAppliedMad > 0 && (
+                <div className="mb-1 flex items-baseline justify-between text-[12px]">
+                  <span className="text-[#9FB8FF]">Crédit Ghost utilisé</span>
+                  <span className="font-mono text-[#9FB8FF]">-{formatDH(creditAppliedMad)}</span>
                 </div>
               )}
               <div className="mb-[11px] flex items-baseline justify-between">
@@ -569,6 +605,7 @@ function SummaryCard({
   promo,
   promoDiscountMad,
   promoCreditMad,
+  creditAppliedMad,
   totalToPay,
   restrictedItems,
   regionConfirmed,
@@ -586,6 +623,7 @@ function SummaryCard({
   promo: PromoPreviewDTO | null;
   promoDiscountMad: number;
   promoCreditMad: number;
+  creditAppliedMad: number;
   totalToPay: number;
   restrictedItems: { item: { productId: string; quantity: number }; product: NonNullable<ReturnType<ReturnType<typeof useProductCatalog>["getProduct"]>> }[];
   regionConfirmed: boolean;
@@ -613,9 +651,13 @@ function SummaryCard({
             const flag = REGION_FLAGS[region.code];
             return (
               <li key={item.productId} className="flex items-center gap-3">
-                <div className="relative grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[11px] border border-white/[0.06] bg-gradient-to-br from-[#1d2638] to-[#0d1017]">
+                <div className="relative grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-[11px] border border-white/[0.06] bg-gradient-to-br from-[#1d2638] to-[#0d1017]">
+                  {product.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  )}
                   {region.restricted && flag && (
-                    <span className="absolute left-1 top-1 text-xs">{flag}</span>
+                    <span className="absolute left-1 top-1 z-10 text-xs">{flag}</span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -648,6 +690,12 @@ function SummaryCard({
             <div className="flex justify-between text-[13.5px]">
               <span className="text-[#8FE0B4]">Réduction · {promo!.code}</span>
               <span className="font-mono text-[#8FE0B4]">-{formatDH(promoDiscountMad)}</span>
+            </div>
+          )}
+          {creditAppliedMad > 0 && (
+            <div className="flex justify-between text-[13.5px]">
+              <span className="text-[#9FB8FF]">Crédit Ghost utilisé</span>
+              <span className="font-mono text-[#9FB8FF]">-{formatDH(creditAppliedMad)}</span>
             </div>
           )}
           <div className="flex justify-between text-[13.5px]">
@@ -915,6 +963,101 @@ function PromoSection({
                   <span className="text-[11.5px] text-faint">Votre panier est conservé.</span>
                 </div>
               )}
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function GhostCreditSection({
+  balanceMad,
+  maxApplicableMad,
+  useCredit,
+  setUseCredit,
+  creditAmountInput,
+  setCreditAmountInput,
+  creditAppliedMad,
+}: {
+  balanceMad: number;
+  maxApplicableMad: number;
+  useCredit: boolean;
+  setUseCredit: (v: boolean) => void;
+  creditAmountInput: string;
+  setCreditAmountInput: (v: string) => void;
+  creditAppliedMad: number;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <button
+        type="button"
+        onClick={() => setUseCredit(!useCredit)}
+        aria-pressed={useCredit}
+        className="flex w-full items-center gap-[13px] px-[18px] py-[16px] text-left sm:px-[22px]"
+      >
+        <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] bg-accent/12 text-[#9FB8FF]">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-[18px] w-[18px]" aria-hidden>
+            <path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2" />
+            <path d="M3 7v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2Z" />
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14.5px] font-semibold text-white">Utiliser mon crédit Ghost</span>
+          <span className="mt-0.5 block text-[12.5px] text-muted">Solde disponible : {formatDH(balanceMad)}</span>
+        </span>
+        <span
+          className={`grid h-6 w-6 shrink-0 place-items-center rounded-[7px] border transition-colors ${
+            useCredit ? "border-accent bg-accent text-white" : "border-white/25 bg-transparent"
+          }`}
+          aria-hidden
+        >
+          {useCredit && (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-3.5 w-3.5">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+        </span>
+      </button>
+
+      {useCredit && (
+        <div className="border-t border-white/[0.06] px-[18px] py-[16px] sm:px-[22px]">
+          {maxApplicableMad <= 0 ? (
+            <p className="text-[12.5px] text-muted">
+              Aucun crédit applicable à cette commande pour le moment.
+            </p>
+          ) : (
+            <>
+              <label className="block">
+                <span className="mb-1.5 block text-[12.5px] font-medium text-[#EAF0FF]">
+                  Montant à utiliser (DH)
+                </span>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="number"
+                    className="input flex-1 font-mono"
+                    value={creditAmountInput}
+                    onChange={(e) => setCreditAmountInput(e.target.value)}
+                    min={0}
+                    max={maxApplicableMad}
+                    placeholder={String(maxApplicableMad)}
+                    inputMode="numeric"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCreditAmountInput(String(maxApplicableMad))}
+                    className="btn-ghost h-[46px] shrink-0 px-4 text-[13px]"
+                  >
+                    Max
+                  </button>
+                </div>
+              </label>
+              <p className="mt-2 text-[11.5px] text-faint">
+                Jusqu&apos;à {formatDH(maxApplicableMad)} applicable sur cette commande.
+                {creditAppliedMad > 0 && (
+                  <span className="text-[#9FB8FF]"> {formatDH(creditAppliedMad)} sera déduit du total.</span>
+                )}
+              </p>
             </>
           )}
         </div>

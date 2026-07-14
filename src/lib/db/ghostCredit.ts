@@ -19,6 +19,18 @@ import type { PromoRewardType, GhostCreditDirection, GhostCreditStatus } from "@
 
 type Tx = Prisma.TransactionClient;
 
+/**
+ * Ghost Credit expires after this many days of INACTIVITY. "Inactivity" means no
+ * new credit added: every grant resets the whole wallet's deadline to now + this
+ * many days; spending does not reset it. When the deadline passes, the entire
+ * remaining balance expires at once.
+ */
+export const GHOST_CREDIT_EXPIRY_DAYS = 60;
+
+function walletDeadlineFrom(now: Date): Date {
+  return new Date(now.getTime() + GHOST_CREDIT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+}
+
 function iso(value: Date | string | null): string | null {
   if (value == null) return null;
   return value instanceof Date ? value.toISOString() : value;
@@ -98,9 +110,13 @@ export async function grantCreditTx(tx: Tx, params: GrantParams): Promise<Ledger
       note: params.note ?? null,
     },
   });
+  // A new credit resets the whole wallet's 60-day inactivity deadline.
   const customer = await tx.customer.update({
     where: { id: params.customerId },
-    data: { ghostCreditBalanceMad: { increment: params.amountMad } },
+    data: {
+      ghostCreditBalanceMad: { increment: params.amountMad },
+      ghostCreditExpiresAt: walletDeadlineFrom(new Date()),
+    },
     select: { ghostCreditBalanceMad: true },
   });
   return { ok: true, duplicate: false, balanceMad: customer.ghostCreditBalanceMad };
@@ -162,11 +178,78 @@ export async function debitCreditTx(
       note: params.note ?? null,
     },
   });
+  // Spending never extends the deadline. Clear it once the wallet empties so an
+  // empty wallet doesn't carry a stale expiry date.
+  const remaining = balance - applied;
   await tx.customer.update({
     where: { id: params.customerId },
-    data: { ghostCreditBalanceMad: { decrement: applied } },
+    data: {
+      ghostCreditBalanceMad: { decrement: applied },
+      ...(remaining <= 0 ? { ghostCreditExpiresAt: null } : {}),
+    },
   });
   return { ok: true, duplicate: false, wouldGoNegative, appliedMad: applied };
+}
+
+/**
+ * Expire the whole wallet if its 60-day inactivity deadline has passed: debit
+ * the full remaining balance (reason "expiration"), mark the still-active credit
+ * rows expired, and clear the deadline. Idempotent per (customer, deadline).
+ * Runs in the given transaction. Returns the balance after any expiry.
+ */
+export async function expireWalletIfDue(tx: Tx, customerId: string, now = new Date()): Promise<number> {
+  const customer = await tx.customer.findUnique({
+    where: { id: customerId },
+    select: { ghostCreditBalanceMad: true, ghostCreditExpiresAt: true },
+  });
+  if (!customer) return 0;
+  const balance = customer.ghostCreditBalanceMad;
+  const deadline = customer.ghostCreditExpiresAt;
+  if (!deadline || now.getTime() <= deadline.getTime() || balance <= 0) return balance;
+
+  const key = `wallet-expire:${customerId}:${deadline.toISOString()}`;
+  const existing = await tx.ghostCreditTransaction.findUnique({
+    where: { idempotencyKey: key },
+    select: { id: true },
+  });
+  if (existing) return balance;
+
+  await tx.ghostCreditTransaction.create({
+    data: {
+      customerId,
+      amountMad: balance,
+      direction: "debit",
+      reason: "expiration",
+      status: "active",
+      idempotencyKey: key,
+      source: "system",
+      note: `Crédit Ghost expiré après ${GHOST_CREDIT_EXPIRY_DAYS} jours d'inactivité`,
+    },
+  });
+  // Mark the credits that made up this balance as expired (audit clarity).
+  await tx.ghostCreditTransaction.updateMany({
+    where: { customerId, direction: "credit", status: "active" },
+    data: { status: "expired" },
+  });
+  await tx.customer.update({
+    where: { id: customerId },
+    data: { ghostCreditBalanceMad: 0, ghostCreditExpiresAt: null },
+  });
+  return 0;
+}
+
+/**
+ * Current spendable balance after applying any due expiry. Used at checkout so a
+ * customer can never spend already-expired credit.
+ */
+export async function getSpendableBalance(customerId: string): Promise<{ balanceMad: number; expiresAt: string | null }> {
+  await ensureDatabaseReady();
+  const balanceMad = await prisma.$transaction((tx) => expireWalletIfDue(tx, customerId));
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { ghostCreditExpiresAt: true },
+  });
+  return { balanceMad, expiresAt: iso(customer?.ghostCreditExpiresAt ?? null) };
 }
 
 function buildTransactionDTO(row: {
@@ -200,8 +283,13 @@ function buildTransactionDTO(row: {
 /** Wallet balance + ledger history for the account wallet page. */
 export async function getGhostCreditWallet(customerId: string): Promise<GhostCreditWalletDTO> {
   await ensureDatabaseReady();
+  // Apply any due expiry first so the page never shows a stale balance.
+  await prisma.$transaction((tx) => expireWalletIfDue(tx, customerId));
   const [customer, rows] = await Promise.all([
-    prisma.customer.findUnique({ where: { id: customerId }, select: { ghostCreditBalanceMad: true } }),
+    prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { ghostCreditBalanceMad: true, ghostCreditExpiresAt: true },
+    }),
     prisma.ghostCreditTransaction.findMany({
       where: { customerId },
       orderBy: { createdAt: "desc" },
@@ -223,6 +311,7 @@ export async function getGhostCreditWallet(customerId: string): Promise<GhostCre
   ]);
   return {
     balanceMad: customer?.ghostCreditBalanceMad ?? 0,
+    expiresAt: iso(customer?.ghostCreditExpiresAt ?? null),
     transactions: rows.map(buildTransactionDTO),
   };
 }
