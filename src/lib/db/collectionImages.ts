@@ -21,6 +21,12 @@ export const COLLECTION_IMAGE_BY_SLUG: Record<string, string> = {
   "selection-du-navigator": "/collections/navigator.webp",
   navigator: "/collections/navigator.webp",
   global: "/collections/global.webp",
+  // United States / USD (Statue of Liberty + US artwork)
+  "etats-unis-usd": "/collections/etats-unis.webp",
+  "etats-unis": "/collections/etats-unis.webp",
+  usa: "/collections/etats-unis.webp",
+  us: "/collections/etats-unis.webp",
+  "united-states": "/collections/etats-unis.webp",
   // Europe / France (Eiffel + FR artwork)
   "europe-eur": "/collections/france.webp",
   europe: "/collections/france.webp",
