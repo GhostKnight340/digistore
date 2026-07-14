@@ -75,7 +75,10 @@ export default function FeaturedCarousel({
     >
       <div
         ref={scrollerRef}
-        className="-mx-4 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
+        // `overflow-x-auto` makes the browser compute `overflow-y` to `auto`
+        // too, which would clip a card's hover lift/border/shadow. The vertical
+        // padding gives that transform room so the top border is never clipped.
+        className="-mx-4 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth px-4 pt-2 pb-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
       >
         {children.map((child, i) => (
           <div
