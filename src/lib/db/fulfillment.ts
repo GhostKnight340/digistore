@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
+import { applyPromoLifecycleForStatus } from "@/lib/db/promoLifecycle";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { publicOrderReference } from "@/lib/db/orders";
 import { getStoreSettings } from "@/lib/db/catalog";
@@ -96,6 +97,10 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
       itemCount: await prisma.orderItem.count({ where: { orderId } }),
       adminUrl,
     });
+
+    // Finalize promo redemption + grant Ghost Credit now that payment is
+    // confirmed. Idempotent and best-effort.
+    await applyPromoLifecycleForStatus(orderId, "payment_confirmed");
 
     return { ok: true };
   } catch (error) {

@@ -9,6 +9,7 @@ import {
   LogoutIcon,
   CheckIcon,
   LifebuoyIcon,
+  WalletIcon,
 } from "@/components/account/icons";
 
 async function logout() {
@@ -17,11 +18,12 @@ async function logout() {
   redirect("/login");
 }
 
-type AccountView = "dashboard" | "orders" | "support" | "security";
+type AccountView = "dashboard" | "orders" | "wallet" | "support" | "security";
 
 const NAV: { view: AccountView; href: string; label: string; Icon: typeof GridIcon }[] = [
   { view: "dashboard", href: "/account", label: "Tableau de bord", Icon: GridIcon },
   { view: "orders", href: "/account/orders", label: "Commandes", Icon: BagIcon },
+  { view: "wallet", href: "/account/wallet", label: "Crédit Ghost", Icon: WalletIcon },
   { view: "support", href: "/account/support", label: "Support", Icon: LifebuoyIcon },
   { view: "security", href: "/account/security", label: "Sécurité", Icon: ShieldIcon },
 ];

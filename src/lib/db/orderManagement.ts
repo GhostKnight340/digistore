@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { publicOrderReference } from "@/lib/db/orders";
 import { absoluteAppUrl } from "@/lib/orderNumber";
+import { applyPromoLifecycleForStatus } from "@/lib/db/promoLifecycle";
 import { notifyPaymentStatusChange } from "@/lib/discord/notify";
 import type { ActionResult } from "@/lib/dto";
 import type { OrderStatus } from "@/lib/types";
@@ -201,6 +202,10 @@ export async function changeOrderStatus(
         adminUrl: absoluteAppUrl(`/admin/orders/${input.orderId}`),
       });
     }
+
+    // Promo lifecycle for admin manual status changes (confirm → grant credit,
+    // cancel/reject → release, refund → reverse). Idempotent, best-effort.
+    await applyPromoLifecycleForStatus(input.orderId, input.toStatus);
 
     return { ok: true };
   } catch (error) {

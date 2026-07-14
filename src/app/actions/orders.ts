@@ -18,6 +18,8 @@ export async function createOrderAction(input: {
   /** Optional: the customer picks the actual method on the payment page. */
   paymentMethod?: string;
   items: { productId: string; quantity: number }[];
+  /** Optional promo code applied at checkout (re-validated server-side). */
+  promoCode?: string;
 }): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
   // Global pre-launch guard: never create an order while ordering is disabled.
   // The DB layer re-checks this too, so a race or a direct call can't slip

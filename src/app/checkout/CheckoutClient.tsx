@@ -9,10 +9,12 @@ import PaymentBrandMark from "@/components/PaymentBrandMark";
 import { formatDH } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
 import { getPaymentConfigAction } from "@/app/actions/payments";
+import { validatePromoCodeAction } from "@/app/actions/promo";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
 import { announcedPaymentMethods } from "@/lib/paymentMethod";
-import type { PaymentConfigDTO } from "@/lib/dto";
+import type { PaymentConfigDTO, PromoPreviewDTO } from "@/lib/dto";
 import { getRegion } from "@/lib/regions";
+import { trackEvent } from "@/lib/analytics";
 
 const REGION_FLAGS: Record<string, string> = {
   MA: "🇲🇦",
@@ -61,6 +63,67 @@ export default function CheckoutClient({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [regionConfirmed, setRegionConfirmed] = useState(false);
+
+  // ── Promo code state ───────────────────────────────────────────────────────
+  const [promoInput, setPromoInput] = useState("");
+  const [promo, setPromo] = useState<PromoPreviewDTO | null>(null);
+  const [promoError, setPromoError] = useState("");
+  const [promoRequiresLogin, setPromoRequiresLogin] = useState(false);
+  const [promoLoading, setPromoLoading] = useState(false);
+
+  const promoDiscountMad = promo?.rewardKind === "discount" ? promo.discountMad : 0;
+  const promoCreditMad = promo?.rewardKind === "credit" ? promo.creditMad : 0;
+  const totalToPay = Math.max(0, cartTotal - promoDiscountMad);
+
+  async function handleApplyPromo() {
+    const code = promoInput.trim();
+    if (!code || promoLoading) return;
+    setPromoLoading(true);
+    setPromoError("");
+    setPromoRequiresLogin(false);
+    trackEvent("promo_code_attempted", {});
+    try {
+      const result = await validatePromoCodeAction({
+        code,
+        items: cart.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+        email: email.trim() || undefined,
+      });
+      if (result.ok && result.preview) {
+        setPromo(result.preview);
+        setPromoError("");
+        trackEvent("promo_code_accepted", { reward_type: result.preview.rewardType });
+      } else {
+        setPromo(null);
+        setPromoError(result.error ?? "Code promo invalide.");
+        setPromoRequiresLogin(Boolean(result.requiresLogin));
+        trackEvent("promo_code_rejected", { reason: result.requiresLogin ? "requires_login" : "invalid" });
+      }
+    } catch {
+      setPromo(null);
+      setPromoError("Une erreur est survenue. Veuillez réessayer.");
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  function handleRemovePromo() {
+    setPromo(null);
+    setPromoInput("");
+    setPromoError("");
+    setPromoRequiresLogin(false);
+    trackEvent("promo_code_removed", {});
+  }
+
+  // A stale preview (cart changed after applying) must never drive the total —
+  // drop it so the customer re-applies. createOrder re-validates authoritatively
+  // regardless.
+  const cartSignature = cart.map((i) => `${i.productId}:${i.quantity}`).join("|");
+  useEffect(() => {
+    setPromo(null);
+    setPromoError("");
+    setPromoRequiresLogin(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartSignature]);
 
   const restrictedItems = cart
     .map((item) => ({ item, product: getProduct(item.productId) }))
@@ -163,6 +226,7 @@ export default function CheckoutClient({
           productId: i.productId,
           quantity: i.quantity,
         })),
+        promoCode: promo ? promo.code : undefined,
       });
 
       if (!order) {
@@ -376,6 +440,17 @@ export default function CheckoutClient({
               </span>
             </div>
           </section>
+
+          <PromoSection
+            promoInput={promoInput}
+            setPromoInput={setPromoInput}
+            promo={promo}
+            promoError={promoError}
+            promoRequiresLogin={promoRequiresLogin}
+            promoLoading={promoLoading}
+            onApply={handleApplyPromo}
+            onRemove={handleRemovePromo}
+          />
         </div>
 
         <aside className="hidden h-fit lg:sticky lg:top-[88px] lg:block">
@@ -383,6 +458,10 @@ export default function CheckoutClient({
             cart={cart}
             getProduct={getProduct}
             cartTotal={cartTotal}
+            promo={promo}
+            promoDiscountMad={promoDiscountMad}
+            promoCreditMad={promoCreditMad}
+            totalToPay={totalToPay}
             restrictedItems={restrictedItems}
             regionConfirmed={regionConfirmed}
             setRegionConfirmed={setRegionConfirmed}
@@ -439,12 +518,24 @@ export default function CheckoutClient({
 
           <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-canvas via-canvas/95 to-transparent px-4 pb-[max(env(safe-area-inset-bottom),14px)] pt-3">
             <div className="rounded-2xl border border-white/[0.09] bg-[#12141B] p-3.5 shadow-[0_-8px_30px_rgba(0,0,0,0.4)]">
+              {promoDiscountMad > 0 && (
+                <div className="mb-1 flex items-baseline justify-between text-[12px]">
+                  <span className="text-[#8FE0B4]">{promo?.code} · réduction</span>
+                  <span className="font-mono text-[#8FE0B4]">-{formatDH(promoDiscountMad)}</span>
+                </div>
+              )}
               <div className="mb-[11px] flex items-baseline justify-between">
                 <span className="text-[12.5px] text-muted">Total à payer</span>
                 <span className="font-mono text-[19px] font-semibold text-white">
-                  {formatDH(cartTotal)}
+                  {formatDH(totalToPay)}
                 </span>
               </div>
+              {promoCreditMad > 0 && (
+                <div className="mb-[11px] -mt-1.5 flex items-baseline justify-between text-[11.5px]">
+                  <span className="text-[#9FB8FF]">Crédit Ghost à recevoir</span>
+                  <span className="font-mono text-[#9FB8FF]">+{formatDH(promoCreditMad)}</span>
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={submitBlocked}
@@ -475,6 +566,10 @@ function SummaryCard({
   cart,
   getProduct,
   cartTotal,
+  promo,
+  promoDiscountMad,
+  promoCreditMad,
+  totalToPay,
   restrictedItems,
   regionConfirmed,
   setRegionConfirmed,
@@ -488,6 +583,10 @@ function SummaryCard({
   cart: ReturnType<typeof useStore>["cart"];
   getProduct: ReturnType<typeof useProductCatalog>["getProduct"];
   cartTotal: number;
+  promo: PromoPreviewDTO | null;
+  promoDiscountMad: number;
+  promoCreditMad: number;
+  totalToPay: number;
   restrictedItems: { item: { productId: string; quantity: number }; product: NonNullable<ReturnType<ReturnType<typeof useProductCatalog>["getProduct"]>> }[];
   regionConfirmed: boolean;
   setRegionConfirmed: (v: boolean) => void;
@@ -498,6 +597,8 @@ function SummaryCard({
   submitBlocked: boolean;
   submitting: boolean;
 }) {
+  // Whether the cart is "mixed": only some lines were eligible for the promo.
+  const mixedCart = promo != null && promo.eligibleLineCount < cart.length;
   return (
     <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
       <div className="border-b border-white/[0.06] px-5 py-[18px]">
@@ -534,6 +635,21 @@ function SummaryCard({
             <span className="text-muted">Sous-total</span>
             <span className="font-mono text-text">{formatDH(cartTotal)}</span>
           </div>
+          {mixedCart && (
+            <div className="flex justify-between text-[13.5px]">
+              <span className="text-muted">
+                Sous-total éligible
+                <span className="ml-1 text-faint">({promo!.eligibleLineCount})</span>
+              </span>
+              <span className="font-mono text-text">{formatDH(promo!.eligibleSubtotalMad)}</span>
+            </div>
+          )}
+          {promoDiscountMad > 0 && (
+            <div className="flex justify-between text-[13.5px]">
+              <span className="text-[#8FE0B4]">Réduction · {promo!.code}</span>
+              <span className="font-mono text-[#8FE0B4]">-{formatDH(promoDiscountMad)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-[13.5px]">
             <span className="text-muted">Frais de livraison</span>
             <span className="font-medium text-[#5BC98C]">Gratuit</span>
@@ -541,11 +657,18 @@ function SummaryCard({
         </div>
 
         <div className="flex items-baseline justify-between py-4 pb-1">
-          <span className="text-[15px] font-semibold text-white">Total</span>
+          <span className="text-[15px] font-semibold text-white">Total à payer</span>
           <span className="font-mono text-[22px] font-semibold tracking-tight text-white">
-            {formatDH(cartTotal)}
+            {formatDH(totalToPay)}
           </span>
         </div>
+
+        {promoCreditMad > 0 && (
+          <div className="mt-1 flex items-center justify-between rounded-[11px] border border-accent/[0.18] bg-accent/[0.07] px-3.5 py-2.5">
+            <span className="text-[12.5px] text-[#9FB8FF]">Crédit Ghost après confirmation</span>
+            <span className="font-mono text-[13.5px] font-semibold text-[#9FB8FF]">+{formatDH(promoCreditMad)}</span>
+          </div>
+        )}
 
         {restrictedItems.length > 0 && (
           <div className="mt-[18px]">
@@ -689,6 +812,170 @@ function Step({ label, active = false, done = false }: { label: string; active?:
       <span className={active ? "text-sm font-semibold text-text" : "text-sm text-muted"}>
         {label}
       </span>
+    </div>
+  );
+}
+
+function PromoSection({
+  promoInput,
+  setPromoInput,
+  promo,
+  promoError,
+  promoRequiresLogin,
+  promoLoading,
+  onApply,
+  onRemove,
+}: {
+  promoInput: string;
+  setPromoInput: (v: string) => void;
+  promo: PromoPreviewDTO | null;
+  promoError: string;
+  promoRequiresLogin: boolean;
+  promoLoading: boolean;
+  onApply: () => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const expanded = open || promo != null || Boolean(promoError);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-[11px] px-[18px] py-[16px] text-left sm:px-[22px]"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9FB8FF" strokeWidth={1.9} className="h-[18px] w-[18px] shrink-0" aria-hidden>
+          <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" />
+          <circle cx="7" cy="7" r="1.2" fill="#9FB8FF" />
+        </svg>
+        <span className="flex-1 text-[14.5px] font-semibold text-white">Vous avez un code promo ?</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          className={`h-4 w-4 text-muted transition-transform ${expanded ? "rotate-180" : ""}`}
+          aria-hidden
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
+          {promo ? (
+            <PromoApplied promo={promo} onRemove={onRemove} />
+          ) : (
+            <>
+              <div className="flex flex-col gap-2.5 sm:flex-row">
+                <input
+                  className="input flex-1 uppercase"
+                  value={promoInput}
+                  onChange={(e) => setPromoInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onApply();
+                    }
+                  }}
+                  placeholder="GHOST10"
+                  aria-label="Code promo"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  onClick={onApply}
+                  disabled={promoLoading || !promoInput.trim()}
+                  className="btn-primary h-[46px] shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {promoLoading ? "Vérification…" : "Appliquer"}
+                </button>
+              </div>
+              {promoError && (
+                <p role="alert" className="mt-2.5 flex items-start gap-2 text-[12.5px] text-red-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden>
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                  <span>{promoError}</span>
+                </p>
+              )}
+              {promoRequiresLogin && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2.5 rounded-[11px] border border-accent/[0.18] bg-accent/[0.07] px-3.5 py-2.5">
+                  <Link href="/login?next=/checkout" className="btn-primary h-9 px-4 text-[13px]">
+                    Se connecter
+                  </Link>
+                  <Link href="/login?next=/checkout&mode=register" className="btn-ghost h-9 px-4 text-[13px]">
+                    Créer un compte
+                  </Link>
+                  <span className="text-[11.5px] text-faint">Votre panier est conservé.</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PromoApplied({ promo, onRemove }: { promo: PromoPreviewDTO; onRemove: () => void }) {
+  const isCredit = promo.rewardKind === "credit";
+  return (
+    <div
+      className={`rounded-[13px] border px-[15px] py-[14px] ${
+        isCredit ? "border-accent/28 bg-accent/[0.07]" : "border-[#5BC98C]/28 bg-[#5BC98C]/[0.07]"
+      }`}
+    >
+      <div className="flex items-start gap-2.5">
+        <span
+          className={`grid h-[26px] w-[26px] shrink-0 place-items-center rounded-lg text-xs font-bold ${
+            isCredit ? "bg-accent/15 text-[#9FB8FF]" : "bg-[#5BC98C]/15 text-[#5BC98C]"
+          }`}
+        >
+          ✓
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[13.5px] font-semibold text-white">{promo.code}</span>
+            <span className="text-[12px] text-muted">appliqué</span>
+          </div>
+          <div className="mt-1 space-y-0.5 text-[12.5px] leading-relaxed text-muted">
+            {promo.rewardKind === "discount" ? (
+              <p>
+                Appliqué à {promo.eligibleLineCount} produit{promo.eligibleLineCount > 1 ? "s" : ""} éligible
+                {promo.eligibleLineCount > 1 ? "s" : ""} — réduction de{" "}
+                <span className="font-medium text-[#8FE0B4]">{formatDH(promo.discountMad)}</span>.
+              </p>
+            ) : promo.rewardType === "FIXED_GHOST_CREDIT" ? (
+              <p>
+                Vous paierez le montant normal et recevrez{" "}
+                <span className="font-medium text-[#9FB8FF]">{formatDH(promo.creditMad)}</span> de crédit Ghost
+                après confirmation de la commande.
+              </p>
+            ) : (
+              <p>
+                Vous paierez le montant normal et recevrez {promo.percentValue}% du sous-total éligible (
+                {formatDH(promo.eligibleSubtotalMad)}), soit{" "}
+                <span className="font-medium text-[#9FB8FF]">{formatDH(promo.creditMad)}</span> de crédit Ghost
+                {promo.maxCreditMad != null ? ` (plafond ${formatDH(promo.maxCreditMad)})` : ""}, après
+                confirmation de la commande.
+              </p>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 rounded-lg border border-white/10 px-2.5 py-1.5 text-[12px] text-muted transition hover:border-red-500/40 hover:text-red-400"
+        >
+          Retirer
+        </button>
+      </div>
     </div>
   );
 }

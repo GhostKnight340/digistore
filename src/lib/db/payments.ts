@@ -13,6 +13,7 @@ import { getStoreSettings } from "@/lib/db/catalog";
 import { getAdminPaymentMethods, getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import { canCustomerCancel, PENDING_PAYMENT_STATUSES } from "@/lib/orderStatus";
+import { applyPromoLifecycleForStatus } from "@/lib/db/promoLifecycle";
 import {
   notifyPaymentStatusChange,
   notifyFulfillmentNeeded,
@@ -252,6 +253,9 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
       };
     }
 
+    // Release the promo reservation (frees the usage slot). Idempotent.
+    await applyPromoLifecycleForStatus(orderId, "cancelled");
+
     const reference = await publicOrderReference(order);
     void notifyPaymentStatusChange({
       order,
@@ -371,6 +375,9 @@ async function setPaymentStatus(
         adminUrl,
       });
     }
+    // Promo redemption + Ghost Credit lifecycle (finalize on confirm, release on
+    // reject). Idempotent and best-effort — never blocks the status change.
+    await applyPromoLifecycleForStatus(orderId, toStatus);
 
     return { ok: true };
   } catch (error) {
@@ -506,6 +513,10 @@ export async function applyPaymentStatusWithEmail(
       note,
       adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
     });
+
+    // Promo lifecycle for admin-driven outcomes (refund → reverse Ghost Credit,
+    // reject → release reservation). Idempotent and best-effort.
+    await applyPromoLifecycleForStatus(orderId, toStatus);
 
     return { ok: true };
   } catch (error) {
@@ -668,6 +679,11 @@ async function transitionPaypalStatus(
       adminUrl,
     });
   }
+
+  // Promo lifecycle for PayPal transitions (confirm → grant credit, refund →
+  // reverse). Runs after a verified capture/webhook; idempotent so a webhook
+  // replay racing a browser capture can never double-grant.
+  await applyPromoLifecycleForStatus(orderId, opts.toStatus);
 
   return { ok: true };
 }

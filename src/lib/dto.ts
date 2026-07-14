@@ -1,4 +1,10 @@
-import type { OrderStatus } from "./types";
+import type {
+  OrderStatus,
+  PromoRewardType,
+  PromoCodeStatus,
+  GhostCreditDirection,
+  GhostCreditStatus,
+} from "./types";
 import type { CategoryLanding } from "./categoryLanding";
 
 // Plain serializable shapes passed between server (DB) and client components.
@@ -534,6 +540,173 @@ export interface ItemAssignment {
 export interface ActionResult {
   ok: boolean;
   error?: string;
+}
+
+// ─── Promo code & Ghost Credit DTOs ──────────────────────────────────────────
+
+/** A product/category option for the admin applicability multi-selects. */
+export interface PromoScopeOptionDTO {
+  id: string;
+  name: string;
+  /** Category name for products (context in the picker), or "" for categories. */
+  meta?: string;
+}
+
+/** Full promo-code configuration for the admin editor. */
+export interface AdminPromoCodeDTO {
+  id: string;
+  code: string;
+  internalName: string;
+  description: string;
+  active: boolean;
+  rewardType: PromoRewardType;
+  percentValue: number | null;
+  fixedAmountMad: number | null;
+  maxDiscountMad: number | null;
+  maxCreditMad: number | null;
+  creditExpiresInDays: number | null;
+  creditExpiresAt: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  maxTotalUses: number | null;
+  maxUsesPerCustomer: number | null;
+  firstOrderOnly: boolean;
+  loggedInOnly: boolean;
+  minSubtotalMad: number | null;
+  maxSubtotalMad: number | null;
+  productIds: string[];
+  categoryIds: string[];
+  archivedAt: string | null;
+  reservedUses: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Derived lifecycle status. */
+  status: PromoCodeStatus;
+}
+
+/** Compact row for the admin promo-code list. */
+export interface AdminPromoCodeSummaryDTO {
+  id: string;
+  code: string;
+  internalName: string;
+  rewardType: PromoRewardType;
+  rewardTypeLabel: string;
+  valueLabel: string;
+  status: PromoCodeStatus;
+  startAt: string | null;
+  endAt: string | null;
+  usedCount: number;
+  maxTotalUses: number | null;
+  scopeLabel: string;
+  createdAt: string;
+}
+
+/** Aggregate stats + audit history for the promo detail view. */
+export interface AdminPromoCodeDetailDTO {
+  promo: AdminPromoCodeDTO;
+  totalUses: number;
+  uniqueCustomers: number;
+  remainingUses: number | null;
+  totalImmediateDiscountMad: number;
+  totalFixedCreditMad: number;
+  totalPercentCreditMad: number;
+  totalCreditGrantedMad: number;
+  averageCreditPerOrderMad: number;
+  revenueMad: number;
+  eligibleSubtotalGeneratedMad: number;
+  orders: PromoOrderUsageDTO[];
+  events: PromoCodeEventDTO[];
+}
+
+export interface PromoOrderUsageDTO {
+  orderId: string;
+  publicOrderNumber: string;
+  status: OrderStatus;
+  redemptionStatus: string;
+  totalMad: number;
+  discountMad: number;
+  expectedCreditMad: number;
+  createdAt: string;
+}
+
+export interface PromoCodeEventDTO {
+  id: string;
+  type: string;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+/** Input for creating/updating a promo code from the admin editor. */
+export interface SavePromoCodeInput {
+  id?: string;
+  code: string;
+  internalName: string;
+  description?: string;
+  active: boolean;
+  rewardType: PromoRewardType;
+  percentValue?: number | null;
+  fixedAmountMad?: number | null;
+  maxDiscountMad?: number | null;
+  maxCreditMad?: number | null;
+  creditExpiresInDays?: number | null;
+  creditExpiresAt?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  maxTotalUses?: number | null;
+  maxUsesPerCustomer?: number | null;
+  firstOrderOnly?: boolean;
+  loggedInOnly?: boolean;
+  minSubtotalMad?: number | null;
+  maxSubtotalMad?: number | null;
+  productIds?: string[];
+  categoryIds?: string[];
+}
+
+/**
+ * Customer-facing promo preview shown at checkout after a code is validated.
+ * Immediate-discount vs Ghost Credit is distinguished by `rewardKind`.
+ */
+export interface PromoPreviewDTO {
+  code: string;
+  rewardType: PromoRewardType;
+  rewardKind: "discount" | "credit";
+  eligibleSubtotalMad: number;
+  eligibleLineCount: number;
+  /** Client ids (slug/variant id) of eligible cart lines, for UI highlighting. */
+  eligibleLineKeys: string[];
+  discountMad: number;
+  creditMad: number;
+  percentValue: number | null;
+  maxCreditMad: number | null;
+}
+
+export interface PromoValidationResultDTO {
+  ok: boolean;
+  error?: string;
+  preview?: PromoPreviewDTO;
+  /** True when the failure is specifically "must log in for Ghost Credit". */
+  requiresLogin?: boolean;
+}
+
+/** A Ghost Credit ledger row for the account wallet + admin view. */
+export interface GhostCreditTransactionDTO {
+  id: string;
+  amountMad: number;
+  direction: GhostCreditDirection;
+  reason: string;
+  status: GhostCreditStatus;
+  orderId: string | null;
+  promoCode: string | null;
+  rewardType: PromoRewardType | null;
+  createdAt: string;
+  expiresAt: string | null;
+  note: string | null;
+}
+
+export interface GhostCreditWalletDTO {
+  balanceMad: number;
+  transactions: GhostCreditTransactionDTO[];
 }
 
 // ─── Payment method DTOs ──────────────────────────────────────────────────────

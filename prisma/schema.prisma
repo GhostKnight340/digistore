@@ -44,6 +44,7 @@ model Product {
   media           ProductMedia[]
   variants        ProductVariant[]
   collectionItems CollectionProduct[]
+  promoCodeLinks  PromoCodeProduct[]
 
   @@index([active, sortOrder])
   @@index([category, active])
@@ -59,44 +60,44 @@ model Product {
 // data (price, media, region, stock) is always read live from the referenced
 // Product — never duplicated here.
 model Collection {
-  id               String   @id @default(cuid())
-  slug             String   @unique
+  id               String    @id @default(cuid())
+  slug             String    @unique
   name             String
-  shortDescription String   @default("")
-  longDescription  String   @default("")
+  shortDescription String    @default("")
+  longDescription  String    @default("")
   // Optional compact banner/hero artwork (URL or data: URI, like ProductMedia).
   imageUrl         String?
   // Publication state. Defaults to false so an imported/created collection is
   // never auto-published — an admin must explicitly activate it.
-  active           Boolean  @default(false)
-  sortOrder        Int      @default(0)
+  active           Boolean   @default(false)
+  sortOrder        Int       @default(0)
   // Optional schedule window. Visibility is computed at render/query time from
   // active + startAt/endAt vs. now (no cron needed). Before startAt: hidden;
   // after endAt: expired/hidden. Null bounds mean "no lower/upper limit".
   startAt          DateTime?
   endAt            DateTime?
   // Homepage placement.
-  showOnHomepage   Boolean  @default(false)
+  showOnHomepage   Boolean   @default(false)
   // Optional homepage section-title override (falls back to `name`).
-  homepageTitle    String   @default("")
-  homepageLimit    Int      @default(8)
+  homepageTitle    String    @default("")
+  homepageLimit    Int       @default(8)
   // Optional "Voir tout" CTA label override on the homepage section.
-  ctaLabel         String   @default("")
+  ctaLabel         String    @default("")
   // SEO for the public /collections/<slug> page (fall back to name/description).
-  seoTitle         String   @default("")
-  seoDescription   String   @default("")
+  seoTitle         String    @default("")
+  seoDescription   String    @default("")
   socialImageUrl   String?
   // Centralized, admin-maintained search aliases matched by the public search
   // (accent/case-insensitive). Never rendered as visible product data.
-  aliases          String[] @default([])
+  aliases          String[]  @default([])
   // Homepage/compact-card visual identity. `icon` is an approved icon KEY (see
   // src/lib/collections/icons.ts) — never raw SVG/HTML; empty means "derive from
   // name or fall back". `accentColor` is an optional restrained accent hex for
   // the card's glow/hover; null falls back to the Ghost blue.
-  icon             String   @default("")
+  icon             String    @default("")
   accentColor      String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @default(now()) @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
 
   items CollectionProduct[]
 
@@ -151,7 +152,8 @@ model Category {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now()) @updatedAt
 
-  products Product[]
+  products       Product[]
+  promoCodeLinks PromoCodeCategory[]
 }
 
 model ProductMedia {
@@ -245,7 +247,15 @@ model Order {
   //       | "payment_issue" | "rejected" | "delivered" | "refunded" | "cancelled"
   status        String   @default("pending_payment")
   paymentMethod String
+  // The amount the customer actually owes/pays. When a promo with an immediate
+  // discount is applied, this is the DISCOUNTED total (subtotal - discountMad),
+  // so every payment surface (PayPal/bank/USDT) and revenue query keeps using
+  // totalMad unchanged. Ghost Credit rewards never touch this — the customer
+  // still pays the full amount. Subtotal is derivable as totalMad + discountMad.
   totalMad      Int
+  // Immediate promo discount applied to this order (whole MAD, 0 when none).
+  // Additive with a safe default so every historical order stays untouched.
+  discountMad   Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
   // Live DB column, auto-populated on every insert. Not read by application
@@ -303,12 +313,15 @@ model Order {
   discordDeliverySentAt        DateTime?
   discordDeliveryError         String?
 
-  items          OrderItem[]
-  deliveredCodes DeliveredCode[]
-  emailLogs      EmailLog[]
-  paymentProof   PaymentProof?
-  paymentEvents  PaymentEvent[]
-  customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items             OrderItem[]
+  deliveredCodes    DeliveredCode[]
+  emailLogs         EmailLog[]
+  paymentProof      PaymentProof?
+  paymentEvents     PaymentEvent[]
+  customer          Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  promoRedemption   PromoRedemption?
+  promotionSnapshot OrderPromotionSnapshot?
+  ghostCreditTxns   GhostCreditTransaction[]
 
   @@index([status])
   @@index([customerEmail])
@@ -357,10 +370,19 @@ model Customer {
   // Customer's global default for whether future eligible orders also go to DM.
   discordOrderDeliveryEnabled Boolean   @default(false)
 
+  // Cached Ghost Credit wallet balance in whole MAD. This is a transactional
+  // cache: it is only ever updated inside the same $transaction as the ledger
+  // entries in GhostCreditTransaction, and can be re-derived from that ledger at
+  // any time (see src/lib/db/ghostCredit.ts deriveBalance). Never the sole source
+  // of truth — the ledger is. Additive with a safe default.
+  ghostCreditBalanceMad Int @default(0)
+
   orders                 Order[]
   emailLogs              EmailLog[]
   authTokens             AuthToken[]
   discordActivationCodes DiscordActivationCode[]
+  ghostCreditTxns        GhostCreditTransaction[]
+  promoRedemptions       PromoRedemption[]
 
   @@index([updatedAt])
   @@index([emailVerified])
@@ -485,43 +507,43 @@ model EmailLog {
 // Order — the customer may reference any order string or none). Attachments
 // are stored inline as base64 like PaymentProof until object storage exists.
 model SupportTicket {
-  id        String  @id @default(cuid())
+  id               String    @id @default(cuid())
   // Public reference shown to the customer, e.g. "GH-S-482913".
-  reference String  @unique
+  reference        String    @unique
   // Category key: paiement | livraison | code | commande | remboursement | compte | technique | autre
-  category  String
+  category         String
   // Sub-issue id (p1, l2, …) + its French label frozen at submit time.
-  subIssue      String
-  subIssueLabel String
+  subIssue         String
+  subIssueLabel    String
   // Optional order reference chosen/typed by the customer (e.g. "#000128").
-  orderRef String?
-  name     String
-  email    String
-  phone    String?
-  message  String?
+  orderRef         String?
+  name             String
+  email            String
+  phone            String?
+  message          String?
   // [{ fileName, mimeType, dataBase64 }] — capped by the server action.
-  attachments Json?
+  attachments      Json?
   // Logged-in customer when available (soft link, ticket survives deletion).
-  customerId String?
+  customerId       String?
   // status: "open" | "answered" | "closed"
-  status    String   @default("open")
+  status           String    @default("open")
   // Optional close outcome chosen by the admin: "resolved" | "cancelled" | "dismissed".
-  resolution String?
+  resolution       String?
   // Admin replies sent to the customer: [{ body, createdAt }] — the customer
   // sees these on the account/tracking pages; each also triggers a reply email.
-  replies   Json?
+  replies          Json?
   // Discord #support card/thread tracking — one card per ticket (edited in
   // place as status changes) with a thread holding the full conversation.
   discordMessageId String?
   discordThreadId  String?
   // Post-close feedback: a random token gates the public feedback page, then
   // the customer's rating (1-5) and comment are stored back here.
-  feedbackToken   String?   @unique
-  feedbackRating  Int?
-  feedbackComment String?
-  feedbackAt      DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  feedbackToken    String?   @unique
+  feedbackRating   Int?
+  feedbackComment  String?
+  feedbackAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
 
   @@index([status, createdAt])
   @@index([email])
@@ -815,9 +837,9 @@ model ExpenseNotificationLog {
 // "pending"/"failed" can be safely retried. Acknowledgement ("Tout est correct")
 // is recorded here from the admin panel — it never mutates any expense record.
 model ExpenseMonthlyReview {
-  id       String @id @default(cuid())
+  id               String    @id @default(cuid())
   // "YYYY-MM" of the month being reviewed, computed in the business timezone.
-  monthKey String @unique
+  monthKey         String    @unique
   // status: "pending" | "sending" | "sent" | "failed"
   status           String    @default("pending")
   attemptCount     Int       @default(0)
@@ -853,4 +875,230 @@ model ReloadlyCostReconciliation {
 
   @@index([orderId])
   @@index([environment, createdAt])
+}
+
+// ── Promo codes & Ghost Credit ───────────────────────────────────────────────
+// A customer-facing promotional code. Exactly ONE reward type per code (see
+// rewardType). Immediate-discount codes reduce what the customer pays now;
+// Ghost Credit codes never touch the paid total and instead grant wallet credit
+// AFTER the order reaches its successful paid state. Money is whole MAD (Int),
+// matching Order.totalMad. Percentages use Decimal so 8.5% is exact. Editing or
+// disabling a code never rewrites historical orders — each order keeps its own
+// OrderPromotionSnapshot. See docs/promo-codes.md for the redemption lifecycle.
+model PromoCode {
+  id           String  @id @default(cuid())
+  // Normalized to trimmed UPPERCASE, unique, matched case-insensitively at
+  // checkout (the stored value is already uppercase, the lookup uppercases too).
+  code         String  @unique
+  internalName String
+  description  String  @default("")
+  active       Boolean @default(true)
+
+  // rewardType: "PERCENT_DISCOUNT" | "FIXED_DISCOUNT" | "FIXED_GHOST_CREDIT"
+  //           | "PERCENT_GHOST_CREDIT" (see src/lib/types.ts PromoRewardType).
+  rewardType String
+
+  // Reward configuration — only the subset relevant to rewardType is populated:
+  //  PERCENT_DISCOUNT      → percentValue (+ optional maxDiscountMad)
+  //  FIXED_DISCOUNT        → fixedAmountMad
+  //  FIXED_GHOST_CREDIT    → fixedAmountMad (+ optional credit expiry)
+  //  PERCENT_GHOST_CREDIT  → percentValue (+ optional maxCreditMad, + expiry)
+  percentValue        Decimal?  @db.Decimal(6, 3)
+  fixedAmountMad      Int?
+  maxDiscountMad      Int?
+  maxCreditMad        Int?
+  // Optional Ghost Credit expiration: a rolling period in days from grant, or a
+  // fixed calendar date. If both are null the credit never expires.
+  creditExpiresInDays Int?
+  creditExpiresAt     DateTime?
+
+  // Validity window (business timezone). Null start = valid immediately; null
+  // end = no expiration.
+  startAt DateTime?
+  endAt   DateTime?
+
+  // Usage limits (all optional, all enforced server-side).
+  maxTotalUses       Int?
+  maxUsesPerCustomer Int?
+  firstOrderOnly     Boolean @default(false)
+  loggedInOnly       Boolean @default(false)
+  minSubtotalMad     Int?
+  maxSubtotalMad     Int?
+
+  // Applicability: when there are NO product and NO category links the code
+  // applies to all eligible products. When both kinds of links exist a cart item
+  // is eligible if it matches EITHER a selected product OR a selected category
+  // (OR semantics — see docs/promo-codes.md and the admin UI note).
+
+  // Denormalized live counter of reserved+finalized redemptions, kept in sync
+  // transactionally so the "final available use" race is decided by a single
+  // conditional UPDATE. The authoritative history is PromoRedemption rows.
+  reservedUses Int @default(0)
+
+  archivedAt DateTime?
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  products    PromoCodeProduct[]
+  categories  PromoCodeCategory[]
+  redemptions PromoRedemption[]
+  snapshots   OrderPromotionSnapshot[]
+  creditTxns  GhostCreditTransaction[]
+  events      PromoCodeEvent[]
+
+  @@index([active])
+  @@index([archivedAt])
+  @@index([rewardType])
+}
+
+// Parent-product applicability link. Real DB relation (never pasted URLs/titles).
+model PromoCodeProduct {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  productId   String
+  createdAt   DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, productId])
+  @@index([promoCodeId])
+  @@index([productId])
+}
+
+// Category applicability link. Real DB relation.
+model PromoCodeCategory {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  categoryId  String
+  createdAt   DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, categoryId])
+  @@index([promoCodeId])
+  @@index([categoryId])
+}
+
+// One redemption per order (the @@unique on orderId also prevents applying two
+// codes / the same code twice to one order). Lifecycle:
+//   reserved  — attached at order creation, counts toward usage limits
+//   finalized — order reached its successful paid state
+//   released  — order cancelled/rejected/expired; frees the reservation
+model PromoRedemption {
+  id            String    @id @default(cuid())
+  promoCodeId   String
+  orderId       String    @unique
+  customerId    String?
+  // Snapshot of the checkout identity used for per-customer limits, so the count
+  // is stable even if the guest never creates an account.
+  customerEmail String
+  // status: "reserved" | "finalized" | "released"
+  status        String    @default("reserved")
+  finalizedAt   DateTime?
+  releasedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id])
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([promoCodeId, status])
+  @@index([promoCodeId, customerEmail])
+  @@index([customerId])
+}
+
+// Immutable promotion snapshot captured at order creation. Historical orders are
+// NEVER recomputed from later promo-code edits — everything needed to explain
+// and refund the order lives here.
+model OrderPromotionSnapshot {
+  id                  String    @id @default(cuid())
+  orderId             String    @unique
+  // Kept as SetNull so deleting a code never destroys order history; the exact
+  // code text is snapshotted regardless.
+  promoCodeId         String?
+  code                String
+  rewardType          String
+  configuredPercent   Decimal?  @db.Decimal(6, 3)
+  configuredFixedMad  Int?
+  maxDiscountMad      Int?
+  maxCreditMad        Int?
+  eligibleSubtotalMad Int
+  discountMad         Int       @default(0)
+  expectedCreditMad   Int       @default(0)
+  creditExpiresAt     DateTime?
+  // OrderItem ids that were eligible for this promo.
+  eligibleLineItemIds String[]  @default([])
+  // Deterministic per-line discount allocation: [{ orderItemId, discountMad }].
+  // Sums exactly to discountMad; used for refund accounting.
+  lineAllocations     Json?
+  // Validation inputs frozen at apply time (isLoggedIn, isFirstOrder, subtotal…).
+  validationContext   Json?
+  createdAt           DateTime  @default(now())
+
+  order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  promoCode PromoCode? @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+
+  @@index([promoCodeId])
+}
+
+// Append-only Ghost Credit ledger. The wallet balance is DERIVED from these
+// rows (and cached on Customer.ghostCreditBalanceMad transactionally). A credit
+// adds to the balance; a debit subtracts. A reversal is a debit that offsets an
+// earlier credit — historical rows are never edited or deleted.
+model GhostCreditTransaction {
+  id         String @id @default(cuid())
+  customerId String
+  // Positive magnitude in whole MAD; the sign is carried by `direction`.
+  amountMad  Int
+  // direction: "credit" | "debit"
+  direction  String
+  // reason: "promo_reward" | "promo_reversal" | "admin_grant" | "admin_reversal"
+  //       | "expiration"
+  reason     String
+
+  promoCodeId         String?
+  orderId             String?
+  rewardType          String?
+  eligibleSubtotalMad Int?
+  configuredPercent   Decimal? @db.Decimal(6, 3)
+  configuredFixedMad  Int?
+
+  // status: "active" | "reversed" | "expired"
+  status         String    @default("active")
+  // Guarantees exactly-once grants/reversals across duplicate webhooks, retried
+  // admin actions, and double completion runs. E.g. "promo-credit:{orderId}:{promoCodeId}".
+  idempotencyKey String    @unique
+  expiresAt      DateTime?
+  // "system" for automated grants, or the admin's name for manual corrections.
+  source         String    @default("system")
+  note           String?
+  createdAt      DateTime  @default(now())
+
+  customer  Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  promoCode PromoCode? @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  order     Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, status])
+  @@index([orderId])
+  @@index([promoCodeId])
+}
+
+// Append-only admin/audit timeline for a promo code (mirrors PaymentEvent).
+model PromoCodeEvent {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  // type: "created" | "updated" | "activated" | "deactivated" | "archived"
+  //     | "unarchived" | "duplicated" | "deleted" | "manual_credit" | "note"
+  type        String
+  note        String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+
+  @@index([promoCodeId])
 }

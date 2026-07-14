@@ -2,6 +2,8 @@ import "server-only";
 
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { isOrderingCurrentlyEnabled } from "./ordering";
+import { resolveCartLines } from "./promoResolve";
+import { reservePromoInTx } from "./promoCodes";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
@@ -23,6 +25,10 @@ type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries
 type PublicOrderIdentity = { id: string; createdAt: Date | string };
 
 const REVENUE_ORDER_STATUSES = ["payment_confirmed", "delivered", "fulfilled"];
+
+/** Thrown inside the createOrder transaction when a promo can't be reserved
+ *  (e.g. its final use was claimed concurrently), rolling the order back. */
+class PromoApplicationError extends Error {}
 
 const emailLogSelect = {
   id: true,
@@ -938,6 +944,8 @@ interface CreateOrderInput {
   /** Optional: unset until the customer picks a method on the payment page. */
   paymentMethod?: string;
   items: { productId: string; quantity: number }[];
+  /** Optional promo code applied at checkout (re-validated server-side here). */
+  promoCode?: string;
 }
 
 function normalizeOptionalPhone(value?: string) {
@@ -956,74 +964,24 @@ export async function createOrder(
   // create an order (no incomplete/partial row) while ordering is disabled,
   // even if a caller bypassed the action-layer guard.
   if (!(await isOrderingCurrentlyEnabled())) return null;
-  const slugs = input.items.map((item) => item.productId);
-  const [products, variants] = await Promise.all([
-    prisma.product.findMany({
-      where: {
-        slug: { in: slugs },
-        active: true,
-        categoryRecord: { is: { active: true } },
-      },
-    }),
-    prisma.productVariant.findMany({
-      where: {
-        id: { in: slugs },
-        active: true,
-        product: {
-          active: true,
-          categoryRecord: { is: { active: true } },
-        },
-      },
-      include: { product: true },
-    }),
-  ]);
+  // Resolve + re-price every line from the DB (never trust client prices). The
+  // shared resolver also tags each line with its parent product + category so a
+  // promo code can be evaluated against product/category restrictions.
+  const resolvedLines = await resolveCartLines(input.items);
+  if (resolvedLines.length === 0) return null;
 
-  const bySlug = new Map(
-    products.map((product) => [
-      product.slug,
-      {
-        productId: product.id,
-        variantId: null as string | null,
-        unitPriceMad: product.priceMad,
-        name: product.name,
-      },
-    ]),
-  );
-  for (const variant of variants) {
-    bySlug.set(variant.id, {
-      productId: variant.productId,
-      variantId: variant.id,
-      unitPriceMad: variant.priceMad,
-      name: `${variant.product.name} - ${variant.name}`,
-    });
-  }
-  const lineItems = input.items
-    .map((item) => {
-      const purchasable = bySlug.get(item.productId);
-      if (!purchasable || item.quantity < 1) return null;
-      return {
-        productId: purchasable.productId,
-        variantId: purchasable.variantId,
-        quantity: item.quantity,
-        unitPriceMad: purchasable.unitPriceMad,
-        name: purchasable.name,
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
-
-  if (lineItems.length === 0) return null;
-
-  const totalMad = lineItems.reduce(
+  const subtotalMad = resolvedLines.reduce(
     (sum, item) => sum + item.unitPriceMad * item.quantity,
     0,
   );
+  const rawPromoCode = input.promoCode?.trim();
   try {
     const sessionCustomer = await getCurrentCustomer();
     const customerName = sessionCustomer?.name ?? input.customerName;
     const customerEmail = sessionCustomer?.email ?? input.customerEmail.trim().toLowerCase();
     const customerPhone = normalizeOptionalPhone(input.customerPhone);
     if (customerPhone === undefined) return null;
-    const order = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const customer = sessionCustomer
         ? await tx.customer.update({
             where: { id: sessionCustomer.id },
@@ -1046,9 +1004,9 @@ export async function createOrder(
           customerEmail,
           paymentMethod: input.paymentMethod ?? "",
           status: "pending_payment",
-          totalMad,
+          totalMad: subtotalMad,
           items: {
-            create: lineItems.map((item) => ({
+            create: resolvedLines.map((item) => ({
               productId: item.productId,
               variantId: item.variantId,
               quantity: item.quantity,
@@ -1056,19 +1014,56 @@ export async function createOrder(
             })),
           },
         },
+        include: { items: { select: { id: true, productId: true, variantId: true } } },
       });
+
+      let discountMad = 0;
+      // Apply and reserve the promo atomically. A failure here (race on the last
+      // use, or a code that turned invalid) rolls back the whole order so the
+      // customer is never charged an unexpected total.
+      if (rawPromoCode) {
+        const lineKeyToOrderItemId = new Map<string, string>();
+        for (const line of resolvedLines) {
+          const match = created.items.find(
+            (it) => it.productId === line.productId && (it.variantId ?? null) === (line.variantId ?? null),
+          );
+          if (match) lineKeyToOrderItemId.set(line.lineKey, match.id);
+        }
+        const reservation = await reservePromoInTx(tx, {
+          rawCode: rawPromoCode,
+          orderId: created.id,
+          lines: resolvedLines,
+          lineKeyToOrderItemId,
+          isLoggedIn: Boolean(sessionCustomer),
+          customerId: customer.id,
+          customerEmail,
+          now: new Date(),
+        });
+        if (!reservation.ok) {
+          throw new PromoApplicationError(reservation.error ?? "Code promo invalide.");
+        }
+        discountMad = reservation.discountMad;
+        if (discountMad > 0) {
+          await tx.order.update({
+            where: { id: created.id },
+            data: { discountMad, totalMad: Math.max(0, subtotalMad - discountMad) },
+          });
+        }
+      }
 
       await tx.paymentEvent.create({
         data: {
           orderId: created.id,
           type: "status_change",
           toStatus: "pending_payment",
-          note: "Order created.",
+          note: rawPromoCode ? `Order created. Promo appliqué (-${discountMad} DH).` : "Order created.",
         },
       });
 
-      return created;
+      return { order: created, totalMad: Math.max(0, subtotalMad - discountMad) };
     });
+    const order = result.order;
+    const totalMad = result.totalMad;
 
     const reference = await publicOrderReference(order);
 
@@ -1094,7 +1089,7 @@ export async function createOrder(
     void notifyOrderCreated({
       order,
       publicOrderNumber: reference.number,
-      itemSummary: lineItems
+      itemSummary: resolvedLines
         .map((item) => `${item.quantity}x ${item.name}`)
         .join(", "),
       adminUrl: absoluteAppUrl(`/admin/orders/${order.id}`),

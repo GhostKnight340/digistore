@@ -207,6 +207,48 @@ export type OrderStatus =
   | "refunded"
   | "cancelled";
 
+/**
+ * Promo-code reward type. Exactly one per code. Stored as a String column on
+ * PromoCode (see prisma/schema.prisma) — never a Prisma enum, matching the
+ * project convention of TS unions + documented String columns.
+ *   PERCENT_DISCOUNT     — % off the eligible subtotal, optional max discount cap
+ *   FIXED_DISCOUNT       — fixed DH off the eligible subtotal
+ *   FIXED_GHOST_CREDIT   — fixed DH of Ghost Credit granted after payment
+ *   PERCENT_GHOST_CREDIT — % of eligible subtotal as Ghost Credit, optional cap
+ */
+export type PromoRewardType =
+  | "PERCENT_DISCOUNT"
+  | "FIXED_DISCOUNT"
+  | "FIXED_GHOST_CREDIT"
+  | "PERCENT_GHOST_CREDIT";
+
+/** Whether a reward is an immediate discount or a post-payment Ghost Credit. */
+export type PromoRewardKind = "discount" | "credit";
+
+/**
+ * Computed promo-code lifecycle status (never stored — derived from active,
+ * archivedAt, the validity window, and usage vs. limit).
+ *   active    — usable now
+ *   scheduled — has a future startAt
+ *   expired   — past endAt
+ *   exhausted — hit its total usage limit
+ *   archived  — soft-archived by an admin
+ *   disabled  — active toggle is off
+ */
+export type PromoCodeStatus =
+  | "active"
+  | "scheduled"
+  | "expired"
+  | "exhausted"
+  | "archived"
+  | "disabled";
+
+/** Ghost Credit ledger transaction direction. */
+export type GhostCreditDirection = "credit" | "debit";
+
+/** Ghost Credit ledger transaction status. */
+export type GhostCreditStatus = "active" | "reversed" | "expired";
+
 export interface Order {
   id: string;
   createdAt: string;

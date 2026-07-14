@@ -129,6 +129,16 @@ export function LifebuoyIcon({ className }: IconProps) {
   );
 }
 
+export function WalletIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2" />
+      <path d="M3 7v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2Z" />
+      <circle cx="16.5" cy="13.5" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function StarIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
