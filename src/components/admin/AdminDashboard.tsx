@@ -116,6 +116,7 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
+  const sectionParam = searchParams.get("section");
   const [activeTab, setActiveTab] = useState(tabParam ?? "overview");
   const [navCounts, setNavCounts] = useState<NavCounts | null>(null);
   const { settings } = useStoreSettings();
@@ -139,6 +140,27 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
       cancelled = true;
     };
   }, [activeTab]);
+
+  // Deep-link to a specific settings card via ?section=<id> (from the command
+  // palette). The target panel is lazy-loaded, so poll briefly until the anchor
+  // exists, then scroll it into view and flash it.
+  useEffect(() => {
+    if (!sectionParam) return;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const tryScroll = () => {
+      const el = document.getElementById(sectionParam);
+      if (el) {
+        el.scrollIntoView({ block: "start", behavior: "smooth" });
+        el.classList.add("admin-section-flash");
+        setTimeout(() => el.classList.remove("admin-section-flash"), 1600);
+        return;
+      }
+      if (tries++ < 40) timer = setTimeout(tryScroll, 50);
+    };
+    tryScroll();
+    return () => clearTimeout(timer);
+  }, [sectionParam, activeTab]);
 
   function handleNavigate(id: string) {
     // Standalone routes (e.g. the Reloadly importer) are full pages, not panels.

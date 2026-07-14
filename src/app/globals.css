@@ -195,6 +195,20 @@ body {
     @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted;
   }
 
+  /* Brief highlight when the command palette deep-links to a settings card. */
+  .admin-section-flash {
+    animation: adminSectionFlash 1.6s ease-out;
+  }
+  @keyframes adminSectionFlash {
+    0%,
+    35% {
+      box-shadow: 0 0 0 2px rgba(62, 123, 250, 0.55), 0 0 0 6px rgba(62, 123, 250, 0.18);
+    }
+    100% {
+      box-shadow: 0 0 0 2px rgba(62, 123, 250, 0), 0 0 0 6px rgba(62, 123, 250, 0);
+    }
+  }
+
   .legal-content {
     @apply mt-8 text-base leading-8 text-muted sm:text-[17px] sm:leading-8;
   }

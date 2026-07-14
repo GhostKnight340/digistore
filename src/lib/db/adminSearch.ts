@@ -25,7 +25,8 @@ export type CommandSearchGroupKey =
   | "promo"
   | "expenses"
   | "pages"
-  | "settings";
+  | "settings"
+  | "controls";
 
 export type CommandSearchGroup = {
   group: CommandSearchGroupKey;

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { adminCommandSearchAction } from "@/app/actions/admin";
+import { ADMIN_CAPABILITY_INDEX } from "@/lib/admin/capabilityIndex";
 import type {
   CommandSearchGroup,
   CommandSearchGroupKey,
@@ -55,6 +56,7 @@ const TYPE_BADGE: Record<CommandSearchGroupKey, { label: string; fg: string; bg:
   expenses: { label: "DEP", fg: "#E8A838", bg: "rgba(232,168,56,0.14)" },
   pages: { label: "PG", fg: "#9AA3B2", bg: "rgba(255,255,255,0.08)" },
   settings: { label: "SET", fg: "#56C7C7", bg: "rgba(64,180,180,0.14)" },
+  controls: { label: "RÉG", fg: "#56C7C7", bg: "rgba(64,180,180,0.14)" },
 };
 
 const GROUP_LABEL: Record<CommandSearchGroupKey, string> = {
@@ -66,6 +68,7 @@ const GROUP_LABEL: Record<CommandSearchGroupKey, string> = {
   expenses: "Dépenses",
   pages: "Pages",
   settings: "Paramètres",
+  controls: "Réglages",
 };
 
 const GROUP_HINT: Record<CommandSearchGroupKey, string> = {
@@ -77,6 +80,7 @@ const GROUP_HINT: Record<CommandSearchGroupKey, string> = {
   expenses: "Ouvrir",
   pages: "Aller",
   settings: "Ouvrir",
+  controls: "Ouvrir",
 };
 
 const GROUP_OVERFLOW_HREF: Partial<Record<CommandSearchGroupKey, string>> = {
@@ -123,11 +127,37 @@ const SETTINGS_INDEX: LocalEntry[] = [
   { title: "Outils développeur", subtitle: "Debug & données", href: "/admin?tab=developer", keywords: "developer développeur debug outils" },
 ];
 
+// Filler words an admin types around the thing they actually want ("changer la
+// couleur", "où est le réglage…"). Stripped before matching so the meaningful
+// terms drive the result. Kept small and intent-neutral.
+const SEARCH_STOPWORDS = new Set([
+  "le", "la", "les", "un", "une", "des", "de", "du", "d", "l", "au", "aux", "et", "ou",
+  "où", "pour", "dans", "sur", "mon", "ma", "mes", "je", "veux", "comment", "est", "réglage",
+  "reglage", "réglages", "reglages", "paramètre", "parametre", "option", "changer", "modifier",
+  "editer", "éditer", "activer", "désactiver", "desactiver", "regler", "régler", "trouver",
+  "the", "a", "an", "to", "of", "in", "on", "my", "i", "want", "how", "where", "change",
+  "edit", "set", "setting", "settings", "option", "toggle", "enable", "disable", "find",
+]);
+
+function tokenizeQuery(q: string): string[] {
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const meaningful = tokens.filter((t) => !SEARCH_STOPWORDS.has(t));
+  // If the query was ALL filler, keep the original tokens so we still match.
+  return meaningful.length > 0 ? meaningful : tokens;
+}
+
 function searchLocal(query: string): CommandSearchGroup[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  const match = (entry: LocalEntry) =>
-    entry.title.toLowerCase().includes(q) || entry.keywords.includes(q);
+  // Token-based match: every meaningful (non-filler) word must appear somewhere
+  // in the entry's title, subtitle, or keywords. This lets natural multi-word
+  // queries like "changer couleur thème" or "wallet usdt" match a control by the
+  // words in its label — not just an exact contiguous substring.
+  const tokens = tokenizeQuery(q);
+  const match = (entry: LocalEntry) => {
+    const hay = `${entry.title} ${entry.subtitle} ${entry.keywords}`.toLowerCase();
+    return tokens.every((tok) => hay.includes(tok));
+  };
   const build = (group: CommandSearchGroupKey, index: LocalEntry[]): CommandSearchGroup | null => {
     const hits = index.filter(match);
     if (hits.length === 0) return null;
@@ -149,9 +179,11 @@ function searchLocal(query: string): CommandSearchGroup[] {
       })),
     };
   };
-  return [build("pages", PAGES_INDEX), build("settings", SETTINGS_INDEX)].filter(
-    (group): group is CommandSearchGroup => group !== null,
-  );
+  return [
+    build("controls", ADMIN_CAPABILITY_INDEX),
+    build("pages", PAGES_INDEX),
+    build("settings", SETTINGS_INDEX),
+  ].filter((group): group is CommandSearchGroup => group !== null);
 }
 
 /* Recents — last 5 opened, de-duped, persisted per browser. */
@@ -209,7 +241,9 @@ const GROUP_ORDER: CommandSearchGroupKey[] = [
   "customers",
   "products",
   "variants",
+  "promo",
   "expenses",
+  "controls",
   "pages",
   "settings",
 ];

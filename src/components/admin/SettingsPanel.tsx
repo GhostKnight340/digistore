@@ -13,6 +13,7 @@ import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/a
 import { getAdminPaymentConfigAction } from "@/app/actions/payments";
 import { announcedPaymentMethods } from "@/lib/paymentMethod";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
+import { adminSectionId } from "@/lib/admin/adminSections";
 import { uploadImageFile } from "@/lib/clientUpload";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import type { PaymentMethod, Product, StockMode, StockStatus } from "@/lib/types";
@@ -555,8 +556,11 @@ function Panel({
   title: string;
   children: React.ReactNode;
 }) {
+  // Stable anchor derived from the title so the command palette can deep-link
+  // to this exact card via ?section=<id>. scroll-mt keeps the heading clear of
+  // the sticky panel top when scrolled into view.
   return (
-    <section className="card p-5">
+    <section id={adminSectionId(title)} className="card scroll-mt-6 p-5">
       <h3 className="mb-4 text-lg font-semibold text-white">{title}</h3>
       {children}
     </section>
