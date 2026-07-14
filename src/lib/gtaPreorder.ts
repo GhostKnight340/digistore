@@ -8,11 +8,12 @@
  * state, hero copy, release date, the PlayStation / Xbox recommended-product
  * slugs, FAQ, disclosure, SEO and the social image.
  *
- * Products are referenced ONLY by their stable catalogue slug (the same value
- * used in `/products/<slug>`). No price, media, region or stock is ever copied
- * here — the page resolves each slug live through the normal catalogue layer
- * (`getProductBySlug`), so this file can never drift from the real catalogue and
- * inactive products simply disappear.
+ * Recommended products are NOT hardcoded. Each platform points at a catalogue
+ * brand/category (`brandKey`, e.g. "playstation" / "xbox"); the page resolves
+ * that brand's REAL gift-card products live through the normal catalogue layer,
+ * so the section always shows whatever PSN / Xbox cards actually exist on the
+ * site — no price, media, region or stock is ever copied here, and inactive
+ * products simply disappear.
  *
  * This module is intentionally client-safe (no `server-only`) — the same types
  * and pure helpers are shared by the server page, the client widgets and the
@@ -87,8 +88,13 @@ export interface GtaPlatformConfig {
   storeName: string;
   /** Selectable-card supporting copy. */
   description: string;
-  /** Catalogue slugs (in display order) of the recommended gift cards. */
-  productSlugs: string[];
+  /**
+   * Catalogue brand key holding this platform's gift cards. Matched (via
+   * `canonicalBrandKey`) against the live categories, so the recommended cards
+   * are the real PSN / Xbox gift-card products already on the site rather than a
+   * fixed list of slugs.
+   */
+  brandKey: string;
 }
 
 export interface GtaDisclosure {
@@ -136,9 +142,9 @@ export interface GtaPreorderConfig {
   howItWorks: GtaHowItWorksStep[];
   disclosure: GtaDisclosure;
   faq: GtaFaqItem[];
-  /** Catalogue slugs for the "Produits associés" strip (resolved live; only
-   *  active/public ones render). */
-  relatedProductSlugs: string[];
+  /** Catalogue brand keys whose real products fill the "Produits associés"
+   *  strip (resolved live; only active/public ones render). */
+  relatedBrandKeys: string[];
   seo: GtaSeo;
   /** Restrained trademark disclaimer. */
   trademark: string;
@@ -176,7 +182,7 @@ export const gtaPreorderConfig: GtaPreorderConfig = {
       storeName: "PlayStation Store",
       description:
         "Précommandez depuis le PlayStation Store avec une carte cadeau compatible avec la région de votre compte.",
-      productSlugs: ["psn-100", "psn-250"],
+      brandKey: "playstation",
     },
     xbox: {
       key: "xbox",
@@ -184,7 +190,7 @@ export const gtaPreorderConfig: GtaPreorderConfig = {
       storeName: "Microsoft Store",
       description:
         "Précommandez depuis le Microsoft Store de votre console avec une carte cadeau Xbox compatible.",
-      productSlugs: ["xbox-100", "xbox-200"],
+      brandKey: "xbox",
     },
   },
   navigatorTip: {
@@ -267,7 +273,7 @@ export const gtaPreorderConfig: GtaPreorderConfig = {
         "Oui, lorsque la boutique de votre console permet de cumuler le solde, sous réserve des règles du compte et de la région.",
     },
   ],
-  relatedProductSlugs: ["psn-100", "psn-250", "xbox-100", "xbox-200"],
+  relatedBrandKeys: ["playstation", "xbox"],
   seo: {
     title:
       "Précommander GTA VI au Maroc avec une carte PSN ou Xbox | Ghost.ma",
@@ -280,17 +286,17 @@ export const gtaPreorderConfig: GtaPreorderConfig = {
     "Grand Theft Auto, GTA and related marks are trademarks of Take-Two Interactive Software, Inc. Ghost.ma is not affiliated with or endorsed by Rockstar Games, Sony Interactive Entertainment or Microsoft.",
 };
 
-/** All catalogue slugs referenced anywhere in the config (recommended per
- *  platform + related) — the exact set the page needs to resolve live. */
-export function referencedProductSlugs(
+/** All catalogue brand keys referenced anywhere in the config (recommended per
+ *  platform + related) — the set of brands the page resolves live. */
+export function referencedBrandKeys(
   config: GtaPreorderConfig = gtaPreorderConfig,
 ): string[] {
-  const slugs = new Set<string>();
+  const keys = new Set<string>();
   for (const platform of GTA_PLATFORMS) {
-    for (const slug of config.platforms[platform].productSlugs) slugs.add(slug);
+    keys.add(config.platforms[platform].brandKey);
   }
-  for (const slug of config.relatedProductSlugs) slugs.add(slug);
-  return [...slugs];
+  for (const key of config.relatedBrandKeys) keys.add(key);
+  return [...keys];
 }
 
 /** FAQ mapped to the shared CategoryFaq item shape (active/ordered). */
