@@ -14,10 +14,14 @@ import {
 } from "@/lib/db/promoCodes";
 import { adminAdjustGhostCredit, adminSetWalletFrozen } from "@/lib/db/ghostCreditAdmin";
 import { reconcileAllWallets, type WalletReconcileRow } from "@/lib/db/walletReconcile";
+import { getAdminWalletDetail, getAdminWalletLedger } from "@/lib/db/adminWallet";
 import type {
   ActionResult,
   AdminPromoCodeSummaryDTO,
   AdminPromoCodeDetailDTO,
+  AdminWalletDetailDTO,
+  AdminWalletLedgerPageDTO,
+  WalletLedgerFilter,
   PromoScopeOptionDTO,
   SavePromoCodeInput,
 } from "@/lib/dto";
@@ -118,4 +122,22 @@ export async function getWalletReconciliationAction(): Promise<{
 }> {
   await requireAdminCustomer();
   return reconcileAllWallets();
+}
+
+/** Admin: full wallet summary for one customer's wallet page. */
+export async function getAdminWalletDetailAction(
+  customerId: string,
+): Promise<AdminWalletDetailDTO | null> {
+  await requireAdminCustomer();
+  return getAdminWalletDetail(customerId);
+}
+
+/** Admin: paginated + filterable ledger for one customer's wallet page. */
+export async function getAdminWalletLedgerAction(
+  customerId: string,
+  filter: WalletLedgerFilter,
+  page: number,
+): Promise<AdminWalletLedgerPageDTO> {
+  await requireAdminCustomer();
+  return getAdminWalletLedger(customerId, filter, page);
 }

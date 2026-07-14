@@ -46,6 +46,7 @@ const ORDER_STATUSES: OrderStatus[] = [
   "delivered",
   "refunded",
   "cancelled",
+  "expired",
 ];
 
 export interface ChangeOrderStatusInput {

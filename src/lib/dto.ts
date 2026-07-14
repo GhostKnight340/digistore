@@ -766,6 +766,68 @@ export interface MilestoneProgressDTO {
   track: MilestoneTrackItemDTO[];
 }
 
+// ─── Admin wallet DTOs ────────────────────────────────────────────────────────
+
+export interface AdminWalletLockedOrderDTO {
+  orderId: string;
+  publicOrderNumber: string;
+  amountMad: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface AdminWalletDetailDTO {
+  customerId: string;
+  name: string;
+  email: string;
+  balanceMad: number;
+  lockedMad: number;
+  expiresAt: string | null;
+  daysUntilExpiry: number | null;
+  lastQualifyingAt: string | null;
+  reminderEnabled: boolean;
+  frozen: boolean;
+  frozenReason: string | null;
+  qualifyingSpendMad: number;
+  nextMilestone: MilestoneProgressDTO["next"];
+  reconcile: { derivedMad: number; cachedMad: number; diffMad: number; ok: boolean };
+  lockedOrders: AdminWalletLockedOrderDTO[];
+}
+
+export interface AdminWalletLedgerRowDTO {
+  id: string;
+  createdAt: string;
+  reason: string;
+  direction: "credit" | "debit";
+  amountMad: number;
+  status: string;
+  resetsExpiration: boolean;
+  orderId: string | null;
+  milestoneId: string | null;
+  thresholdMad: number | null;
+  promoCode: string | null;
+  source: string;
+  note: string | null;
+  idempotencyKey: string;
+}
+
+export interface AdminWalletLedgerPageDTO {
+  rows: AdminWalletLedgerRowDTO[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface WalletLedgerFilter {
+  direction?: "credit" | "debit" | "all";
+  reason?: string;
+  status?: string;
+  orderId?: string;
+  milestoneId?: string;
+  from?: string;
+  to?: string;
+}
+
 // ─── Payment method DTOs ──────────────────────────────────────────────────────
 
 export type PaymentMethodType = "bank" | "paypal" | "crypto" | "card" | "cash" | "custom";

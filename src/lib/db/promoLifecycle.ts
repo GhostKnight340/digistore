@@ -157,6 +157,12 @@ export async function applyPromoLifecycleForStatus(orderId: string, toStatus: st
       // Refund reduces qualifying spend → reverse milestones no longer qualified.
       const { reverseMilestonesForOrder } = await import("./milestones");
       await reverseMilestonesForOrder(orderId);
+    } else if (toStatus === "expired") {
+      // Abandoned unpaid order → release reservation + locked credit (the credit
+      // release applies the anti-avoidance wallet-expiry rule).
+      await releaseOrderPromotion(orderId);
+      const { releaseLockedOrderCredit } = await import("./orderExpiry");
+      await releaseLockedOrderCredit(orderId);
     }
   } catch (error) {
     console.error("[applyPromoLifecycleForStatus]", orderId, toStatus, error);

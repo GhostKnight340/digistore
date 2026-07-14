@@ -11,6 +11,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   rejected: "Paiement refusé",
   refunded: "Remboursée",
   cancelled: "Annulée",
+  expired: "Expirée",
 };
 
 /** Short French status badge text. */
@@ -39,6 +40,7 @@ export function orderStatusBadgeClass(status: string): string {
       return "border-blue-500/40 text-blue-400";
     case "rejected":
     case "cancelled":
+    case "expired":
       return "border-red-500/40 text-red-400";
     case "refunded":
       return "border-purple-500/40 text-purple-400";

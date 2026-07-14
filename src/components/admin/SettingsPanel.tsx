@@ -545,6 +545,39 @@ export default function SettingsPanel() {
           />
         </div>
       </Panel>
+
+      <Panel title="Crédit Ghost">
+        <p className="mb-4 text-[13px] text-muted">
+          Politique du portefeuille de crédit Ghost. Seuls les crédits gagnés après une commande payée et
+          finalisée prolongent la validité.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <TextField
+            label="Expiration après inactivité (jours)"
+            type="number"
+            value={String(draft.ghostCredit.inactivityDays)}
+            onChange={(value) =>
+              update("ghostCredit", { ...draft.ghostCredit, inactivityDays: Math.max(1, Number(value) || 0) })
+            }
+          />
+          <TextField
+            label="Rappel avant expiration (jours)"
+            type="number"
+            value={String(draft.ghostCredit.reminderDaysBefore)}
+            onChange={(value) =>
+              update("ghostCredit", { ...draft.ghostCredit, reminderDaysBefore: Math.max(1, Number(value) || 0) })
+            }
+          />
+          <TextField
+            label="Expiration des commandes impayées (heures)"
+            type="number"
+            value={String(draft.ghostCredit.unpaidOrderExpiryHours)}
+            onChange={(value) =>
+              update("ghostCredit", { ...draft.ghostCredit, unpaidOrderExpiryHours: Math.max(1, Number(value) || 0) })
+            }
+          />
+        </div>
+      </Panel>
     </section>
   );
 }

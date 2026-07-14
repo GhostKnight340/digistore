@@ -204,6 +204,9 @@ export type StoreSettings = {
     inactivityDays: number;
     // Days before expiry the reminder email is sent (when the customer opted in).
     reminderDaysBefore: number;
+    // Hours an UNPAID order holding Ghost Credit may sit before it is auto-
+    // expired and its locked credit released. Default 24.
+    unpaidOrderExpiryHours: number;
   };
 };
 
@@ -486,6 +489,7 @@ export const defaultStoreSettings: StoreSettings = {
   ghostCredit: {
     inactivityDays: 180,
     reminderDaysBefore: 3,
+    unpaidOrderExpiryHours: 24,
   },
 };
 
@@ -810,6 +814,12 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
         value.ghostCredit.reminderDaysBefore > 0
           ? Math.round(value.ghostCredit.reminderDaysBefore)
           : defaultStoreSettings.ghostCredit.reminderDaysBefore,
+      unpaidOrderExpiryHours:
+        isObject(value.ghostCredit) &&
+        typeof value.ghostCredit.unpaidOrderExpiryHours === "number" &&
+        value.ghostCredit.unpaidOrderExpiryHours > 0
+          ? Math.round(value.ghostCredit.unpaidOrderExpiryHours)
+          : defaultStoreSettings.ghostCredit.unpaidOrderExpiryHours,
     },
   };
 }

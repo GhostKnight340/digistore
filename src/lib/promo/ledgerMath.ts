@@ -135,3 +135,11 @@ export function milestoneReversalKey(milestoneId: string, customerId: string): s
 export function expiryReminderKey(customerId: string, deadlineIso: string): string {
   return `ghost-credit-expiry-reminder:${customerId}:${deadlineIso}`;
 }
+/** Restoration of credit locked in an abandoned unpaid order (one per order). */
+export function orderExpiryReleaseKey(orderId: string): string {
+  return `order-expiry-credit-release:${orderId}`;
+}
+/** Immediate expiry of restored credit when the wallet already lapsed (one per order). */
+export function orderExpiryCreditExpiredKey(orderId: string): string {
+  return `order-expiry-credit-expired:${orderId}`;
+}

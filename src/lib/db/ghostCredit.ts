@@ -359,7 +359,11 @@ export async function expireWalletIfDue(tx: Tx, customerId: string, now = new Da
       amountMad: balance,
       direction: "debit",
       reason: "expiration",
-      status: "active",
+      // Marked "expired" (not "active") so it is excluded from the active-ledger
+      // balance derivation alongside the credits it settles — otherwise the
+      // reconciliation would derive -balance for every naturally-expired wallet
+      // (credits excluded, debit still counted). Both sides net out consistently.
+      status: "expired",
       idempotencyKey: key,
       source: "system",
       note: `Crédit Ghost expiré après inactivité`,
@@ -426,6 +430,52 @@ function buildTransactionDTO(row: {
     createdAt: row.createdAt.toISOString(),
     expiresAt: iso(row.expiresAt),
     note: row.note,
+  };
+}
+
+/**
+ * Order statuses in which Ghost Credit spent on an order is LOCKED: debited at
+ * creation but not yet settled (order not confirmed) and not yet restored (order
+ * not cancelled/rejected/refunded/expired). Pre-confirmation states only.
+ */
+export const LOCKED_CREDIT_STATUSES = [
+  "pending_payment",
+  "pending",
+  "awaiting_payment",
+  "payment_submitted",
+  "payment_issue",
+];
+
+export interface LockedCreditOrder {
+  orderId: string;
+  amountMad: number;
+  status: string;
+  createdAt: string;
+}
+
+/**
+ * Ghost Credit currently locked in the customer's not-yet-resolved orders. The
+ * spend model debits credit at order creation, so this is "outside" the
+ * available balance — surfaced so neither the customer nor an admin thinks it's
+ * lost. Reconcilable from Order rows; no separate reserved-balance column.
+ */
+export async function getLockedCreditForCustomer(
+  customerId: string,
+): Promise<{ lockedMad: number; orders: LockedCreditOrder[] }> {
+  await ensureDatabaseReady();
+  const orders = await prisma.order.findMany({
+    where: { customerId, status: { in: LOCKED_CREDIT_STATUSES }, ghostCreditAppliedMad: { gt: 0 } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, ghostCreditAppliedMad: true, status: true, createdAt: true },
+  });
+  return {
+    lockedMad: orders.reduce((sum, o) => sum + o.ghostCreditAppliedMad, 0),
+    orders: orders.map((o) => ({
+      orderId: o.id,
+      amountMad: o.ghostCreditAppliedMad,
+      status: o.status,
+      createdAt: o.createdAt.toISOString(),
+    })),
   };
 }
 

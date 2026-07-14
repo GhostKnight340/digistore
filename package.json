@@ -23,6 +23,7 @@
     "prod:status": "node scripts/prod-op.mjs migrate status",
     "prod:migrate": "node scripts/prod-op.mjs migrate deploy",
     "test": "node --conditions=react-server --import tsx --test \"test/**/*.test.ts\"",
+    "test:integration": "node --conditions=react-server --import tsx --test \"test/integration/**/*.test.ts\"",
     "postinstall": "prisma generate"
   },
   "prisma": {

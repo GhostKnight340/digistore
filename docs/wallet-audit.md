@@ -92,15 +92,39 @@ to match the ledger (never rewrites history). Admin read-only action:
 - **Order-expiry job** to auto-release credit on abandoned unpaid orders. Spent
   credit on an order that is never paid and never cancelled stays debited until
   someone cancels it (locked, not lost). No such cron exists in the project yet.
-- **Full admin wallet UI** (ledger browser, freeze toggle, reconciliation view).
-  The server actions exist (`adminAdjustGhostCreditAction`,
-  `adminSetWalletFrozenAction`, `getWalletReconciliationAction`); the admin panel
-  surface is not built.
-- **True concurrency integration tests** require a Postgres test database, which
-  this project's pure `node:test` harness does not provide. The concurrency
-  guarantee rests on the `FOR UPDATE` lock + unique-key design; the money/ledger
-  math and idempotency keys are unit-tested (`test/promo/wallet.test.ts`). See the
-  manual plan below to validate against a real DB.
+- **Full admin wallet UI** — BUILT. Per-customer page at
+  `/admin/clients/[customerId]/ghost-credit` (linked from the Clients panel):
+  summary, filterable/paginated ledger with an idempotency-reference technical
+  view, order-locked-credit list (open-only, no arbitrary unlock), read-only
+  reconciliation view, and audited admin actions (manual grant/debit, freeze/
+  unfreeze) each requiring a reason and previewing the resulting balance before a
+  confirmation modal. Backed by the existing server actions
+  (`adminAdjustGhostCreditAction`, `adminSetWalletFrozenAction`) plus
+  `getAdminWalletDetailAction` / `getAdminWalletLedgerAction`.
+- **True concurrency integration tests** — BUILT as a gated Postgres suite
+  (`test/integration/wallet-concurrency.test.ts`). It exercises the real wallet
+  functions over concurrent connections. It is a no-op unless
+  `WALLET_INTEGRATION_TEST_DATABASE_URL` is set and hard-refuses to run against
+  `DATABASE_URL`/`PRODUCTION_DATABASE_URL`. Run it with:
+
+  ```sh
+  export WALLET_INTEGRATION_TEST_DATABASE_URL='postgresql://…/ghost_staging_test'
+  npx prisma migrate deploy      # bring the test DB schema up to date
+  npm run test:integration
+  ```
+
+  The pure money/ledger math and idempotency keys remain unit-tested
+  (`test/promo/wallet.test.ts`, `test/promo/order-expiry.test.ts`).
+
+### Reconciliation fix (whole-wallet expiry)
+
+`expireWalletIfDue` previously wrote its `expiration` debit as `status:"active"`
+while flipping the settled credits to `"expired"`, so the ledger-derived balance
+came out at `-balance` for every naturally-expired wallet and reconciliation
+flagged a false mismatch. The expiration debit is now written `status:"expired"`
+so it is excluded from the active-ledger derivation alongside the credits it
+settles (both net to 0, matching the zeroed cache). Covered by a pure test in
+`test/promo/wallet.test.ts` and by scenario checks in the integration suite.
 
 ## Manual penetration / failure test plan
 

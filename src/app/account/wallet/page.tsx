@@ -3,7 +3,8 @@ import PageHeader from "@/components/account/PageHeader";
 import { WalletIcon } from "@/components/account/icons";
 import { requireCustomer, getAccountOrders, isProfileIncomplete } from "@/lib/auth";
 import { countSupportTicketsForCustomer } from "@/lib/db/supportTickets";
-import { getGhostCreditWallet } from "@/lib/db/ghostCredit";
+import { getGhostCreditWallet, getLockedCreditForCustomer } from "@/lib/db/ghostCredit";
+import Link from "next/link";
 import { getMilestoneProgressForCustomer } from "@/lib/db/milestones";
 import { prisma } from "@/lib/db/prisma";
 import { formatDH } from "@/lib/format";
@@ -33,16 +34,22 @@ function reasonLabel(txn: GhostCreditTransactionDTO): string {
       return txn.promoCode ? `Crédit promo · ${txn.promoCode}` : "Crédit promo";
     case "promo_reversal":
       return "Reprise (remboursement)";
+    case "spending_milestone_reward":
+      return "Palier de dépenses atteint";
+    case "milestone_reversal":
+      return "Reprise palier (remboursement)";
     case "order_spend":
       return "Utilisé sur une commande";
     case "order_spend_refund":
       return "Restitué (commande non finalisée)";
+    case "order_refund_restore":
+      return "Restitué (commande expirée)";
     case "admin_grant":
       return "Crédit manuel";
     case "admin_reversal":
       return "Reprise manuelle";
     case "expiration":
-      return "Expiré (60 j d'inactivité)";
+      return "Expiré (inactivité)";
     default:
       return txn.reason;
   }
@@ -62,7 +69,7 @@ function statusLabel(status: string): string {
 export default async function AccountWalletPage() {
   const customer = await requireCustomer();
   const incomplete = isProfileIncomplete(customer);
-  const [wallet, orders, supportCount, milestones, reminderRow] = await Promise.all([
+  const [wallet, orders, supportCount, milestones, reminderRow, locked] = await Promise.all([
     getGhostCreditWallet(customer.id),
     getAccountOrders(customer.id),
     countSupportTicketsForCustomer(customer.id, incomplete ? null : customer.email),
@@ -71,6 +78,7 @@ export default async function AccountWalletPage() {
       where: { id: customer.id },
       select: { expirationReminderEnabled: true },
     }),
+    getLockedCreditForCustomer(customer.id),
   ]);
   const canExpire = wallet.balanceMad > 0 && Boolean(wallet.expiresAt);
 
@@ -113,6 +121,17 @@ export default async function AccountWalletPage() {
                 </p>
               </div>
             </div>
+            {locked.lockedMad > 0 && (
+              <div className="relative mt-3 flex flex-wrap items-center gap-1.5 rounded-[12px] border border-amber-500/20 bg-amber-500/[0.06] px-3.5 py-2.5">
+                <span className="text-[12.5px] text-amber-200/90">
+                  Crédit temporairement utilisé dans des commandes en attente :{" "}
+                  <span className="font-semibold">{formatDH(locked.lockedMad)}</span>.
+                </span>
+                <Link href="/account/orders" className="text-[12.5px] font-medium text-[#9FB8FF] underline-offset-2 hover:underline">
+                  Voir mes commandes en attente
+                </Link>
+              </div>
+            )}
             {canExpire && wallet.expiresAt && (
               <div className="relative mt-4 flex flex-wrap items-center gap-2 rounded-[12px] border border-accent/20 bg-accent/[0.06] px-3.5 py-2.5">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#9FB8FF" strokeWidth={1.9} className="h-4 w-4 shrink-0" aria-hidden>

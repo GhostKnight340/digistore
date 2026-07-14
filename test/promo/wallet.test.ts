@@ -34,6 +34,20 @@ test("deriveBalance sums active credits minus active debits; ignores reversed/ex
   assert.equal(deriveBalance(rows), 20);
 });
 
+test("whole-wallet expiry nets to 0: the expiration debit and its credits are all excluded", () => {
+  // Mirrors expireWalletIfDue's output — a 60 DH wallet lapses: every credit is
+  // flipped to "expired" AND the offsetting expiration debit is written "expired"
+  // too, so the active-ledger balance derives to 0 (matching the zeroed cache).
+  // Were the debit left "active", derivation would be -60 and reconciliation
+  // would flag a false mismatch on every naturally-expired wallet.
+  const rows: LedgerRow[] = [
+    { direction: "credit", amountMad: 40, status: "expired" },
+    { direction: "credit", amountMad: 20, status: "expired" },
+    { direction: "debit", amountMad: 60, status: "expired" }, // expiration debit
+  ];
+  assert.equal(deriveBalance(rows), 0);
+});
+
 test("deriveBalance of an empty ledger is 0", () => {
   assert.equal(deriveBalance([]), 0);
 });

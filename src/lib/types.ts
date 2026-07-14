@@ -205,7 +205,8 @@ export type OrderStatus =
   | "rejected"
   | "delivered"
   | "refunded"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
 
 /**
  * Promo-code reward type. Exactly one per code. Stored as a String column on

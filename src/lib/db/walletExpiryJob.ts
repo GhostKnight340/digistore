@@ -24,9 +24,15 @@ import { formatDH } from "@/lib/format";
 export async function runWalletExpiryAndReminders(now = new Date()): Promise<{
   expired: number;
   remindersSent: number;
+  ordersExpired: number;
 }> {
   await ensureDatabaseReady();
   const settings = await getStoreSettings();
+
+  // 0. First release credit locked in abandoned unpaid orders (so the freshly
+  //    restored balance is considered by the wallet-expiry pass below).
+  const { expireAbandonedOrders } = await import("./orderExpiry");
+  const orderExpiry = await expireAbandonedOrders(now);
   const reminderDays = settings.ghostCredit?.reminderDaysBefore ?? 3;
   const timeZone = settings.expenses?.businessTimezone ?? "Africa/Casablanca";
 
@@ -118,7 +124,12 @@ export async function runWalletExpiryAndReminders(now = new Date()): Promise<{
 
   console.info(
     "[cron:ghost-credit] done",
-    JSON.stringify({ expiredCandidates: dueForExpiry.length, expired, remindersSent }),
+    JSON.stringify({
+      expiredCandidates: dueForExpiry.length,
+      expired,
+      remindersSent,
+      ordersExpired: orderExpiry.expired,
+    }),
   );
-  return { expired, remindersSent };
+  return { expired, remindersSent, ordersExpired: orderExpiry.expired };
 }

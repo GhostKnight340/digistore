@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { formatMAD, formatDate } from "@/lib/format";
 import { getAdminCustomersAction, deleteCustomerAccountAction } from "@/app/actions/admin";
 import type { CustomerDTO } from "@/lib/dto";
@@ -125,6 +126,14 @@ export default function CustomersPanel() {
                     {customer.orderCount > 0 ? formatDate(customer.lastOrderAt) : "-"}
                   </td>
                   <td className="px-5 py-3 text-right">
+                    {customer.id ? (
+                      <Link
+                        href={`/admin/clients/${customer.id}/ghost-credit`}
+                        className="mr-3 text-xs text-[#9FB8FF] hover:underline"
+                      >
+                        Portefeuille
+                      </Link>
+                    ) : null}
                     {customer.id ? (
                       confirmId === customer.id ? (
                         <span className="inline-flex items-center gap-2">
