@@ -16,6 +16,7 @@
     "start:worker": "tsx scripts/discord-dm-worker.ts",
     "reloadly:smoke-test": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/reloadly-smoke-test.ts",
     "reloadly:cost-sync": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/reloadly-cost-sync.ts",
+    "wallet:reconcile": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/wallet-reconcile.ts",
     "seed:category-landing": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/seed-category-landing.ts",
     "seed:collections": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/seed-collections.ts",
     "assign:collection-images": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/assign-collection-images.ts",

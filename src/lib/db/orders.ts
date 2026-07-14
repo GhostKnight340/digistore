@@ -5,6 +5,7 @@ import { isOrderingCurrentlyEnabled } from "./ordering";
 import { resolveCartLines } from "./promoResolve";
 import { reservePromoInTx } from "./promoCodes";
 import { debitCreditTx, expireWalletIfDue } from "./ghostCredit";
+import { capSpend, orderSpendKey } from "@/lib/promo/ledgerMath";
 import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
@@ -1059,22 +1060,28 @@ export async function createOrder(
         await expireWalletIfDue(tx, customer.id);
         const wallet = await tx.customer.findUnique({
           where: { id: customer.id },
-          select: { ghostCreditBalanceMad: true },
+          select: { ghostCreditBalanceMad: true, walletFrozen: true },
         });
-        const balance = wallet?.ghostCreditBalanceMad ?? 0;
+        // A frozen wallet can never spend, regardless of what the client sends.
+        const balance = wallet?.walletFrozen ? 0 : wallet?.ghostCreditBalanceMad ?? 0;
         const remainingTotal = Math.max(0, subtotalMad - discountMad);
-        creditAppliedMad = Math.max(0, Math.min(requestedCredit, balance, remainingTotal));
-        if (creditAppliedMad > 0) {
-          await debitCreditTx(tx, {
+        const target = capSpend(requestedCredit, balance, remainingTotal);
+        if (target > 0) {
+          const debit = await debitCreditTx(tx, {
             customerId: customer.id,
-            amountMad: creditAppliedMad,
+            amountMad: target,
             reason: "order_spend",
-            idempotencyKey: `credit-spend:${created.id}`,
+            idempotencyKey: orderSpendKey(created.id),
             orderId: created.id,
             source: "system",
             note: "Crédit Ghost utilisé sur la commande",
             allowNegative: false,
           });
+          // Use the amount ACTUALLY debited from the ledger so the order total
+          // can never diverge from the wallet movement. The wallet row is locked
+          // for this transaction, so this equals `target` in practice; capping to
+          // it is a belt-and-suspenders guard against a concurrent drain.
+          creditAppliedMad = debit.appliedMad ?? 0;
         }
       }
 

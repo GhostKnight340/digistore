@@ -386,6 +386,13 @@ model Customer {
   // credit has been granted. Enforced lazily on read + spend (see ghostCredit.ts
   // expireWalletIfDue). Additive, nullable — existing customers keep null.
   ghostCreditExpiresAt  DateTime?
+  // Wallet freeze: blocks SPENDING Ghost Credit (grants/reversals still apply)
+  // until an admin resolves it. Set automatically when a refund reversal can't
+  // be fully applied because the promotional credit was already spent (so the
+  // wallet is never left with an unexplained negative balance), or manually by
+  // an admin. Additive with safe defaults.
+  walletFrozen          Boolean   @default(false)
+  walletFrozenReason    String?
 
   orders                 Order[]
   emailLogs              EmailLog[]

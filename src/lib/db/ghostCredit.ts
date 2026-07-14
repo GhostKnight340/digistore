@@ -1,9 +1,39 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma, ensureDatabaseReady } from "./prisma";
+import { capDebit, walletExpireKey } from "@/lib/promo/ledgerMath";
 import type { GhostCreditWalletDTO, GhostCreditTransactionDTO } from "@/lib/dto";
 import type { PromoRewardType, GhostCreditDirection, GhostCreditStatus } from "@/lib/types";
+
+/**
+ * Structured wallet log. Internal ids + amounts only — never email/PII. Wallet
+ * money movements are financial events, so they are always logged for audit.
+ */
+function walletLog(event: string, data: Record<string, unknown>): void {
+  try {
+    console.info(`[ghost-credit] ${event}`, JSON.stringify(data));
+  } catch {
+    /* logging must never break a wallet write */
+  }
+}
+
+/** True for a unique-constraint violation (idempotency-key race). */
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+/**
+ * Take a transactional row lock on the customer wallet so a read-then-write
+ * (balance read → conditional debit / expiry) is atomic against every other
+ * concurrent wallet mutation for the same customer. Postgres holds this until
+ * the surrounding transaction commits, serializing wallet writes per customer
+ * and making overspend impossible under concurrent requests. Re-entrant within
+ * a transaction that already holds the lock.
+ */
+async function lockWallet(tx: Tx, customerId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "Customer" WHERE id = ${customerId} FOR UPDATE`;
+}
 
 /**
  * Ghost Credit ledger.
@@ -89,27 +119,40 @@ export async function grantCreditTx(tx: Tx, params: GrantParams): Promise<Ledger
     where: { idempotencyKey: params.idempotencyKey },
     select: { id: true },
   });
-  if (existing) return { ok: true, duplicate: true };
+  if (existing) {
+    walletLog("grant.duplicate", { customerId: params.customerId, key: params.idempotencyKey, reason: params.reason });
+    return { ok: true, duplicate: true };
+  }
 
-  await tx.ghostCreditTransaction.create({
-    data: {
-      customerId: params.customerId,
-      amountMad: params.amountMad,
-      direction: "credit",
-      reason: params.reason,
-      promoCodeId: params.promoCodeId ?? null,
-      orderId: params.orderId ?? null,
-      rewardType: params.rewardType ?? null,
-      eligibleSubtotalMad: params.eligibleSubtotalMad ?? null,
-      configuredPercent: params.configuredPercent ?? null,
-      configuredFixedMad: params.configuredFixedMad ?? null,
-      status: "active",
-      idempotencyKey: params.idempotencyKey,
-      expiresAt: params.expiresAt ?? null,
-      source: params.source ?? "system",
-      note: params.note ?? null,
-    },
-  });
+  try {
+    await tx.ghostCreditTransaction.create({
+      data: {
+        customerId: params.customerId,
+        amountMad: params.amountMad,
+        direction: "credit",
+        reason: params.reason,
+        promoCodeId: params.promoCodeId ?? null,
+        orderId: params.orderId ?? null,
+        rewardType: params.rewardType ?? null,
+        eligibleSubtotalMad: params.eligibleSubtotalMad ?? null,
+        configuredPercent: params.configuredPercent ?? null,
+        configuredFixedMad: params.configuredFixedMad ?? null,
+        status: "active",
+        idempotencyKey: params.idempotencyKey,
+        expiresAt: params.expiresAt ?? null,
+        source: params.source ?? "system",
+        note: params.note ?? null,
+      },
+    });
+  } catch (error) {
+    // Two concurrent grants with the same key raced past the findUnique check;
+    // the unique constraint is the real guard, so treat the loser as a no-op.
+    if (isUniqueViolation(error)) {
+      walletLog("grant.duplicate.race", { customerId: params.customerId, key: params.idempotencyKey });
+      return { ok: true, duplicate: true };
+    }
+    throw error;
+  }
   // A new credit resets the whole wallet's 60-day inactivity deadline.
   const customer = await tx.customer.update({
     where: { id: params.customerId },
@@ -118,6 +161,13 @@ export async function grantCreditTx(tx: Tx, params: GrantParams): Promise<Ledger
       ghostCreditExpiresAt: walletDeadlineFrom(new Date()),
     },
     select: { ghostCreditBalanceMad: true },
+  });
+  walletLog("grant.settled", {
+    customerId: params.customerId,
+    amountMad: params.amountMad,
+    reason: params.reason,
+    key: params.idempotencyKey,
+    balanceMad: customer.ghostCreditBalanceMad,
   });
   return { ok: true, duplicate: false, balanceMad: customer.ghostCreditBalanceMad };
 }
@@ -148,36 +198,61 @@ export async function debitCreditTx(
     where: { idempotencyKey: params.idempotencyKey },
     select: { id: true },
   });
-  if (existing) return { ok: true, duplicate: true };
+  if (existing) {
+    walletLog("debit.duplicate", { customerId: params.customerId, key: params.idempotencyKey, reason: params.reason });
+    return { ok: true, duplicate: true };
+  }
 
+  // CRITICAL: lock the wallet row before reading the balance, so the balance
+  // used to cap the debit reflects committed state and no concurrent debit can
+  // interleave between the read and the decrement. Without this, two concurrent
+  // debits (e.g. a checkout spend racing an admin reversal, or a spend racing
+  // expiry) could both read the full balance and both decrement, overspending
+  // into a negative balance.
+  await lockWallet(tx, params.customerId);
   const customer = await tx.customer.findUnique({
     where: { id: params.customerId },
     select: { ghostCreditBalanceMad: true },
   });
   const balance = customer?.ghostCreditBalanceMad ?? 0;
   const allowNegative = params.allowNegative ?? false;
-  const wouldGoNegative = params.amountMad > balance;
-  const applied = allowNegative ? params.amountMad : Math.min(params.amountMad, Math.max(0, balance));
+  const { appliedMad: applied, wouldGoNegative } = capDebit(params.amountMad, balance, allowNegative);
 
   if (applied <= 0) {
+    if (wouldGoNegative) {
+      walletLog("debit.insufficient", {
+        customerId: params.customerId,
+        requestedMad: params.amountMad,
+        balanceMad: balance,
+        reason: params.reason,
+      });
+    }
     return { ok: true, duplicate: false, wouldGoNegative, appliedMad: 0 };
   }
 
-  await tx.ghostCreditTransaction.create({
-    data: {
-      customerId: params.customerId,
-      amountMad: applied,
-      direction: "debit",
-      reason: params.reason,
-      promoCodeId: params.promoCodeId ?? null,
-      orderId: params.orderId ?? null,
-      rewardType: params.rewardType ?? null,
-      status: "active",
-      idempotencyKey: params.idempotencyKey,
-      source: params.source ?? "system",
-      note: params.note ?? null,
-    },
-  });
+  try {
+    await tx.ghostCreditTransaction.create({
+      data: {
+        customerId: params.customerId,
+        amountMad: applied,
+        direction: "debit",
+        reason: params.reason,
+        promoCodeId: params.promoCodeId ?? null,
+        orderId: params.orderId ?? null,
+        rewardType: params.rewardType ?? null,
+        status: "active",
+        idempotencyKey: params.idempotencyKey,
+        source: params.source ?? "system",
+        note: params.note ?? null,
+      },
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      walletLog("debit.duplicate.race", { customerId: params.customerId, key: params.idempotencyKey });
+      return { ok: true, duplicate: true };
+    }
+    throw error;
+  }
   // Spending never extends the deadline. Clear it once the wallet empties so an
   // empty wallet doesn't carry a stale expiry date.
   const remaining = balance - applied;
@@ -187,6 +262,14 @@ export async function debitCreditTx(
       ghostCreditBalanceMad: { decrement: applied },
       ...(remaining <= 0 ? { ghostCreditExpiresAt: null } : {}),
     },
+  });
+  walletLog("debit.settled", {
+    customerId: params.customerId,
+    amountMad: applied,
+    reason: params.reason,
+    key: params.idempotencyKey,
+    balanceMad: remaining,
+    wouldGoNegative,
   });
   return { ok: true, duplicate: false, wouldGoNegative, appliedMad: applied };
 }
@@ -198,6 +281,9 @@ export async function debitCreditTx(
  * Runs in the given transaction. Returns the balance after any expiry.
  */
 export async function expireWalletIfDue(tx: Tx, customerId: string, now = new Date()): Promise<number> {
+  // Lock the wallet before the read-then-zero so expiry can't race a concurrent
+  // spend/grant into a negative or resurrected balance.
+  await lockWallet(tx, customerId);
   const customer = await tx.customer.findUnique({
     where: { id: customerId },
     select: { ghostCreditBalanceMad: true, ghostCreditExpiresAt: true },
@@ -207,7 +293,7 @@ export async function expireWalletIfDue(tx: Tx, customerId: string, now = new Da
   const deadline = customer.ghostCreditExpiresAt;
   if (!deadline || now.getTime() <= deadline.getTime() || balance <= 0) return balance;
 
-  const key = `wallet-expire:${customerId}:${deadline.toISOString()}`;
+  const key = walletExpireKey(customerId, deadline.toISOString());
   const existing = await tx.ghostCreditTransaction.findUnique({
     where: { idempotencyKey: key },
     select: { id: true },
@@ -235,6 +321,7 @@ export async function expireWalletIfDue(tx: Tx, customerId: string, now = new Da
     where: { id: customerId },
     data: { ghostCreditBalanceMad: 0, ghostCreditExpiresAt: null },
   });
+  walletLog("expire.settled", { customerId, amountMad: balance, key });
   return 0;
 }
 
@@ -242,14 +329,23 @@ export async function expireWalletIfDue(tx: Tx, customerId: string, now = new Da
  * Current spendable balance after applying any due expiry. Used at checkout so a
  * customer can never spend already-expired credit.
  */
-export async function getSpendableBalance(customerId: string): Promise<{ balanceMad: number; expiresAt: string | null }> {
+export async function getSpendableBalance(
+  customerId: string,
+): Promise<{ balanceMad: number; expiresAt: string | null; frozen: boolean }> {
   await ensureDatabaseReady();
-  const balanceMad = await prisma.$transaction((tx) => expireWalletIfDue(tx, customerId));
+  const rawBalance = await prisma.$transaction((tx) => expireWalletIfDue(tx, customerId));
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
-    select: { ghostCreditExpiresAt: true },
+    select: { ghostCreditExpiresAt: true, walletFrozen: true },
   });
-  return { balanceMad, expiresAt: iso(customer?.ghostCreditExpiresAt ?? null) };
+  const frozen = customer?.walletFrozen ?? false;
+  // A frozen wallet is not spendable — report 0 spendable so no checkout can
+  // apply it, while the account page still shows the real (frozen) balance.
+  return {
+    balanceMad: frozen ? 0 : rawBalance,
+    expiresAt: iso(customer?.ghostCreditExpiresAt ?? null),
+    frozen,
+  };
 }
 
 function buildTransactionDTO(row: {
@@ -288,7 +384,7 @@ export async function getGhostCreditWallet(customerId: string): Promise<GhostCre
   const [customer, rows] = await Promise.all([
     prisma.customer.findUnique({
       where: { id: customerId },
-      select: { ghostCreditBalanceMad: true, ghostCreditExpiresAt: true },
+      select: { ghostCreditBalanceMad: true, ghostCreditExpiresAt: true, walletFrozen: true },
     }),
     prisma.ghostCreditTransaction.findMany({
       where: { customerId },
@@ -312,6 +408,7 @@ export async function getGhostCreditWallet(customerId: string): Promise<GhostCre
   return {
     balanceMad: customer?.ghostCreditBalanceMad ?? 0,
     expiresAt: iso(customer?.ghostCreditExpiresAt ?? null),
+    frozen: customer?.walletFrozen ?? false,
     transactions: rows.map(buildTransactionDTO),
   };
 }

@@ -100,11 +100,18 @@ export default async function AccountWalletPage() {
               </div>
             </div>
             <p className="relative mt-4 text-[12.5px] leading-relaxed text-muted">
-              Le crédit Ghost est ajouté après confirmation des commandes éligibles.
+              Le crédit Ghost est ajouté après confirmation des commandes éligibles et n&apos;est utilisable
+              que sur Ghost.ma — il n&apos;est pas retirable en argent.
               {wallet.balanceMad > 0 && wallet.expiresAt
                 ? ` Votre solde expire le ${formatFrenchDate(wallet.expiresAt)} s'il reste inactif — chaque nouveau crédit relance ce délai de 60 jours.`
                 : " Le solde expire après 60 jours d'inactivité ; chaque nouveau crédit relance ce délai."}
             </p>
+            {wallet.frozen && (
+              <p className="relative mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+                Votre crédit Ghost est temporairement bloqué et en cours de vérification. Contactez le support
+                si besoin.
+              </p>
+            )}
           </div>
 
           {/* Ledger */}

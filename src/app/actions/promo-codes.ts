@@ -12,7 +12,8 @@ import {
   duplicatePromoCode,
   deletePromoCode,
 } from "@/lib/db/promoCodes";
-import { adminAdjustGhostCredit } from "@/lib/db/ghostCreditAdmin";
+import { adminAdjustGhostCredit, adminSetWalletFrozen } from "@/lib/db/ghostCreditAdmin";
+import { reconcileAllWallets, type WalletReconcileRow } from "@/lib/db/walletReconcile";
 import type {
   ActionResult,
   AdminPromoCodeSummaryDTO,
@@ -89,9 +90,32 @@ export async function adminAdjustGhostCreditAction(input: {
   direction: "credit" | "debit";
   amountMad: number;
   reason: string;
+  /** Stable per-request id (idempotency): the UI generates it once per form. */
+  requestId: string;
 }): Promise<ActionResult> {
   const admin = await requireAdminCustomer();
   const result = await adminAdjustGhostCredit({ ...input, actor: admin.name });
   if (result.ok) revalidate();
   return result;
+}
+
+/** Admin: freeze / unfreeze a customer's wallet (blocks spending). */
+export async function adminSetWalletFrozenAction(input: {
+  customerEmail: string;
+  frozen: boolean;
+  reason: string;
+}): Promise<ActionResult> {
+  const admin = await requireAdminCustomer();
+  const result = await adminSetWalletFrozen({ ...input, actor: admin.name });
+  if (result.ok) revalidate();
+  return result;
+}
+
+/** Admin: read-only wallet reconciliation (ledger-derived vs cached balances). */
+export async function getWalletReconciliationAction(): Promise<{
+  checked: number;
+  mismatches: WalletReconcileRow[];
+}> {
+  await requireAdminCustomer();
+  return reconcileAllWallets();
 }

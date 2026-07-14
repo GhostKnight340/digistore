@@ -708,6 +708,8 @@ export interface GhostCreditWalletDTO {
   balanceMad: number;
   /** Wallet-wide expiry deadline (60 days after the last credit), or null. */
   expiresAt: string | null;
+  /** True when spending is temporarily blocked pending admin review. */
+  frozen: boolean;
   transactions: GhostCreditTransactionDTO[];
 }
 

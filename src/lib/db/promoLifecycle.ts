@@ -3,12 +3,8 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { grantCreditTx, debitCreditTx, expireWalletIfDue } from "./ghostCredit";
-import {
-  isGhostCreditReward,
-  computeCreditReversal,
-  promoCreditIdempotencyKey,
-  promoReversalIdempotencyKey,
-} from "@/lib/promo/engine";
+import { isGhostCreditReward, computeCreditReversal } from "@/lib/promo/engine";
+import { promoCreditKey, promoReversalKey, orderRefundKey } from "@/lib/promo/ledgerMath";
 import type { PromoRewardType } from "@/lib/types";
 
 type Tx = Prisma.TransactionClient;
@@ -83,7 +79,7 @@ export async function finalizeOrderPromotion(orderId: string, existingTx?: Tx): 
       customerId,
       amountMad: snapshot.expectedCreditMad,
       reason: "promo_reward",
-      idempotencyKey: promoCreditIdempotencyKey(orderId, snapshot.promoCodeId ?? snapshot.code),
+      idempotencyKey: promoCreditKey(orderId, snapshot.promoCodeId ?? snapshot.code),
       promoCodeId: snapshot.promoCodeId,
       orderId,
       rewardType,
@@ -176,7 +172,7 @@ export async function refundSpentCreditForOrder(orderId: string): Promise<void> 
       customerId: order.customerId,
       amountMad: order.ghostCreditAppliedMad,
       reason: "order_spend_refund",
-      idempotencyKey: `credit-refund:${orderId}`,
+      idempotencyKey: orderRefundKey(orderId),
       orderId,
       source: "system",
       note: "Crédit Ghost restitué (commande non finalisée)",
@@ -218,7 +214,7 @@ export async function reverseOrderPromotionCredit(
 
     // Only reverse credit that was actually granted (finalized order).
     const grant = await tx.ghostCreditTransaction.findUnique({
-      where: { idempotencyKey: promoCreditIdempotencyKey(orderId, snapshot.promoCodeId ?? snapshot.code) },
+      where: { idempotencyKey: promoCreditKey(orderId, snapshot.promoCodeId ?? snapshot.code) },
       select: { customerId: true, amountMad: true, status: true },
     });
     if (!grant || grant.status !== "active") return { ok: true, reversedMad: 0, flaggedForReview: false };
@@ -237,7 +233,7 @@ export async function reverseOrderPromotionCredit(
       customerId: grant.customerId,
       amountMad: reversalMad,
       reason: "promo_reversal",
-      idempotencyKey: promoReversalIdempotencyKey(orderId, snapshot.promoCodeId ?? snapshot.code, opts.seq ?? 1),
+      idempotencyKey: promoReversalKey(orderId, snapshot.promoCodeId ?? snapshot.code, opts.seq ?? 1),
       promoCodeId: snapshot.promoCodeId,
       orderId,
       rewardType,
@@ -247,14 +243,27 @@ export async function reverseOrderPromotionCredit(
     });
 
     const flaggedForReview = Boolean(debit.wouldGoNegative);
-    if (flaggedForReview && snapshot.promoCodeId) {
-      await tx.promoCodeEvent.create({
+    if (flaggedForReview) {
+      // The promotional credit was already (partly) spent, so we can't fully
+      // claw it back without a negative balance. Freeze the wallet — blocking
+      // further spending until an admin resolves it — instead of leaving an
+      // unexplained negative balance, and record the case.
+      await tx.customer.update({
+        where: { id: grant.customerId },
         data: {
-          promoCodeId: snapshot.promoCodeId,
-          type: "note",
-          note: `Remboursement commande ${orderId}: ${reversalMad} DH de crédit Ghost à reprendre mais une partie a déjà été dépensée — révision manuelle requise.`,
+          walletFrozen: true,
+          walletFrozenReason: `Remboursement commande ${orderId}: crédit promo déjà dépensé, reprise incomplète — révision requise.`,
         },
       });
+      if (snapshot.promoCodeId) {
+        await tx.promoCodeEvent.create({
+          data: {
+            promoCodeId: snapshot.promoCodeId,
+            type: "note",
+            note: `Remboursement commande ${orderId}: ${reversalMad} DH de crédit Ghost à reprendre mais une partie a déjà été dépensée — portefeuille gelé, révision manuelle requise.`,
+          },
+        });
+      }
     }
     return { ok: true, reversedMad: debit.appliedMad ?? reversalMad, flaggedForReview };
   });
