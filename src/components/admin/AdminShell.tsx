@@ -274,6 +274,17 @@ const NAV: NavGroup[] = [
         ),
       },
       {
+        id: "gta-preorder",
+        label: "Précommande GTA VI",
+        icon: icon(
+          <>
+            <rect x="2" y="6" width="20" height="12" rx="2" />
+            <circle cx="8" cy="12" r="2" />
+            <path d="M14 11h4M16 9v4" />
+          </>,
+        ),
+      },
+      {
         id: "email-templates",
         label: "Templates email",
         icon: icon(

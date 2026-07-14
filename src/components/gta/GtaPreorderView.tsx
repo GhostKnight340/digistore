@@ -13,6 +13,7 @@ import {
   getProductsByCategorySlug,
 } from "@/lib/db/catalog";
 import { canonicalBrandKey } from "@/lib/brandAssets";
+import { getGtaPreorderSettings } from "@/lib/db/gtaPreorderSettings";
 import {
   GTA_CAMPAIGN_ID,
   GTA_PLATFORMS,
@@ -44,6 +45,8 @@ export default async function GtaPreorderView({
   now: Date;
 }) {
   const config = gtaPreorderConfig;
+  // Admin-uploaded hero image (empty → the original generated hero renders).
+  const { heroImageUrl } = await getGtaPreorderSettings();
 
   // Resolve each referenced catalogue brand to its live parent products, so the
   // page shows the REAL PSN / Xbox gift cards already on the site (never a fixed
@@ -119,7 +122,12 @@ export default async function GtaPreorderView({
       </nav>
 
       {/* 1. HERO */}
-      <GtaHero config={config} released={released} daysLeft={daysLeft} />
+      <GtaHero
+        config={config}
+        released={released}
+        daysLeft={daysLeft}
+        heroImageUrl={heroImageUrl}
+      />
 
       {/* 2. OFFICIAL RELEASE INFORMATION */}
       <section className="mt-8 sm:mt-10">

@@ -21,13 +21,18 @@ export default function GtaHero({
   config,
   released,
   daysLeft,
+  heroImageUrl,
 }: {
   config: GtaPreorderConfig;
   released: boolean;
   daysLeft: number;
+  /** Admin-uploaded hero image (from DB). Overrides the config value; when
+   *  empty the original generated collage is shown. */
+  heroImageUrl?: string;
 }) {
   const { hero } = config;
-  const hasArt = Boolean(hero.heroImageUrl);
+  const art = (heroImageUrl || hero.heroImageUrl).trim();
+  const hasArt = Boolean(art);
 
   return (
     <section
@@ -59,7 +64,7 @@ export default function GtaHero({
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={hero.heroImageUrl}
+            src={art}
             alt=""
             className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-40"
           />

@@ -25,6 +25,7 @@ const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplatesPanel"));
 const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
 const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
+const GtaPreorderPanel = lazy(() => import("@/components/admin/GtaPreorderPanel"));
 const SuppliersPanel = lazy(() => import("@/components/admin/SuppliersPanel"));
 const PricingPanel = lazy(() => import("@/components/admin/PricingPanel"));
 const ExpensesPanel = lazy(() => import("@/components/admin/ExpensesPanel"));
@@ -86,6 +87,8 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
       return <LegalPagesPanel />;
     case "maintenance":
       return <MaintenancePanel />;
+    case "gta-preorder":
+      return <GtaPreorderPanel />;
     case "orders":
     case "fulfillment":
       return <FulfillmentPanel />;

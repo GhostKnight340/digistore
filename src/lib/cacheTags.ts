@@ -12,3 +12,7 @@
  */
 export const CATALOG_TAG = "catalog";
 export const STORE_SETTINGS_TAG = "store-settings";
+// Campaign-specific runtime overrides for the GTA VI pre-order landing page
+// (e.g. the admin-uploaded hero image). Kept separate so campaign edits don't
+// invalidate the whole catalog cache.
+export const GTA_PREORDER_TAG = "gta-preorder";

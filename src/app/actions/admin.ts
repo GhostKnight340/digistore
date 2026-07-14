@@ -4,6 +4,10 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { CATALOG_TAG } from "@/lib/cacheTags";
 import { requireAdminCustomer } from "@/lib/auth";
 import {
+  getGtaPreorderSettings,
+  saveGtaPreorderHeroImage,
+} from "@/lib/db/gtaPreorderSettings";
+import {
   getAdminCustomers,
   deleteCustomerAccount,
   getAdminOrderDetail,
@@ -230,6 +234,28 @@ export async function getOrderEmailLogsAction(orderId: string): Promise<EmailLog
 export async function getAdminStatsAction(): Promise<AdminStatsDTO> {
   await assertAdminAccess();
   return getAdminStats();
+}
+
+// ── GTA VI pre-order landing: admin-editable hero image ────────────────────
+export async function getGtaPreorderSettingsAction(): Promise<{ heroImageUrl: string }> {
+  await assertAdminAccess();
+  return getGtaPreorderSettings();
+}
+
+export async function saveGtaPreorderHeroImageAction(
+  url: string,
+): Promise<ActionResult> {
+  await assertAdminAccess();
+  const value = typeof url === "string" ? url.trim() : "";
+  // Accept only an internal upload path or a data: image URI (what /api/upload
+  // returns), or empty to clear — never an arbitrary remote URL.
+  if (value && !/^(\/uploads\/|data:image\/)/.test(value)) {
+    return { ok: false, error: "Image invalide. Importez un fichier via le bouton." };
+  }
+  await saveGtaPreorderHeroImage(value);
+  revalidatePath("/precommande-gta-6", "page");
+  revalidatePath("/admin");
+  return { ok: true };
 }
 
 export async function getInventoryAction(): Promise<InventoryGroupDTO[]> {
