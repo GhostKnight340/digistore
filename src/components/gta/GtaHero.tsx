@@ -36,42 +36,61 @@ export default function GtaHero({
 
   return (
     <section
-      className={`relative mt-4 overflow-hidden rounded-[24px] border border-[#3a2350] ${sora.className}`}
+      className={`relative mt-4 overflow-hidden rounded-[24px] border ${
+        hasArt ? "border-white/10" : "border-[#3a2350]"
+      } ${sora.className}`}
       style={{
         background:
           "linear-gradient(150deg,#1a1030 0%,#160e28 45%,#0e0a1a 100%)",
       }}
     >
-      {/* Atmospheric depth: sunset glows in the GTA-VI palette. Decorative. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -left-24 -top-28 h-80 w-80 rounded-full blur-3xl"
-        style={{ background: "radial-gradient(circle,rgba(233,56,140,0.42),transparent 70%)" }}
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -bottom-28 right-1/3 h-80 w-80 rounded-full blur-3xl"
-        style={{ background: "radial-gradient(circle,rgba(42,190,212,0.28),transparent 70%)" }}
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -right-24 top-1/4 h-80 w-80 rounded-full blur-3xl"
-        style={{ background: "radial-gradient(circle,rgba(124,77,255,0.35),transparent 70%)" }}
-      />
+      {/* Atmospheric depth: sunset glows in the GTA-VI palette. Decorative —
+          only for the generated hero; when a real image is set they'd muddy it,
+          so they are omitted entirely. */}
+      {!hasArt && (
+        <>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -left-24 -top-28 h-80 w-80 rounded-full blur-3xl"
+            style={{ background: "radial-gradient(circle,rgba(233,56,140,0.42),transparent 70%)" }}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -bottom-28 right-1/3 h-80 w-80 rounded-full blur-3xl"
+            style={{ background: "radial-gradient(circle,rgba(42,190,212,0.28),transparent 70%)" }}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-24 top-1/4 h-80 w-80 rounded-full blur-3xl"
+            style={{ background: "radial-gradient(circle,rgba(124,77,255,0.35),transparent 70%)" }}
+          />
+        </>
+      )}
 
-      {/* Optional approved artwork behind a scrim (only if configured). */}
+      {/* Uploaded artwork, bled to the right, with a left→right scrim that keeps
+          the copy legible while letting the image read clearly. No colored glow
+          on top. */}
       {hasArt && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={art}
             alt=""
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-40"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: "72% center" }}
           />
           <span
             aria-hidden
             className="pointer-events-none absolute inset-0"
-            style={{ background: "linear-gradient(90deg,#140c26 30%,rgba(20,12,38,0.55) 100%)" }}
+            style={{
+              background:
+                "linear-gradient(90deg,#130b26 0%,#130b26 28%,rgba(19,11,38,0.6) 52%,rgba(19,11,38,0.12) 74%,transparent 100%)",
+            }}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "linear-gradient(0deg,rgba(14,10,26,0.55) 0%,transparent 45%)" }}
           />
         </>
       )}

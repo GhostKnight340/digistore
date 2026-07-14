@@ -1,54 +1,154 @@
+import { Sora } from "next/font/google";
 import TrackedLink from "@/components/gta/TrackedLink";
+import { getGtaPreorderSettings } from "@/lib/db/gtaPreorderSettings";
 import {
   GTA_CAMPAIGN_ID,
   GTA_PREORDER_PATH,
   gtaPreorderConfig,
 } from "@/lib/gtaPreorder";
 
+const sora = Sora({ subsets: ["latin"], weight: ["400", "700", "800"], display: "swap" });
+
 /**
- * Homepage entry point to the GTA VI pre-order campaign. A restrained premium
- * banner (dark card, subtle blue glow) that links to `/precommande-gta-6`. Only
- * rendered when the campaign is active. Purely a navigation card — no game
- * artwork, no "buy the game" wording.
+ * Homepage GTA VI pre-order banner — the animated "alive" design from the
+ * design handoff (neon glow blobs, shimmering badge, gradient title, animated
+ * CTA arrow). It links to `/precommande-gta-6` and only renders when the
+ * campaign is active.
+ *
+ * Brand safety: the right-side key-art bleed uses the SAME admin-uploaded image
+ * as the pre-order hero (`getGtaPreorderSettings().heroImageUrl`) — never any
+ * bundled Rockstar / third-party artwork. When no image is uploaded the banner
+ * still looks complete (card gradient + neon glows), just without the photo.
  */
-export default function GtaPreorderBanner() {
+export default async function GtaPreorderBanner() {
   if (!gtaPreorderConfig.active) return null;
-  const { releaseInfo } = gtaPreorderConfig;
+  const { heroImageUrl } = await getGtaPreorderSettings();
+  const art = heroImageUrl.trim();
+  const hasArt = Boolean(art);
 
   return (
-    <section className="mt-8 sm:mt-12">
-      <TrackedLink
-        href={GTA_PREORDER_PATH}
-        event="select_gta_banner"
-        params={{ campaign: GTA_CAMPAIGN_ID, source: "homepage" }}
-        className="group relative flex flex-col gap-5 overflow-hidden rounded-[20px] border border-border bg-[linear-gradient(158deg,#1d2638_0%,#141a27_52%,#0d1017_100%)] p-6 shadow-soft transition hover:border-accent/50 sm:flex-row sm:items-center sm:justify-between sm:p-8"
+    <section className={`mt-8 sm:mt-12 ${sora.className}`}>
+      <div
+        className="relative overflow-hidden rounded-[24px]"
+        style={{
+          border: "1px solid rgba(120,90,190,0.3)",
+          background: "linear-gradient(115deg,#15132b 0%,#121a33 48%,#0c1120 100%)",
+          boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
+        }}
       >
+        {/* Key art bleeding from the right — the admin-uploaded image only. */}
+        {hasArt && (
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[64%] sm:w-[54%]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={art}
+              alt=""
+              className="h-full w-full object-cover"
+              style={{ objectPosition: "62% center" }}
+            />
+            <span
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(90deg,#101228 0%,rgba(16,18,40,0.7) 22%,rgba(16,18,40,0.15) 55%,transparent 100%)",
+              }}
+            />
+            <span
+              className="absolute inset-0"
+              style={{ background: "linear-gradient(0deg,rgba(12,17,32,0.5) 0%,transparent 40%)" }}
+            />
+          </div>
+        )}
+
+        {/* Animated neon glow blobs. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent/20 blur-3xl"
+          className="gta-glow pointer-events-none absolute rounded-full"
+          style={{
+            top: "-30%",
+            right: "6%",
+            width: 420,
+            height: 420,
+            background: "radial-gradient(circle,rgba(233,64,168,0.4),transparent 68%)",
+            filter: "blur(30px)",
+          }}
         />
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[20px] border border-accent/25 shadow-[inset_0_0_90px_rgba(62,123,250,0.12)]"
+          className="gta-glow--slow pointer-events-none absolute rounded-full"
+          style={{
+            bottom: "-34%",
+            left: "10%",
+            width: 460,
+            height: 460,
+            background: "radial-gradient(circle,rgba(56,150,255,0.32),transparent 68%)",
+            filter: "blur(34px)",
+          }}
         />
-        <div className="relative min-w-0">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent">
-            Précommande GTA VI
-          </span>
-          <h2 className="mt-3 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-            Préparez votre précommande de GTA VI
-          </h2>
-          <p className="mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-muted">
-            Ajoutez le crédit nécessaire avec une carte PlayStation ou Xbox, puis
-            précommandez sur la boutique officielle. Sortie&nbsp;:{" "}
-            {releaseInfo.dateLabel}.
-          </p>
+
+        {/* Content row — stacks on mobile, CTA right on desktop. */}
+        <div className="relative flex flex-col items-start gap-5 p-6 sm:flex-row sm:items-center sm:gap-7 sm:px-[34px] sm:py-[30px]">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {/* Shimmering badge. */}
+            <div
+              className="relative self-start overflow-hidden rounded-full px-[13px] py-1.5"
+              style={{
+                background: "linear-gradient(90deg,rgba(233,64,168,0.18),rgba(56,150,255,0.18))",
+                border: "1px solid rgba(233,64,168,0.4)",
+              }}
+            >
+              <span
+                className="relative z-[1] text-[11px] font-bold uppercase tracking-[0.18em]"
+                style={{
+                  background: "linear-gradient(90deg,#ff8fd4,#7db8ff)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                Précommande GTA VI
+              </span>
+              <span
+                aria-hidden
+                className="gta-shimmer absolute left-0 top-0 h-full w-2/5"
+                style={{ background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent)" }}
+              />
+            </div>
+
+            <h2
+              className="m-0 text-[22px] font-extrabold leading-[1.15] tracking-[-0.02em] sm:text-[26px]"
+              style={{ color: "#f6f8fc" }}
+            >
+              Préparez votre précommande de{" "}
+              <span
+                style={{
+                  background: "linear-gradient(90deg,#ff7fce,#8bbcff)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                GTA VI
+              </span>
+            </h2>
+
+            <p className="m-0 max-w-[620px] text-[14.5px] leading-[1.55]" style={{ color: "#aeb8cc" }}>
+              Ajoutez le crédit nécessaire avec une carte PlayStation ou Xbox, puis
+              précommandez sur la boutique officielle. Sortie&nbsp;: 19 novembre 2026.
+            </p>
+          </div>
+
+          <TrackedLink
+            href={GTA_PREORDER_PATH}
+            event="select_gta_banner"
+            params={{ campaign: GTA_CAMPAIGN_ID, source: "homepage" }}
+            className="gta-banner__cta inline-flex shrink-0 items-center gap-2.5 rounded-[13px] px-6 py-[13px] text-[15px] font-bold text-white"
+          >
+            Découvrir
+            <span aria-hidden className="gta-arrow text-[17px] leading-none">→</span>
+          </TrackedLink>
         </div>
-        <span className="relative inline-flex shrink-0 items-center gap-2 self-start rounded-xl bg-accent px-5 py-2.5 text-[14px] font-semibold text-white shadow-glow transition group-hover:-translate-y-px sm:self-auto">
-          Découvrir
-          <span aria-hidden>→</span>
-        </span>
-      </TrackedLink>
+      </div>
     </section>
   );
 }
