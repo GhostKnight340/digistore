@@ -11,18 +11,15 @@ import AddToCartForm from "@/components/AddToCartForm";
 import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import RegionPanel from "@/components/RegionPanel";
 import RegionFlag from "@/components/RegionFlag";
+import NavigatorTips from "@/components/trust/NavigatorTips";
+import DeliverySteps from "@/components/trust/DeliverySteps";
+import AcceptedPayments from "@/components/trust/AcceptedPayments";
 import { getRegion } from "@/lib/regions";
 
 export async function generateStaticParams() {
   const slugs = await getParentProductSlugs().catch(() => []);
   return slugs.map((id) => ({ id }));
 }
-
-const howItWorks = [
-  { n: "01", title: "Choisissez votre montant", text: "Sélectionnez la valeur ou la formule qui vous convient." },
-  { n: "02", title: "Payez en toute sécurité", text: "Choisissez un mode de paiement disponible." },
-  { n: "03", title: "Recevez votre produit numérique", text: "Disponible après confirmation du paiement." },
-];
 
 export default async function ProductDetailPage({
   params,
@@ -99,29 +96,12 @@ export default async function ProductDetailPage({
             <ProductInfoCard text={product.longDescription || product.description} />
           )}
 
-          <section className="mt-10">
-            <h2 className="text-lg font-semibold tracking-tight text-text">
-              Comment ça marche
-            </h2>
-            <div className="mt-5 flex flex-col gap-2">
-              {howItWorks.map((step) => (
-                <article
-                  key={step.n}
-                  className="flex gap-4 rounded-[14px] border border-border bg-surface p-4"
-                >
-                  <span className="w-6 shrink-0 font-mono text-[13px] text-accent">
-                    {step.n}
-                  </span>
-                  <div>
-                    <h3 className="text-[14.5px] font-medium text-text">
-                      {step.title}
-                    </h3>
-                    <p className="mt-1 text-[13px] text-muted">{step.text}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
+          {/* Contextual Navigator Tips — region-match guidance resolves from the
+              product name / category (PlayStation, Steam, Netflix…) plus the
+              general "delivery after payment" reminder. */}
+          <NavigatorTips
+            context={[product.name, product.category, product.categoryName]}
+          />
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
@@ -229,8 +209,22 @@ export default async function ProductDetailPage({
               </div>
             ))}
           </div>
+
+          {/* Accepted payment methods, live from admin config — disabled methods
+              disappear automatically. Reassures before the buyer commits. */}
+          <AcceptedPayments variant="inline" heading="Paiement accepté" className="mt-[18px]" />
         </aside>
       </div>
+
+      {/* Reusable premium delivery flow (compact variant), full width. */}
+      <section className="mt-14">
+        <h2 className="text-xl font-semibold tracking-tight text-text">
+          Comment fonctionne la livraison
+        </h2>
+        <div className="mt-6">
+          <DeliverySteps variant="compact" />
+        </div>
+      </section>
 
       {related.length > 0 && (
         <section className="mt-16">

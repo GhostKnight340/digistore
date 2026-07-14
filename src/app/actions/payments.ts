@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/payments";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import { getPublicPaymentMethods, getAdminPaymentMethods } from "@/lib/db/paymentMethods";
+import { announcedPaymentMethods } from "@/lib/paymentMethod";
 import { getCustomerOrder } from "@/lib/db/orders";
 import { isOrderingCurrentlyEnabled, ORDERING_DISABLED_RESULT } from "@/lib/db/ordering";
 import { requireAdminCustomer } from "@/lib/auth";
@@ -21,6 +22,7 @@ import type {
   AdminPaymentProofDTO,
   PaymentConfigDTO,
   CustomerOrderDTO,
+  AnnouncedPaymentMethodDTO,
 } from "@/lib/dto";
 
 const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
@@ -264,4 +266,29 @@ export async function getPaymentConfigAction(): Promise<PaymentConfigDTO> {
     isOrderingCurrentlyEnabled(),
   ]);
   return orderingEnabled ? config : { ...config, methods: [] };
+}
+
+/**
+ * The list of accepted payment methods, purely for informational trust display
+ * (homepage / product page / footer). Unlike `getPaymentConfigAction` this is
+ * NOT gated by the ordering switch — customers should always know which methods
+ * are accepted — but it strips every sensitive field (bank RIB, crypto wallet,
+ * PayPal address, internal notes), returning only display branding. Banks are
+ * collapsed into the single "Virement bancaire" entry, and disabled methods
+ * disappear automatically because the source already filters to usable methods.
+ */
+export async function getAcceptedPaymentMethodsAction(): Promise<
+  AnnouncedPaymentMethodDTO[]
+> {
+  const config = await getPublicPaymentMethods();
+  return announcedPaymentMethods(config.methods).map((method) => ({
+    id: method.id,
+    type: method.type,
+    name: method.name,
+    subtitle: method.subtitle,
+    logoUrl: method.logoType !== "initials" ? method.logoUrl : null,
+    initials: method.initials,
+    accentColor: method.accentColor,
+    logoType: method.logoType,
+  }));
 }

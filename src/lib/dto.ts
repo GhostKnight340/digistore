@@ -1074,3 +1074,17 @@ export interface ImportReloadlyBatchResultDTO {
   variantsNeedingMedia: number;
   products: ImportedProductSummaryDTO[];
 }
+
+/** Branding-only descriptor for an accepted payment method — no bank details,
+ *  wallet addresses or notes. Safe to expose anywhere (incl. pre-launch), since
+ *  it carries nothing actionable. Populated by getAcceptedPaymentMethodsAction. */
+export interface AnnouncedPaymentMethodDTO {
+  id: string;
+  type: string;
+  name: string;
+  subtitle: string;
+  logoUrl: string | null;
+  initials: string;
+  accentColor: string;
+  logoType: string;
+}

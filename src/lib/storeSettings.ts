@@ -1,4 +1,9 @@
 import type { PaymentMethod, StockMode } from "./types";
+import {
+  defaultTrustContent,
+  mergeTrustContent,
+  type TrustContent,
+} from "./trustContent";
 
 export type TrustItemSetting = {
   id: string;
@@ -72,6 +77,11 @@ export type StoreSettings = {
     showCollections: boolean;
     showHowItWorks: boolean;
     showWhyChooseUs: boolean;
+    /** Customer Trust & Conversion sections (all reuse the trust content CMS). */
+    showWhyGhost: boolean;
+    showReviews: boolean;
+    showFaq: boolean;
+    showPaymentMethods: boolean;
     showFooter: boolean;
     brandNavTitle: string;
     brandNavSubtitle: string;
@@ -147,6 +157,9 @@ export type StoreSettings = {
     businessTimezone: string;
     monthlyReviewHour: number;
   };
+  /** Customer Trust & Conversion content (Why ghost.ma, reviews, Navigator
+   *  tips, delivery flow, FAQ, trust strip). Admin-editable, admin-ready. */
+  trust: TrustContent;
 };
 
 export const defaultStoreSettings: StoreSettings = {
@@ -178,6 +191,10 @@ export const defaultStoreSettings: StoreSettings = {
     showCollections: true,
     showHowItWorks: true,
     showWhyChooseUs: true,
+    showWhyGhost: true,
+    showReviews: true,
+    showFaq: true,
+    showPaymentMethods: true,
     showFooter: true,
     brandNavTitle: "Parcourir par marque",
     brandNavSubtitle: "Accédez directement à vos plateformes préférées.",
@@ -400,6 +417,7 @@ export const defaultStoreSettings: StoreSettings = {
     businessTimezone: "Africa/Casablanca",
     monthlyReviewHour: 20,
   },
+  trust: defaultTrustContent,
 };
 
 /**
@@ -572,5 +590,6 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
           ? value.expenses.defaultReminderDaysBefore.filter((n): n is number => typeof n === "number")
           : defaultStoreSettings.expenses.defaultReminderDaysBefore,
     },
+    trust: mergeTrustContent(value.trust),
   };
 }
