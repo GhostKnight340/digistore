@@ -64,20 +64,21 @@ export default function ReleaseCountdown() {
   }, ${remaining.hours} h et ${remaining.minutes} min.`;
 
   return (
-    <div className="mt-4">
+    <div className="mt-6">
       <p className="sr-only" aria-live="polite">
         {sentence}
       </p>
-      <ul aria-hidden className="flex flex-wrap gap-2">
+      <ul aria-hidden className="grid max-w-md grid-cols-4 gap-2 sm:gap-3">
         {CELLS.map((cell) => (
           <li
             key={cell.key}
-            className="flex min-w-[58px] flex-col items-center rounded-[12px] border border-border bg-surface2/70 px-3 py-2"
+            className="flex flex-col items-center rounded-[14px] border px-2 py-3 sm:px-4"
+            style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)" }}
           >
-            <span className="font-mono text-xl font-semibold tabular-nums text-white">
+            <span className="text-[26px] font-extrabold leading-none tabular-nums text-white sm:text-[32px]">
               {String(remaining[cell.key]).padStart(2, "0")}
             </span>
-            <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-faint">
+            <span className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#a99fc4] sm:text-[10px] sm:tracking-[0.14em]">
               {cell.label}
             </span>
           </li>

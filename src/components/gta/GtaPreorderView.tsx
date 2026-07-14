@@ -5,7 +5,7 @@ import CategoryFaq from "@/components/category/CategoryFaq";
 import TrackView from "@/components/analytics/TrackView";
 import PlatformTabs from "@/components/gta/PlatformTabs";
 import GtaGiftCard from "@/components/gta/GtaGiftCard";
-import ReleaseCountdown from "@/components/gta/ReleaseCountdown";
+import GtaHero from "@/components/gta/GtaHero";
 import TrackedLink from "@/components/gta/TrackedLink";
 import {
   getActiveCategories,
@@ -119,47 +119,7 @@ export default async function GtaPreorderView({
       </nav>
 
       {/* 1. HERO */}
-      <section className="relative mt-4 overflow-hidden rounded-[22px] border border-border bg-[linear-gradient(158deg,#1d2638_0%,#141a27_52%,#0d1017_100%)] p-6 shadow-soft sm:p-10">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[22px] border border-accent/30 shadow-[inset_0_0_120px_rgba(62,123,250,0.16)]"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/20 blur-3xl"
-        />
-        <div className="relative max-w-2xl">
-          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-            {config.hero.eyebrow}
-          </p>
-          <h1 className="mt-3 text-[clamp(1.9rem,6vw,2.8rem)] font-semibold leading-tight tracking-tight text-white">
-            {config.hero.heading}
-          </h1>
-          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted">
-            {config.hero.subheading}
-          </p>
-          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-border bg-surface2/60 px-3.5 py-1.5 text-[13px] font-medium text-white">
-            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
-            {config.hero.releaseLine}
-          </p>
-          {!released && (
-            <>
-              {/* Accessible SSR fallback — the client ticker enhances this. */}
-              <p className="sr-only">Sortie dans environ {daysLeft} jours.</p>
-              <ReleaseCountdown />
-            </>
-          )}
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link href="#plateforme" className="btn-primary h-11 px-6 text-[15px]">
-              {config.hero.primaryCtaLabel}
-              <span aria-hidden>→</span>
-            </Link>
-            <Link href="#comment" className="btn-ghost h-11 px-6 text-[15px]">
-              {config.hero.secondaryCtaLabel}
-            </Link>
-          </div>
-        </div>
-      </section>
+      <GtaHero config={config} released={released} daysLeft={daysLeft} />
 
       {/* 2. OFFICIAL RELEASE INFORMATION */}
       <section className="mt-8 sm:mt-10">
