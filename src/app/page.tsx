@@ -5,19 +5,19 @@ import FeaturedCarousel from "@/components/FeaturedCarousel";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
 import CollectionsExplorer from "@/components/CollectionsExplorer";
-import TrustStrip from "@/components/TrustStrip";
 import GtaPreorderBanner from "@/components/gta/GtaPreorderBanner";
+import TrustBar from "@/components/trust/TrustBar";
+import WhyGhost from "@/components/trust/WhyGhost";
+import DeliverySteps from "@/components/trust/DeliverySteps";
+import CustomerReviews from "@/components/trust/CustomerReviews";
+import AcceptedPayments from "@/components/trust/AcceptedPayments";
+import ContextualTips from "@/components/trust/ContextualTips";
+import TrustFaq from "@/components/trust/TrustFaq";
 import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getHomepageCollectionCards } from "@/lib/db/collections";
 import { resolveBrandColor } from "@/lib/brandAssets";
 
 export const revalidate = 3600;
-
-const steps = [
-  { n: 1, title: "Choisissez un produit", text: "Sélectionnez le produit et la quantité." },
-  { n: 2, title: "Paiement sécurisé", text: "Renseignez votre e-mail et choisissez un mode de paiement." },
-  { n: 3, title: "Recevez votre produit numérique", text: "Votre produit est disponible après confirmation du paiement." },
-];
 
 export default async function HomePage() {
   const [{ categories, products }, settings, brandCategories, collectionCards] =
@@ -97,6 +97,8 @@ export default async function HomePage() {
           <StatStrip items={settings.statItems} />
         </section>
       )}
+
+      <TrustBar />
 
       <GtaPreorderBanner />
 
@@ -209,22 +211,20 @@ export default async function HomePage() {
                 Le Navigateur vous guide à chaque étape
               </figcaption>
             </figure>
-            <div className="grid flex-1 gap-4 sm:grid-cols-3">
-              {steps.map((step) => (
-                <div key={step.n} className="card p-6">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-lg font-bold text-accent">
-                    {step.n}
-                  </span>
-                  <h3 className="mt-4 font-semibold text-white">{step.title}</h3>
-                  <p className="mt-1 text-sm text-muted">{step.text}</p>
-                </div>
-              ))}
-            </div>
+            <DeliverySteps variant="bare" className="flex-1" analyticsEvent="trust_delivery_view" />
           </div>
         </section>
       )}
 
-      {settings.homepage.showWhyChooseUs && <TrustStrip />}
+      {settings.homepage.showWhyChooseUs && <WhyGhost />}
+
+      <CustomerReviews />
+
+      <AcceptedPayments />
+
+      <ContextualTips contexts={["general"]} className="mt-16" />
+
+      <TrustFaq />
 
       <section className="mt-16">
         <div className="relative overflow-hidden rounded-[20px] border border-accent/30 bg-gradient-to-br from-accent/20 to-surface px-6 py-12 text-center sm:py-16">
