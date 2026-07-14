@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/expense-review",
       "schedule": "0 19 28-31 * *"
+    },
+    {
+      "path": "/api/cron/ghost-credit",
+      "schedule": "0 8 * * *"
     }
   ]
 }

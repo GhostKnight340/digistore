@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma, ensureDatabaseReady } from "./prisma";
-import { grantCreditTx, debitCreditTx } from "./ghostCredit";
+import { grantCreditTx, debitCreditTx, ghostCreditInactivityDays } from "./ghostCredit";
 import { manualCreditKey } from "@/lib/promo/ledgerMath";
 import type { ActionResult } from "@/lib/dto";
 
@@ -40,6 +40,7 @@ export async function adminAdjustGhostCredit(input: {
 
   const amountMad = Math.round(input.amountMad);
   const key = manualCreditKey(input.requestId.trim());
+  const inactivityDays = await ghostCreditInactivityDays();
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -49,6 +50,9 @@ export async function adminAdjustGhostCredit(input: {
           amountMad,
           reason: "admin_grant",
           idempotencyKey: key,
+          // Manual grants NEVER reset the timer and do not count as qualifying.
+          resetsExpiration: false,
+          inactivityDays,
           source: input.actor,
           note: input.reason.trim(),
         });

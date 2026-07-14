@@ -18,7 +18,8 @@ export type EmailTemplateKey =
   | "refund_update"
   | "support_received"
   | "support_reply"
-  | "support_closed";
+  | "support_closed"
+  | "ghost_credit_expiry_reminder";
 
 type Variables = Record<string, string | number | boolean | null | undefined>;
 
@@ -329,6 +330,12 @@ function brandedEmailHtml(
       ctaLabel: "Donner mon avis",
       ctaUrl: feedbackUrl,
     },
+    ghost_credit_expiry_reminder: {
+      title: subject,
+      intro: text,
+      ctaLabel: "Voir mon crédit Ghost",
+      ctaUrl: accountUrl,
+    },
   };
 
   const selected = config[key] ?? {
@@ -507,6 +514,7 @@ export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateKey, string> = {
   support_received: "Support — demande reçue",
   support_reply: "Support — réponse envoyée",
   support_closed: "Support — demande clôturée",
+  ghost_credit_expiry_reminder: "Crédit Ghost — rappel d'expiration",
 };
 
 type TemplateVariable = { key: string; sample: string };
@@ -600,6 +608,13 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
     { key: "reference", sample: "GH-S-482913" },
     { key: "reason", sample: "Résolu" },
     { key: "feedback_url", sample: "https://ghost.ma/support/feedback?token=example" },
+  ],
+  ghost_credit_expiry_reminder: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "credit_amount", sample: "45 DH" },
+    { key: "expiry_date", sample: "18 janvier 2027" },
+    { key: "days_remaining", sample: "3" },
+    { key: "account_url", sample: "https://ghost.ma/account/wallet" },
   ],
 };
 

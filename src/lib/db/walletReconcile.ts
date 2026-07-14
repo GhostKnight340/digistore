@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma, ensureDatabaseReady } from "./prisma";
+import { ghostCreditInactivityDays } from "./ghostCredit";
 
 /**
  * Ghost Credit reconciliation — the ledger is the source of truth; the cached
@@ -97,6 +98,57 @@ export async function reconcileAllWallets(): Promise<{
       "[ghost-credit] reconcile.mismatch",
       JSON.stringify(mismatches.map((m) => ({ customerId: m.customerId, cached: m.cachedMad, derived: m.derivedMad, diff: m.diffMad }))),
     );
+  }
+  return { checked: rows.length, mismatches };
+}
+
+export interface ExpiryReconcileRow {
+  customerId: string;
+  email: string;
+  lastQualifyingAt: string | null;
+  expectedExpiresAt: string | null;
+  storedExpiresAt: string | null;
+  ok: boolean;
+}
+
+/**
+ * Verify the wallet expiry invariant: when a qualifying earning event exists
+ * (lastQualifyingCreditEarnedAt), ghostCreditExpiresAt should equal it +
+ * inactivityDays (only qualifying rewards move the deadline). Read-only; reports
+ * customers whose stored deadline drifted from the qualifying event. Wallets with
+ * no qualifying event (deadline seeded by a manual grant) are skipped — their
+ * deadline is intentionally not tied to a qualifying timestamp.
+ */
+export async function reconcileExpiry(): Promise<{ checked: number; mismatches: ExpiryReconcileRow[] }> {
+  await ensureDatabaseReady();
+  const inactivityDays = await ghostCreditInactivityDays();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const rows = await prisma.customer.findMany({
+    where: { lastQualifyingCreditEarnedAt: { not: null } },
+    select: { id: true, email: true, lastQualifyingCreditEarnedAt: true, ghostCreditExpiresAt: true },
+    take: 5000,
+  });
+  const mismatches: ExpiryReconcileRow[] = [];
+  for (const r of rows) {
+    const last = r.lastQualifyingCreditEarnedAt!;
+    const expected = new Date(last.getTime() + inactivityDays * dayMs);
+    const stored = r.ghostCreditExpiresAt;
+    // Allow a 1-minute tolerance for clock/rounding; a null stored deadline after
+    // a qualifying event only happens post-expiry (handled by the balance check).
+    const ok = stored != null && Math.abs(stored.getTime() - expected.getTime()) < 60_000;
+    if (!ok && stored != null) {
+      mismatches.push({
+        customerId: r.id,
+        email: r.email,
+        lastQualifyingAt: last.toISOString(),
+        expectedExpiresAt: expected.toISOString(),
+        storedExpiresAt: stored.toISOString(),
+        ok: false,
+      });
+    }
+  }
+  if (mismatches.length > 0) {
+    console.error("[ghost-credit] reconcile.expiry.mismatch", JSON.stringify(mismatches.slice(0, 20)));
   }
   return { checked: rows.length, mismatches };
 }

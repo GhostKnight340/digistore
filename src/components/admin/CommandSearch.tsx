@@ -112,6 +112,7 @@ const PAGES_INDEX: LocalEntry[] = [
   { title: "Stock", subtitle: "Inventaire & codes", href: "/admin?tab=inventory", keywords: "stock inventory inventaire codes" },
   { title: "Clients", subtitle: "Comptes clients", href: "/admin?tab=customers", keywords: "customers clients comptes" },
   { title: "Codes promo", subtitle: "Finance", href: "/admin?tab=promo-codes", keywords: "promo codes promotion réduction reduction discount crédit ghost credit coupon voucher finance" },
+  { title: "Paliers de dépenses", subtitle: "Finance", href: "/admin?tab=milestones", keywords: "paliers milestones dépenses spend seuil récompense reward crédit ghost fidélité" },
   { title: "Dépenses", subtitle: "Finance", href: "/admin?tab=expenses", keywords: "expenses dépenses depenses abonnements coûts couts finance" },
   { title: "Support", subtitle: "Demandes clients", href: "/admin?tab=support", keywords: "support tickets demandes réclamations sav aide" },
   { title: "Éditeur d'accueil", subtitle: "Page d'accueil", href: "/admin/editor", keywords: "editor éditeur accueil homepage" },

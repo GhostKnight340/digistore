@@ -30,6 +30,7 @@ const SuppliersPanel = lazy(() => import("@/components/admin/SuppliersPanel"));
 const PricingPanel = lazy(() => import("@/components/admin/PricingPanel"));
 const ExpensesPanel = lazy(() => import("@/components/admin/ExpensesPanel"));
 const PromoCodesPanel = lazy(() => import("@/components/admin/PromoCodesPanel"));
+const MilestonesPanel = lazy(() => import("@/components/admin/MilestonesPanel"));
 const SupportTicketsPanel = lazy(() => import("@/components/admin/SupportTicketsPanel"));
 
 const panelFallback = (
@@ -68,6 +69,8 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
       return <ExpensesPanel />;
     case "promo-codes":
       return <PromoCodesPanel />;
+    case "milestones":
+      return <MilestonesPanel />;
     case "support":
       return <SupportTicketsPanel />;
     case "inventory":

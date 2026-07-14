@@ -37,3 +37,18 @@ export async function getMyGhostCreditWalletAction(): Promise<GhostCreditWalletD
   if (!customer) return null;
   return getGhostCreditWallet(customer.id);
 }
+
+/**
+ * Account: toggle the "email me 3 days before my Ghost Credit expires" preference
+ * for the CURRENT customer (id derived from the session, never from the client).
+ */
+export async function setExpiryReminderAction(enabled: boolean): Promise<{ ok: boolean }> {
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false };
+  const { prisma } = await import("@/lib/db/prisma");
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: { expirationReminderEnabled: Boolean(enabled) },
+  });
+  return { ok: true };
+}

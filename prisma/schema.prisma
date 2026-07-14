@@ -326,6 +326,7 @@ model Order {
   promoRedemption   PromoRedemption?
   promotionSnapshot OrderPromotionSnapshot?
   ghostCreditTxns   GhostCreditTransaction[]
+  milestoneGrants   SpendingMilestoneGrant[]
 
   @@index([status])
   @@index([customerEmail])
@@ -379,20 +380,32 @@ model Customer {
   // entries in GhostCreditTransaction, and can be re-derived from that ledger at
   // any time (see src/lib/db/ghostCredit.ts deriveBalance). Never the sole source
   // of truth — the ledger is. Additive with a safe default.
-  ghostCreditBalanceMad Int       @default(0)
-  // Wallet-wide expiry deadline. Ghost Credit expires after 60 days of
-  // INACTIVITY: every new credit grant resets this to now + 60 days for the
-  // WHOLE wallet; spending does not reset it. Null when the balance is 0 / no
-  // credit has been granted. Enforced lazily on read + spend (see ghostCredit.ts
-  // expireWalletIfDue). Additive, nullable — existing customers keep null.
-  ghostCreditExpiresAt  DateTime?
+  ghostCreditBalanceMad        Int       @default(0)
+  // Wallet-wide expiry deadline. Ghost Credit expires after N days of
+  // INACTIVITY (default 180, configurable in store settings). Only a QUALIFYING
+  // earning event — a promo Ghost Credit reward or a spending-milestone reward
+  // granted after a paid+completed order — resets this to earnedAt + N days.
+  // Spending, manual admin grants/corrections, refunds, and reversals do NOT
+  // reset it (they carry resetsExpiration=false on their ledger row). Null when
+  // no cycle exists. Enforced by the wallet-expiry job + lazily on read/spend.
+  ghostCreditExpiresAt         DateTime?
+  // Timestamp of the last QUALIFYING earning event (the only thing that resets
+  // the timer). Distinct from any credit timestamp — manual grants/refunds never
+  // touch this. Drives reconciliation of ghostCreditExpiresAt.
+  lastQualifyingCreditEarnedAt DateTime?
+  // Customer opt-in for the "3 days before expiry" reminder email (default off).
+  expirationReminderEnabled    Boolean   @default(false)
+  // The ghostCreditExpiresAt value a reminder was last sent for — one reminder
+  // per expiration cycle. A new qualifying reward moves the deadline, allowing a
+  // fresh reminder. Idempotency anchor for the reminder job.
+  expirationReminderSentFor    DateTime?
   // Wallet freeze: blocks SPENDING Ghost Credit (grants/reversals still apply)
   // until an admin resolves it. Set automatically when a refund reversal can't
   // be fully applied because the promotional credit was already spent (so the
   // wallet is never left with an unexplained negative balance), or manually by
   // an admin. Additive with safe defaults.
-  walletFrozen          Boolean   @default(false)
-  walletFrozenReason    String?
+  walletFrozen                 Boolean   @default(false)
+  walletFrozenReason           String?
 
   orders                 Order[]
   emailLogs              EmailLog[]
@@ -400,6 +413,7 @@ model Customer {
   discordActivationCodes DiscordActivationCode[]
   ghostCreditTxns        GhostCreditTransaction[]
   promoRedemptions       PromoRedemption[]
+  milestoneGrants        SpendingMilestoneGrant[]
 
   @@index([updatedAt])
   @@index([emailVerified])
@@ -1067,22 +1081,37 @@ model OrderPromotionSnapshot {
 // adds to the balance; a debit subtracts. A reversal is a debit that offsets an
 // earlier credit — historical rows are never edited or deleted.
 model GhostCreditTransaction {
-  id         String @id @default(cuid())
-  customerId String
+  id               String  @id @default(cuid())
+  customerId       String
   // Positive magnitude in whole MAD; the sign is carried by `direction`.
-  amountMad  Int
+  amountMad        Int
   // direction: "credit" | "debit"
-  direction  String
-  // reason: "promo_reward" | "promo_reversal" | "admin_grant" | "admin_reversal"
-  //       | "expiration"
-  reason     String
+  direction        String
+  // reason: "promo_reward" | "promo_reversal" | "spending_milestone_reward"
+  //       | "milestone_reversal" | "order_spend" | "order_spend_refund"
+  //       | "admin_grant" | "admin_reversal" | "expiration"
+  reason           String
+  // Whether this entry is a QUALIFYING earning event that resets the 180-day
+  // inactivity timer. TRUE only for promo Ghost Credit rewards and spending-
+  // milestone rewards granted after a paid+completed order. NEVER inferred from
+  // the direction/amount — it is set explicitly by the granting code and stored
+  // here so reconciliation can verify the wallet deadline against it.
+  resetsExpiration Boolean @default(false)
 
-  promoCodeId         String?
-  orderId             String?
-  rewardType          String?
-  eligibleSubtotalMad Int?
-  configuredPercent   Decimal? @db.Decimal(6, 3)
-  configuredFixedMad  Int?
+  promoCodeId          String?
+  orderId              String?
+  rewardType           String?
+  eligibleSubtotalMad  Int?
+  configuredPercent    Decimal? @db.Decimal(6, 3)
+  configuredFixedMad   Int?
+  // Spending-milestone context (set on milestone reward + reversal rows).
+  milestoneId          String?
+  thresholdMad         Int?
+  qualifyingSpendMad   Int?
+  // For reversal rows: the original ledger entry being reversed (audit link).
+  relatedTransactionId String?
+  // Free-form audit context (never rendered as customer data).
+  metadata             Json?
 
   // status: "active" | "reversed" | "expired"
   status         String    @default("active")
@@ -1095,13 +1124,78 @@ model GhostCreditTransaction {
   note           String?
   createdAt      DateTime  @default(now())
 
-  customer  Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  promoCode PromoCode? @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
-  order     Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customer  Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  promoCode PromoCode?         @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  order     Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  milestone SpendingMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
 
   @@index([customerId, status])
   @@index([orderId])
   @@index([promoCodeId])
+  @@index([milestoneId])
+}
+
+// Configurable, cumulative account-level spending milestone: "spend X total →
+// earn Y Ghost Credit", granted once per customer per milestone after a
+// paid+completed order crosses the threshold. NOT points, NOT automatic
+// per-order cashback. Editing a live threshold/reward should ARCHIVE this row
+// and create a new one (new id) so historical grants stay linked to the exact
+// milestone version that produced them (see SpendingMilestoneGrant).
+model SpendingMilestone {
+  id                String    @id @default(cuid())
+  internalName      String
+  publicTitle       String
+  publicDescription String    @default("")
+  // Required cumulative qualifying spend to unlock, and the reward, in whole MAD.
+  thresholdMad      Int
+  rewardMad         Int
+  active            Boolean   @default(true)
+  startsAt          DateTime?
+  endsAt            DateTime?
+  displayOrder      Int       @default(0)
+  // Monotonic version bumped when superseded by an edited copy (audit clarity).
+  version           Int       @default(1)
+  archivedAt        DateTime?
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+
+  grants     SpendingMilestoneGrant[]
+  creditTxns GhostCreditTransaction[]
+
+  @@index([active, displayOrder])
+  @@index([archivedAt])
+  @@index([thresholdMad])
+}
+
+// One row per (milestone, customer) grant — the @@unique makes a milestone
+// impossible to award twice, independent of application logic. `status` flips to
+// "reversed" (never deleted) when a refund drops qualifying spend below the
+// threshold. The reward itself lives in the GhostCreditTransaction ledger; this
+// is the reporting + idempotency anchor.
+model SpendingMilestoneGrant {
+  id                 String    @id @default(cuid())
+  milestoneId        String
+  customerId         String
+  // The order whose completion crossed the threshold.
+  orderId            String?
+  thresholdMad       Int
+  rewardMad          Int
+  // Qualifying lifetime spend at grant time (audit).
+  qualifyingSpendMad Int
+  // status: "granted" | "reversed"
+  status             String    @default("granted")
+  reversedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  milestone SpendingMilestone @relation(fields: [milestoneId], references: [id])
+  customer  Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order     Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([milestoneId, customerId])
+  @@index([customerId, status])
+  @@index([milestoneId])
+  @@index([orderId])
 }
 
 // Append-only admin/audit timeline for a promo code (mirrors PaymentEvent).

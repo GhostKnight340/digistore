@@ -196,6 +196,15 @@ export type StoreSettings = {
     businessTimezone: string;
     monthlyReviewHour: number;
   };
+  // Ghost Credit wallet config. No balances live here — only policy.
+  ghostCredit: {
+    // Days of inactivity (no qualifying earned credit) before the wallet
+    // expires. Default 180. Only promo/milestone rewards from paid+completed
+    // orders reset this timer.
+    inactivityDays: number;
+    // Days before expiry the reminder email is sent (when the customer opted in).
+    reminderDaysBefore: number;
+  };
 };
 
 export const defaultStoreSettings: StoreSettings = {
@@ -384,6 +393,10 @@ export const defaultStoreSettings: StoreSettings = {
       // clôture" block (from the resolution) and the "Donner mon avis" CTA.
       body: "Votre demande {{reference}} a été clôturée. Votre avis compte beaucoup pour nous : dites-nous comment s'est passée votre expérience avec notre support en laissant une note et un commentaire. Cela nous aide à nous améliorer.",
     },
+    ghost_credit_expiry_reminder: {
+      subject: "Votre crédit Ghost expire bientôt",
+      body: "Il vous reste {{credit_amount}} de crédit Ghost, qui expire dans {{days_remaining}} jours (le {{expiry_date}}). Seul un nouveau crédit gagné après une commande payée et finalisée prolonge sa validité — dépenser votre crédit ou recevoir un ajustement manuel ne réinitialise pas ce délai. Utilisez-le sur Ghost.ma avant qu'il n'expire.",
+    },
   },
   legalPages: {
     terms: {
@@ -469,6 +482,10 @@ export const defaultStoreSettings: StoreSettings = {
     monthlyReviewEnabled: true,
     businessTimezone: "Africa/Casablanca",
     monthlyReviewHour: 20,
+  },
+  ghostCredit: {
+    inactivityDays: 180,
+    reminderDaysBefore: 3,
   },
 };
 
@@ -777,6 +794,22 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
         isObject(value.expenses) && Array.isArray(value.expenses.defaultReminderDaysBefore)
           ? value.expenses.defaultReminderDaysBefore.filter((n): n is number => typeof n === "number")
           : defaultStoreSettings.expenses.defaultReminderDaysBefore,
+    },
+    ghostCredit: {
+      ...defaultStoreSettings.ghostCredit,
+      ...(isObject(value.ghostCredit) ? value.ghostCredit : {}),
+      inactivityDays:
+        isObject(value.ghostCredit) &&
+        typeof value.ghostCredit.inactivityDays === "number" &&
+        value.ghostCredit.inactivityDays > 0
+          ? Math.round(value.ghostCredit.inactivityDays)
+          : defaultStoreSettings.ghostCredit.inactivityDays,
+      reminderDaysBefore:
+        isObject(value.ghostCredit) &&
+        typeof value.ghostCredit.reminderDaysBefore === "number" &&
+        value.ghostCredit.reminderDaysBefore > 0
+          ? Math.round(value.ghostCredit.reminderDaysBefore)
+          : defaultStoreSettings.ghostCredit.reminderDaysBefore,
     },
   };
 }

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { grantCreditTx, debitCreditTx, expireWalletIfDue } from "./ghostCredit";
+import { grantCreditTx, debitCreditTx, expireWalletIfDue, ghostCreditInactivityDays } from "./ghostCredit";
 import { isGhostCreditReward, computeCreditReversal } from "@/lib/promo/engine";
 import { promoCreditKey, promoReversalKey, orderRefundKey } from "@/lib/promo/ledgerMath";
 import type { PromoRewardType } from "@/lib/types";
@@ -27,6 +27,7 @@ type Tx = Prisma.TransactionClient;
  * duplicate webhook. Runs in its own transaction unless one is supplied.
  */
 export async function finalizeOrderPromotion(orderId: string, existingTx?: Tx): Promise<void> {
+  const inactivityDays = await ghostCreditInactivityDays();
   const run = async (tx: Tx) => {
     const redemption = await tx.promoRedemption.findUnique({
       where: { orderId },
@@ -86,8 +87,10 @@ export async function finalizeOrderPromotion(orderId: string, existingTx?: Tx): 
       eligibleSubtotalMad: snapshot.eligibleSubtotalMad,
       configuredPercent: snapshot.configuredPercent ? Number(snapshot.configuredPercent.toString()) : null,
       configuredFixedMad: snapshot.configuredFixedMad,
-      // Expiry is wallet-wide (60 days of inactivity), reset on every grant — no
-      // per-transaction expiry date (see ghostCredit.ts GHOST_CREDIT_EXPIRY_DAYS).
+      // Promo Ghost Credit from a paid+completed order is a QUALIFYING reward —
+      // it resets the 180-day inactivity timer.
+      resetsExpiration: true,
+      inactivityDays,
       source: "system",
       note: `Crédit Ghost — code ${snapshot.code}`,
     });
@@ -140,6 +143,9 @@ export async function applyPromoLifecycleForStatus(orderId: string, toStatus: st
   try {
     if (toStatus === "payment_confirmed" || toStatus === "delivered") {
       await finalizeOrderPromotion(orderId);
+      // Evaluate spending milestones now that this order counts as qualifying.
+      const { grantMilestonesForCompletedOrder } = await import("./milestones");
+      await grantMilestonesForCompletedOrder(orderId);
     } else if (toStatus === "cancelled" || toStatus === "rejected") {
       await releaseOrderPromotion(orderId);
       // The order never completed → give back any Ghost Credit spent on it.
@@ -148,6 +154,9 @@ export async function applyPromoLifecycleForStatus(orderId: string, toStatus: st
       await reverseOrderPromotionCredit(orderId);
       // A refunded order is reversed → return the Ghost Credit spent on it.
       await refundSpentCreditForOrder(orderId);
+      // Refund reduces qualifying spend → reverse milestones no longer qualified.
+      const { reverseMilestonesForOrder } = await import("./milestones");
+      await reverseMilestonesForOrder(orderId);
     }
   } catch (error) {
     console.error("[applyPromoLifecycleForStatus]", orderId, toStatus, error);

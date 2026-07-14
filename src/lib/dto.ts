@@ -706,11 +706,64 @@ export interface GhostCreditTransactionDTO {
 
 export interface GhostCreditWalletDTO {
   balanceMad: number;
-  /** Wallet-wide expiry deadline (60 days after the last credit), or null. */
+  /** Wallet-wide expiry deadline (180 days after the last qualifying credit), or null. */
   expiresAt: string | null;
   /** True when spending is temporarily blocked pending admin review. */
   frozen: boolean;
   transactions: GhostCreditTransactionDTO[];
+}
+
+// ─── Spending milestone DTOs ─────────────────────────────────────────────────
+
+export interface AdminMilestoneDTO {
+  id: string;
+  internalName: string;
+  publicTitle: string;
+  publicDescription: string;
+  thresholdMad: number;
+  rewardMad: number;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  displayOrder: number;
+  version: number;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminMilestoneDetailDTO {
+  milestone: AdminMilestoneDTO;
+  customersUnlocked: number;
+  reversedCount: number;
+  totalRewardGrantedMad: number;
+}
+
+export interface SaveMilestoneInput {
+  id?: string;
+  internalName: string;
+  publicTitle: string;
+  publicDescription?: string;
+  thresholdMad: number;
+  rewardMad: number;
+  active: boolean;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  displayOrder?: number;
+}
+
+export interface MilestoneTrackItemDTO {
+  id: string;
+  title: string;
+  thresholdMad: number;
+  rewardMad: number;
+  state: "unlocked" | "current" | "locked";
+}
+
+export interface MilestoneProgressDTO {
+  qualifyingSpendMad: number;
+  next: { id: string; thresholdMad: number; rewardMad: number; remainingMad: number } | null;
+  allUnlocked: boolean;
+  track: MilestoneTrackItemDTO[];
 }
 
 // ─── Payment method DTOs ──────────────────────────────────────────────────────

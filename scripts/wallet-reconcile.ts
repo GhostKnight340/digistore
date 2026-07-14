@@ -10,11 +10,18 @@
 //
 // Repair requires WALLET_REPAIR_CONFIRM=1 in addition to --repair so a stray
 // flag can't mutate production balances.
-import { reconcileAllWallets, repairWalletCache } from "../src/lib/db/walletReconcile";
+import { reconcileAllWallets, reconcileExpiry, repairWalletCache } from "../src/lib/db/walletReconcile";
 
 async function main() {
   const repair = process.argv.includes("--repair");
   const { checked, mismatches } = await reconcileAllWallets();
+
+  // Expiry-invariant check (deadline == last qualifying event + inactivity days).
+  const expiry = await reconcileExpiry();
+  console.log(`[wallet:reconcile] expiry: checked ${expiry.checked}, ${expiry.mismatches.length} mismatch(es)`);
+  for (const e of expiry.mismatches) {
+    console.log(`  customer=${e.customerId} stored=${e.storedExpiresAt} expected=${e.expectedExpiresAt}`);
+  }
 
   console.log(`[wallet:reconcile] checked ${checked} wallet(s) with ledger history`);
   if (mismatches.length === 0) {

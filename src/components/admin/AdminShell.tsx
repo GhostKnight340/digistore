@@ -237,6 +237,18 @@ const NAV: NavGroup[] = [
         ),
       },
       {
+        id: "milestones",
+        label: "Paliers de dépenses",
+        icon: icon(
+          <>
+            <path d="M4 20V10" />
+            <path d="M10 20V4" />
+            <path d="M16 20v-6" />
+            <path d="M2 20h20" />
+          </>,
+        ),
+      },
+      {
         id: "expenses",
         label: "Dépenses",
         icon: icon(

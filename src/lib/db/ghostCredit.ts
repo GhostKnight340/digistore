@@ -2,7 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { prisma, ensureDatabaseReady } from "./prisma";
-import { capDebit, walletExpireKey } from "@/lib/promo/ledgerMath";
+import { capDebit, walletExpireKey, computeExpiryDecision } from "@/lib/promo/ledgerMath";
 import type { GhostCreditWalletDTO, GhostCreditTransactionDTO } from "@/lib/dto";
 import type { PromoRewardType, GhostCreditDirection, GhostCreditStatus } from "@/lib/types";
 
@@ -50,15 +50,20 @@ async function lockWallet(tx: Tx, customerId: string): Promise<void> {
 type Tx = Prisma.TransactionClient;
 
 /**
- * Ghost Credit expires after this many days of INACTIVITY. "Inactivity" means no
- * new credit added: every grant resets the whole wallet's deadline to now + this
- * many days; spending does not reset it. When the deadline passes, the entire
- * remaining balance expires at once.
+ * Default days of INACTIVITY before Ghost Credit expires. "Inactivity" means no
+ * QUALIFYING earned credit — only a promo Ghost Credit reward or a spending-
+ * milestone reward from a paid+completed order resets the timer. Spending,
+ * manual grants, refunds, and reversals never reset it. Configurable in store
+ * settings (ghostCredit.inactivityDays); this is the fallback.
  */
-export const GHOST_CREDIT_EXPIRY_DAYS = 60;
+export const GHOST_CREDIT_DEFAULT_INACTIVITY_DAYS = 180;
 
-function walletDeadlineFrom(now: Date): Date {
-  return new Date(now.getTime() + GHOST_CREDIT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+/** Resolve the configured inactivity period (days) from store settings. */
+export async function ghostCreditInactivityDays(): Promise<number> {
+  const { getStoreSettings } = await import("./catalog");
+  const settings = await getStoreSettings();
+  const days = settings.ghostCredit?.inactivityDays;
+  return typeof days === "number" && days > 0 ? Math.round(days) : GHOST_CREDIT_DEFAULT_INACTIVITY_DAYS;
 }
 
 function iso(value: Date | string | null): string | null {
@@ -90,12 +95,27 @@ interface GrantParams {
   amountMad: number;
   reason: string;
   idempotencyKey: string;
+  /**
+   * Whether this is a QUALIFYING earning event that resets the inactivity timer.
+   * TRUE only for promo Ghost Credit rewards and spending-milestone rewards from
+   * paid+completed orders. Never inferred — always set explicitly by the caller.
+   */
+  resetsExpiration?: boolean;
+  /** Configured inactivity period (days); falls back to the 180-day default. */
+  inactivityDays?: number;
+  /** Timestamp of the earning event (defaults to now). */
+  earnedAt?: Date;
   promoCodeId?: string | null;
   orderId?: string | null;
   rewardType?: PromoRewardType | null;
   eligibleSubtotalMad?: number | null;
   configuredPercent?: number | null;
   configuredFixedMad?: number | null;
+  milestoneId?: string | null;
+  thresholdMad?: number | null;
+  qualifyingSpendMad?: number | null;
+  relatedTransactionId?: string | null;
+  metadata?: Prisma.InputJsonValue;
   expiresAt?: Date | null;
   source?: string;
   note?: string | null;
@@ -124,6 +144,7 @@ export async function grantCreditTx(tx: Tx, params: GrantParams): Promise<Ledger
     return { ok: true, duplicate: true };
   }
 
+  const resets = params.resetsExpiration ?? false;
   try {
     await tx.ghostCreditTransaction.create({
       data: {
@@ -131,12 +152,18 @@ export async function grantCreditTx(tx: Tx, params: GrantParams): Promise<Ledger
         amountMad: params.amountMad,
         direction: "credit",
         reason: params.reason,
+        resetsExpiration: resets,
         promoCodeId: params.promoCodeId ?? null,
         orderId: params.orderId ?? null,
         rewardType: params.rewardType ?? null,
         eligibleSubtotalMad: params.eligibleSubtotalMad ?? null,
         configuredPercent: params.configuredPercent ?? null,
         configuredFixedMad: params.configuredFixedMad ?? null,
+        milestoneId: params.milestoneId ?? null,
+        thresholdMad: params.thresholdMad ?? null,
+        qualifyingSpendMad: params.qualifyingSpendMad ?? null,
+        relatedTransactionId: params.relatedTransactionId ?? null,
+        metadata: params.metadata ?? undefined,
         status: "active",
         idempotencyKey: params.idempotencyKey,
         expiresAt: params.expiresAt ?? null,
@@ -153,19 +180,39 @@ export async function grantCreditTx(tx: Tx, params: GrantParams): Promise<Ledger
     }
     throw error;
   }
-  // A new credit resets the whole wallet's 60-day inactivity deadline.
+
+  // Expiry timer: ONLY a qualifying reward resets it. A non-qualifying grant
+  // (manual/refund/…) preserves the current cycle; if none exists it seeds a
+  // default expiry so the credit isn't permanent, WITHOUT marking it qualifying.
+  const now = params.earnedAt ?? new Date();
+  const inactivityDays = params.inactivityDays ?? GHOST_CREDIT_DEFAULT_INACTIVITY_DAYS;
+  const current = resets
+    ? null
+    : await tx.customer.findUnique({
+        where: { id: params.customerId },
+        select: { ghostCreditExpiresAt: true },
+      });
+  const decision = computeExpiryDecision({
+    resetsExpiration: resets,
+    currentExpiresAt: current?.ghostCreditExpiresAt ?? null,
+    now,
+    inactivityDays,
+  });
+  const expiryData: Prisma.CustomerUpdateInput = {
+    ...(decision.markQualifying ? { lastQualifyingCreditEarnedAt: now } : {}),
+    ...(decision.changeExpiry ? { ghostCreditExpiresAt: decision.newExpiresAt } : {}),
+  };
+
   const customer = await tx.customer.update({
     where: { id: params.customerId },
-    data: {
-      ghostCreditBalanceMad: { increment: params.amountMad },
-      ghostCreditExpiresAt: walletDeadlineFrom(new Date()),
-    },
+    data: { ghostCreditBalanceMad: { increment: params.amountMad }, ...expiryData },
     select: { ghostCreditBalanceMad: true },
   });
   walletLog("grant.settled", {
     customerId: params.customerId,
     amountMad: params.amountMad,
     reason: params.reason,
+    resets,
     key: params.idempotencyKey,
     balanceMad: customer.ghostCreditBalanceMad,
   });
@@ -237,9 +284,15 @@ export async function debitCreditTx(
         amountMad: applied,
         direction: "debit",
         reason: params.reason,
+        // Debits (spend/reversal/expiry) NEVER reset the inactivity timer.
+        resetsExpiration: false,
         promoCodeId: params.promoCodeId ?? null,
         orderId: params.orderId ?? null,
         rewardType: params.rewardType ?? null,
+        milestoneId: params.milestoneId ?? null,
+        thresholdMad: params.thresholdMad ?? null,
+        relatedTransactionId: params.relatedTransactionId ?? null,
+        metadata: params.metadata ?? undefined,
         status: "active",
         idempotencyKey: params.idempotencyKey,
         source: params.source ?? "system",
@@ -309,7 +362,7 @@ export async function expireWalletIfDue(tx: Tx, customerId: string, now = new Da
       status: "active",
       idempotencyKey: key,
       source: "system",
-      note: `Crédit Ghost expiré après ${GHOST_CREDIT_EXPIRY_DAYS} jours d'inactivité`,
+      note: `Crédit Ghost expiré après inactivité`,
     },
   });
   // Mark the credits that made up this balance as expired (audit clarity).

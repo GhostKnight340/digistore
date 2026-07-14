@@ -59,6 +59,44 @@ export function capSpend(requestedMad: number, balanceMad: number, remainingPaya
   return Math.max(0, Math.min(req, Math.max(0, balanceMad), Math.max(0, remainingPayableMad)));
 }
 
+// ── Expiry timer decision (only qualifying rewards reset it) ─────────────────
+
+export interface ExpiryDecision {
+  /** Set Customer.lastQualifyingCreditEarnedAt to `now` (qualifying reward only). */
+  markQualifying: boolean;
+  /** Whether to write a new ghostCreditExpiresAt at all. */
+  changeExpiry: boolean;
+  /** The new deadline to write when changeExpiry is true. */
+  newExpiresAt: Date | null;
+}
+
+/**
+ * Decide how a Ghost Credit grant affects the wallet's inactivity timer.
+ *
+ *  - Qualifying reward (promo/milestone from a paid+completed order): reset —
+ *    mark qualifying and set the deadline to now + inactivityDays.
+ *  - Non-qualifying grant (manual/refund/…) with an existing cycle: preserve it
+ *    (no change), and never mark qualifying.
+ *  - Non-qualifying grant into a wallet with NO cycle: seed a default deadline
+ *    (now + inactivityDays) so the credit isn't permanent, but do NOT mark it
+ *    qualifying (it won't count as an earning event).
+ */
+export function computeExpiryDecision(params: {
+  resetsExpiration: boolean;
+  currentExpiresAt: Date | string | null;
+  now: Date;
+  inactivityDays: number;
+}): ExpiryDecision {
+  const deadline = new Date(params.now.getTime() + params.inactivityDays * 24 * 60 * 60 * 1000);
+  if (params.resetsExpiration) {
+    return { markQualifying: true, changeExpiry: true, newExpiresAt: deadline };
+  }
+  if (!params.currentExpiresAt) {
+    return { markQualifying: false, changeExpiry: true, newExpiresAt: deadline };
+  }
+  return { markQualifying: false, changeExpiry: false, newExpiresAt: null };
+}
+
 // ── Canonical idempotency keys (one per credit-affecting event) ──────────────
 
 /** Promo Ghost Credit reward for an order. */
@@ -84,4 +122,16 @@ export function manualCreditKey(requestId: string): string {
 /** Whole-wallet expiry for a specific deadline (one per deadline). */
 export function walletExpireKey(customerId: string, deadlineIso: string): string {
   return `wallet-expire:${customerId}:${deadlineIso}`;
+}
+/** Spending-milestone reward (one per milestone per customer, ever). */
+export function milestoneGrantKey(milestoneId: string, customerId: string): string {
+  return `spending-milestone:${milestoneId}:${customerId}`;
+}
+/** Spending-milestone reversal after a refund drops qualifying spend. */
+export function milestoneReversalKey(milestoneId: string, customerId: string): string {
+  return `spending-milestone-reversal:${milestoneId}:${customerId}`;
+}
+/** Expiry reminder email (one per expiration cycle). */
+export function expiryReminderKey(customerId: string, deadlineIso: string): string {
+  return `ghost-credit-expiry-reminder:${customerId}:${deadlineIso}`;
 }

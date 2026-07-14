@@ -4,10 +4,18 @@ import { WalletIcon } from "@/components/account/icons";
 import { requireCustomer, getAccountOrders, isProfileIncomplete } from "@/lib/auth";
 import { countSupportTicketsForCustomer } from "@/lib/db/supportTickets";
 import { getGhostCreditWallet } from "@/lib/db/ghostCredit";
+import { getMilestoneProgressForCustomer } from "@/lib/db/milestones";
+import { prisma } from "@/lib/db/prisma";
 import { formatDH } from "@/lib/format";
-import type { GhostCreditTransactionDTO } from "@/lib/dto";
+import type { GhostCreditTransactionDTO, MilestoneProgressDTO } from "@/lib/dto";
+import WalletReminderToggle from "./WalletReminderToggle";
+import TrackSectionView from "@/components/analytics/TrackSectionView";
 
 export const dynamic = "force-dynamic";
+
+function daysUntil(iso: string): number {
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+}
 
 function formatFrenchDate(iso: string) {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -54,11 +62,17 @@ function statusLabel(status: string): string {
 export default async function AccountWalletPage() {
   const customer = await requireCustomer();
   const incomplete = isProfileIncomplete(customer);
-  const [wallet, orders, supportCount] = await Promise.all([
+  const [wallet, orders, supportCount, milestones, reminderRow] = await Promise.all([
     getGhostCreditWallet(customer.id),
     getAccountOrders(customer.id),
     countSupportTicketsForCustomer(customer.id, incomplete ? null : customer.email),
+    getMilestoneProgressForCustomer(customer.id),
+    prisma.customer.findUnique({
+      where: { id: customer.id },
+      select: { expirationReminderEnabled: true },
+    }),
   ]);
+  const canExpire = wallet.balanceMad > 0 && Boolean(wallet.expiresAt);
 
   return (
     <div className="container-page py-10">
@@ -99,12 +113,22 @@ export default async function AccountWalletPage() {
                 </p>
               </div>
             </div>
-            <p className="relative mt-4 text-[12.5px] leading-relaxed text-muted">
-              Le crédit Ghost est ajouté après confirmation des commandes éligibles et n&apos;est utilisable
-              que sur Ghost.ma — il n&apos;est pas retirable en argent.
-              {wallet.balanceMad > 0 && wallet.expiresAt
-                ? ` Votre solde expire le ${formatFrenchDate(wallet.expiresAt)} s'il reste inactif — chaque nouveau crédit relance ce délai de 60 jours.`
-                : " Le solde expire après 60 jours d'inactivité ; chaque nouveau crédit relance ce délai."}
+            {canExpire && wallet.expiresAt && (
+              <div className="relative mt-4 flex flex-wrap items-center gap-2 rounded-[12px] border border-accent/20 bg-accent/[0.06] px-3.5 py-2.5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#9FB8FF" strokeWidth={1.9} className="h-4 w-4 shrink-0" aria-hidden>
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+                <span className="text-[12.5px] font-medium text-[#9FB8FF]">
+                  Expiration dans {daysUntil(wallet.expiresAt)} jours — {formatFrenchDate(wallet.expiresAt)}
+                </span>
+              </div>
+            )}
+            <p className="relative mt-3 text-[12.5px] leading-relaxed text-muted">
+              Votre crédit Ghost expire après 180 jours sans nouveau crédit gagné grâce à une commande éligible.
+              Seuls les crédits gagnés après une commande payée et finalisée prolongent sa validité. Dépenser
+              votre crédit Ghost ou recevoir un ajustement manuel ne prolonge pas cette durée. Il n&apos;est
+              utilisable que sur Ghost.ma et n&apos;est pas retirable en argent.
             </p>
             {wallet.frozen && (
               <p className="relative mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
@@ -112,7 +136,15 @@ export default async function AccountWalletPage() {
                 si besoin.
               </p>
             )}
+            {canExpire && (
+              <div className="relative mt-3">
+                <WalletReminderToggle initialEnabled={reminderRow?.expirationReminderEnabled ?? false} />
+              </div>
+            )}
           </div>
+
+          {/* Milestone progress — "Votre prochaine récompense" */}
+          <MilestoneProgress progress={milestones} />
 
           {/* Ledger */}
           <div className="rounded-[18px] border border-border bg-card p-[22px] shadow-soft sm:p-[26px]">
@@ -174,6 +206,74 @@ export default async function AccountWalletPage() {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function MilestoneProgress({ progress }: { progress: MilestoneProgressDTO }) {
+  // No milestones configured → render nothing (don't invent a repeating one).
+  if (progress.track.length === 0) return null;
+
+  const next = progress.next;
+  const pct = next && next.thresholdMad > 0 ? Math.min(100, Math.round((progress.qualifyingSpendMad / next.thresholdMad) * 100)) : 100;
+
+  return (
+    <div className="rounded-[18px] border border-border bg-card p-[22px] shadow-soft sm:p-[26px]">
+      <TrackSectionView event="milestone_progress_viewed" />
+      <h2 className="text-[15px] font-semibold text-white">Votre prochaine récompense</h2>
+
+      {progress.allUnlocked || !next ? (
+        <p className="mt-2 text-[13px] text-muted">Vous avez débloqué tous les paliers actuellement disponibles.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-[13px] text-muted">
+            Vous avez dépensé{" "}
+            <span className="font-semibold text-white">{formatDH(progress.qualifyingSpendMad)}</span> sur{" "}
+            <span className="font-semibold text-white">{formatDH(next.thresholdMad)}</span>.
+          </p>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            Encore <span className="font-medium text-[#9FB8FF]">{formatDH(next.remainingMad)}</span> d&apos;achats
+            pour recevoir <span className="font-medium text-[#9FB8FF]">{formatDH(next.rewardMad)}</span> de crédit Ghost.
+          </p>
+          {/* Progress bar (text conveys the value too — not color-only). */}
+          <div
+            className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-surface2"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={next.thresholdMad}
+            aria-valuenow={progress.qualifyingSpendMad}
+            aria-label={`Progression : ${progress.qualifyingSpendMad} sur ${next.thresholdMad} DH`}
+          >
+            <div className="h-full rounded-full bg-gradient-to-r from-accent to-[#2B5FD9]" style={{ width: `${pct}%` }} />
+          </div>
+        </>
+      )}
+
+      {/* Compact milestone track */}
+      <ul className="mt-4 space-y-1.5">
+        {progress.track.map((m) => (
+          <li key={m.id} className="flex items-center gap-2.5 text-[12.5px]">
+            <span
+              className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+                m.state === "unlocked"
+                  ? "bg-[#5BC98C]/15 text-[#5BC98C]"
+                  : m.state === "current"
+                    ? "bg-accent/20 text-[#9FB8FF]"
+                    : "bg-surface2 text-faint"
+              }`}
+              aria-hidden
+            >
+              {m.state === "unlocked" ? "✓" : m.state === "current" ? "→" : "○"}
+            </span>
+            <span className={m.state === "locked" ? "text-faint" : "text-muted"}>
+              {formatDH(m.thresholdMad)} → {formatDH(m.rewardMad)} de crédit
+            </span>
+            <span className="ml-auto text-[11px] uppercase tracking-wide text-faint">
+              {m.state === "unlocked" ? "Débloqué" : m.state === "current" ? "En cours" : "À venir"}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
