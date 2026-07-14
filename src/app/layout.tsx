@@ -34,6 +34,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#05070d",
+  // Required for `env(safe-area-inset-*)` to resolve to anything but 0 on iOS,
+  // which the floating support pill and the account drawer both rely on.
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({

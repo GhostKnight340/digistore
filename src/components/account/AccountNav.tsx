@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { logoutCustomerAction } from "@/app/actions/auth";
+import { accountLogoutAction } from "@/app/account/actions";
 import { isPlaceholderEmail } from "@/lib/auth";
+import {
+  ACCOUNT_NAV,
+  accountNavCount,
+  type AccountView,
+} from "@/lib/account/nav";
 import {
   GridIcon,
   BagIcon,
@@ -12,22 +16,16 @@ import {
   WalletIcon,
 } from "@/components/account/icons";
 
-async function logout() {
-  "use server";
-  await logoutCustomerAction();
-  redirect("/login");
-}
+const ICONS: Record<AccountView, typeof GridIcon> = {
+  dashboard: GridIcon,
+  orders: BagIcon,
+  wallet: WalletIcon,
+  support: LifebuoyIcon,
+  security: ShieldIcon,
+};
 
-type AccountView = "dashboard" | "orders" | "wallet" | "support" | "security";
-
-const NAV: { view: AccountView; href: string; label: string; Icon: typeof GridIcon }[] = [
-  { view: "dashboard", href: "/account", label: "Tableau de bord", Icon: GridIcon },
-  { view: "orders", href: "/account/orders", label: "Commandes", Icon: BagIcon },
-  { view: "wallet", href: "/account/wallet", label: "Crédit Ghost", Icon: WalletIcon },
-  { view: "support", href: "/account/support", label: "Support", Icon: LifebuoyIcon },
-  { view: "security", href: "/account/security", label: "Sécurité", Icon: ShieldIcon },
-];
-
+/** Desktop-only account sidebar. Below `lg` the compact AccountMobileNav
+ *  bottom sheet replaces it — see AccountShell. */
 export default function AccountNav({
   name,
   email,
@@ -35,6 +33,7 @@ export default function AccountNav({
   verified = false,
   ordersCount,
   supportCount,
+  className = "",
 }: {
   name: string;
   email: string;
@@ -42,12 +41,13 @@ export default function AccountNav({
   verified?: boolean;
   ordersCount?: number;
   supportCount?: number;
+  className?: string;
 }) {
   const hasEmail = Boolean(email) && !isPlaceholderEmail(email);
   const initial = name.slice(0, 1).toUpperCase() || "?";
 
   return (
-    <aside className="h-fit lg:sticky lg:top-[88px]">
+    <aside className={`h-fit lg:sticky lg:top-[88px] ${className}`}>
       {/* Identity card */}
       <div
         className="relative overflow-hidden rounded-[18px] border border-border p-5"
@@ -81,9 +81,10 @@ export default function AccountNav({
 
       {/* Nav */}
       <nav className="mt-4 space-y-1">
-        {NAV.map(({ view, href, label, Icon }) => {
+        {ACCOUNT_NAV.map(({ view, href, label }) => {
+          const Icon = ICONS[view];
           const isActive = view === active;
-          const count = view === "orders" ? ordersCount : view === "support" ? supportCount : undefined;
+          const count = accountNavCount(view, { ordersCount, supportCount });
           return (
             <Link
               key={view}
@@ -113,7 +114,7 @@ export default function AccountNav({
 
       <div className="my-4 border-t border-border" />
 
-      <form action={logout}>
+      <form action={accountLogoutAction}>
         <button
           type="submit"
           className="flex w-full items-center gap-3 rounded-xl border border-[rgba(240,97,109,0.22)] bg-[rgba(240,97,109,0.06)] px-3 py-2.5 text-sm font-medium text-[#f0616d] transition-colors hover:bg-[rgba(240,97,109,0.12)]"

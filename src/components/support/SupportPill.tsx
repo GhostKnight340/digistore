@@ -6,8 +6,13 @@ import { usePathname } from "next/navigation";
 /**
  * Floating Navigator support pill, bottom-right on all storefront pages.
  * Desktop: circle avatar (36px) + two-line prompt. Mobile: avatar-only 44px
- * circle button (≥44px tap target). Hidden on the support flow itself, where
- * the prompt would be redundant. The avatar is the circle-safe profile mark.
+ * circle button (≥44px tap target) — never both at once. Hidden on the support
+ * flow itself, where the prompt would be redundant. The avatar is the
+ * circle-safe profile mark.
+ *
+ * The offsets add `env(safe-area-inset-bottom)` so the pill clears the Safari
+ * toolbar / home indicator; pages that end in an action (the account area) add
+ * matching bottom padding so it never sits on top of a button.
  */
 export default function SupportPill() {
   const pathname = usePathname();
@@ -18,7 +23,8 @@ export default function SupportPill() {
       {/* Desktop / tablet: full pill */}
       <Link
         href="/support"
-        className="fixed bottom-5 right-5 z-40 hidden items-center gap-3 rounded-full border border-border bg-card/95 py-1.5 pl-1.5 pr-4 shadow-card backdrop-blur-xl transition hover:border-accent/50 sm:flex"
+        style={{ bottom: "calc(20px + env(safe-area-inset-bottom))" }}
+        className="fixed right-5 z-40 hidden items-center gap-3 rounded-full border border-border bg-card/95 py-1.5 pl-1.5 pr-4 shadow-card backdrop-blur-xl transition hover:border-accent/50 sm:flex"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -44,7 +50,8 @@ export default function SupportPill() {
       <Link
         href="/support"
         aria-label="Besoin d'aide ? Contacter le support"
-        className="fixed bottom-4 right-4 z-40 grid h-11 w-11 place-items-center rounded-full border border-border bg-card shadow-card sm:hidden"
+        style={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }}
+        className="fixed right-4 z-40 grid h-11 w-11 place-items-center rounded-full border border-border bg-card shadow-card sm:hidden"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

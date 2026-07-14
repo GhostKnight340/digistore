@@ -1,5 +1,4 @@
-import AccountNav from "@/components/account/AccountNav";
-import PageHeader from "@/components/account/PageHeader";
+import AccountShell from "@/components/account/AccountShell";
 import { WalletIcon } from "@/components/account/icons";
 import { requireCustomer, getAccountOrders, isProfileIncomplete } from "@/lib/auth";
 import { countSupportTicketsForCustomer } from "@/lib/db/supportTickets";
@@ -75,138 +74,147 @@ export default async function AccountWalletPage() {
   const canExpire = wallet.balanceMad > 0 && Boolean(wallet.expiresAt);
 
   return (
-    <div className="container-page py-10">
-      <div className="grid gap-[26px] lg:grid-cols-[264px_1fr]">
-        <AccountNav
-          name={customer.name}
-          email={incomplete ? "" : customer.email}
-          active="wallet"
-          verified={!incomplete && customer.emailVerified}
-          ordersCount={orders.length}
-          supportCount={supportCount}
+    <AccountShell
+      name={customer.name}
+      email={incomplete ? "" : customer.email}
+      active="wallet"
+      verified={!incomplete && customer.emailVerified}
+      ordersCount={orders.length}
+      supportCount={supportCount}
+      title="Crédit Ghost"
+      subtitle="Votre solde de crédit Ghost et l'historique de vos transactions."
+    >
+      {/* Balance card */}
+      <div
+        className="relative overflow-hidden rounded-[18px] border border-accent/25 p-5 sm:p-6"
+        style={{ background: "linear-gradient(150deg,#16203a,#0f1218)" }}
+      >
+        <div
+          className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full opacity-70 blur-2xl"
+          style={{ background: "radial-gradient(circle, rgba(62,123,250,0.28), transparent 70%)" }}
         />
-        <section className="space-y-5">
-          <PageHeader
-            title="Crédit Ghost"
-            subtitle="Votre solde de crédit Ghost et l'historique de vos transactions."
-          />
-
-          {/* Balance card */}
-          <div
-            className="relative overflow-hidden rounded-[18px] border border-accent/25 p-6"
-            style={{ background: "linear-gradient(150deg,#16203a,#0f1218)" }}
-          >
-            <div
-              className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full opacity-70 blur-2xl"
-              style={{ background: "radial-gradient(circle, rgba(62,123,250,0.28), transparent 70%)" }}
-            />
-            <div className="relative flex items-center gap-4">
-              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-accent/15 text-[#9FB8FF]">
-                <WalletIcon className="h-7 w-7" />
-              </span>
-              <div>
-                <p className="text-[12.5px] font-medium uppercase tracking-wide text-[#9FB8FF]">
-                  Solde disponible
-                </p>
-                <p className="mt-1 font-mono text-[32px] font-semibold leading-none text-white">
-                  {formatDH(wallet.balanceMad)}
-                </p>
-              </div>
-            </div>
-            {canExpire && wallet.expiresAt && (
-              <div className="relative mt-4 flex flex-wrap items-center gap-2 rounded-[12px] border border-accent/20 bg-accent/[0.06] px-3.5 py-2.5">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#9FB8FF" strokeWidth={1.9} className="h-4 w-4 shrink-0" aria-hidden>
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 2" />
-                </svg>
-                <span className="text-[12.5px] font-medium text-[#9FB8FF]">
-                  Expiration dans {daysUntil(wallet.expiresAt)} jours — {formatFrenchDate(wallet.expiresAt)}
-                </span>
-              </div>
-            )}
-            <p className="relative mt-3 text-[12.5px] leading-relaxed text-muted">
-              Votre crédit Ghost expire après 180 jours sans nouveau crédit gagné grâce à une commande éligible.
-              Seuls les crédits gagnés après une commande payée et finalisée prolongent sa validité. Dépenser
-              votre crédit Ghost ou recevoir un ajustement manuel ne prolonge pas cette durée. Il n&apos;est
-              utilisable que sur Ghost.ma et n&apos;est pas retirable en argent.
+        <div className="relative flex items-center gap-4">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-accent/15 text-[#9FB8FF]">
+            <WalletIcon className="h-7 w-7" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[12.5px] font-medium uppercase tracking-wide text-[#9FB8FF]">
+              Solde disponible
             </p>
-            {wallet.frozen && (
-              <p className="relative mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
-                Votre crédit Ghost est temporairement bloqué et en cours de vérification. Contactez le support
-                si besoin.
-              </p>
-            )}
-            {canExpire && (
-              <div className="relative mt-3">
-                <WalletReminderToggle initialEnabled={reminderRow?.expirationReminderEnabled ?? false} />
-              </div>
-            )}
+            <p className="mt-1 break-words font-mono text-[28px] font-semibold leading-none text-white sm:text-[32px]">
+              {formatDH(wallet.balanceMad)}
+            </p>
           </div>
-
-          {/* Milestone progress — "Votre prochaine récompense" */}
-          <MilestoneProgress progress={milestones} />
-
-          {/* Ledger */}
-          <div className="rounded-[18px] border border-border bg-card p-[22px] shadow-soft sm:p-[26px]">
-            <h2 className="text-[15px] font-semibold text-white">Historique</h2>
-            {wallet.transactions.length === 0 ? (
-              <div className="mt-4 flex flex-col items-center px-6 py-8 text-center">
-                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-accent-strong">
-                  <WalletIcon className="h-6 w-6" />
-                </span>
-                <p className="mt-4 text-[14px] font-semibold text-white">Aucune transaction</p>
-                <p className="mt-1 max-w-sm text-[13px] text-muted">
-                  Utilisez un code promo « crédit Ghost » lors du paiement pour commencer à gagner du crédit.
-                </p>
-              </div>
-            ) : (
-              <ul className="mt-3.5 space-y-2">
-                {wallet.transactions.map((txn) => {
-                  const isCredit = txn.direction === "credit";
-                  const inactive = txn.status !== "active";
-                  return (
-                    <li
-                      key={txn.id}
-                      className="flex items-center gap-3.5 rounded-[13px] border border-border bg-canvas px-4 py-3"
-                    >
-                      <span
-                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[15px] font-semibold ${
-                          isCredit ? "bg-[#5BC98C]/12 text-[#5BC98C]" : "bg-red-500/10 text-red-300"
-                        }`}
-                        aria-hidden
-                      >
-                        {isCredit ? "+" : "−"}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13.5px] font-medium text-white">
-                          {reasonLabel(txn)}
-                          {inactive && (
-                            <span className="ml-2 rounded-full border border-white/15 px-1.5 py-0.5 text-[10.5px] text-muted">
-                              {statusLabel(txn.status)}
-                            </span>
-                          )}
-                        </p>
-                        <p className="mt-0.5 truncate font-mono text-[11.5px] text-faint">
-                          {formatFrenchDate(txn.createdAt)}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 font-mono text-[14px] font-semibold ${
-                          inactive ? "text-faint line-through" : isCredit ? "text-[#5BC98C]" : "text-red-300"
-                        }`}
-                      >
-                        {isCredit ? "+" : "−"}
-                        {formatDH(txn.amountMad)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+        </div>
+        {canExpire && wallet.expiresAt && (
+          <div className="relative mt-4 flex flex-wrap items-center gap-2 rounded-[12px] border border-accent/20 bg-accent/[0.06] px-3.5 py-2.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9FB8FF" strokeWidth={1.9} className="h-4 w-4 shrink-0" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            <span className="min-w-0 text-[12.5px] font-medium text-[#9FB8FF]">
+              Expiration dans {daysUntil(wallet.expiresAt)} jours — {formatFrenchDate(wallet.expiresAt)}
+            </span>
           </div>
-        </section>
+        )}
+        {/* The full expiry/usage terms are long — keep them one tap away in a
+            disclosure so they don't dominate the balance card. */}
+        <details className="group relative mt-4">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12.5px] font-medium text-[#9FB8FF] [&::-webkit-details-marker]:hidden">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180"
+              aria-hidden
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            Comment fonctionne le crédit Ghost&nbsp;?
+          </summary>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+            Votre crédit Ghost expire après 180 jours sans nouveau crédit gagné grâce à une commande éligible.
+            Seuls les crédits gagnés après une commande payée et finalisée prolongent sa validité. Dépenser
+            votre crédit Ghost ou recevoir un ajustement manuel ne prolonge pas cette durée. Il n&apos;est
+            utilisable que sur Ghost.ma et n&apos;est pas retirable en argent.
+          </p>
+        </details>
+        {wallet.frozen && (
+          <p className="relative mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-300">
+            Votre crédit Ghost est temporairement bloqué et en cours de vérification. Contactez le support
+            si besoin.
+          </p>
+        )}
+        {canExpire && (
+          <div className="relative mt-3">
+            <WalletReminderToggle initialEnabled={reminderRow?.expirationReminderEnabled ?? false} />
+          </div>
+        )}
       </div>
-    </div>
+
+      {/* Milestone progress — "Votre prochaine récompense" */}
+      <MilestoneProgress progress={milestones} />
+
+      {/* Ledger */}
+      <div className="rounded-[18px] border border-border bg-card p-4 shadow-soft sm:p-[26px]">
+        <h2 className="text-[15px] font-semibold text-white">Historique</h2>
+        {wallet.transactions.length === 0 ? (
+          <div className="mt-4 flex flex-col items-center px-2 py-8 text-center sm:px-6">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-accent-strong">
+              <WalletIcon className="h-6 w-6" />
+            </span>
+            <p className="mt-4 text-[14px] font-semibold text-white">Aucune transaction</p>
+            <p className="mt-1 max-w-sm text-[13px] text-muted">
+              Utilisez un code promo « crédit Ghost » lors du paiement pour commencer à gagner du crédit.
+            </p>
+          </div>
+        ) : (
+          <ul className="mt-3.5 space-y-2">
+            {wallet.transactions.map((txn) => {
+              const isCredit = txn.direction === "credit";
+              const inactive = txn.status !== "active";
+              return (
+                <li
+                  key={txn.id}
+                  className="flex items-center gap-3 rounded-[13px] border border-border bg-canvas px-3.5 py-3 sm:gap-3.5 sm:px-4"
+                >
+                  <span
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[15px] font-semibold ${
+                      isCredit ? "bg-[#5BC98C]/12 text-[#5BC98C]" : "bg-red-500/10 text-red-300"
+                    }`}
+                    aria-hidden
+                  >
+                    {isCredit ? "+" : "−"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] font-medium text-white">
+                      <span className="break-words">{reasonLabel(txn)}</span>
+                      {inactive && (
+                        <span className="ml-2 inline-block rounded-full border border-white/15 px-1.5 py-0.5 text-[10.5px] text-muted">
+                          {statusLabel(txn.status)}
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 truncate font-mono text-[11.5px] text-faint">
+                      {formatFrenchDate(txn.createdAt)}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 font-mono text-[13px] font-semibold sm:text-[14px] ${
+                      inactive ? "text-faint line-through" : isCredit ? "text-[#5BC98C]" : "text-red-300"
+                    }`}
+                  >
+                    {isCredit ? "+" : "−"}
+                    {formatDH(txn.amountMad)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </AccountShell>
   );
 }
 
@@ -218,7 +226,7 @@ function MilestoneProgress({ progress }: { progress: MilestoneProgressDTO }) {
   const pct = next && next.thresholdMad > 0 ? Math.min(100, Math.round((progress.qualifyingSpendMad / next.thresholdMad) * 100)) : 100;
 
   return (
-    <div className="rounded-[18px] border border-border bg-card p-[22px] shadow-soft sm:p-[26px]">
+    <div className="rounded-[18px] border border-border bg-card p-4 shadow-soft sm:p-[26px]">
       <TrackSectionView event="milestone_progress_viewed" />
       <h2 className="text-[15px] font-semibold text-white">Votre prochaine récompense</h2>
 
@@ -252,7 +260,7 @@ function MilestoneProgress({ progress }: { progress: MilestoneProgressDTO }) {
       {/* Compact milestone track */}
       <ul className="mt-4 space-y-1.5">
         {progress.track.map((m) => (
-          <li key={m.id} className="flex items-center gap-2.5 text-[12.5px]">
+          <li key={m.id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px]">
             <span
               className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
                 m.state === "unlocked"

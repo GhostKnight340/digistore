@@ -1,5 +1,4 @@
-import AccountNav from "@/components/account/AccountNav";
-import PageHeader from "@/components/account/PageHeader";
+import AccountShell from "@/components/account/AccountShell";
 import { ShieldIcon } from "@/components/account/icons";
 import {
   requireCustomer,
@@ -22,50 +21,42 @@ export default async function AccountSecurityPage() {
   );
 
   return (
-    <div className="container-page py-10">
-      <div className="grid gap-[26px] lg:grid-cols-[264px_1fr]">
-        <AccountNav
-          name={customer.name}
-          email={incomplete ? "" : customer.email}
-          active="security"
-          verified={!incomplete && customer.emailVerified}
-          ordersCount={orders.length}
-          supportCount={supportCount}
+    <AccountShell
+      name={customer.name}
+      email={incomplete ? "" : customer.email}
+      active="security"
+      verified={!incomplete && customer.emailVerified}
+      ordersCount={orders.length}
+      supportCount={supportCount}
+      title="Sécurité"
+      subtitle="Protégez votre compte et vos codes."
+    >
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Info
+          label="E-mail"
+          value={customer.emailVerified ? "Vérifié" : "Non vérifié"}
+          tone={customer.emailVerified ? "success" : "default"}
         />
-        <section className="space-y-5">
-          <PageHeader
-            title="Sécurité"
-            subtitle="Protégez votre compte et vos codes."
-          />
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Info
-              label="E-mail"
-              value={customer.emailVerified ? "Vérifié" : "Non vérifié"}
-              tone={customer.emailVerified ? "success" : "default"}
-            />
-            <Info
-              label="Dernière connexion"
-              value={
-                customer.lastLoginAt
-                  ? formatDate(customer.lastLoginAt.toISOString())
-                  : "Jamais"
-              }
-            />
-            <Info
-              label="Mot de passe"
-              value={
-                customer.lastPasswordChangeAt
-                  ? formatDate(customer.lastPasswordChangeAt.toISOString())
-                  : "Pas encore modifié"
-              }
-            />
-          </div>
-
-          <SecurityClient emailVerified={customer.emailVerified} />
-        </section>
+        <Info
+          label="Dernière connexion"
+          value={
+            customer.lastLoginAt
+              ? formatDate(customer.lastLoginAt.toISOString())
+              : "Jamais"
+          }
+        />
+        <Info
+          label="Mot de passe"
+          value={
+            customer.lastPasswordChangeAt
+              ? formatDate(customer.lastPasswordChangeAt.toISOString())
+              : "Pas encore modifié"
+          }
+        />
       </div>
-    </div>
+
+      <SecurityClient emailVerified={customer.emailVerified} />
+    </AccountShell>
   );
 }
 
