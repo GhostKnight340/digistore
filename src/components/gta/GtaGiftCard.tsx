@@ -32,6 +32,8 @@ export default function GtaGiftCard({
   const inStock = product.stockStatus
     ? product.stockStatus === "in_stock"
     : variants.some((v) => v.stockStatus === "in_stock");
+  // More than one denomination → the price is a starting point ("à partir de").
+  const multiDenom = variants.length > 1;
 
   // Denomination line: the single variant's face value when unambiguous, else a
   // neutral "plusieurs montants" label (never an invented amount).
@@ -87,7 +89,12 @@ export default function GtaGiftCard({
             </dd>
           </div>
         </dl>
-        <div className="mt-4 flex items-baseline justify-between gap-2">
+        <div className="mt-4">
+          {multiDenom && (
+            <span className="block text-[11px] font-medium text-faint">
+              À partir de
+            </span>
+          )}
           <span className="font-mono text-lg font-semibold tracking-tight text-text">
             {formatDH(startingPrice)}
           </span>

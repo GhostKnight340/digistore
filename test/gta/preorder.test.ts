@@ -10,6 +10,7 @@ import {
   gtaFaqItems,
   gtaPreorderConfig,
   gtaReleaseDate,
+  isRecommendableGiftCard,
   isReleased,
   parsePlatform,
   referencedBrandKeys,
@@ -86,6 +87,17 @@ test("referencedBrandKeys is the deduped union of all referenced brands", () => 
   const keys = referencedBrandKeys();
   assert.deepEqual([...keys].sort(), ["playstation", "xbox"]);
   assert.equal(new Set(keys).size, keys.length);
+});
+
+test("subscriptions are excluded from recommended gift cards", () => {
+  // Real store-credit gift cards pass; subscriptions do not (case/accent-insensitive).
+  assert.equal(isRecommendableGiftCard("Xbox Gift Cards"), true);
+  assert.equal(isRecommendableGiftCard("PlayStation FR"), true);
+  assert.equal(isRecommendableGiftCard("Carte PSN 250 MAD"), true);
+  assert.equal(isRecommendableGiftCard("Xbox Game Pass"), false);
+  assert.equal(isRecommendableGiftCard("Xbox Game Pass Essential"), false);
+  assert.equal(isRecommendableGiftCard("PlayStation Plus 12 mois"), false);
+  assert.equal(isRecommendableGiftCard("PS Plus Essential"), false);
 });
 
 test("FAQ maps to active, ordered items with unique questions", () => {

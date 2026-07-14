@@ -19,6 +19,7 @@ import {
   daysUntilRelease,
   gtaFaqItems,
   gtaPreorderConfig,
+  isRecommendableGiftCard,
   isReleased,
   referencedBrandKeys,
   type GtaPlatform,
@@ -77,8 +78,14 @@ export default async function GtaPreorderView({
     }),
   );
 
+  // Recommended cards = the brand's store-credit gift cards only. Subscriptions
+  // (Xbox Game Pass, PlayStation Plus) can't add the balance needed to pre-order
+  // a game, so they are filtered out of the recommendations (they may still show
+  // under "Produits associés").
   const platformProducts = (platform: GtaPlatform): Product[] =>
-    productsByBrand.get(config.platforms[platform].brandKey) ?? [];
+    (productsByBrand.get(config.platforms[platform].brandKey) ?? []).filter(
+      (product) => isRecommendableGiftCard(product.name, config),
+    );
 
   // Related: real products from the configured brands, deduped by id.
   const relatedSeen = new Set<string>();

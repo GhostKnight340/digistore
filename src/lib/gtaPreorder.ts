@@ -142,6 +142,14 @@ export interface GtaPreorderConfig {
   howItWorks: GtaHowItWorksStep[];
   disclosure: GtaDisclosure;
   faq: GtaFaqItem[];
+  /**
+   * Product-name keywords (case/accent-insensitive) that exclude a product from
+   * the RECOMMENDED gift cards. A brand category can contain items that are not
+   * store-credit gift cards — subscriptions like Xbox Game Pass or PlayStation
+   * Plus — which cannot be used to pre-order a game, so they are filtered out of
+   * the recommendations (they may still appear under "Produits associés").
+   */
+  recommendationExcludeKeywords: string[];
   /** Catalogue brand keys whose real products fill the "Produits associés"
    *  strip (resolved live; only active/public ones render). */
   relatedBrandKeys: string[];
@@ -273,6 +281,14 @@ export const gtaPreorderConfig: GtaPreorderConfig = {
         "Oui, lorsque la boutique de votre console permet de cumuler le solde, sous réserve des règles du compte et de la région.",
     },
   ],
+  recommendationExcludeKeywords: [
+    "game pass",
+    "gamepass",
+    "game-pass",
+    "playstation plus",
+    "ps plus",
+    "ps+",
+  ],
   relatedBrandKeys: ["playstation", "xbox"],
   seo: {
     title:
@@ -297,6 +313,26 @@ export function referencedBrandKeys(
   }
   for (const key of config.relatedBrandKeys) keys.add(key);
   return [...keys];
+}
+
+/**
+ * Whether a product (by name) is a store-credit gift card suitable for the
+ * RECOMMENDED section — i.e. not a subscription like Game Pass / PS Plus. Match
+ * is case- and accent-insensitive against `recommendationExcludeKeywords`.
+ */
+export function isRecommendableGiftCard(
+  name: string,
+  config: GtaPreorderConfig = gtaPreorderConfig,
+): boolean {
+  const normalized = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return !config.recommendationExcludeKeywords.some((keyword) =>
+    normalized.includes(
+      keyword.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(),
+    ),
+  );
 }
 
 /** FAQ mapped to the shared CategoryFaq item shape (active/ordered). */
