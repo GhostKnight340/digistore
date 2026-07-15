@@ -117,12 +117,21 @@ export async function registerCustomerAction(input: {
       });
     }
 
-    void notifyAccountCreated({
-      customerId: customer.id,
-      name,
-      email,
-      createdAt: new Date().toISOString(),
-    });
+    // Await (not fire-and-forget) so the Discord POST completes before the
+    // serverless function is frozen after the response — a dangling promise is
+    // dropped on Vercel, which is why this notification never arrived while the
+    // (awaited) verification email did. safeSend never throws, but guard anyway
+    // so a notification failure can never fail account creation.
+    try {
+      await notifyAccountCreated({
+        customerId: customer.id,
+        name,
+        email,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[auth:register:notify_error]", { customerId: customer.id, error });
+    }
 
     revalidatePath("/account");
     return {

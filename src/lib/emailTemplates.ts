@@ -419,6 +419,15 @@ function brandedEmailHtml(
 </html>`;
 }
 
+// The HTML shell and the plain-text composer each add the "Bonjour <name>,"
+// greeting exactly once. The editable template bodies historically ALSO began
+// with that greeting, which produced a duplicated "Bonjour ...". Strip any
+// leading greeting line from the body before it goes under the shell/text
+// greeting. Idempotent — a body without a greeting is returned unchanged.
+function stripLeadingGreeting(body: string): string {
+  return body.replace(/^\s*bonjour[^\n]*,[ \t]*\r?\n+/i, "");
+}
+
 export function renderEmailTemplate(
   settings: StoreSettings,
   key: EmailTemplateKey,
@@ -445,6 +454,9 @@ export function renderEmailTemplate(
       ? "Votre mot de passe ghost.ma a été modifié"
       : render(template.subject);
   const renderedBody = render(template.body);
+  // The shell (HTML) and the text composer own the single greeting, so the body
+  // placed under them must not carry its own.
+  const bodyForShell = stripLeadingGreeting(renderedBody);
   const customerName = variableString(baseVariables, "customer_name") || "client";
   // The HTML shell owns the greeting, heading, CTA and footer; the body it
   // renders (intro) is always `renderedBody` — the editable message only. The
@@ -480,20 +492,20 @@ export function renderEmailTemplate(
           return [
             `Bonjour ${customerName},`,
             "",
-            renderedBody,
+            bodyForShell,
             ...(reasonText ? ["", `${meta.motifLabel} :`, reasonText] : []),
             "",
             meta.ctaText,
             variableString(baseVariables, meta.ctaUrlVar),
           ].join("\n");
         })()
-      : renderedBody;
+      : [`Bonjour ${customerName},`, "", bodyForShell].join("\n");
   return {
     subject,
     text,
-    // Always pass the message body (never the composed plain-text) so the shell
-    // greeting is added exactly once.
-    html: brandedEmailHtml(key, subject, renderedBody, baseVariables, settings),
+    // Always pass the greeting-stripped body so the shell greeting is added
+    // exactly once (the body must not carry its own).
+    html: brandedEmailHtml(key, subject, bodyForShell, baseVariables, settings),
   };
 }
 
