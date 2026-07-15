@@ -34,12 +34,15 @@ export function isFeedbackType(value: string): value is FeedbackType {
 
 export const FEEDBACK_STATUSES = [
   { value: "new", label: "Nouveau" },
-  { value: "reviewing", label: "En cours d’examen" },
+  { value: "considered", label: "Considéré" },
   { value: "planned", label: "Planifié" },
   { value: "implemented", label: "Implémenté" },
-  { value: "declined", label: "Non retenu" },
-  { value: "closed", label: "Fermé" },
+  { value: "refused", label: "Refusé" },
+  { value: "archived", label: "Archivé" },
 ] as const;
+
+/** Statuses that count as "done" — stamp closedAt and drop out of the open list. */
+export const FEEDBACK_TERMINAL_STATUSES = ["refused", "archived"] as const;
 
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number]["value"];
 

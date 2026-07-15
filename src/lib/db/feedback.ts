@@ -13,8 +13,11 @@ import {
   isFeedbackStatus,
   isFeedbackPriority,
   FEEDBACK_LIMITS,
+  FEEDBACK_TERMINAL_STATUSES,
   type FeedbackType,
 } from "@/lib/feedback";
+
+const TERMINAL = new Set<string>(FEEDBACK_TERMINAL_STATUSES);
 import type {
   FeedbackListFilters,
   FeedbackListItemDTO,
@@ -403,7 +406,7 @@ export async function setFeedbackStatus(
   await prisma.$transaction(async (tx) => {
     await tx.feedbackSubmission.update({
       where: { id },
-      data: { status, closedAt: status === "closed" ? new Date() : null },
+      data: { status, closedAt: TERMINAL.has(status) ? new Date() : null },
     });
     await logActivity(tx, id, actor.name, "status_changed", { from: existing.status, to: status });
   });
@@ -527,7 +530,7 @@ export async function convertFeedbackToSupport(
   await prisma.$transaction(async (tx) => {
     await tx.feedbackSubmission.update({
       where: { id },
-      data: { status: "closed", closedAt: new Date() },
+      data: { status: "archived", closedAt: new Date() },
     });
     await logActivity(tx, id, actor.name, "converted_to_support", {
       supportReference: ticket.reference,

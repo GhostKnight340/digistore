@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getFeedbackListAction } from "@/app/actions/feedback";
+import { getFeedbackListAction, setFeedbackStatusAction } from "@/app/actions/feedback";
 import {
   feedbackTypeLabel,
   FEEDBACK_TYPES,
@@ -53,6 +53,19 @@ export default function FeedbackListView({
     const next = { ...filters, ...patch, page: patch.page ?? 1 };
     setFilters(next);
     void fetchPage(next);
+  }
+
+  // Inline triage: mark a row's status straight from the list. Optimistic, then
+  // refetch so the row re-sorts / drops out if a status filter is active.
+  async function mark(id: string, status: string) {
+    setResult((r) => ({
+      ...r,
+      items: r.items.map((it) =>
+        it.id === id ? { ...it, status: status as (typeof it)["status"] } : it,
+      ),
+    }));
+    await setFeedbackStatusAction(id, status);
+    void fetchPage(filters);
   }
 
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
@@ -129,7 +142,18 @@ export default function FeedbackListView({
                   <span className="ml-1 text-[11px] text-faint">{f.isGuest ? "· visiteur" : ""}</span>
                   {f.hasAttachment && <span className="ml-1 text-[11px] text-accent">📎</span>}
                 </td>
-                <td className="px-4 py-3"><FeedbackStatusBadge status={f.status} /></td>
+                <td className="px-4 py-3">
+                  <select
+                    className="input h-8 w-auto py-0 text-xs"
+                    value={f.status}
+                    aria-label={`Statut de ${f.reference}`}
+                    onChange={(e) => mark(f.id, e.target.value)}
+                  >
+                    {FEEDBACK_STATUSES.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </td>
                 <td className="px-4 py-3"><FeedbackPriorityBadge priority={f.priority} /></td>
                 <td className="px-4 py-3 text-muted">{formatAdminDate(f.createdAt)}</td>
                 <td className="px-4 py-3 text-right">

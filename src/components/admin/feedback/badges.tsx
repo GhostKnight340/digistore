@@ -6,11 +6,11 @@ import { feedbackStatusLabel, feedbackPriorityLabel } from "@/lib/feedback";
 // alone), matching the admin design system.
 const STATUS_CLASS: Record<string, string> = {
   new: "border-accent/40 text-accent",
-  reviewing: "border-amber-500/40 text-amber-400",
+  considered: "border-amber-500/40 text-amber-400",
   planned: "border-sky-500/40 text-sky-400",
   implemented: "border-green-500/40 text-green-400",
-  declined: "border-border text-faint",
-  closed: "border-border text-faint",
+  refused: "border-red-500/40 text-red-300",
+  archived: "border-border text-faint",
 };
 
 export function FeedbackStatusBadge({ status }: { status: string }) {
