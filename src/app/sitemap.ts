@@ -1,22 +1,26 @@
 import type { MetadataRoute } from "next";
 import { getCategorySeoIndex, getParentProductSlugs } from "@/lib/db/catalog";
 import { getActiveCollectionSlugs } from "@/lib/db/collections";
+import { getPublishedGuideSlugs } from "@/lib/db/guides";
 import { categoryPathFromSlug } from "@/lib/categoryUrl";
 import { collectionHref } from "@/lib/collectionUrl";
+import { guideHref } from "@/lib/guide";
 import { absoluteUrl } from "@/lib/siteUrl";
 
 export const dynamic = "force-dynamic";
 
 // Public, indexable storefront URLs. Admin/account/checkout/api are excluded
 // here and blocked in robots.ts.
-const STATIC_PATHS = ["/", "/products", "/collections", "/support", "/about", "/conditions", "/privacy", "/terms", "/refunds"];
+const STATIC_PATHS = ["/", "/products", "/collections", "/guides", "/support", "/about", "/conditions", "/privacy", "/terms", "/refunds"];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [categories, productSlugs, collectionSlugs] = await Promise.all([
+  const [categories, productSlugs, collectionSlugs, guides] = await Promise.all([
     getCategorySeoIndex().catch(() => []),
     getParentProductSlugs().catch(() => [] as string[]),
     // Only active, in-window, non-empty collections (see getActiveCollectionSlugs).
     getActiveCollectionSlugs().catch(() => [] as string[]),
+    // Only published, non-scheduled, non-archived guides.
+    getPublishedGuideSlugs().catch(() => [] as { slug: string; updatedAt: Date }[]),
   ]);
 
   const now = new Date();
@@ -51,5 +55,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticEntries, ...categoryEntries, ...productEntries, ...collectionEntries];
+  const guideEntries: MetadataRoute.Sitemap = guides.map((guide) => ({
+    url: absoluteUrl(guideHref(guide.slug)),
+    lastModified: guide.updatedAt,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
+  return [
+    ...staticEntries,
+    ...categoryEntries,
+    ...productEntries,
+    ...collectionEntries,
+    ...guideEntries,
+  ];
 }

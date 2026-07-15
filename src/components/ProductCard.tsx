@@ -3,29 +3,39 @@ import type { Product } from "@/lib/types";
 import { formatDH } from "@/lib/format";
 import ProductArt from "./ProductArt";
 import RegionBadge, { regionTitleSuffix } from "./RegionBadge";
+import WishlistButton from "./WishlistButton";
 
 export default function ProductCard({
   product,
   featured = false,
   accent,
+  showWishlist = true,
 }: {
   product: Product;
   featured?: boolean;
   /** Brand accent color for the art glow and hover border. */
   accent?: string | null;
+  /** Render the wishlist heart overlay (default on). */
+  showWishlist?: boolean;
 }) {
   const suffix = regionTitleSuffix(product.region);
   const brand = accent || "#3e7bfa";
   return (
-    <Link
-      href={product.href ?? `/products/${product.id}`}
-      style={{ ["--brand" as string]: brand }}
-      className={`group flex min-w-0 flex-col overflow-hidden rounded-[14px] border bg-surface transition duration-200 ${
-        featured
-          ? "border-border-strong shadow-soft hover:-translate-y-1 hover:border-[var(--brand)] hover:shadow-[0_22px_54px_rgba(0,0,0,0.38)]"
-          : "border-border hover:-translate-y-[3px] hover:border-[var(--brand)] hover:shadow-soft"
-      }`}
-    >
+    // The heart is a SIBLING of the card Link (never a button nested in an
+    // anchor), overlaid on the media so the whole card stays one tap target.
+    <div className="group relative min-w-0">
+      {showWishlist && (
+        <WishlistButton slug={product.id} className="absolute right-2.5 top-2.5 z-10" />
+      )}
+      <Link
+        href={product.href ?? `/products/${product.id}`}
+        style={{ ["--brand" as string]: brand }}
+        className={`flex min-w-0 flex-col overflow-hidden rounded-[14px] border bg-surface transition duration-200 ${
+          featured
+            ? "border-border-strong shadow-soft hover:-translate-y-1 hover:border-[var(--brand)] hover:shadow-[0_22px_54px_rgba(0,0,0,0.38)]"
+            : "border-border hover:-translate-y-[3px] hover:border-[var(--brand)] hover:shadow-soft"
+        }`}
+      >
       <div className="relative shrink-0">
         <ProductArt
           category={product.category}
@@ -65,6 +75,7 @@ export default function ProductCard({
           <span className="min-w-0 truncate text-xs text-faint">{product.categoryName}</span>
         </div>
       </div>
-    </Link>
+      </Link>
+    </div>
   );
 }

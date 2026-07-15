@@ -110,6 +110,7 @@ function toParent(product: ProductRow): ParentProductDTO {
     thumbnail: product.imageUrl ?? product.media[0]?.url ?? null,
     active: product.active,
     featured: product.featured,
+    searchAliases: product.searchAliases ?? [],
     createdAt: product.createdAt.toISOString(),
     variants,
   };
@@ -573,6 +574,14 @@ export async function saveParentProduct(
     imageUrl: data.thumbnail || null,
     active: data.active,
     featured: data.featured,
+    // Trim/lowercase/de-dupe aliases so search matching stays clean + bounded.
+    searchAliases: Array.from(
+      new Set(
+        (data.searchAliases ?? [])
+          .map((a) => a.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ).slice(0, 40),
   };
 
   try {

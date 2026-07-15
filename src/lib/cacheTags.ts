@@ -16,3 +16,6 @@ export const STORE_SETTINGS_TAG = "store-settings";
 // (e.g. the admin-uploaded hero image). Kept separate so campaign edits don't
 // invalidate the whole catalog cache.
 export const GTA_PREORDER_TAG = "gta-preorder";
+// Customer-education guide content (/guides). Search reads carry this alongside
+// CATALOG_TAG so an admin guide edit refreshes both the guide pages and search.
+export const GUIDES_TAG = "guides";

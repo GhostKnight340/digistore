@@ -13,11 +13,11 @@ import {
 test("the drawer offers every account section, in order", () => {
   assert.deepEqual(
     ACCOUNT_NAV.map((item) => item.view),
-    ["dashboard", "orders", "wallet", "support", "security"],
+    ["dashboard", "orders", "favoris", "wallet", "support", "security"],
   );
   assert.deepEqual(
     ACCOUNT_NAV.map((item) => item.label),
-    ["Tableau de bord", "Commandes", "Crédit Ghost", "Support", "Sécurité"],
+    ["Tableau de bord", "Commandes", "Favoris", "Crédit Ghost", "Support", "Sécurité"],
   );
 });
 
@@ -27,6 +27,7 @@ test("every section points at a real account route", () => {
     [
       "/account",
       "/account/orders",
+      "/account/favoris",
       "/account/wallet",
       "/account/support",
       "/account/security",
@@ -35,7 +36,14 @@ test("every section points at a real account route", () => {
 });
 
 test("the active section resolves to exactly one nav entry", () => {
-  const views: AccountView[] = ["dashboard", "orders", "wallet", "support", "security"];
+  const views: AccountView[] = [
+    "dashboard",
+    "orders",
+    "favoris",
+    "wallet",
+    "support",
+    "security",
+  ];
   for (const active of views) {
     const matches = ACCOUNT_NAV.filter((item) => item.view === active);
     assert.equal(matches.length, 1, `${active} must highlight one entry`);

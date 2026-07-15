@@ -12,6 +12,7 @@ import {
 import { uploadImageFile } from "@/lib/clientUpload";
 import type { AdminCategoryDTO, SaveCategoryInput } from "@/lib/dto";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
+import AliasEditor from "@/components/admin/AliasEditor";
 import {
   defaultCategoryLanding,
   isValidCtaUrl,
@@ -39,6 +40,7 @@ function emptyCategory(sortOrder: number): AdminCategoryDTO {
     sortOrder,
     productCount: 0,
     landing: defaultCategoryLanding(),
+    aliases: [],
   };
 }
 
@@ -160,6 +162,7 @@ export default function CategoriesPanel() {
       active: draft.active,
       sortOrder: draft.sortOrder,
       landing: draft.landing ?? defaultCategoryLanding(),
+      aliases: draft.aliases ?? [],
     };
     const result = await saveCategoryAction(input);
     if (result.ok && result.category) {
@@ -421,6 +424,16 @@ export default function CategoriesPanel() {
                 value={draft.description}
                 onChange={(event) => update("description", event.target.value)}
               />
+            </Field>
+
+            <Field label="Alias de recherche">
+              <AliasEditor
+                aliases={draft.aliases ?? []}
+                onChange={(next) => update("aliases", next)}
+              />
+              <p className="mt-1 text-[11px] text-faint">
+                Termes alternatifs que les clients tapent (ex. « carte psn »). Jamais affichés.
+              </p>
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">

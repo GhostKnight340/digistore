@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, lazy, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getAdminNavCountsAction } from "@/app/actions/admin";
 import AdminShell, {
@@ -21,7 +22,6 @@ const InventoryPanel = lazy(() => import("@/components/admin/InventoryPanel"));
 const PaymentsPanel = lazy(() => import("@/components/admin/PaymentsPanel"));
 const PaymentMethodsPanel = lazy(() => import("@/components/admin/PaymentMethodsPanel"));
 const FulfillmentPanel = lazy(() => import("@/components/admin/FulfillmentPanel"));
-const CustomersPanel = lazy(() => import("@/components/admin/CustomersPanel"));
 const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplatesPanel"));
 const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
 const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
@@ -32,17 +32,35 @@ const ExpensesPanel = lazy(() => import("@/components/admin/ExpensesPanel"));
 const PromoCodesPanel = lazy(() => import("@/components/admin/PromoCodesPanel"));
 const MilestonesPanel = lazy(() => import("@/components/admin/MilestonesPanel"));
 const SupportTicketsPanel = lazy(() => import("@/components/admin/SupportTicketsPanel"));
+const GuidesPanel = lazy(() => import("@/components/admin/GuidesPanel"));
 
 const panelFallback = (
   <section className="card p-6 text-sm text-muted">Chargement de la section...</section>
 );
 
-function RestoredPanel({ title, eyebrow, text }: { title: string; eyebrow: string; text: string }) {
+function RestoredPanel({
+  title,
+  eyebrow,
+  text,
+  href,
+  linkLabel,
+}: {
+  title: string;
+  eyebrow: string;
+  text: string;
+  href?: string;
+  linkLabel?: string;
+}) {
   return (
     <section className="card p-6">
       <p className="text-xs uppercase tracking-wide text-muted">{eyebrow}</p>
       <h2 className="mt-2 text-xl font-bold text-white">{title}</h2>
       <p className="mt-2 max-w-2xl text-sm text-muted">{text}</p>
+      {href && (
+        <Link href={href} className="btn-primary mt-4 inline-flex text-sm">
+          {linkLabel ?? "Ouvrir"}
+        </Link>
+      )}
     </section>
   );
 }
@@ -63,6 +81,8 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
       return <FeaturedProductsPanel />;
     case "collections":
       return <CollectionsPanel />;
+    case "guides":
+      return <GuidesPanel />;
     case "pricing":
       return <PricingPanel />;
     case "expenses":
@@ -99,7 +119,16 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
     case "fulfillment":
       return <FulfillmentPanel />;
     case "customers":
-      return <CustomersPanel />;
+      // Clients moved to the dedicated management area at /admin/clients.
+      return (
+        <RestoredPanel
+          title="Clients"
+          eyebrow="Section admin"
+          text="La gestion des clients dispose désormais de sa propre page."
+          href="/admin/clients"
+          linkLabel="Ouvrir les clients"
+        />
+      );
     case "suppliers":
       return <SuppliersPanel />;
     case "refunds":

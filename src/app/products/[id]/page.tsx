@@ -12,6 +12,10 @@ import RegionBadge, { regionTitleSuffix } from "@/components/RegionBadge";
 import RegionPanel from "@/components/RegionPanel";
 import RegionFlag from "@/components/RegionFlag";
 import NavigatorTips from "@/components/trust/NavigatorTips";
+import ShareButton from "@/components/ShareButton";
+import WishlistButton from "@/components/WishlistButton";
+import RecordProductView from "@/components/RecordProductView";
+import RecentlyViewed from "@/components/RecentlyViewed";
 import DeliverySteps from "@/components/trust/DeliverySteps";
 import AcceptedPayments from "@/components/trust/AcceptedPayments";
 import Faq from "@/components/trust/Faq";
@@ -141,8 +145,17 @@ export default async function ProductDetailPage({
             )}
           </h1>
 
-          <div className="mt-6 flex flex-wrap gap-2">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
             <span className="chip">{product.deliveryType}</span>
+            <div className="flex items-center gap-2">
+              <WishlistButton slug={product.id} variant="inline" />
+              <ShareButton
+                url={`/products/${id}`}
+                title={`${product.name} — ghost.ma`}
+                text={product.shortDescription || undefined}
+                variant="icon"
+              />
+            </div>
           </div>
 
           <div className="mt-5">
@@ -243,6 +256,9 @@ export default async function ProductDetailPage({
         </aside>
       </div>
 
+      {/* Records this parent product in the local "Consultés récemment" history. */}
+      <RecordProductView slug={product.id} max={settings.features.recentlyViewedMax} />
+
       {related.length > 0 && (
         <section className="mt-16">
           <h2 className="text-xl font-semibold tracking-tight text-text">
@@ -255,6 +271,12 @@ export default async function ProductDetailPage({
           </div>
         </section>
       )}
+
+      <RecentlyViewed
+        excludeSlug={product.id}
+        limit={settings.features.recentlyViewedMax}
+        className="mt-16"
+      />
 
       {settings.homepage.showFaq && (
         <Faq

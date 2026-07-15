@@ -8,6 +8,7 @@ import {
 } from "@/lib/account/nav";
 import {
   GridIcon,
+  HeartIcon,
   BagIcon,
   ShieldIcon,
   LogoutIcon,
@@ -19,6 +20,7 @@ import {
 const ICONS: Record<AccountView, typeof GridIcon> = {
   dashboard: GridIcon,
   orders: BagIcon,
+  favoris: HeartIcon,
   wallet: WalletIcon,
   support: LifebuoyIcon,
   security: ShieldIcon,

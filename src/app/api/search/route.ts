@@ -21,6 +21,7 @@ export async function GET(request: Request) {
       products: [],
       categories: [],
       collections: [],
+      guides: [],
       hasMore: false,
     });
   }
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
         products: [],
         categories: [],
         collections: [],
+        guides: [],
         hasMore: false,
         error: "search_failed",
       },

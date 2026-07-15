@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { formatPublicOrderNumber, formatPublicOrderPathSegment } from "@/lib/orderNumber";
+import { isSessionActive } from "@/lib/sessionRevocation";
 
 const scryptAsync = promisify(scrypt);
 const SESSION_COOKIE = "ghost_customer_session";
@@ -23,6 +24,8 @@ export type AuthCustomer = {
   image: string | null;
   googleId: string | null;
   role: string;
+  /** Admin-managed account status: "active" | "disabled" | "review" | "fraud_hold". */
+  status: string;
   emailVerified: boolean;
   emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
@@ -125,13 +128,16 @@ function sign(value: string) {
 }
 
 function encodeSession(customerId: string, expiresAt: Date) {
+  // `iat` (issued-at) is embedded so admin session-revocation can invalidate
+  // cookies issued before a Customer.sessionsValidAfter anchor. See
+  // src/lib/sessionRevocation.ts.
   const payload = Buffer.from(
-    JSON.stringify({ customerId, exp: expiresAt.getTime() }),
+    JSON.stringify({ customerId, exp: expiresAt.getTime(), iat: Date.now() }),
   ).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
-function decodeSession(value?: string) {
+function decodeSession(value?: string): { customerId: string; iat?: number } | null {
   if (!value) return null;
   const [payload, signature] = value.split(".");
   if (!payload || !signature || sign(payload) !== signature) return null;
@@ -139,9 +145,11 @@ function decodeSession(value?: string) {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
       customerId?: string;
       exp?: number;
+      iat?: number;
     };
     if (!parsed.customerId || !parsed.exp || parsed.exp < Date.now()) return null;
-    return parsed.customerId;
+    // `iat` is optional so pre-existing cookies (no iat) still decode.
+    return { customerId: parsed.customerId, iat: parsed.iat };
   } catch {
     return null;
   }
@@ -298,10 +306,10 @@ export async function clearCustomerSession() {
 
 export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
   await ensureDatabaseReady();
-  const customerId = decodeSession((await cookies()).get(SESSION_COOKIE)?.value);
-  if (!customerId) return null;
+  const session = decodeSession((await cookies()).get(SESSION_COOKIE)?.value);
+  if (!session) return null;
   const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
+    where: { id: session.customerId },
     select: {
       id: true,
       name: true,
@@ -310,6 +318,8 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
       image: true,
       googleId: true,
       role: true,
+      status: true,
+      sessionsValidAfter: true,
       emailVerified: true,
       emailVerifiedAt: true,
       lastLoginAt: true,
@@ -334,6 +344,11 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
   if (!customer || (!customer.passwordHash && !customer.googleId && !customer.discordId)) {
     return null;
   }
+  // A disabled account is treated as logged-out server-side (blocks login/
+  // purchases) without deleting any data.
+  if (customer.status === "disabled") return null;
+  // Admin session revocation: reject cookies issued before the anchor.
+  if (!isSessionActive(session.iat, customer.sessionsValidAfter)) return null;
   return {
     id: customer.id,
     name: customer.name,
@@ -342,6 +357,7 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     image: customer.image,
     googleId: customer.googleId,
     role: customer.role,
+    status: customer.status,
     emailVerified: customer.emailVerified,
     emailVerifiedAt: customer.emailVerifiedAt,
     lastLoginAt: customer.lastLoginAt,

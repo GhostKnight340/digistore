@@ -5,6 +5,7 @@ import ProductCard from "@/components/ProductCard";
 import TrackView from "@/components/analytics/TrackView";
 import TrackedLink from "@/components/gta/TrackedLink";
 import CollectionRegionFilter from "@/components/collections/CollectionRegionFilter";
+import ShareButton from "@/components/ShareButton";
 import { getCollectionBySlug } from "@/lib/db/collections";
 import { getActiveCategories } from "@/lib/db/catalog";
 import { collectionHref } from "@/lib/collectionUrl";
@@ -150,6 +151,12 @@ export default async function CollectionPage({
               Voir les produits →
             </Link>
           ) : null}
+          <ShareButton
+            url={collectionHref(collection.slug)}
+            title={`${collection.name} — ghost.ma`}
+            text={collection.shortDescription || undefined}
+            variant="icon"
+          />
         </div>
       </header>
 

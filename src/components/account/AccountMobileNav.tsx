@@ -13,6 +13,7 @@ import {
 import {
   GridIcon,
   BagIcon,
+  HeartIcon,
   ShieldIcon,
   LogoutIcon,
   CheckIcon,
@@ -25,6 +26,7 @@ import {
 const ICONS: Record<AccountView, typeof GridIcon> = {
   dashboard: GridIcon,
   orders: BagIcon,
+  favoris: HeartIcon,
   wallet: WalletIcon,
   support: LifebuoyIcon,
   security: ShieldIcon,

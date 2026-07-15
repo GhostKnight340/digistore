@@ -205,6 +205,17 @@ export type StoreSettings = {
     // Days before expiry the reminder email is sent (when the customer opted in).
     reminderDaysBefore: number;
   };
+  // Discovery/engagement feature switches. Additive; safe defaults keep the new
+  // storefront features on without any admin action.
+  features: {
+    // Master switch for the customer wishlist ("Favoris"). Off → hearts hide and
+    // /account/favoris shows a disabled notice; existing saved rows are kept.
+    wishlistEnabled: boolean;
+    // Show the "Consultés récemment" strip on the homepage.
+    recentlyViewedOnHomepage: boolean;
+    // Max recently-viewed products kept per device/customer (parent products).
+    recentlyViewedMax: number;
+  };
 };
 
 export const defaultStoreSettings: StoreSettings = {
@@ -486,6 +497,11 @@ export const defaultStoreSettings: StoreSettings = {
   ghostCredit: {
     inactivityDays: 180,
     reminderDaysBefore: 3,
+  },
+  features: {
+    wishlistEnabled: true,
+    recentlyViewedOnHomepage: false,
+    recentlyViewedMax: 12,
   },
 };
 
@@ -810,6 +826,23 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
         value.ghostCredit.reminderDaysBefore > 0
           ? Math.round(value.ghostCredit.reminderDaysBefore)
           : defaultStoreSettings.ghostCredit.reminderDaysBefore,
+    },
+    features: {
+      wishlistEnabled:
+        isObject(value.features) && typeof value.features.wishlistEnabled === "boolean"
+          ? value.features.wishlistEnabled
+          : defaultStoreSettings.features.wishlistEnabled,
+      recentlyViewedOnHomepage:
+        isObject(value.features) &&
+        typeof value.features.recentlyViewedOnHomepage === "boolean"
+          ? value.features.recentlyViewedOnHomepage
+          : defaultStoreSettings.features.recentlyViewedOnHomepage,
+      recentlyViewedMax:
+        isObject(value.features) &&
+        typeof value.features.recentlyViewedMax === "number" &&
+        value.features.recentlyViewedMax > 0
+          ? Math.min(24, Math.round(value.features.recentlyViewedMax))
+          : defaultStoreSettings.features.recentlyViewedMax,
     },
   };
 }

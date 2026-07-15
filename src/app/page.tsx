@@ -4,6 +4,7 @@ import StatStrip from "@/components/StatStrip";
 import FeaturedCarousel from "@/components/FeaturedCarousel";
 import CategoryCard from "@/components/CategoryCard";
 import ProductCard from "@/components/ProductCard";
+import RecentlyViewed from "@/components/RecentlyViewed";
 import CollectionsExplorer from "@/components/CollectionsExplorer";
 import TrustStrip from "@/components/TrustStrip";
 import TrustBadges from "@/components/trust/TrustBadges";
@@ -186,6 +187,13 @@ export default async function HomePage() {
             </div>
           )}
         </section>
+      )}
+
+      {settings.features.recentlyViewedOnHomepage && (
+        <RecentlyViewed
+          className="mt-10 sm:mt-14"
+          limit={settings.features.recentlyViewedMax}
+        />
       )}
 
       {settings.homepage.showCollections && (

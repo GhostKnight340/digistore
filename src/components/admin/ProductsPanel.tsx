@@ -25,6 +25,7 @@ import { REGION_LIST, getRegion } from "@/lib/regions";
 import { variantSku, variantTitle as computeVariantTitle } from "@/lib/pricing/variant-identity";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
+import AliasEditor from "@/components/admin/AliasEditor";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ function emptyParent(category = ""): ParentProductDTO {
     thumbnail: null,
     active: true,
     featured: false,
+    searchAliases: [],
     createdAt: new Date().toISOString(),
     variants: [],
   };
@@ -269,6 +271,7 @@ export default function ProductsPanel() {
       thumbnail: draft.thumbnail?.trim() || null,
       active: draft.active,
       featured: draft.featured,
+      searchAliases: draft.searchAliases ?? [],
     });
     if (result.ok) {
       const variantResult = await saveDirtyVariants({ ...draft, slug: newSlug });
@@ -1005,6 +1008,12 @@ function DetailsTab({
             value={draft.deliveryType}
             onChange={(e) => update("deliveryType", e.target.value)}
             placeholder="Produit numérique - livraison rapide"
+          />
+        </Field>
+        <Field label="Alias de recherche">
+          <AliasEditor
+            aliases={draft.searchAliases ?? []}
+            onChange={(next) => update("searchAliases", next)}
           />
         </Field>
       </div>

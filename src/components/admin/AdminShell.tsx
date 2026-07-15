@@ -37,6 +37,9 @@ export type NavCounts = { activeOrders: number; paymentReview: number; supportOp
  */
 export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   "import-reloadly": "/admin/catalog/import-reloadly",
+  // Clients is a full management area (list + per-customer detail), not an
+  // in-place dashboard panel.
+  customers: "/admin/clients",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
@@ -139,6 +142,22 @@ const NAV: NavGroup[] = [
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    heading: "Contenu",
+    items: [
+      {
+        id: "guides",
+        label: "Guides",
+        icon: icon(
+          <>
+            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+            <line x1="8" y1="7.5" x2="16" y2="7.5" />
+            <line x1="8" y1="11" x2="14" y2="11" />
           </>,
         ),
       },

@@ -17,6 +17,8 @@ import { isCollectionPublic } from "@/lib/collections/schedule";
 import { categoryHref } from "@/lib/categoryUrl";
 import { collectionHref } from "@/lib/collectionUrl";
 import { resolveCollectionIcon } from "@/lib/collections/icons";
+import { guideHref, normalizeGuideIcon } from "@/lib/guide";
+import { GUIDES_TAG } from "@/lib/cacheTags";
 
 /** Subset of settings the stock helpers need. */
 type StockOpts = Pick<StoreSettings, "inventoryEnabled" | "inventoryMode">;
@@ -24,6 +26,7 @@ import type {
   Category,
   CategorySearchResult,
   CollectionSearchResult,
+  GuideSearchResult,
   Product,
   ProductSearchResult,
   ProductVariantOption,
@@ -554,6 +557,42 @@ export async function getEligibleParentIds(
   return new Set(rows.map((row) => row.id));
 }
 
+/**
+ * Map a product row + its public variants to a storefront parent card. Shared by
+ * every card site (collections, related products, ranked search) so the shape
+ * and visibility-derived fields never drift.
+ */
+function buildParentCard(
+  row: ProductWithCategory,
+  publicVariants: ProductWithCategory["variants"],
+  settings: StoreSettings,
+): Product {
+  const startingPrice = publicVariants.reduce(
+    (min, variant) => (variant.priceMad < min ? variant.priceMad : min),
+    publicVariants[0].priceMad,
+  );
+  const inStock = publicVariants.some(
+    (variant) => variantStockStatus(row, variant, settings) === "in_stock",
+  );
+  return {
+    id: row.slug,
+    parentId: row.slug,
+    href: `/products/${row.slug}`,
+    name: row.name,
+    category: row.category,
+    categoryName: row.categoryRecord?.name ?? row.category,
+    region: row.region,
+    price: startingPrice,
+    deliveryType: row.deliveryType,
+    description: row.description,
+    shortDescription: row.shortDescription,
+    longDescription: row.longDescription,
+    imageUrl: catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug),
+    featured: row.featured,
+    stockStatus: inStock ? "in_stock" : "out_of_stock",
+  };
+}
+
 export async function getPublicParentCards(
   productIds: string[],
 ): Promise<Map<string, Product>> {
@@ -574,33 +613,107 @@ export async function getPublicParentCards(
       isVariantPublic(row, variant, settings),
     );
     if (publicVariants.length === 0) continue;
-    const startingPrice = publicVariants.reduce(
-      (min, variant) => (variant.priceMad < min ? variant.priceMad : min),
-      publicVariants[0].priceMad,
-    );
-    const inStock = publicVariants.some(
-      (variant) => variantStockStatus(row, variant, settings) === "in_stock",
-    );
-    map.set(row.id, {
-      id: row.slug,
-      parentId: row.slug,
-      href: `/products/${row.slug}`,
-      name: row.name,
-      category: row.category,
-      categoryName: row.categoryRecord?.name ?? row.category,
-      region: row.region,
-      price: startingPrice,
-      deliveryType: row.deliveryType,
-      description: row.description,
-      shortDescription: row.shortDescription,
-      longDescription: row.longDescription,
-      imageUrl: catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug),
-      featured: row.featured,
-      stockStatus: inStock ? "in_stock" : "out_of_stock",
-    });
+    map.set(row.id, buildParentCard(row, publicVariants, settings));
   }
   return map;
 }
+
+/**
+ * Visible parent-product cards for a list of SLUGS, returned in the SAME order as
+ * the input. Hidden/inactive/removed products are silently dropped. Backs the
+ * "Consultés récemment" section — so a product that becomes unavailable simply
+ * disappears from history rather than leaking. Bounded to avoid unbounded reads.
+ */
+export async function getVisibleParentCardsBySlugs(
+  slugs: string[],
+): Promise<Product[]> {
+  const clean = [...new Set(slugs.map((s) => s.trim()).filter(Boolean))].slice(0, 24);
+  if (clean.length === 0) return [];
+  const settings = await loadStoreSettings();
+  const rows = await prisma.product.findMany({
+    where: {
+      slug: { in: clean },
+      active: true,
+      categoryRecord: { is: { active: true } },
+      variants: { some: { active: true } },
+    },
+    include: productCatalogInclude,
+  });
+  const bySlug = new Map<string, Product>();
+  for (const row of rows) {
+    const publicVariants = row.variants.filter((variant) =>
+      isVariantPublic(row, variant, settings),
+    );
+    if (publicVariants.length === 0) continue;
+    bySlug.set(row.slug, buildParentCard(row, publicVariants, settings));
+  }
+  return clean.map((slug) => bySlug.get(slug)).filter((p): p is Product => Boolean(p));
+}
+
+/**
+ * Ranked full parent-product cards for the /search results page. Uses the exact
+ * same accent/alias ranker and visibility rules as the header autocomplete, but
+ * returns full `Product` cards (for `ProductCard`) rather than compact rows.
+ * Parent-level only — variants never appear as separate results.
+ */
+export async function getRankedSearchProducts(
+  rawQuery: string,
+  limit = 48,
+): Promise<Product[]> {
+  const query = rawQuery.trim();
+  if (query.length < 2) return [];
+  return getRankedSearchProductsCached(query, limit);
+}
+
+const getRankedSearchProductsCached = unstable_cache(
+  async (query: string, limit: number): Promise<Product[]> => {
+    const settings = await loadStoreSettings();
+    const rows = await getActiveProductRows({ take: 300 });
+    const scored: { score: number; product: Product }[] = [];
+    for (const row of rows) {
+      const publicVariants = row.variants.filter((variant) =>
+        isVariantPublic(row, variant, settings),
+      );
+      if (publicVariants.length === 0) continue;
+      const inStock = publicVariants.some(
+        (variant) => variantStockStatus(row, variant, settings) === "in_stock",
+      );
+      const score = scoreMatch(
+        {
+          kind: "product",
+          title: row.name,
+          aliasText: [
+            row.brand ?? "",
+            row.categoryRecord?.name ?? row.category,
+            ...(row.searchAliases ?? []),
+          ]
+            .filter(Boolean)
+            .join(" "),
+          haystack: [
+            row.shortDescription ?? "",
+            row.description,
+            row.region,
+            ...publicVariants.map((variant) =>
+              [variant.name, variant.region ?? "", variant.faceCurrency]
+                .filter(Boolean)
+                .join(" "),
+            ),
+          ]
+            .filter(Boolean)
+            .join(" "),
+          inStock,
+        },
+        query,
+      );
+      if (score <= 0) continue;
+      scored.push({ score, product: buildParentCard(row, publicVariants, settings) });
+    }
+    scored.sort((a, b) => b.score - a.score || a.product.name.localeCompare(b.product.name));
+    return scored.slice(0, limit).map((entry) => entry.product);
+  },
+  ["storefront-search-products"],
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+);
 
 /**
  * When a query is specific enough to name a denomination (e.g. "steam 20 eur"),
@@ -642,7 +755,14 @@ export async function searchStorefront(
 ): Promise<SearchGroupsResult> {
   const query = rawQuery.trim();
   if (query.length < 2) {
-    return { query, products: [], categories: [], collections: [], hasMore: false };
+    return {
+      query,
+      products: [],
+      categories: [],
+      collections: [],
+      guides: [],
+      hasMore: false,
+    };
   }
   return searchStorefrontCached(query, opts.productLimit ?? 6);
 }
@@ -650,12 +770,20 @@ export async function searchStorefront(
 const searchStorefrontCached = unstable_cache(
   async (query: string, productLimit: number): Promise<SearchGroupsResult> => {
     const settings = await loadStoreSettings();
-    const [rows, categoryRows, collectionRows] = await Promise.all([
+    const now = new Date();
+    const [rows, categoryRows, collectionRows, guideRows] = await Promise.all([
       getActiveProductRows({ take: 300 }),
       prisma.category.findMany({
         where: { active: true },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, description: true, tagline: true, seoSlug: true },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          tagline: true,
+          seoSlug: true,
+          aliases: true,
+        },
       }),
       prisma.collection.findMany({
         where: { active: true },
@@ -671,8 +799,25 @@ const searchStorefrontCached = unstable_cache(
           endAt: true,
         },
       }),
+      // Published, current guides only — never drafts/scheduled/archived.
+      prisma.guide.findMany({
+        where: {
+          published: true,
+          archivedAt: null,
+          OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
+        },
+        orderBy: [{ featured: "desc" }, { sortOrder: "asc" }],
+        take: 200,
+        select: {
+          slug: true,
+          title: true,
+          summary: true,
+          platform: true,
+          icon: true,
+          aliases: true,
+        },
+      }),
     ]);
-    const now = new Date();
 
     // ── Products (parent-level, ranked) ──────────────────────────────────────
     const scoredProducts: { score: number; result: ProductSearchResult }[] = [];
@@ -688,10 +833,29 @@ const searchStorefrontCached = unstable_cache(
         {
           kind: "product",
           title: row.name,
-          aliasText: [row.brand ?? "", row.categoryRecord?.name ?? row.category]
+          // Brand, category name, and the record's editable search aliases all
+          // count as alias matches (tier 2). Global synonyms live in text.ts.
+          aliasText: [
+            row.brand ?? "",
+            row.categoryRecord?.name ?? row.category,
+            ...(row.searchAliases ?? []),
+          ]
             .filter(Boolean)
             .join(" "),
-          haystack: [row.shortDescription ?? "", row.description].filter(Boolean).join(" "),
+          // Region + variant denominations searched last so "france" or "20 eur"
+          // still surface the parent (the variant is then preselected via href).
+          haystack: [
+            row.shortDescription ?? "",
+            row.description,
+            row.region,
+            ...publicVariants.map((variant) =>
+              [variant.name, variant.region ?? "", variant.faceCurrency]
+                .filter(Boolean)
+                .join(" "),
+            ),
+          ]
+            .filter(Boolean)
+            .join(" "),
           inStock,
         },
         query,
@@ -733,6 +897,7 @@ const searchStorefrontCached = unstable_cache(
           {
             kind: "category",
             title: category.name,
+            aliasText: (category.aliases ?? []).join(" "),
             haystack: [category.description, category.tagline].filter(Boolean).join(" "),
           },
           query,
@@ -778,10 +943,38 @@ const searchStorefrontCached = unstable_cache(
         ),
       }));
 
-    return { query, products, categories, collections, hasMore };
+    // ── Guides (published/current only) ──────────────────────────────────────
+    const guides: GuideSearchResult[] = guideRows
+      .map((guide) => ({
+        score: scoreMatch(
+          {
+            kind: "product", // rank guides on the same content tiers as products
+            title: guide.title,
+            aliasText: [guide.platform, ...(guide.aliases ?? [])]
+              .filter(Boolean)
+              .join(" "),
+            haystack: guide.summary,
+          },
+          query,
+        ),
+        guide,
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .map((entry) => ({
+        slug: entry.guide.slug,
+        title: entry.guide.title,
+        href: guideHref(entry.guide.slug),
+        summary: entry.guide.summary,
+        platform: entry.guide.platform,
+        icon: normalizeGuideIcon(entry.guide.icon) || "",
+      }));
+
+    return { query, products, categories, collections, guides, hasMore };
   },
   ["storefront-search"],
-  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG] },
+  { tags: [CATALOG_TAG, STORE_SETTINGS_TAG, GUIDES_TAG] },
 );
 
 export async function getProductCatalog(): Promise<Product[]> {

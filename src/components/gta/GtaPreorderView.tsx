@@ -7,6 +7,7 @@ import PlatformTabs from "@/components/gta/PlatformTabs";
 import GtaGiftCard from "@/components/gta/GtaGiftCard";
 import GtaHero from "@/components/gta/GtaHero";
 import TrackedLink from "@/components/gta/TrackedLink";
+import ShareButton from "@/components/ShareButton";
 import {
   getActiveCategories,
   getProductBySlug,
@@ -140,6 +141,13 @@ export default async function GtaPreorderView({
           <InfoStrip
             label="Disponibilité"
             value={config.releaseInfo.availabilityLabel}
+          />
+        </div>
+        <div className="mt-4 flex justify-end">
+          <ShareButton
+            url="/precommande-gta-6"
+            title="Précommande GTA VI — ghost.ma"
+            text="Précommandez GTA VI avec une carte PSN ou Xbox sur ghost.ma."
           />
         </div>
       </section>

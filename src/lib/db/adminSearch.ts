@@ -185,12 +185,14 @@ async function searchCustomers(query: string): Promise<CommandSearchGroup | null
       OR: [
         { name: { contains: query, mode: "insensitive" } },
         { email: { contains: query, mode: "insensitive" } },
+        { phone: { contains: query } },
       ],
     },
     select: {
       id: true,
       name: true,
       email: true,
+      status: true,
       _count: { select: { orders: true } },
     },
   });
@@ -205,7 +207,12 @@ async function searchCustomers(query: string): Promise<CommandSearchGroup | null
       title: customer.name,
       subtitle: `${customer.email} · ${customer._count.orders} commande${customer._count.orders > 1 ? "s" : ""}`,
       mono: true,
-      href: "/admin?tab=customers",
+      status:
+        customer.status && customer.status !== "active"
+          ? { text: customer.status === "disabled" ? "Désactivé" : "Revue", tone: "amber" as const }
+          : undefined,
+      // Deep-link straight to the customer's management page (not the old tab).
+      href: `/admin/clients/${customer.id}`,
       exact: customer.email.toLowerCase() === normalizedQuery,
     })),
   };

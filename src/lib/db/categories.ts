@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import type { ActionResult, AdminCategoryDTO, SaveCategoryInput } from "@/lib/dto";
 import { normalizeCategoryLanding, hasLandingContent } from "@/lib/categoryLanding";
+import { normalizeCollectionAliases } from "@/lib/collections/normalize";
 import { canonicalBrandKey } from "@/lib/brandAssets";
 import {
   CONTENT,
@@ -50,6 +51,7 @@ function toDTO(row: {
   active: boolean;
   sortOrder: number;
   landing?: unknown;
+  aliases?: string[];
   _count?: { products: number };
 }): AdminCategoryDTO {
   return {
@@ -66,6 +68,7 @@ function toDTO(row: {
     sortOrder: row.sortOrder,
     productCount: row._count?.products ?? 0,
     landing: normalizeCategoryLanding(row.landing),
+    aliases: row.aliases ?? [],
   };
 }
 
@@ -202,6 +205,8 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
     sortOrder: input.sortOrder,
     // Normalize on write so the persisted blob is always clean and bounded.
     landing: normalizeCategoryLanding(input.landing) as unknown as Prisma.InputJsonValue,
+    // Trim/lowercase/de-dupe aliases so search matching is clean and bounded.
+    aliases: normalizeCollectionAliases(input.aliases ?? []).slice(0, 40),
   };
 
   try {

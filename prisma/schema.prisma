@@ -30,6 +30,10 @@ model Product {
   featured          Boolean  @default(true)
   active            Boolean  @default(true)
   sortOrder         Int      @default(0)
+  // Centralized, admin-maintained public-search aliases (accent/case-insensitive
+  // match only, e.g. "psn", "carte steam"). Never rendered as visible product
+  // data. Kept alongside the global alias table in src/lib/search/text.ts.
+  searchAliases     String[] @default([])
   // Pricing-policy override for the suggested-price engine only (see
   // docs/pricing-architecture.md). Percentage, e.g. 8.5 = 8.5%. NEVER touches
   // the published priceMad — it only feeds the margin-resolution ladder.
@@ -37,7 +41,7 @@ model Product {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now()) @updatedAt
 
-  categoryRecord  Category?           @relation(fields: [category], references: [id])
+  categoryRecord  Category?               @relation(fields: [category], references: [id])
   digitalCodes    DigitalCode[]
   orderItems      OrderItem[]
   deliveredCodes  DeliveredCode[]
@@ -45,6 +49,8 @@ model Product {
   variants        ProductVariant[]
   collectionItems CollectionProduct[]
   promoCodeLinks  PromoCodeProduct[]
+  wishlistItems   WishlistItem[]
+  recentlyViewed  RecentlyViewedProduct[]
 
   @@index([active, sortOrder])
   @@index([category, active])
@@ -149,11 +155,106 @@ model Category {
   // — see src/lib/categoryLanding.ts for the shape and normalizer. Null / absent
   // means the category renders as a plain product grid (no landing sections).
   landing           Json?
+  // Centralized, admin-maintained public-search aliases (accent/case-insensitive
+  // match only). Mirrors Collection.aliases. Never rendered as visible data.
+  aliases           String[] @default([])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now()) @updatedAt
 
   products       Product[]
   promoCodeLinks PromoCodeCategory[]
+  guides         Guide[]
+}
+
+// Customer-education content page (e.g. "Comment activer une carte Steam").
+// Real SEO-friendly public routes at /guides/<slug>, not modal-only content.
+// The structured body (typed content blocks), FAQ, and Navigator tip are stored
+// as normalized JSON blobs — mirroring the Category.landing pattern — so we avoid
+// a fan of tiny join tables while keeping the shape validated on read/write in
+// src/lib/guide.ts. Related products/guides are id arrays resolved live (and
+// filtered to visible records) at render time, never snapshots.
+model Guide {
+  id                String    @id @default(cuid())
+  slug              String    @unique
+  title             String
+  summary           String    @default("")
+  // Free-form platform/category badge label shown on the guide (e.g.
+  // "PlayStation", "Steam"). Distinct from the optional structured Category link.
+  platform          String    @default("")
+  // Optional link to a real Category for cross-linking / filtering the index.
+  categoryId        String?
+  heroImageUrl      String?
+  // Approved icon KEY (see src/lib/guide.ts) — never raw SVG/HTML.
+  icon              String    @default("")
+  // Array of typed content blocks (heading/paragraph/steps/list/image/warning/
+  // navigatorTip/payment/productRecommendation/faq/cta). Sanitized on write.
+  content           Json?
+  // Visible FAQ items [{ id, question, answer }] — the ONLY source of FAQ schema.
+  faq               Json?
+  // Navigator tip { enabled, title, message, type, ctaLabel, ctaUrl }.
+  navigatorTip      Json?
+  // Related content resolved live; hidden/inactive targets are dropped at render.
+  relatedProductIds String[]  @default([])
+  relatedGuideIds   String[]  @default([])
+  // Public-search aliases/keywords (accent/case-insensitive). Never rendered.
+  aliases           String[]  @default([])
+  // Publication. `published` gates public visibility & sitemap inclusion.
+  // `scheduledAt` in the future keeps it out of public reads until then.
+  published         Boolean   @default(false)
+  featured          Boolean   @default(false)
+  sortOrder         Int       @default(0)
+  publishedAt       DateTime?
+  scheduledAt       DateTime?
+  archivedAt        DateTime?
+  // SEO
+  seoTitle          String    @default("")
+  seoDescription    String    @default("")
+  socialImageUrl    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@index([published, sortOrder])
+  @@index([published, featured])
+  @@index([categoryId])
+}
+
+// Persistent per-customer wishlist ("Favoris"). One row per customer + parent
+// product (enforced by the unique constraint — the storefront never stores a
+// variant here). Cascade-deleted with the customer or product. Designed so
+// restock/price notifications can be layered on later without a migration; no
+// notification state is implied to exist yet.
+model WishlistItem {
+  id         String   @id @default(cuid())
+  customerId String
+  productId  String
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@index([customerId])
+  @@index([productId])
+}
+
+// Optional server-side "Consultés récemment" history for logged-in customers.
+// The launch behavior keeps recently-viewed in localStorage (guests AND
+// logged-in); this table exists so account-level cross-device sync can be turned
+// on later without a schema change. One row per customer + parent product;
+// re-viewing bumps viewedAt. Not yet written by the app.
+model RecentlyViewedProduct {
+  id         String   @id @default(cuid())
+  customerId String
+  productId  String
+  viewedAt   DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@index([customerId, viewedAt])
 }
 
 model ProductMedia {
@@ -356,6 +457,23 @@ model Customer {
   firstName            String?
   lastName             String?
 
+  // ── Admin-managed account state (Customer Management) ─────────────────────
+  // Operational account status set by admins. "active" (default) | "disabled"
+  // (blocks login/purchases; data preserved) | "review" (under review) |
+  // "fraud_hold". A disabled account is treated as logged-out server-side (see
+  // src/lib/auth.ts getCurrentCustomer). Never auto-set by customer flows.
+  status             String    @default("active")
+  statusReason       String?
+  statusUpdatedAt    DateTime?
+  // Stateless-session revocation anchor. When set, any session cookie whose
+  // issued-at (iat) predates this instant is rejected on the next request — this
+  // is how "force logout / revoke sessions" and account-disable invalidate
+  // existing HMAC cookies without a DB session table.
+  sessionsValidAfter DateTime?
+  // Optional customer preferences (admin-editable where operationally needed).
+  preferredLanguage  String?
+  marketingConsent   Boolean   @default(false)
+
   // Discord OAuth identity (login/linking source of truth). Separate from the
   // DM fields below: being OAuth-linked does NOT mean the bot can DM this user.
   discordId         String? @unique
@@ -414,10 +532,60 @@ model Customer {
   ghostCreditTxns        GhostCreditTransaction[]
   promoRedemptions       PromoRedemption[]
   milestoneGrants        SpendingMilestoneGrant[]
+  wishlistItems          WishlistItem[]
+  recentlyViewed         RecentlyViewedProduct[]
+  adminNotes             CustomerNote[]
+  adminAuditLogs         AdminAuditLog[]
 
   @@index([updatedAt])
   @@index([emailVerified])
   @@index([role])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Append-only admin audit trail for customer-management actions (status change,
+// disable/enable, session revoke, verification resend, wallet adjust, note add,
+// support reply, data edit, consent change). Never deleted. `customerId` is the
+// affected customer (nullable for non-customer-scoped events). `metadata` holds
+// safe, non-sensitive changed-field context only — never secrets/tokens/hashes.
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  adminName  String
+  customerId String?
+  action     String
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt])
+  @@index([adminId, createdAt])
+  @@index([action])
+}
+
+// Private internal admin notes on a customer. Never customer-visible. Append-only
+// with soft-delete (archivedAt) — a note is archived, never hard-deleted, so the
+// history is preserved (a correction is a new note). Optional category + related
+// order for support/fraud/payment context.
+model CustomerNote {
+  id         String    @id @default(cuid())
+  customerId String
+  authorId   String
+  authorName String
+  // "general" | "support" | "fraud" | "payment"
+  category   String    @default("general")
+  body       String
+  orderId    String?
+  archivedAt DateTime?
+  archivedBy String?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
 }
 
 // One-time codes the customer sends to the Ghost.ma bot to prove control of a

@@ -6,6 +6,11 @@ import type {
   GhostCreditStatus,
 } from "./types";
 import type { CategoryLanding } from "./categoryLanding";
+import type {
+  GuideBlock,
+  GuideFaqItem,
+  GuideNavigatorTip,
+} from "./guide";
 
 // Plain serializable shapes passed between server (DB) and client components.
 // `productId` always refers to the catalog SLUG (e.g. "steam-100") so existing
@@ -235,6 +240,8 @@ export interface AdminCategoryDTO {
   sortOrder: number;
   productCount: number;
   landing: CategoryLanding;
+  /** Editable public-search aliases (accent/case-insensitive match only). */
+  aliases: string[];
 }
 
 export interface SaveCategoryInput {
@@ -250,6 +257,7 @@ export interface SaveCategoryInput {
   active: boolean;
   sortOrder: number;
   landing: CategoryLanding;
+  aliases: string[];
 }
 
 // ─── Collections (curated merchandising groups) ──────────────────────────────
@@ -419,6 +427,8 @@ export interface ParentProductDTO {
   thumbnail: string | null;
   active: boolean;
   featured: boolean;
+  /** Editable public-search aliases (accent/case-insensitive match only). */
+  searchAliases: string[];
   createdAt: string;
   variants: VariantDTO[];
 }
@@ -438,6 +448,7 @@ export interface SaveParentProductInput {
   thumbnail: string | null;
   active: boolean;
   featured: boolean;
+  searchAliases: string[];
 }
 
 export interface SaveVariantInput {
@@ -540,6 +551,72 @@ export interface ItemAssignment {
 export interface ActionResult {
   ok: boolean;
   error?: string;
+}
+
+// ─── Guide (Contenu → Guides) DTOs ───────────────────────────────────────────
+
+/** Full guide record for the admin editor (all editable fields, serializable). */
+export interface AdminGuideDTO {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  platform: string;
+  categoryId: string | null;
+  heroImageUrl: string;
+  icon: string;
+  content: GuideBlock[];
+  faq: GuideFaqItem[];
+  navigatorTip: GuideNavigatorTip;
+  relatedProductIds: string[];
+  relatedGuideIds: string[];
+  aliases: string[];
+  published: boolean;
+  featured: boolean;
+  sortOrder: number;
+  /** ISO string or null. Future value keeps the guide out of public reads. */
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  archivedAt: string | null;
+  seoTitle: string;
+  seoDescription: string;
+  socialImageUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Input accepted by saveGuideAction. `id` absent → create. */
+export interface SaveGuideInput {
+  id?: string;
+  slug: string;
+  title: string;
+  summary: string;
+  platform: string;
+  categoryId: string | null;
+  heroImageUrl: string;
+  icon: string;
+  content: GuideBlock[];
+  faq: GuideFaqItem[];
+  navigatorTip: GuideNavigatorTip;
+  relatedProductIds: string[];
+  relatedGuideIds: string[];
+  aliases: string[];
+  published: boolean;
+  featured: boolean;
+  sortOrder: number;
+  scheduledAt: string | null;
+  seoTitle: string;
+  seoDescription: string;
+  socialImageUrl: string;
+}
+
+/** Compact option for the guide related-guides / product pickers. */
+export interface GuideOptionDTO {
+  id: string;
+  slug: string;
+  title: string;
+  platform: string;
+  published: boolean;
 }
 
 // ─── Promo code & Ghost Credit DTOs ──────────────────────────────────────────

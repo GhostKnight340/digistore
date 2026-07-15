@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type {
   CategorySearchResult,
   CollectionSearchResult,
+  GuideSearchResult,
   ProductSearchResult,
 } from "@/lib/types";
 import { formatDH } from "@/lib/format";
@@ -21,6 +22,7 @@ type FlatOption =
   | { index: number; kind: "product"; data: ProductSearchResult }
   | { index: number; kind: "category"; data: CategorySearchResult }
   | { index: number; kind: "collection"; data: CollectionSearchResult }
+  | { index: number; kind: "guide"; data: GuideSearchResult }
   | { index: number; kind: "viewall" };
 
 export default function HeaderSearch({
@@ -42,6 +44,7 @@ export default function HeaderSearch({
   const [products, setProducts] = useState<ProductSearchResult[]>([]);
   const [categories, setCategories] = useState<CategorySearchResult[]>([]);
   const [collections, setCollections] = useState<CollectionSearchResult[]>([]);
+  const [guides, setGuides] = useState<GuideSearchResult[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -50,7 +53,8 @@ export default function HeaderSearch({
   const trimmed = query.trim();
   const ready = trimmed.length >= MIN_QUERY;
   const showDropdown = open && ready;
-  const totalResults = products.length + categories.length + collections.length;
+  const totalResults =
+    products.length + categories.length + collections.length + guides.length;
 
   // A single flat option list backs the combobox: one contiguous index space
   // across all three groups plus the trailing "view all" row, so keyboard
@@ -60,21 +64,22 @@ export default function HeaderSearch({
     products.forEach((data) => out.push({ index: out.length, kind: "product", data }));
     categories.forEach((data) => out.push({ index: out.length, kind: "category", data }));
     collections.forEach((data) => out.push({ index: out.length, kind: "collection", data }));
+    guides.forEach((data) => out.push({ index: out.length, kind: "guide", data }));
     if (hasMore && products.length > 0) out.push({ index: out.length, kind: "viewall" });
     return out;
-  }, [products, categories, collections, hasMore]);
+  }, [products, categories, collections, guides, hasMore]);
 
-  const goToCatalogue = useCallback(() => {
+  const goToSearch = useCallback(() => {
     setOpen(false);
     inputRef.current?.blur();
     trackEvent("search", { search_term: trimmed });
-    router.push(`/products?q=${encodeURIComponent(trimmed)}`);
+    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
   }, [router, trimmed]);
 
   const selectOption = useCallback(
     (option: FlatOption) => {
       if (option.kind === "viewall") {
-        goToCatalogue();
+        goToSearch();
         return;
       }
       setOpen(false);
@@ -83,11 +88,9 @@ export default function HeaderSearch({
         search_term: trimmed,
         result_type: option.kind,
       });
-      if (option.kind === "product") router.push(option.data.href);
-      else if (option.kind === "category") router.push(option.data.href);
-      else router.push(option.data.href);
+      router.push(option.data.href);
     },
-    [goToCatalogue, router, trimmed],
+    [goToSearch, router, trimmed],
   );
 
   // Debounced fetch. Aborts the in-flight request on each keystroke and ignores
@@ -97,6 +100,7 @@ export default function HeaderSearch({
       setProducts([]);
       setCategories([]);
       setCollections([]);
+      setGuides([]);
       setHasMore(false);
       setLoading(false);
       return;
@@ -114,18 +118,25 @@ export default function HeaderSearch({
           products?: ProductSearchResult[];
           categories?: CategorySearchResult[];
           collections?: CollectionSearchResult[];
+          guides?: GuideSearchResult[];
           hasMore?: boolean;
         };
         const nextProducts = data.products ?? [];
         const nextCategories = data.categories ?? [];
         const nextCollections = data.collections ?? [];
+        const nextGuides = data.guides ?? [];
         setProducts(nextProducts);
         setCategories(nextCategories);
         setCollections(nextCollections);
+        setGuides(nextGuides);
         setHasMore(Boolean(data.hasMore));
         // Fire a no-results event once per distinct empty query.
         if (
-          nextProducts.length + nextCategories.length + nextCollections.length === 0 &&
+          nextProducts.length +
+            nextCategories.length +
+            nextCollections.length +
+            nextGuides.length ===
+            0 &&
           noResultTracked.current !== trimmed
         ) {
           noResultTracked.current = trimmed;
@@ -136,6 +147,7 @@ export default function HeaderSearch({
         setProducts([]);
         setCategories([]);
         setCollections([]);
+        setGuides([]);
         setHasMore(false);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -217,7 +229,7 @@ export default function HeaderSearch({
         selectOption(flat[0]);
       } else if (ready) {
         event.preventDefault();
-        goToCatalogue();
+        goToSearch();
       }
     }
   }
@@ -240,7 +252,7 @@ export default function HeaderSearch({
         className="relative flex h-full w-full items-center"
         onSubmit={(event) => {
           event.preventDefault();
-          if (ready) goToCatalogue();
+          if (ready) goToSearch();
         }}
       >
         <input
@@ -298,7 +310,7 @@ export default function HeaderSearch({
           {loading && totalResults === 0 ? (
             <SkeletonRows />
           ) : totalResults === 0 ? (
-            <EmptyState query={trimmed} onCatalogue={goToCatalogue} />
+            <EmptyState query={trimmed} onCatalogue={goToSearch} />
           ) : (
             <div className="py-1.5">
               {products.length > 0 && (
@@ -361,6 +373,27 @@ export default function HeaderSearch({
                 </Group>
               )}
 
+              {guides.length > 0 && (
+                <Group label="Guides">
+                  <ul>
+                    {flat
+                      .filter((o): o is Extract<FlatOption, { kind: "guide" }> => o.kind === "guide")
+                      .map((option) => (
+                        <SimpleRow
+                          key={`guide-${option.data.slug}`}
+                          id={optId(option.index)}
+                          label={option.data.title}
+                          subtitle={option.data.platform || option.data.summary}
+                          icon="guide"
+                          active={activeIndex === option.index}
+                          onSelect={() => selectOption(option)}
+                          onHover={() => setActiveIndex(option.index)}
+                        />
+                      ))}
+                  </ul>
+                </Group>
+              )}
+
               {flat.some((o) => o.kind === "viewall") && (
                 <button
                   type="button"
@@ -369,7 +402,7 @@ export default function HeaderSearch({
                   aria-selected={activeIndex === flat[flat.length - 1].index}
                   onMouseEnter={() => setActiveIndex(flat[flat.length - 1].index)}
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={goToCatalogue}
+                  onClick={goToSearch}
                   className={`flex w-full items-center justify-between gap-2 border-t border-border px-4 py-3 text-left text-sm font-medium transition ${
                     activeIndex === flat[flat.length - 1].index
                       ? "bg-surface text-white"
@@ -463,7 +496,7 @@ function SimpleRow({
   id: string;
   label: string;
   subtitle?: string;
-  icon: "category" | "collection";
+  icon: "category" | "collection" | "guide";
   active: boolean;
   onSelect: () => void;
   onHover: () => void;
@@ -489,6 +522,12 @@ function SimpleRow({
                 <line x1="3" y1="6" x2="3.01" y2="6" />
                 <line x1="3" y1="12" x2="3.01" y2="12" />
                 <line x1="3" y1="18" x2="3.01" y2="18" />
+              </>
+            ) : icon === "guide" ? (
+              <>
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+                <line x1="8" y1="7.5" x2="16" y2="7.5" />
+                <line x1="8" y1="11" x2="14" y2="11" />
               </>
             ) : (
               <>

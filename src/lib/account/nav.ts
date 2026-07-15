@@ -2,7 +2,13 @@
  * The customer account sections, shared by the desktop sidebar and the mobile
  * account drawer so the two can never drift apart.
  */
-export type AccountView = "dashboard" | "orders" | "wallet" | "support" | "security";
+export type AccountView =
+  | "dashboard"
+  | "orders"
+  | "favoris"
+  | "wallet"
+  | "support"
+  | "security";
 
 export type AccountNavItem = {
   view: AccountView;
@@ -13,6 +19,7 @@ export type AccountNavItem = {
 export const ACCOUNT_NAV: AccountNavItem[] = [
   { view: "dashboard", href: "/account", label: "Tableau de bord" },
   { view: "orders", href: "/account/orders", label: "Commandes" },
+  { view: "favoris", href: "/account/favoris", label: "Favoris" },
   { view: "wallet", href: "/account/wallet", label: "Crédit Ghost" },
   { view: "support", href: "/account/support", label: "Support" },
   { view: "security", href: "/account/security", label: "Sécurité" },

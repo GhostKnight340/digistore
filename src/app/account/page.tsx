@@ -12,11 +12,14 @@ import OrderCard from "@/components/account/OrderCard";
 import AccountProfileForm from "./AccountProfileForm";
 import DiscordConnection from "@/components/account/DiscordConnection";
 import LoginMethods from "@/components/account/LoginMethods";
+import RecentlyViewed from "@/components/RecentlyViewed";
+import { getWishlistSlugs } from "@/lib/db/wishlist";
 import {
   UserIcon,
   MailIcon,
   ShieldIcon,
   BagIcon,
+  HeartIcon,
   ArrowRightIcon,
 } from "@/components/account/icons";
 
@@ -25,6 +28,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const customer = await requireCustomer();
   const orders = await getAccountOrders(customer.id);
+  const wishlistCount = await getWishlistSlugs(customer.id).catch(() => []);
   const incomplete = isProfileIncomplete(customer);
   const supportCount = await countSupportTicketsForCustomer(
     customer.id,
@@ -142,6 +146,29 @@ export default async function AccountPage() {
           )}
         </div>
       </div>
+
+      {/* Wishlist summary */}
+      <Link
+        href="/account/favoris"
+        className="flex items-center justify-between gap-3 rounded-[18px] border border-border bg-card p-5 shadow-soft transition hover:border-accent/50"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent-strong">
+            <HeartIcon className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[15px] font-semibold text-white">Favoris</p>
+            <p className="text-[13px] text-muted">
+              {wishlistCount.length === 0
+                ? "Aucun produit enregistré."
+                : `${wishlistCount.length} produit${wishlistCount.length === 1 ? "" : "s"} enregistré${wishlistCount.length === 1 ? "" : "s"}.`}
+            </p>
+          </div>
+        </div>
+        <ArrowRightIcon className="h-4 w-4 text-faint" />
+      </Link>
+
+      <RecentlyViewed className="mt-2" />
     </AccountShell>
   );
 }

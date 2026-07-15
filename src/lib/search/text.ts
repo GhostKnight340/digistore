@@ -34,13 +34,28 @@ export function tokenize(normalized: string): string[] {
  * text, so entries here are written in their natural form and normalized on use.
  */
 export const ALIAS_GROUPS: { canonical: string; aliases: string[] }[] = [
-  { canonical: "playstation", aliases: ["psn", "play station", "playstation network"] },
+  {
+    canonical: "playstation",
+    aliases: [
+      "psn",
+      "play station",
+      "playstation network",
+      "playstation store",
+      "ps5",
+      "ps4",
+      "ps3",
+    ],
+  },
   { canonical: "google play", aliases: ["googleplay", "google-play", "gplay"] },
   { canonical: "apple", aliases: ["itunes", "app store", "appstore", "apple store"] },
-  { canonical: "game pass", aliases: ["xbox game pass", "gamepass"] },
+  { canonical: "game pass", aliases: ["xbox game pass", "xbox pass", "gamepass"] },
   { canonical: "steam wallet", aliases: ["steam card", "steam wallet code", "carte steam"] },
   { canonical: "free fire", aliases: ["freefire", "free-fire"] },
   { canonical: "xbox", aliases: ["x box"] },
+  {
+    canonical: "gta vi",
+    aliases: ["gta 6", "gta6", "grand theft auto vi", "grand theft auto 6", "gta six"],
+  },
 ];
 
 const ALIAS_LOOKUP: { alias: string; canonical: string }[] = ALIAS_GROUPS.flatMap(

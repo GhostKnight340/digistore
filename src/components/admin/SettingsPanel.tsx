@@ -272,6 +272,51 @@ export default function SettingsPanel() {
         </div>
       </Panel>
 
+      <Panel title="Découverte & engagement">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ToggleSwitch
+            className="rounded-xl border border-border bg-canvas px-3 py-3"
+            label="Liste de favoris (cœur)"
+            checked={draft.features.wishlistEnabled}
+            onChange={(checked) =>
+              update("features", { ...draft.features, wishlistEnabled: checked })
+            }
+          />
+          <ToggleSwitch
+            className="rounded-xl border border-border bg-canvas px-3 py-3"
+            label="« Consultés récemment » en page d'accueil"
+            checked={draft.features.recentlyViewedOnHomepage}
+            onChange={(checked) =>
+              update("features", {
+                ...draft.features,
+                recentlyViewedOnHomepage: checked,
+              })
+            }
+          />
+          <label className="block rounded-xl border border-border bg-canvas px-3 py-3">
+            <span className="mb-1 block text-xs font-medium text-muted">
+              Nombre max. de produits récents
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={24}
+              className="input"
+              value={draft.features.recentlyViewedMax}
+              onChange={(e) =>
+                update("features", {
+                  ...draft.features,
+                  recentlyViewedMax: Math.min(
+                    24,
+                    Math.max(1, Number(e.target.value) || 12),
+                  ),
+                })
+              }
+            />
+          </label>
+        </div>
+      </Panel>
+
       <Panel title="Images des catégories">
         <p className="mb-4 text-sm text-muted">
           Importez ou indiquez une image pour chaque catégorie affichée en page d'accueil. Laissez vide pour utiliser le visuel par défaut.

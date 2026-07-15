@@ -127,14 +127,69 @@ export interface HomepageCollectionCard {
   productCount: number;
 }
 
+/** A guide match in the public grouped search. */
+export interface GuideSearchResult {
+  slug: string;
+  title: string;
+  href: string;
+  /** Short summary shown as a secondary line under the title. */
+  summary: string;
+  /** Platform/category badge label, when set. */
+  platform: string;
+  /** Approved icon key for the result glyph (see guide.ts), or "" for default. */
+  icon: string;
+}
+
 /** Grouped public-search payload returned by /api/search and the results page. */
 export interface SearchGroupsResult {
   query: string;
   products: ProductSearchResult[];
   categories: CategorySearchResult[];
   collections: CollectionSearchResult[];
+  guides: GuideSearchResult[];
   /** More product matches exist beyond the previewed slice. */
   hasMore: boolean;
+}
+
+/** Compact guide row for the /guides index and related-guides lists. */
+export interface GuideIndexItem {
+  slug: string;
+  title: string;
+  summary: string;
+  /** Platform/category badge label, or "". */
+  platform: string;
+  /** Approved icon key (see guide.ts), or "". */
+  icon: string;
+  heroImageUrl: string | null;
+  featured: boolean;
+  /** Linked category id, when set (for index filtering). */
+  categoryId: string | null;
+  /** ISO date the guide was last updated. */
+  updatedAt: string;
+}
+
+/** Full public guide page payload (visibility already applied). */
+export interface GuideDetail {
+  slug: string;
+  title: string;
+  summary: string;
+  platform: string;
+  icon: string;
+  heroImageUrl: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  content: import("./guide").GuideBlock[];
+  faq: import("./guide").GuideFaqItem[];
+  navigatorTip: import("./guide").GuideNavigatorTip;
+  /** Related active products, resolved live (hidden ones dropped). */
+  relatedProducts: Product[];
+  /** Related published guides, resolved live. */
+  relatedGuides: GuideIndexItem[];
+  seoTitle: string;
+  seoDescription: string;
+  socialImageUrl: string | null;
+  updatedAt: string;
+  publishedAt: string | null;
 }
 
 export interface ProductVariantOption {

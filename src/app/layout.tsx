@@ -6,6 +6,8 @@ import { isOrderingEnabled, ORDERS_UNAVAILABLE_COPY } from "@/lib/storeSettings"
 import { StoreProvider } from "@/context/StoreContext";
 import { StoreSettingsProvider } from "@/context/StoreSettingsContext";
 import { ProductCatalogProvider } from "@/context/ProductCatalogContext";
+import { WishlistProvider } from "@/context/WishlistContext";
+import { getWishlistSlugs } from "@/lib/db/wishlist";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SupportPill from "@/components/support/SupportPill";
@@ -49,6 +51,12 @@ export default async function RootLayout({
     getStoreSettings().catch(() => undefined),
     getCurrentCustomer().catch(() => null),
   ]);
+  // Logged-in customers get their server-persisted wishlist slugs hydrated into
+  // the client provider (guests start from localStorage). Cheap, visible-only.
+  const wishlistSlugs = customer
+    ? await getWishlistSlugs(customer.id).catch(() => [] as string[])
+    : [];
+  const wishlistEnabled = settings?.features?.wishlistEnabled ?? true;
   const pathname = (await headers()).get("x-current-path") ?? "/";
   const maintenanceAllowed =
     pathname.startsWith("/admin") ||
@@ -95,6 +103,11 @@ export default async function RootLayout({
             products={catalog.products}
           >
             <StoreProvider>
+              <WishlistProvider
+                authenticated={Boolean(customer)}
+                initialSlugs={wishlistSlugs}
+                enabled={wishlistEnabled}
+              >
               {showMaintenance ? (
                 <main className="grid min-h-screen place-items-center px-6 py-12">
                   <section className="w-full max-w-xl rounded-2xl border border-border bg-card p-8 text-center shadow-card">
@@ -152,6 +165,7 @@ export default async function RootLayout({
                   {pathname.startsWith("/admin") ? null : <SupportPill />}
                 </div>
               )}
+              </WishlistProvider>
             </StoreProvider>
           </ProductCatalogProvider>
         </StoreSettingsProvider>
