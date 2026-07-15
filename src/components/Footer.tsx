@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
-import { getEnabledFooterPaymentBadges, getFooterSocialLinks } from "@/lib/footerConfig";
+import { getFooterSocialLinks } from "@/lib/footerConfig";
 import { categoryHref } from "@/lib/categoryUrl";
 import AcceptedPayments from "@/components/trust/AcceptedPayments";
 
@@ -18,9 +18,6 @@ export default function Footer() {
   if (!settings.homepage.showFooter) return null;
 
   const socialLinks = getFooterSocialLinks(settings);
-  // Same admin-managed badge list as the email footer (Boutique settings →
-  // "Badges de paiement du pied de page") — never individual bank accounts.
-  const paymentBadges = getEnabledFooterPaymentBadges(settings);
 
   return (
     <footer className="mt-20 border-t border-border bg-canvas/60">
@@ -48,19 +45,9 @@ export default function Footer() {
             <p>E-mail : {settings.footer.contactEmail}</p>
             <p>WhatsApp : {settings.footer.whatsappNumber}</p>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {paymentBadges.map((badge) => (
-              <span
-                key={badge.id}
-                className="rounded-md border border-border px-2 py-1 font-mono text-[11px] text-faint"
-              >
-                {badge.label}
-              </span>
-            ))}
-          </div>
           {/* Real, admin-configured accepted methods — disabled methods vanish
               automatically. Self-fetches (footer is a client component). */}
-          <AcceptedPayments variant="inline" showNote={false} className="mt-4" />
+          <AcceptedPayments variant="inline" showNote={false} className="mt-5" />
           {socialLinks.length > 0 && (
             <div className="mt-5 flex items-center gap-2">
               {socialLinks.map((link) => (
