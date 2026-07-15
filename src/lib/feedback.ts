@@ -100,7 +100,7 @@ export const FEEDBACK_LIMITS = {
 
 export interface FeedbackValidationInput {
   type: string;
-  subject: string;
+  /** The single feedback field — what the customer typed. */
   message: string;
   contactAllowed: boolean;
   /** Resolved email that will be used (account email for logged-in, guest email otherwise). */
@@ -110,19 +110,27 @@ export interface FeedbackValidationInput {
 /** Returns the first validation error message, or null when valid. */
 export function validateFeedback(input: FeedbackValidationInput): string | null {
   if (!isFeedbackType(input.type)) return "Type de retour invalide.";
-  const subject = input.subject.trim();
-  if (!subject) return "Le sujet est requis.";
-  if (subject.length > FEEDBACK_LIMITS.subjectMax)
-    return `Le sujet ne peut pas dépasser ${FEEDBACK_LIMITS.subjectMax} caractères.`;
-  // Message is optional — only the maximum is enforced.
+  // A single field: the customer just types their feedback. Required, no minimum
+  // length; only the maximum is enforced.
   const message = input.message.trim();
+  if (!message) return "Votre retour ne peut pas être vide.";
   if (message.length > FEEDBACK_LIMITS.messageMax)
-    return `Le message ne peut pas dépasser ${FEEDBACK_LIMITS.messageMax} caractères.`;
+    return `Votre retour ne peut pas dépasser ${FEEDBACK_LIMITS.messageMax} caractères.`;
   // If they asked to be contacted, a valid email is required.
   if (input.contactAllowed && !isValidEmail(input.effectiveEmail)) {
     return "Une adresse e-mail valide est requise pour être recontacté.";
   }
   return null;
+}
+
+/**
+ * Derive a short one-line title from the feedback text — used only for the admin
+ * list column and the detail heading. The full typed text is always kept as the
+ * message. Not shown to the customer.
+ */
+export function deriveFeedbackTitle(message: string): string {
+  const firstLine = message.split(/\r?\n/)[0].trim();
+  return (firstLine || message.trim()).slice(0, FEEDBACK_LIMITS.subjectMax);
 }
 
 export function isValidEmail(value: string): boolean {

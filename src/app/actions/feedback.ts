@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getCurrentCustomer, requireAdminCustomer } from "@/lib/auth";
 import { absoluteUrl } from "@/lib/siteUrl";
-import { feedbackTypeLabel } from "@/lib/feedback";
+import { feedbackTypeLabel, deriveFeedbackTitle } from "@/lib/feedback";
 import { notifyFeedbackCreated } from "@/lib/discord/notify";
 import {
   createFeedback,
@@ -46,7 +46,7 @@ function deploymentVersion(): string | null {
 
 export interface SubmitFeedbackInput {
   type: string;
-  subject: string;
+  /** The single feedback field. */
   message: string;
   contactAllowed: boolean;
   guestName?: string;
@@ -71,7 +71,6 @@ export async function submitFeedbackAction(
 
   const result = await createFeedback({
     type: input.type,
-    subject: input.subject,
     message: input.message,
     contactAllowed: input.contactAllowed,
     guestName: input.guestName,
@@ -96,7 +95,7 @@ export async function submitFeedbackAction(
       await notifyFeedbackCreated({
         reference: result.reference,
         typeLabel: feedbackTypeLabel(input.type),
-        subject: input.subject,
+        subject: deriveFeedbackTitle(input.message),
         isGuest: !customer,
         relatedRoute: input.context.relatedRoute ?? null,
         excerpt: input.message,

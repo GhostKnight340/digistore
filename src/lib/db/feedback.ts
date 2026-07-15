@@ -8,6 +8,7 @@ import {
   formatFeedbackReference,
   parseFeedbackReference,
   validateFeedback,
+  deriveFeedbackTitle,
   feedbackTypeLabel,
   isFeedbackStatus,
   isFeedbackPriority,
@@ -66,7 +67,7 @@ export async function createPendingAttachment(input: {
 
 export interface CreateFeedbackInput {
   type: string;
-  subject: string;
+  /** The single feedback field. A short title is derived from it for the admin list. */
   message: string;
   contactAllowed: boolean;
   guestName?: string;
@@ -97,12 +98,13 @@ export async function createFeedback(
 
   const isGuest = !input.customer;
   const effectiveEmail = input.customer?.email ?? (input.guestEmail ?? "").trim();
-  const subject = plain(input.subject, FEEDBACK_LIMITS.subjectMax);
   const message = plain(input.message, FEEDBACK_LIMITS.messageMax);
+  // A short one-line title is derived from the feedback for the admin list —
+  // the full typed text is always kept as the message.
+  const subject = deriveFeedbackTitle(message);
 
   const error = validateFeedback({
     type: input.type,
-    subject,
     message,
     contactAllowed: input.contactAllowed,
     effectiveEmail,

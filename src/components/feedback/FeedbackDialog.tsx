@@ -28,7 +28,6 @@ export default function FeedbackDialog({
   customer: { name: string; email: string } | null;
 }) {
   const [type, setType] = useState<string>("suggestion");
-  const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [contactAllowed, setContactAllowed] = useState(false);
   const [guestName, setGuestName] = useState("");
@@ -42,12 +41,11 @@ export default function FeedbackDialog({
   const [context, setContext] = useState<FeedbackPageContext | null>(null);
 
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const firstFieldRef = useRef<HTMLInputElement | null>(null);
+  const firstFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const triggerReturnRef = useRef<Element | null>(null);
 
   function reset() {
     setType("suggestion");
-    setSubject("");
     setMessage("");
     setContactAllowed(false);
     setGuestName("");
@@ -104,7 +102,7 @@ export default function FeedbackDialog({
   }
 
   const effectiveEmail = customer?.email ?? guestEmail.trim();
-  const showSupportNotice = looksLikeSupportIssue(subject, message);
+  const showSupportNotice = looksLikeSupportIssue(message, "");
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -141,7 +139,7 @@ export default function FeedbackDialog({
 
   async function submit() {
     setError(null);
-    const validation = validateFeedback({ type, subject, message, contactAllowed, effectiveEmail });
+    const validation = validateFeedback({ type, message, contactAllowed, effectiveEmail });
     if (validation) {
       setError(validation);
       return;
@@ -151,7 +149,6 @@ export default function FeedbackDialog({
     try {
       const res = await submitFeedbackAction({
         type,
-        subject,
         message,
         contactAllowed,
         guestName: customer ? undefined : guestName,
@@ -176,7 +173,6 @@ export default function FeedbackDialog({
 
   if (!open) return null;
 
-  const subjectLeft = FEEDBACK_LIMITS.subjectMax - subject.length;
   const messageCount = message.trim().length;
 
   return (
@@ -270,38 +266,21 @@ export default function FeedbackDialog({
                 </div>
               )}
 
-              {/* Subject */}
+              {/* Feedback — a single free-text field. */}
               <label className="block">
                 <span className="mb-1 flex items-center justify-between text-xs font-medium text-muted">
-                  Sujet
-                  <span className={subjectLeft < 0 ? "text-red-400" : "text-faint"}>{subjectLeft}</span>
-                </span>
-                <input
-                  ref={firstFieldRef}
-                  className="input"
-                  value={subject}
-                  maxLength={FEEDBACK_LIMITS.subjectMax}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Résumé en quelques mots"
-                />
-              </label>
-
-              {/* Message (optional) */}
-              <label className="block">
-                <span className="mb-1 flex items-center justify-between text-xs font-medium text-muted">
-                  <span>
-                    Message <span className="text-faint">· facultatif</span>
-                  </span>
+                  <span>Votre retour</span>
                   <span className="text-faint">
                     {messageCount}/{FEEDBACK_LIMITS.messageMax}
                   </span>
                 </span>
                 <textarea
-                  className="input min-h-[110px]"
+                  ref={firstFieldRef}
+                  className="input min-h-[130px]"
                   value={message}
                   maxLength={FEEDBACK_LIMITS.messageMax}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Décrivez votre idée ou ce qui pourrait être amélioré…"
+                  placeholder="Décrivez votre idée, votre suggestion ou ce qui pourrait être amélioré…"
                 />
               </label>
 

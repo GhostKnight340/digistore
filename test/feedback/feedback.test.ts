@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import {
   validateFeedback,
+  deriveFeedbackTitle,
   formatFeedbackReference,
   parseFeedbackReference,
   looksLikeSupportIssue,
@@ -16,49 +17,45 @@ import {
   FEEDBACK_LIMITS,
 } from "../../src/lib/feedback";
 
-test("valid feedback passes; required fields fail safely (test 4)", () => {
+test("single-field feedback: required, no minimum length (test 4)", () => {
+  // Valid.
   assert.equal(
     validateFeedback({
       type: "suggestion",
-      subject: "Idée",
       message: "Ajoutez plus de moyens de paiement svp.",
       contactAllowed: false,
       effectiveEmail: "",
     }),
     null,
   );
-  // Missing subject.
-  assert.ok(validateFeedback({ type: "suggestion", subject: "  ", message: "message assez long", contactAllowed: false, effectiveEmail: "" }));
-  // Message is optional now (no minimum): empty/short message is accepted.
-  assert.equal(validateFeedback({ type: "suggestion", subject: "S", message: "", contactAllowed: false, effectiveEmail: "" }), null);
+  // Empty feedback fails.
+  assert.ok(validateFeedback({ type: "suggestion", message: "   ", contactAllowed: false, effectiveEmail: "" }));
+  // No minimum length — a very short message is accepted.
+  assert.equal(validateFeedback({ type: "suggestion", message: "ok", contactAllowed: false, effectiveEmail: "" }), null);
   // Invalid type (bug is no longer a valid feedback type).
-  assert.ok(validateFeedback({ type: "bug", subject: "S", message: "", contactAllowed: false, effectiveEmail: "" }));
+  assert.ok(validateFeedback({ type: "bug", message: "un message", contactAllowed: false, effectiveEmail: "" }));
 });
 
 test("contact permission requires a valid email (test 3)", () => {
-  const err = validateFeedback({
-    type: "suggestion",
-    subject: "Sujet",
-    message: "un message suffisamment long",
-    contactAllowed: true,
-    effectiveEmail: "",
-  });
-  assert.ok(err, "empty email + contact permission must fail");
+  assert.ok(
+    validateFeedback({ type: "suggestion", message: "une idée", contactAllowed: true, effectiveEmail: "" }),
+    "empty email + contact permission must fail",
+  );
   assert.equal(
-    validateFeedback({
-      type: "suggestion",
-      subject: "Sujet",
-      message: "un message suffisamment long",
-      contactAllowed: true,
-      effectiveEmail: "a@b.co",
-    }),
+    validateFeedback({ type: "suggestion", message: "une idée", contactAllowed: true, effectiveEmail: "a@b.co" }),
     null,
   );
 });
 
-test("message length bounds are enforced", () => {
+test("message maximum is enforced", () => {
   const long = "x".repeat(FEEDBACK_LIMITS.messageMax + 1);
-  assert.ok(validateFeedback({ type: "other", subject: "S", message: long, contactAllowed: false, effectiveEmail: "" }));
+  assert.ok(validateFeedback({ type: "other", message: long, contactAllowed: false, effectiveEmail: "" }));
+});
+
+test("derived title is the first line, capped", () => {
+  assert.equal(deriveFeedbackTitle("Mode sombre\nplus de détails ici"), "Mode sombre");
+  assert.equal(deriveFeedbackTitle("  une seule ligne  "), "une seule ligne");
+  assert.equal(deriveFeedbackTitle("x".repeat(200)).length, FEEDBACK_LIMITS.subjectMax);
 });
 
 test("reference formats and parses round-trip", () => {
