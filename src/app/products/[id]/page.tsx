@@ -257,7 +257,7 @@ export default async function ProductDetailPage({
       </div>
 
       {/* Records this parent product in the local "Consultés récemment" history. */}
-      <RecordProductView slug={product.id} max={settings.features.recentlyViewedMax} />
+      <RecordProductView slug={product.id} max={settings.features?.recentlyViewedMax ?? 12} />
 
       {related.length > 0 && (
         <section className="mt-16">
@@ -274,7 +274,7 @@ export default async function ProductDetailPage({
 
       <RecentlyViewed
         excludeSlug={product.id}
-        limit={settings.features.recentlyViewedMax}
+        limit={settings.features?.recentlyViewedMax ?? 12}
         className="mt-16"
       />
 

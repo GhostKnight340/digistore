@@ -189,10 +189,11 @@ export default async function HomePage() {
         </section>
       )}
 
-      {settings.features.recentlyViewedOnHomepage && (
+      {/* `features` may be absent on a legacy/cached settings blob — guard it. */}
+      {settings.features?.recentlyViewedOnHomepage && (
         <RecentlyViewed
           className="mt-10 sm:mt-14"
-          limit={settings.features.recentlyViewedMax}
+          limit={settings.features?.recentlyViewedMax ?? 12}
         />
       )}
 

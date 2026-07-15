@@ -27,6 +27,14 @@ const paymentLabels: Record<PaymentMethod, string> = {
   card: "Carte bancaire",
 };
 
+// Fallback when a legacy/cached settings blob lacks the `features` section, so
+// the editor never reads undefined. Save re-merges via mergeStoreSettings.
+const FEATURE_DEFAULTS = {
+  wishlistEnabled: true,
+  recentlyViewedOnHomepage: false,
+  recentlyViewedMax: 12,
+} as const;
+
 const homepageSectionKeys = [
   "showHero",
   "showTrustStrip",
@@ -277,17 +285,18 @@ export default function SettingsPanel() {
           <ToggleSwitch
             className="rounded-xl border border-border bg-canvas px-3 py-3"
             label="Liste de favoris (cœur)"
-            checked={draft.features.wishlistEnabled}
+            checked={(draft.features ?? FEATURE_DEFAULTS).wishlistEnabled}
             onChange={(checked) =>
-              update("features", { ...draft.features, wishlistEnabled: checked })
+              update("features", { ...FEATURE_DEFAULTS, ...draft.features, wishlistEnabled: checked })
             }
           />
           <ToggleSwitch
             className="rounded-xl border border-border bg-canvas px-3 py-3"
             label="« Consultés récemment » en page d'accueil"
-            checked={draft.features.recentlyViewedOnHomepage}
+            checked={(draft.features ?? FEATURE_DEFAULTS).recentlyViewedOnHomepage}
             onChange={(checked) =>
               update("features", {
+                ...FEATURE_DEFAULTS,
                 ...draft.features,
                 recentlyViewedOnHomepage: checked,
               })
@@ -302,9 +311,10 @@ export default function SettingsPanel() {
               min={1}
               max={24}
               className="input"
-              value={draft.features.recentlyViewedMax}
+              value={(draft.features ?? FEATURE_DEFAULTS).recentlyViewedMax}
               onChange={(e) =>
                 update("features", {
+                  ...FEATURE_DEFAULTS,
                   ...draft.features,
                   recentlyViewedMax: Math.min(
                     24,
