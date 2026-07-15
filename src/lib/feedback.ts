@@ -10,11 +10,12 @@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+// Feedback is only for suggesting features/products and UI/UX improvements — NOT
+// for bug reports or problems (those belong in support). No "bug" type here.
 export const FEEDBACK_TYPES = [
   { value: "suggestion", label: "Suggestion" },
   { value: "product_request", label: "Demande de produit" },
-  { value: "site_experience", label: "Expérience du site" },
-  { value: "bug", label: "Bug ou problème d’affichage" },
+  { value: "site_experience", label: "Expérience du site (UX/UI)" },
   { value: "catalogue", label: "Catalogue" },
   { value: "other", label: "Autre" },
 ] as const;
@@ -90,7 +91,8 @@ export function parseFeedbackReference(value: string): number | null {
 
 export const FEEDBACK_LIMITS = {
   subjectMax: 120,
-  messageMin: 10,
+  // No minimum — the message is optional (the subject already carries the idea).
+  messageMin: 0,
   messageMax: 2000,
   nameMax: 80,
   emailMax: 160,
@@ -112,9 +114,8 @@ export function validateFeedback(input: FeedbackValidationInput): string | null 
   if (!subject) return "Le sujet est requis.";
   if (subject.length > FEEDBACK_LIMITS.subjectMax)
     return `Le sujet ne peut pas dépasser ${FEEDBACK_LIMITS.subjectMax} caractères.`;
+  // Message is optional — only the maximum is enforced.
   const message = input.message.trim();
-  if (message.length < FEEDBACK_LIMITS.messageMin)
-    return `Le message doit contenir au moins ${FEEDBACK_LIMITS.messageMin} caractères.`;
   if (message.length > FEEDBACK_LIMITS.messageMax)
     return `Le message ne peut pas dépasser ${FEEDBACK_LIMITS.messageMax} caractères.`;
   // If they asked to be contacted, a valid email is required.

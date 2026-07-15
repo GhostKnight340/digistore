@@ -29,10 +29,10 @@ test("valid feedback passes; required fields fail safely (test 4)", () => {
   );
   // Missing subject.
   assert.ok(validateFeedback({ type: "suggestion", subject: "  ", message: "message assez long", contactAllowed: false, effectiveEmail: "" }));
-  // Too-short message.
-  assert.ok(validateFeedback({ type: "suggestion", subject: "S", message: "court", contactAllowed: false, effectiveEmail: "" }));
-  // Invalid type.
-  assert.ok(validateFeedback({ type: "payment_problem", subject: "S", message: "message assez long", contactAllowed: false, effectiveEmail: "" }));
+  // Message is optional now (no minimum): empty/short message is accepted.
+  assert.equal(validateFeedback({ type: "suggestion", subject: "S", message: "", contactAllowed: false, effectiveEmail: "" }), null);
+  // Invalid type (bug is no longer a valid feedback type).
+  assert.ok(validateFeedback({ type: "bug", subject: "S", message: "", contactAllowed: false, effectiveEmail: "" }));
 });
 
 test("contact permission requires a valid email (test 3)", () => {
@@ -76,7 +76,7 @@ test("support-issue heuristic flags order/payment content only", () => {
 });
 
 test("type/status/priority guards reject unknown values", () => {
-  assert.ok(isFeedbackType("bug") && !isFeedbackType("refund"));
+  assert.ok(isFeedbackType("suggestion") && !isFeedbackType("bug"));
   assert.ok(isFeedbackStatus("planned") && !isFeedbackStatus("open"));
   assert.ok(isFeedbackPriority("critical") && !isFeedbackPriority("urgent"));
 });

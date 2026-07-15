@@ -286,11 +286,13 @@ export default function FeedbackDialog({
                 />
               </label>
 
-              {/* Message */}
+              {/* Message (optional) */}
               <label className="block">
                 <span className="mb-1 flex items-center justify-between text-xs font-medium text-muted">
-                  Message
-                  <span className={messageCount < FEEDBACK_LIMITS.messageMin ? "text-faint" : "text-faint"}>
+                  <span>
+                    Message <span className="text-faint">· facultatif</span>
+                  </span>
+                  <span className="text-faint">
                     {messageCount}/{FEEDBACK_LIMITS.messageMax}
                   </span>
                 </span>
