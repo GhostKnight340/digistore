@@ -92,7 +92,15 @@ export default function FeedbackDetailView({ detail }: { detail: FeedbackDetailD
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Card title="Message">
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted">{detail.message}</p>
+            {detail.message.trim() ? (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted">
+                {detail.message}
+              </p>
+            ) : (
+              <p className="text-sm italic text-faint">
+                Aucun message — le sujet résume la suggestion.
+              </p>
+            )}
           </Card>
 
           {detail.attachments.length > 0 && (
