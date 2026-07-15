@@ -72,6 +72,7 @@ export default async function SupportPage() {
       orders={orders}
       initialName={customer?.name ?? ""}
       initialEmail={customer?.email ?? ""}
+      initialPhone={customer?.phone ?? ""}
     />
   );
 }

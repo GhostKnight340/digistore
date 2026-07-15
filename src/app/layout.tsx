@@ -138,15 +138,17 @@ export default async function RootLayout({
                 </main>
               ) : (
                 <div className="flex min-h-screen flex-col">
-                  {pathname.startsWith("/admin") ? null : (
-                    <Navbar
-                      customer={
-                        customer
-                          ? { name: customer.name, email: customer.email }
-                          : null
-                      }
-                    />
-                  )}
+                  {/* Navbar/Footer/SupportPill self-hide on /admin client-side
+                      (usePathname), so they stay correct across soft navigations
+                      rather than depending on the root layout's frozen
+                      server-side pathname. */}
+                  <Navbar
+                    customer={
+                      customer
+                        ? { name: customer.name, email: customer.email }
+                        : null
+                    }
+                  />
                   {showOrdersBanner ? (
                     <div className="border-b border-accent/15 bg-accent-soft">
                       <div className="container-page flex flex-wrap items-center justify-center gap-x-2 gap-y-1 py-2 text-center text-[13px] text-muted">
@@ -161,8 +163,8 @@ export default async function RootLayout({
                     </div>
                   ) : null}
                   <main className="flex-1">{children}</main>
-                  {pathname.startsWith("/admin") ? null : <Footer />}
-                  {pathname.startsWith("/admin") ? null : <SupportPill />}
+                  <Footer />
+                  <SupportPill />
                 </div>
               )}
               </WishlistProvider>

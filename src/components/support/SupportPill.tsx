@@ -16,7 +16,9 @@ import { usePathname } from "next/navigation";
  */
 export default function SupportPill() {
   const pathname = usePathname();
-  if (pathname.startsWith("/support")) return null;
+  // Hidden on the support flow and across the admin area. Client-side so it
+  // stays correct across soft navigations (see Navbar for the rationale).
+  if (pathname.startsWith("/support") || pathname.startsWith("/admin")) return null;
 
   return (
     <>

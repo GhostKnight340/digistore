@@ -41,6 +41,13 @@ export default function Navbar({
     });
   }
 
+  // Self-hide on the admin area. Doing this client-side (usePathname updates on
+  // navigation) instead of gating in the root layout — which reads a server
+  // `headers()` pathname that is frozen across client-side navigations — fixes
+  // the navbar going missing until a hard refresh when moving between /admin and
+  // the storefront.
+  if (pathname.startsWith("/admin")) return null;
+
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-canvas/75 backdrop-blur-xl">
       <nav className="container-page flex min-h-[66px] flex-wrap items-center gap-2 py-2 sm:gap-4 sm:py-0 md:flex-nowrap md:gap-7">

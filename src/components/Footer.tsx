@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getEnabledFooterPaymentBadges, getFooterSocialLinks } from "@/lib/footerConfig";
@@ -10,7 +11,10 @@ import AcceptedPayments from "@/components/trust/AcceptedPayments";
 export default function Footer() {
   const { settings } = useStoreSettings();
   const { categories } = useProductCatalog();
+  const pathname = usePathname();
 
+  // Self-hide on the admin area, client-side (see Navbar for the rationale).
+  if (pathname.startsWith("/admin")) return null;
   if (!settings.homepage.showFooter) return null;
 
   const socialLinks = getFooterSocialLinks(settings);

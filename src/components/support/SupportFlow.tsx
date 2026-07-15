@@ -99,10 +99,12 @@ export default function SupportFlow({
   orders,
   initialName,
   initialEmail,
+  initialPhone = "",
 }: {
   orders: SupportOrderOption[];
   initialName: string;
   initialEmail: string;
+  initialPhone?: string;
 }) {
   const [step, setStep] = useState<Step>("category");
   const [hist, setHist] = useState<Step[]>([]);
@@ -110,7 +112,12 @@ export default function SupportFlow({
   const [sub, setSub] = useState<string | null>(null);
   const [order, setOrder] = useState<{ label: string; manual: boolean } | null>(null);
   const [manual, setManual] = useState("");
-  const [form, setForm] = useState({ name: initialName, email: initialEmail, phone: "", message: "" });
+  const [form, setForm] = useState({
+    name: initialName,
+    email: initialEmail,
+    phone: initialPhone,
+    message: "",
+  });
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
