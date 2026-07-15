@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import "./globals.css";
@@ -11,6 +12,7 @@ import { getWishlistSlugs } from "@/lib/db/wishlist";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SupportPill from "@/components/support/SupportPill";
+import FeedbackButton from "@/components/feedback/FeedbackButton";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
@@ -165,6 +167,15 @@ export default async function RootLayout({
                   <main className="flex-1">{children}</main>
                   <Footer />
                   <SupportPill />
+                  <Suspense fallback={null}>
+                    <FeedbackButton
+                      customer={
+                        customer
+                          ? { name: customer.name, email: customer.email }
+                          : null
+                      }
+                    />
+                  </Suspense>
                 </div>
               )}
               </WishlistProvider>

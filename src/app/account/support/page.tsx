@@ -46,6 +46,21 @@ export default async function AccountSupportPage() {
           <SupportTicketList tickets={tickets} />
         )}
       </div>
+
+      {/* Feedback is separate from support — a low-friction way to suggest ideas.
+          The link opens the global feedback dialog via ?feedback=1. */}
+      <Link
+        href="/account/support?feedback=1"
+        className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-border bg-card p-5 shadow-soft transition hover:border-accent/50"
+      >
+        <div>
+          <p className="text-[15px] font-semibold text-white">Envoyer une suggestion</p>
+          <p className="text-[13px] text-muted">
+            Une idée ou une amélioration ? Partagez votre avis (hors problème de commande).
+          </p>
+        </div>
+        <ArrowRightIcon className="h-4 w-4 text-faint" />
+      </Link>
     </AccountShell>
   );
 }

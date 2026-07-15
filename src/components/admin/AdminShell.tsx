@@ -40,6 +40,7 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   // Clients is a full management area (list + per-customer detail), not an
   // in-place dashboard panel.
   customers: "/admin/clients",
+  feedback: "/admin/feedback",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
@@ -237,6 +238,17 @@ const NAV: NavGroup[] = [
             <circle cx="12" cy="12" r="9" />
             <circle cx="12" cy="12" r="3.5" />
             <path d="M5.7 5.7l4 4M14.3 14.3l4 4M18.3 5.7l-4 4M9.7 14.3l-4 4" />
+          </>,
+        ),
+      },
+      {
+        id: "feedback",
+        label: "Feedback",
+        icon: icon(
+          <>
+            <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
+            <line x1="8" y1="9" x2="16" y2="9" />
+            <line x1="8" y1="13" x2="13" y2="13" />
           </>,
         ),
       },

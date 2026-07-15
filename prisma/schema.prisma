@@ -536,6 +536,7 @@ model Customer {
   recentlyViewed         RecentlyViewedProduct[]
   adminNotes             CustomerNote[]
   adminAuditLogs         AdminAuditLog[]
+  feedbackSubmissions    FeedbackSubmission[]
 
   @@index([updatedAt])
   @@index([emailVerified])
@@ -586,6 +587,107 @@ model CustomerNote {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, createdAt])
+}
+
+// Low-friction customer/visitor feedback (suggestions, product requests, UX/UI
+// reports, general feedback) — DELIBERATELY separate from the support queue (a
+// feedback item only enters support if an admin explicitly converts it). Public
+// submission (guests allowed); logged-in identity is derived from the session,
+// never the client. The human-readable reference (FB-000123) is derived from the
+// autoincrement `seq`, so it is unique and race-free without a second write.
+// Message/subject are stored as plain text and only ever rendered sanitized.
+model FeedbackSubmission {
+  id                String    @id @default(cuid())
+  seq               Int       @unique @default(autoincrement())
+  // "suggestion" | "product_request" | "site_experience" | "bug" | "catalogue" | "other"
+  type              String
+  subject           String
+  message           String
+  // "new" | "reviewing" | "planned" | "implemented" | "declined" | "closed"
+  status            String    @default("new")
+  // "low" | "medium" | "high" | "critical"
+  priority          String    @default("medium")
+  // Set from the session for logged-in submitters; guest fields used otherwise.
+  customerId        String?
+  guestName         String?
+  guestEmail        String?
+  contactAllowed    Boolean   @default(false)
+  // Safe page context (query string is stripped before storage).
+  relatedUrl        String?
+  relatedRoute      String?
+  pageTitle         String?
+  deviceType        String?
+  viewport          String?
+  browserSummary    String?
+  deploymentVersion String?
+  // Salted hash of the submitter IP — used ONLY for rate-limiting / duplicate
+  // detection, never displayed. No raw IP is ever stored.
+  ipHash            String?
+  assignedAdminId   String?
+  assignedAdminName String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+  closedAt          DateTime?
+
+  customer    Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  attachments FeedbackAttachment[]
+  notes       FeedbackNote[]
+  activity    FeedbackActivity[]
+
+  @@index([status])
+  @@index([type])
+  @@index([priority])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([ipHash, createdAt])
+}
+
+// Optional image attachment for a feedback item. Stored the same way as product
+// media (data: URL in prod, /uploads path in dev — see /api/upload). `submissionId`
+// is nullable so an upload can exist briefly before its submission is created;
+// the submit action links it. Only viewable by admins (via the detail page).
+model FeedbackAttachment {
+  id           String   @id @default(cuid())
+  submissionId String?
+  mimeType     String
+  fileName     String
+  sizeBytes    Int
+  url          String
+  createdAt    DateTime @default(now())
+
+  submission FeedbackSubmission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@index([createdAt])
+}
+
+// Private internal admin note on a feedback item. Never shown to the submitter.
+model FeedbackNote {
+  id           String   @id @default(cuid())
+  submissionId String
+  authorId     String
+  authorName   String
+  body         String
+  createdAt    DateTime @default(now())
+
+  submission FeedbackSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt])
+}
+
+// Append-only activity trail for a feedback item (created, status/priority
+// changed, assigned, note added, linked, converted to support, closed).
+model FeedbackActivity {
+  id           String   @id @default(cuid())
+  submissionId String
+  actorName    String
+  action       String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  submission FeedbackSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt])
 }
 
 // One-time codes the customer sends to the Ghost.ma bot to prove control of a

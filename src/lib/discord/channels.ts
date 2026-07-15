@@ -9,6 +9,7 @@ export type DiscordChannelKey =
   | "ordersFeed"
   | "accounts"
   | "support"
+  | "feedback"
   | "stockAlerts"
   | "systemAlerts"
   | "dailySummary"
@@ -39,6 +40,7 @@ export const DISCORD_SERVER_STRUCTURE: DiscordCategoryDefinition[] = [
     channels: [
       { key: "accounts", name: "accounts", envVar: "DISCORD_CHANNEL_ACCOUNTS_ID" },
       { key: "support", name: "support", envVar: "DISCORD_CHANNEL_SUPPORT_ID" },
+      { key: "feedback", name: "feedback", envVar: "DISCORD_CHANNEL_FEEDBACK_ID" },
     ],
   },
   {

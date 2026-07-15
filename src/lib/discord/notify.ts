@@ -314,6 +314,45 @@ export function notifyAccountCreated(
 }
 
 // ---------------------------------------------------------------------------
+// #feedback
+// ---------------------------------------------------------------------------
+
+export type FeedbackNotification = {
+  reference: string;
+  typeLabel: string;
+  subject: string;
+  isGuest: boolean;
+  relatedRoute: string | null;
+  excerpt: string;
+  hasAttachment: boolean;
+  priority: string;
+  adminUrl: string;
+};
+
+/**
+ * Concise notification for new feedback. Deliberately omits the submitter's
+ * email and any account/order detail — only the reference, type, subject, a
+ * short excerpt, page, and the admin link. Critical priority is flagged.
+ */
+export function notifyFeedbackCreated(input: FeedbackNotification): Promise<void> {
+  const excerpt = input.excerpt.length > 300 ? `${input.excerpt.slice(0, 297)}…` : input.excerpt;
+  return safeSend("feedback", () =>
+    embed({
+      title: `${input.priority === "critical" ? "🔴 " : ""}Feedback ${input.reference} · ${input.typeLabel}`,
+      color: input.priority === "critical" ? COLOR.red : COLOR.blue,
+      fields: [
+        { name: "Sujet", value: input.subject.slice(0, 200) || "—" },
+        { name: "Auteur", value: input.isGuest ? "Visiteur" : "Client connecté", inline: true },
+        { name: "Pièce jointe", value: input.hasAttachment ? "Oui" : "Non", inline: true },
+        { name: "Page", value: input.relatedRoute || "—", inline: true },
+        ...(excerpt ? [{ name: "Extrait", value: excerpt }] : []),
+        { name: "Admin", value: input.adminUrl },
+      ],
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // #support
 // ---------------------------------------------------------------------------
 
