@@ -413,22 +413,19 @@ export default function CheckoutClient({
               {!accountVerified && <AccountVerifyPanel email={email} name={fullName} />}
             </>
           ) : (
-            <>
-              <AccountAccessSection onChange={setAccountGate} />
-
-              <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
-                <div className="px-[18px] py-5 sm:px-[22px]">
-                  <PhoneBlock
-                    isLoggedIn={false}
-                    phoneLocal={phoneLocal}
-                    setPhoneLocal={setPhoneLocal}
-                    phoneValid={phoneValid}
-                    editingPhone={editingPhone}
-                    setEditingPhone={setEditingPhone}
-                  />
-                </div>
-              </section>
-            </>
+            <AccountAccessSection
+              onChange={setAccountGate}
+              phoneField={
+                <PhoneBlock
+                  isLoggedIn={false}
+                  phoneLocal={phoneLocal}
+                  setPhoneLocal={setPhoneLocal}
+                  phoneValid={phoneValid}
+                  editingPhone={editingPhone}
+                  setEditingPhone={setEditingPhone}
+                />
+              }
+            />
           )}
 
           <PromoSection

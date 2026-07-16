@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginCustomerAction } from "@/app/actions/auth";
@@ -464,7 +464,14 @@ function InlineLogin({ presetEmail, onAuthenticated }: { presetEmail: string; on
 
 // ── Main account-access section (not logged in) ─────────────────────────────
 
-export function AccountAccessSection({ onChange }: { onChange: (state: AccountGateState) => void }) {
+export function AccountAccessSection({
+  onChange,
+  phoneField,
+}: {
+  onChange: (state: AccountGateState) => void;
+  /** Phone input rendered inline with the account fields (register mode). */
+  phoneField?: ReactNode;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<"register" | "login">("register");
   const [name, setName] = useState("");
@@ -567,6 +574,8 @@ export function AccountAccessSection({ onChange }: { onChange: (state: AccountGa
               onVerifiedChange={setEmailVerified}
               onAccountExists={() => setMode("login")}
             />
+
+            {phoneField}
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-white">Mot de passe</label>
