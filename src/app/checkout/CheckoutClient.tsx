@@ -1233,7 +1233,7 @@ function PhoneBlock({
           className="h-full flex-1 bg-transparent text-[14.5px] tracking-wide text-text outline-none placeholder:text-faint"
           value={phoneLocal}
           onChange={(e) => setPhoneLocal(e.target.value)}
-          placeholder="6 00 00 00 00"
+          placeholder="Votre numéro de téléphone"
           autoComplete="tel-national"
           inputMode="tel"
         />

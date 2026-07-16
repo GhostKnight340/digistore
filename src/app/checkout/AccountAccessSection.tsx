@@ -159,7 +159,7 @@ function EmailVerifyBlock({
             value={email}
             disabled={fixedEmail || verified}
             onChange={(e) => editEmail(e.target.value)}
-            placeholder="vous@example.com"
+            placeholder="Votre adresse e-mail"
             aria-label="Adresse e-mail"
           />
           {verified && (
@@ -438,6 +438,7 @@ function InlineLogin({ presetEmail, onAuthenticated }: { presetEmail: string; on
         <PasswordInput
           value={password}
           onChange={setPassword}
+          placeholder="Votre mot de passe"
           autoComplete="current-password"
           ariaLabel="Mot de passe"
         />
@@ -564,7 +565,7 @@ export function AccountAccessSection({
                 className="input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Youssef El Amrani"
+                placeholder="Votre nom et prénom"
                 autoComplete="name"
               />
             </div>
@@ -585,7 +586,7 @@ export function AccountAccessSection({
               <PasswordInput
                 value={password}
                 onChange={setPassword}
-                placeholder="Minimum 8 caractères"
+                placeholder="Au moins 8 caractères"
                 autoComplete="new-password"
                 ariaLabel="Mot de passe"
               />
