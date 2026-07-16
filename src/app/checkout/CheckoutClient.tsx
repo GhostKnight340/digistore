@@ -8,6 +8,8 @@ import { useProductCatalog } from "@/context/ProductCatalogContext";
 import PaymentBrandMark from "@/components/PaymentBrandMark";
 import { formatDH } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
+import { registerAndCreateOrderAction } from "@/app/actions/checkoutAuth";
+import { AccountAccessSection, AccountVerifyPanel, type AccountGateState } from "./AccountAccessSection";
 import { getPaymentConfigAction } from "@/app/actions/payments";
 import { validatePromoCodeAction } from "@/app/actions/promo";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
@@ -58,13 +60,17 @@ export default function CheckoutClient({
   // Only a real, email-verified account earns the "Compte vérifié" badge —
   // never merely being logged in. Ghost.ma has no phone verification.
   const accountVerified = Boolean(initialCustomer?.emailVerified);
-  const [email, setEmail] = useState(initialCustomer?.email ?? "");
-  const [fullName, setFullName] = useState(initialCustomer?.name ?? "");
+  // Name/email are read-only here: for a logged-in customer they come from the
+  // account; a new customer manages them inside AccountAccessSection.
+  const [email] = useState(initialCustomer?.email ?? "");
+  const [fullName] = useState(initialCustomer?.name ?? "");
   const [phoneLocal, setPhoneLocal] = useState(() => stripCountryPrefix(initialCustomer?.phone ?? ""));
   const [editingPhone, setEditingPhone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [regionConfirmed, setRegionConfirmed] = useState(false);
+  // Inline account state reported by AccountAccessSection (not-logged-in flow).
+  const [accountGate, setAccountGate] = useState<AccountGateState | null>(null);
 
   // ── Promo code state ───────────────────────────────────────────────────────
   const [promoInput, setPromoInput] = useState("");
@@ -164,16 +170,42 @@ export default function CheckoutClient({
   const phoneDigits = phoneLocal.replace(/\D/g, "");
   const phoneValid = phoneDigits.length >= 9;
   const needsRegion = restrictedItems.length > 0;
-  const canPlace = phoneValid && (!needsRegion || regionConfirmed);
-  const ctaLabel = canPlace
-    ? "Passer la commande"
+
+  // Account gating. An authenticated customer must be email-verified; a new
+  // customer must finish the inline account form AND verify their email. In the
+  // not-logged-in "login" sub-mode nothing can be placed until they log in
+  // (which refreshes into the authenticated view).
+  const accountReady = isLoggedIn
+    ? accountVerified
+    : accountGate?.mode === "register" && accountGate.ready === true;
+  const accountIncomplete: string | null = isLoggedIn
+    ? accountVerified
+      ? null
+      : "Vérifiez votre adresse e-mail pour continuer vers le paiement."
+    : accountReady
+      ? null
+      : accountGate?.incompleteReason ?? "Créez votre compte pour continuer vers le paiement.";
+
+  const canPlace = accountReady && phoneValid && (!needsRegion || regionConfirmed);
+  // Ordered so the CTA surfaces the first blocking step: account → phone → region.
+  const blockingReason: string | null = accountIncomplete
+    ? accountIncomplete
     : !phoneValid
-      ? "Ajoutez votre téléphone"
-      : "Confirmez la région";
+      ? "Ajoutez votre numéro de téléphone."
+      : needsRegion && !regionConfirmed
+        ? "Confirmez la région requise."
+        : null;
+  const ctaLabel = canPlace
+    ? "Passer au paiement"
+    : accountIncomplete
+      ? "Compte requis"
+      : !phoneValid
+        ? "Ajoutez votre téléphone"
+        : "Confirmez la région";
   const ctaHelp = canPlace
     ? "Votre commande sera créée, puis vous continuerez vers la page de paiement."
-    : "Complétez les informations requises pour créer la commande.";
-  const ctaHelpShort = canPlace ? "Étape suivante : page de paiement" : "Champs requis à compléter";
+    : blockingReason ?? "Complétez les informations requises pour continuer.";
+  const ctaHelpShort = canPlace ? "Étape suivante : page de paiement" : "Informations requises à compléter";
 
   // A successful submit clears the cart and then navigates to the
   // server-rendered /payment/[id] page, which takes a moment to load. During
@@ -211,14 +243,6 @@ export default function CheckoutClient({
     e.preventDefault();
     setError("");
 
-    if (!email.trim() || !fullName.trim()) {
-      setError("Veuillez saisir votre nom et votre e-mail.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Veuillez saisir une adresse e-mail valide.");
-      return;
-    }
     if (!phoneValid) {
       setError("Veuillez saisir un numéro de téléphone valide.");
       return;
@@ -228,16 +252,57 @@ export default function CheckoutClient({
       return;
     }
 
+    const items = cart.map((i) => ({ productId: i.productId, quantity: i.quantity }));
+
+    // ── New customer: register + create the order atomically on the server. ──
+    if (!isLoggedIn) {
+      if (!accountGate || accountGate.mode !== "register" || !accountGate.ready) {
+        setError(accountGate?.incompleteReason ?? "Veuillez compléter la création de votre compte.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await registerAndCreateOrderAction({
+          name: accountGate.values.name,
+          email: accountGate.values.email,
+          password: accountGate.values.password,
+          confirmPassword: accountGate.values.confirmPassword,
+          acceptTerms: accountGate.values.acceptTerms,
+          phone: `+212 ${phoneLocal.trim()}`,
+          items,
+          promoCode: promo ? promo.code : undefined,
+        });
+        if (!res.ok) {
+          setSubmitting(false);
+          if (res.accountExists) {
+            setError("Un compte peut déjà être associé à cette adresse. Connectez-vous pour continuer.");
+            return;
+          }
+          setError(res.error ?? "Une erreur est survenue. Veuillez réessayer.");
+          return;
+        }
+        clearCart();
+        router.push(`/payment/${res.order.accessToken ?? res.order.publicOrderPathSegment}`);
+      } catch {
+        setSubmitting(false);
+        setError("Une erreur est survenue. Veuillez réessayer.");
+      }
+      return;
+    }
+
+    // ── Authenticated customer. Verification is enforced server-side too. ──
+    if (!accountVerified) {
+      setError("Vérifiez votre adresse e-mail pour continuer vers le paiement.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const order = await createOrderAction({
         customerName: fullName.trim(),
         customerEmail: email.trim(),
         customerPhone: `+212 ${phoneLocal.trim()}`,
-        items: cart.map((i) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-        })),
+        items,
         promoCode: promo ? promo.code : undefined,
         ghostCreditToApplyMad: creditAppliedMad > 0 ? creditAppliedMad : undefined,
       });
@@ -251,8 +316,8 @@ export default function CheckoutClient({
       }
 
       clearCart();
-      // Route via the per-order secret token: it authorizes the guest's payment
-      // page and order actions. The enumerable public number is display-only.
+      // Route via the per-order secret token: it authorizes the payment page and
+      // order actions. The enumerable public number is display-only.
       router.push(`/payment/${order.accessToken ?? order.publicOrderPathSegment}`);
     } catch {
       setSubmitting(false);
@@ -289,22 +354,22 @@ export default function CheckoutClient({
         className="mt-7 grid gap-[22px] lg:grid-cols-[1fr_384px] lg:items-start lg:gap-[26px]"
       >
         <div className="flex flex-col gap-[22px]">
-          <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
-            <div className="flex items-center gap-[11px] border-b border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
-              <h2 className="text-base font-semibold text-white">Vos informations</h2>
-              {accountVerified && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#5BC98C]/25 bg-[#5BC98C]/10 px-2.5 py-1 text-[11.5px] font-medium text-[#5BC98C]">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="h-[11px] w-[11px]" aria-hidden>
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                  Compte vérifié
-                </span>
-              )}
-            </div>
+          {isLoggedIn ? (
+            <>
+              <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+                <div className="flex items-center gap-[11px] border-b border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
+                  <h2 className="text-base font-semibold text-white">Vos informations</h2>
+                  {accountVerified && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[#5BC98C]/25 bg-[#5BC98C]/10 px-2.5 py-1 text-[11.5px] font-medium text-[#5BC98C]">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="h-[11px] w-[11px]" aria-hidden>
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      Compte vérifié
+                    </span>
+                  )}
+                </div>
 
-            <div className="px-[18px] py-5 sm:px-[22px]">
-              {isLoggedIn ? (
-                <>
+                <div className="px-[18px] py-5 sm:px-[22px]">
                   <div className="mb-4 flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-[#0B0C10] p-3.5 sm:gap-[14px] sm:p-4">
                     <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#2c3445] to-[#171b26] text-base font-semibold text-[#9FB8FF]">
                       {(fullName.trim().slice(0, 1) || "C").toUpperCase()}
@@ -332,97 +397,39 @@ export default function CheckoutClient({
                     </svg>
                     Nom et e-mail proviennent de votre compte. Modifiez-les depuis votre profil.
                   </p>
-                </>
-              ) : (
-                <div className="mb-[18px] grid gap-4 sm:grid-cols-2">
-                  <Field label="Nom complet">
-                    <input
-                      className="input"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Youssef El Amrani"
-                      autoComplete="name"
-                    />
-                  </Field>
-                  <Field label="E-mail">
-                    <input
-                      className="input"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="vous@example.com"
-                      autoComplete="email"
-                    />
-                  </Field>
-                </div>
-              )}
 
-              {/* phone — collapsed to a compact saved row for a logged-in
-                  account that already has a number; opens on "Modifier". */}
-              {isLoggedIn && phoneValid && !editingPhone ? (
-                <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-[#0B0C10] p-3.5">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#5BC98C]/12 text-[#5BC98C]">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className="h-[18px] w-[18px]" aria-hidden>
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
-                    </svg>
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold text-white">Numéro de téléphone</div>
-                    <div className="font-mono text-[13px] text-muted">🇲🇦 +212 {phoneLocal}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditingPhone(true)}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/[0.08] px-3 py-2 text-[12.5px] font-medium text-[#9FB8FF] transition hover:bg-accent/[0.14]"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3" aria-hidden>
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
-                    Modifier
-                  </button>
-                </div>
-              ) : (
-              <label className="block">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-[#EAF0FF]">Numéro de téléphone</span>
-                  <span className={`text-[11.5px] ${phoneValid ? "text-[#5BC98C]" : "text-[#E8A838]"}`}>
-                    {phoneValid ? "Enregistré" : "Requis"}
-                  </span>
-                </div>
-                <div
-                  className={`flex h-[46px] items-center gap-2.5 rounded-[11px] border bg-[#0B0C10] pl-3.5 pr-2 transition ${
-                    phoneValid
-                      ? "border-white/[0.09]"
-                      : "border-[#E8A838]/50 shadow-[0_0_0_3px_rgba(232,168,56,0.1)]"
-                  }`}
-                >
-                  <span className="flex shrink-0 items-center gap-1.5 border-r border-white/[0.09] pr-2.5 text-sm text-muted">
-                    <span className="text-[15px]">🇲🇦</span>+212
-                  </span>
-                  <input
-                    className="h-full flex-1 bg-transparent text-[14.5px] tracking-wide text-text outline-none placeholder:text-faint"
-                    value={phoneLocal}
-                    onChange={(e) => setPhoneLocal(e.target.value)}
-                    placeholder="6 00 00 00 00"
-                    autoComplete="tel-national"
-                    inputMode="tel"
+                  <PhoneBlock
+                    isLoggedIn
+                    phoneLocal={phoneLocal}
+                    setPhoneLocal={setPhoneLocal}
+                    phoneValid={phoneValid}
+                    editingPhone={editingPhone}
+                    setEditingPhone={setEditingPhone}
                   />
-                  {phoneValid && (
-                    <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-[#5BC98C]/15">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="#5BC98C" strokeWidth={2.6} className="h-[13px] w-[13px]" aria-hidden>
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </span>
-                  )}
                 </div>
-                <p className="mt-2 text-[11.5px] text-faint">
-                  Utilisé uniquement pour le suivi de votre commande si nécessaire.
-                </p>
-              </label>
-              )}
-            </div>
-          </section>
+              </section>
+
+              {/* Authenticated but not yet email-verified → require verification. */}
+              {!accountVerified && <AccountVerifyPanel email={email} name={fullName} />}
+            </>
+          ) : (
+            <>
+              <AccountAccessSection onChange={setAccountGate} />
+
+              <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
+                <div className="px-[18px] py-5 sm:px-[22px]">
+                  <PhoneBlock
+                    isLoggedIn={false}
+                    phoneLocal={phoneLocal}
+                    setPhoneLocal={setPhoneLocal}
+                    phoneValid={phoneValid}
+                    editingPhone={editingPhone}
+                    setEditingPhone={setEditingPhone}
+                  />
+                </div>
+              </section>
+            </>
+          )}
 
           <PromoSection
             promoInput={promoInput}
@@ -1154,11 +1161,86 @@ function PromoApplied({ promo, onRemove }: { promo: PromoPreviewDTO; onRemove: (
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function PhoneBlock({
+  isLoggedIn,
+  phoneLocal,
+  setPhoneLocal,
+  phoneValid,
+  editingPhone,
+  setEditingPhone,
+}: {
+  isLoggedIn: boolean;
+  phoneLocal: string;
+  setPhoneLocal: (v: string) => void;
+  phoneValid: boolean;
+  editingPhone: boolean;
+  setEditingPhone: (v: boolean) => void;
+}) {
+  // Collapsed saved row for a logged-in account that already has a number.
+  if (isLoggedIn && phoneValid && !editingPhone) {
+    return (
+      <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-[#0B0C10] p-3.5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#5BC98C]/12 text-[#5BC98C]">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className="h-[18px] w-[18px]" aria-hidden>
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
+          </svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-semibold text-white">Numéro de téléphone</div>
+          <div className="font-mono text-[13px] text-muted">🇲🇦 +212 {phoneLocal}</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditingPhone(true)}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/[0.08] px-3 py-2 text-[12.5px] font-medium text-[#9FB8FF] transition hover:bg-accent/[0.14]"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3" aria-hidden>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+          Modifier
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-white">{label}</label>
-      {children}
-    </div>
+    <label className="block">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[13px] font-semibold text-[#EAF0FF]">Numéro de téléphone</span>
+        <span className={`text-[11.5px] ${phoneValid ? "text-[#5BC98C]" : "text-[#E8A838]"}`}>
+          {phoneValid ? "Enregistré" : "Requis"}
+        </span>
+      </div>
+      <div
+        className={`flex h-[46px] items-center gap-2.5 rounded-[11px] border bg-[#0B0C10] pl-3.5 pr-2 transition ${
+          phoneValid
+            ? "border-white/[0.09]"
+            : "border-[#E8A838]/50 shadow-[0_0_0_3px_rgba(232,168,56,0.1)]"
+        }`}
+      >
+        <span className="flex shrink-0 items-center gap-1.5 border-r border-white/[0.09] pr-2.5 text-sm text-muted">
+          <span className="text-[15px]">🇲🇦</span>+212
+        </span>
+        <input
+          className="h-full flex-1 bg-transparent text-[14.5px] tracking-wide text-text outline-none placeholder:text-faint"
+          value={phoneLocal}
+          onChange={(e) => setPhoneLocal(e.target.value)}
+          placeholder="6 00 00 00 00"
+          autoComplete="tel-national"
+          inputMode="tel"
+        />
+        {phoneValid && (
+          <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-[#5BC98C]/15">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#5BC98C" strokeWidth={2.6} className="h-[13px] w-[13px]" aria-hidden>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-[11.5px] text-faint">
+        Utilisé uniquement pour le suivi de votre commande si nécessaire.
+      </p>
+    </label>
   );
 }

@@ -1,7 +1,9 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
+import { consumeVerifiedProofTx } from "@/lib/checkout/emailVerification";
 import { isOrderingCurrentlyEnabled } from "./ordering";
 import { resolveCartLines } from "./promoResolve";
 import { reservePromoInTx } from "./promoCodes";
@@ -1248,6 +1250,232 @@ export async function createOrder(
     // Promo failures carry a customer-safe French message (e.g. the last use
     // was taken in a race) — surface it instead of a generic retry loop.
     if (error instanceof PromoApplicationError) return { error: error.message };
+    return null;
+  }
+}
+
+/** Thrown inside createVerifiedAccountAndOrder when a real account raced in for
+ *  the same email, rolling the whole transaction back. */
+class AccountExistsError extends Error {}
+/** Thrown when the server-side email-verification proof is missing/expired. */
+class VerificationRequiredError extends Error {}
+
+/**
+ * Atomically create a verified customer account AND their first order, then link
+ * them. Used by the inline checkout registration flow. Everything runs in ONE
+ * transaction so a partial failure never leaves an account without its order (or
+ * an order without an account); a retry after failure finds no half-built state.
+ *
+ * The caller has already validated the name/email/password shape and hashed the
+ * password. This function independently re-validates and CONSUMES the
+ * server-side email-verification proof (never a client flag), re-prices the cart
+ * from the DB, and re-checks that no real account exists for the email.
+ */
+export async function createVerifiedAccountAndOrder(input: {
+  name: string;
+  email: string;
+  passwordHash: string;
+  phone?: string;
+  /** Checkout-session id the verification proof is bound to. */
+  sessionId: string;
+  items: { productId: string; quantity: number }[];
+  promoCode?: string;
+}): Promise<
+  | {
+      id: string;
+      publicOrderNumber: string;
+      publicOrderPathSegment: string;
+      accessToken: string | null;
+      customerId: string;
+    }
+  | { error: string }
+  | { accountExists: true }
+  | null
+> {
+  await ensureDatabaseReady();
+  if (!(await isOrderingCurrentlyEnabled())) return null;
+
+  const MAX_LINE_QUANTITY = 100;
+  const requestedItems = input.items.filter((item) => item.quantity >= 1);
+  if (requestedItems.length === 0) return { error: "Votre panier est vide." };
+  for (const item of requestedItems) {
+    if (!Number.isInteger(item.quantity) || item.quantity > MAX_LINE_QUANTITY) {
+      return { error: "Quantité invalide pour un article du panier." };
+    }
+  }
+
+  const resolvedLines = await resolveCartLines(requestedItems);
+  if (resolvedLines.length !== requestedItems.length) {
+    return {
+      error:
+        "Un article de votre panier n'est plus disponible. Actualisez votre panier puis réessayez.",
+    };
+  }
+  if (resolvedLines.length === 0) return { error: "Votre panier est vide." };
+
+  const subtotalMad = resolvedLines.reduce(
+    (sum, item) => sum + item.unitPriceMad * item.quantity,
+    0,
+  );
+  const customerName = input.name.trim();
+  const customerEmail = input.email.trim().toLowerCase();
+  const customerPhone = normalizeOptionalPhone(input.phone);
+  if (customerPhone === undefined) return { error: "Numéro de téléphone invalide." };
+  const rawPromoCode = input.promoCode?.trim();
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1) Consume the verification proof (single-use, server-authoritative).
+      const proofOk = await consumeVerifiedProofTx(tx, customerEmail, input.sessionId);
+      if (!proofOk) throw new VerificationRequiredError();
+
+      // 2) Refuse to duplicate a real account (race with a concurrent register).
+      const existing = await tx.customer.findUnique({ where: { email: customerEmail } });
+      if (existing && (existing.passwordHash || existing.googleId || existing.discordId)) {
+        throw new AccountExistsError();
+      }
+
+      // 3) Create the account, or upgrade a guest row (email present but no
+      // credential from a past guest order) in place — never a duplicate.
+      const customer = existing
+        ? await tx.customer.update({
+            where: { id: existing.id },
+            data: {
+              name: customerName,
+              passwordHash: input.passwordHash,
+              phone: customerPhone ?? existing.phone ?? undefined,
+              emailVerified: true,
+              emailVerifiedAt: new Date(),
+              authProvider: "password",
+            },
+          })
+        : await tx.customer.create({
+            data: {
+              name: customerName,
+              email: customerEmail,
+              passwordHash: input.passwordHash,
+              phone: customerPhone,
+              emailVerified: true,
+              emailVerifiedAt: new Date(),
+              authProvider: "password",
+            },
+          });
+
+      // 4) Create the order linked to the new account.
+      const created = await tx.order.create({
+        data: {
+          customerId: customer.id,
+          customerName,
+          customerEmail,
+          paymentMethod: "",
+          status: "pending_payment",
+          deliveryToken: randomBytes(24).toString("base64url"),
+          totalMad: subtotalMad,
+          items: {
+            create: resolvedLines.map((item) => ({
+              productId: item.productId,
+              variantId: item.variantId,
+              quantity: item.quantity,
+              unitPriceMad: item.unitPriceMad,
+            })),
+          },
+        },
+        include: { items: { select: { id: true, productId: true, variantId: true } } },
+      });
+
+      // 5) Apply + reserve any promo atomically (the customer is now logged in).
+      let discountMad = 0;
+      if (rawPromoCode) {
+        const lineKeyToOrderItemId = new Map<string, string>();
+        for (const line of resolvedLines) {
+          const match = created.items.find(
+            (it) => it.productId === line.productId && (it.variantId ?? null) === (line.variantId ?? null),
+          );
+          if (match) lineKeyToOrderItemId.set(line.lineKey, match.id);
+        }
+        const reservation = await reservePromoInTx(tx, {
+          rawCode: rawPromoCode,
+          orderId: created.id,
+          lines: resolvedLines,
+          lineKeyToOrderItemId,
+          isLoggedIn: true,
+          customerId: customer.id,
+          customerEmail,
+          now: new Date(),
+        });
+        if (!reservation.ok) {
+          throw new PromoApplicationError(reservation.error ?? "Code promo invalide.");
+        }
+        discountMad = reservation.discountMad;
+      }
+
+      const finalTotalMad = Math.max(0, subtotalMad - discountMad);
+      if (discountMad > 0) {
+        await tx.order.update({
+          where: { id: created.id },
+          data: { discountMad, totalMad: finalTotalMad },
+        });
+      }
+
+      await tx.paymentEvent.create({
+        data: {
+          orderId: created.id,
+          type: "status_change",
+          toStatus: "pending_payment",
+          note: discountMad > 0 ? `Order created. Promo -${discountMad} DH.` : "Order created.",
+        },
+      });
+
+      return { order: created, totalMad: finalTotalMad, customerId: customer.id };
+    });
+
+    const order = result.order;
+    const reference = await publicOrderReference(order);
+
+    try {
+      await sendTransactionalEmail({
+        to: customerEmail,
+        orderId: order.id,
+        customerId: result.customerId,
+        templateKey: "order_received",
+        type: "order_received",
+        variables: {
+          customer_name: customerName,
+          order_number: reference.number,
+          payment_url: absoluteAppUrl(`/payment/${order.deliveryToken ?? reference.pathSegment}`),
+          order_url: absoluteAppUrl(`/order/${order.deliveryToken ?? reference.pathSegment}`),
+          total: `${result.totalMad} DH`,
+        },
+      });
+    } catch (emailError) {
+      console.error("[email:order_received]", emailError);
+    }
+
+    void notifyOrderCreated({
+      order,
+      publicOrderNumber: reference.number,
+      itemSummary: resolvedLines.map((item) => `${item.quantity}x ${item.name}`).join(", "),
+      adminUrl: absoluteAppUrl(`/admin/orders/${order.id}`),
+    });
+
+    return {
+      id: order.id,
+      publicOrderNumber: reference.number,
+      publicOrderPathSegment: reference.pathSegment,
+      accessToken: order.deliveryToken,
+      customerId: result.customerId,
+    };
+  } catch (error) {
+    if (error instanceof AccountExistsError) return { accountExists: true };
+    if (error instanceof VerificationRequiredError) {
+      return { error: "Vérifiez votre adresse e-mail pour continuer vers le paiement." };
+    }
+    if (error instanceof PromoApplicationError) return { error: error.message };
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      // Unique email collided in a race → an account now exists.
+      return { accountExists: true };
+    }
+    console.error("[createVerifiedAccountAndOrder]", error);
     return null;
   }
 }

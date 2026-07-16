@@ -724,6 +724,36 @@ model AuthToken {
   @@index([expiresAt])
 }
 
+// Pre-account email verification for inline checkout registration. Unlike
+// AuthToken this is NOT tied to a Customer row — the whole point is to prove
+// control of an email address BEFORE any account is created. A short-lived
+// six-digit code is stored HASHED (never plaintext, never in an API response),
+// bound to the normalized email AND the browser's checkout-session cookie, and
+// consumed exactly once when the account+order are created atomically. See
+// src/lib/checkout/emailVerification.ts.
+model CheckoutEmailVerification {
+  id           String    @id @default(cuid())
+  // Normalized (trimmed + lowercased) email the code was sent to.
+  email        String
+  // Opaque per-browser checkout-session id (httpOnly cookie). Binds a code to
+  // the session that requested it so a code leaked to another context is useless.
+  sessionId    String
+  // HMAC(secret, `${email}:${code}`) — the plaintext code is never persisted.
+  codeHash     String
+  // Code expiry (10 minutes). After this the code can no longer be confirmed.
+  expiresAt    DateTime
+  // Failed confirmation attempts against this row; capped to block brute force.
+  attemptCount Int       @default(0)
+  // Set when the correct code was entered — this is the verification PROOF.
+  verifiedAt   DateTime?
+  // Set when the proof was spent creating the account/order (single-use).
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([email, sessionId])
+  @@index([expiresAt])
+}
+
 model OrderItem {
   id           String  @id @default(cuid())
   orderId      String

@@ -7,6 +7,7 @@ import {
   findOrderByEmailAndId,
 } from "@/lib/db/orders";
 import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
+import { getCurrentCustomer } from "@/lib/auth";
 import { customerOrderRedirectPath } from "@/lib/orderNumber";
 import type { CustomerOrderDTO } from "@/lib/dto";
 
@@ -36,6 +37,18 @@ export async function createOrderAction(input: {
   // The DB layer re-checks this too, so a race or a direct call can't slip
   // through (see createOrder in src/lib/db/orders.ts).
   if (!(await isOrderingCurrentlyEnabled())) return null;
+
+  // Account required: anonymous guest checkout is removed. Only an authenticated,
+  // email-verified customer may create an order through this path. New customers
+  // register + verify inline and use registerAndCreateOrderAction instead. This
+  // is the server-side backstop — the disabled button is never the only guard.
+  const customer = await getCurrentCustomer();
+  if (!customer) {
+    return { error: "Veuillez créer un compte ou vous connecter pour continuer." };
+  }
+  if (!customer.emailVerified) {
+    return { error: "Vérifiez votre adresse e-mail pour continuer vers le paiement." };
+  }
   return createOrder(input);
 }
 

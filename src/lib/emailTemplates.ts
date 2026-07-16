@@ -5,6 +5,7 @@ import { emailIconUrl, getEnabledFooterPaymentBadges, getFooterSocialLinks, what
 export type EmailTemplateKey =
   | "welcome"
   | "email_verification"
+  | "checkout_email_verification"
   | "email_confirmation"
   | "password_reset"
   | "password_changed"
@@ -209,6 +210,8 @@ function brandedEmailHtml(
   const supportEmail = variableString(variables, "support_email") || "support@ghost.ma";
   const currentYear = variableString(variables, "current_year") || String(new Date().getFullYear());
   const verificationUrl = variableString(variables, "verification_url");
+  const verificationCode = variableString(variables, "verification_code");
+  const expiryMinutes = variableString(variables, "expiry_minutes") || "10";
   const resetUrl = variableString(variables, "reset_password_url");
   const accountUrl = variableString(variables, "account_url");
   const orderUrl = variableString(variables, "order_url");
@@ -227,6 +230,8 @@ function brandedEmailHtml(
       ctaUrl?: string;
       fallbackLabel?: string;
       notice?: string;
+      /** Big, copyable one-time code (checkout verification email). */
+      code?: string;
     }
   > = {
     email_verification: {
@@ -236,6 +241,13 @@ function brandedEmailHtml(
       ctaLabel: "Vérifier mon e-mail",
       ctaUrl: verificationUrl,
       fallbackLabel: "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :",
+    },
+    checkout_email_verification: {
+      title: "Votre code de vérification",
+      intro:
+        "Utilisez le code ci-dessous pour confirmer votre adresse e-mail et finaliser votre commande sur ghost.ma. Elle servira à confirmer votre commande, recevoir votre code et récupérer votre compte.",
+      code: verificationCode,
+      notice: `Ce code expire dans ${expiryMinutes} minutes et ne doit être partagé avec personne. Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.`,
     },
     welcome: {
       title: "Bienvenue sur ghost.ma",
@@ -400,7 +412,21 @@ function brandedEmailHtml(
                   ${escapeHtml(selected.intro).replace(/\r?\n/g, "<br />")}
                 </p>
                 ${REVIEW_TEMPLATE_META[key] ? motifBlockHtml(reason, REVIEW_TEMPLATE_META[key]!.motifLabel) : ""}
-                ${brandedButton(selected.ctaLabel ?? "Ouvrir ghost.ma", selected.ctaUrl ?? "")}
+                ${
+                  selected.code
+                    ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 26px 0 4px;">
+                        <tr>
+                          <td align="center" style="border: 1px solid #d7defa; border-radius: 14px; background: #f2f6ff; padding: 22px 16px;">
+                            <div style="color: #6b7280; font-family: Arial, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;">Code de vérification</div>
+                            <div style="margin-top: 10px; color: #0f1729; font-family: 'Courier New', monospace; font-size: 34px; font-weight: 700; letter-spacing: .32em;">${escapeHtml(
+                              selected.code,
+                            )}</div>
+                          </td>
+                        </tr>
+                      </table>`
+                    : ""
+                }
+                ${selected.code ? "" : brandedButton(selected.ctaLabel ?? "Ouvrir ghost.ma", selected.ctaUrl ?? "")}
                 ${
                   fallbackUrl && selected.fallbackLabel
                     ? `<p style="margin: 16px 0 0; color: #6b7280; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
@@ -475,7 +501,18 @@ export function renderEmailTemplate(
   // plain-text below is composed separately for templates that need buttons
   // (unavailable in text) turned into links, but never re-derives the body.
   const text =
-    key === "password_changed"
+    key === "checkout_email_verification"
+      ? [
+          `Bonjour ${customerName},`,
+          "",
+          "Utilisez ce code pour confirmer votre adresse e-mail et finaliser votre commande sur ghost.ma :",
+          "",
+          variableString(baseVariables, "verification_code"),
+          "",
+          `Ce code expire dans ${variableString(baseVariables, "expiry_minutes") || "10"} minutes et ne doit être partagé avec personne.`,
+          "Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.",
+        ].join("\n")
+      : key === "password_changed"
       ? [
           `Bonjour ${customerName},`,
           "",
@@ -524,6 +561,7 @@ export function renderEmailTemplate(
 export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateKey, string> = {
   welcome: "Bienvenue",
   email_verification: "Vérification d'e-mail",
+  checkout_email_verification: "Vérification e-mail (paiement)",
   email_confirmation: "Confirmation d'e-mail",
   password_reset: "Réinitialisation du mot de passe",
   password_changed: "Mot de passe modifié",
@@ -552,6 +590,11 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
   email_verification: [
     { key: "customer_name", sample: "Amine" },
     { key: "verification_url", sample: "https://ghost.ma/verify/example" },
+  ],
+  checkout_email_verification: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "verification_code", sample: "482913" },
+    { key: "expiry_minutes", sample: "10" },
   ],
   email_confirmation: [
     { key: "customer_name", sample: "Amine" },

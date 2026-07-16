@@ -44,6 +44,7 @@ type EmailSendResult = {
 
 const AUTH_TEMPLATE_KEYS = new Set<EmailTemplateKey>([
   "email_verification",
+  "checkout_email_verification",
   "welcome",
   "password_reset",
   "password_changed",

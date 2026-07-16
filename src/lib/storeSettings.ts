@@ -339,6 +339,10 @@ export const defaultStoreSettings: StoreSettings = {
       subject: "Vérifiez votre e-mail ghost.ma",
       body: "Bonjour {{customer_name}},\n\nVérifiez votre adresse e-mail pour sécuriser votre compte ghost.ma : {{verification_url}}\n\nVotre espace client : {{account_url}}\n\nSupport : {{support_email}} / {{support_whatsapp}}.",
     },
+    checkout_email_verification: {
+      subject: "Votre code de vérification ghost.ma",
+      body: "Bonjour {{customer_name}},\n\nVotre code de vérification est {{verification_code}}. Il expire dans {{expiry_minutes}} minutes.",
+    },
     password_reset: {
       subject: "Réinitialisation de mot de passe",
       body: "Bonjour {{customer_name}},\n\nUtilisez le lien reçu pour réinitialiser votre mot de passe. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
