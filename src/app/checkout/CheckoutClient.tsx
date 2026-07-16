@@ -242,14 +242,18 @@ export default function CheckoutClient({
         ghostCreditToApplyMad: creditAppliedMad > 0 ? creditAppliedMad : undefined,
       });
 
-      if (!order) {
+      if (!order || "error" in order) {
         setSubmitting(false);
-        setError("Une erreur est survenue. Veuillez réessayer.");
+        // Server-side validation/promo failures carry a customer-safe French
+        // message (e.g. promo race, item no longer available) — show it.
+        setError(order && "error" in order ? order.error : "Une erreur est survenue. Veuillez réessayer.");
         return;
       }
 
       clearCart();
-      router.push(`/payment/${order.publicOrderPathSegment}`);
+      // Route via the per-order secret token: it authorizes the guest's payment
+      // page and order actions. The enumerable public number is display-only.
+      router.push(`/payment/${order.accessToken ?? order.publicOrderPathSegment}`);
     } catch {
       setSubmitting(false);
       setError("Une erreur est survenue. Veuillez réessayer.");

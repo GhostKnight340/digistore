@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomBytes } from "node:crypto";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { isOrderingCurrentlyEnabled } from "./ordering";
 import { resolveCartLines } from "./promoResolve";
@@ -126,7 +127,18 @@ function parseDeliveryFields(value: unknown): DeliveredFieldDTO[] | undefined {
 function buildCustomerDTO(
   data: OrderRecord,
   publicOrder: { number: string; pathSegment: string },
-  options: { authorizedForCodes?: boolean; includeUndeliveredCodes?: boolean } = {},
+  options: {
+    authorizedForCodes?: boolean;
+    includeUndeliveredCodes?: boolean;
+    /**
+     * False when the caller resolved the order ONLY via the enumerable public
+     * order number without being the owner: identity fields (name, email) and
+     * the internal id are then withheld, so sequential numbers can't be used to
+     * harvest customer PII or the cuid that unlocks order actions (IDOR fix).
+     * Defaults to true for token/owner/internal-id callers and admin views.
+     */
+    authorizedForIdentity?: boolean;
+  } = {},
 ): CustomerOrderDTO {
   // Delivered codes are secrets: expose them only when the caller is authorized
   // (a valid delivery token or the logged-in order owner — resolved upstream in
@@ -135,13 +147,14 @@ function buildCustomerDTO(
   const canExposeCodes =
     options.includeUndeliveredCodes === true ||
     (options.authorizedForCodes === true && data.status === "delivered");
+  const identity = options.authorizedForIdentity !== false;
   return {
-    id: data.id,
+    id: identity ? data.id : "",
     publicOrderNumber: publicOrder.number,
     publicOrderPathSegment: publicOrder.pathSegment,
     status: data.status as OrderStatus,
-    customerName: data.customerName,
-    customerEmail: data.customerEmail,
+    customerName: identity ? data.customerName : "",
+    customerEmail: identity ? data.customerEmail : "",
     paymentMethod: data.paymentMethod,
     totalMad: data.totalMad,
     createdAt: iso(data.createdAt),
@@ -381,17 +394,59 @@ export async function getCustomerOrder(
   }
 
   // 2) Public order number / internal id path — codes only for the logged-in owner.
+  let authorizedForIdentity = authorizedForCodes;
   if (!data) {
     const internalId = await resolveOrderReference(idOrToken);
     if (!internalId) return null;
     data = await loadOrder(internalId);
     if (!data) return null;
     authorizedForCodes = await isOrderOwner(data);
+    // Possession of the internal id (an unguessable cuid, e.g. from the guest's
+    // own browser) is a weak capability and may see identity fields. The
+    // SEQUENTIAL public order number is enumerable and must never reveal
+    // another customer's name/email or the internal id (IDOR fix).
+    const viaInternalId = internalId === decodeURIComponent(idOrToken.trim());
+    authorizedForIdentity = authorizedForCodes || viaInternalId;
   }
   if (!data) return null;
 
   const reference = await publicOrderReference(data);
-  return buildCustomerDTO(data, reference, { authorizedForCodes });
+  return buildCustomerDTO(data, reference, { authorizedForCodes, authorizedForIdentity });
+}
+
+/**
+ * Resolves a customer-supplied order reference (delivery/access token, internal
+ * id, or public order number) and authorizes a STATE-CHANGING action on it.
+ * Authorized when the caller presents the order's secret token, or is the
+ * logged-in owner. The enumerable public order number alone NEVER authorizes an
+ * action — that would let anyone cancel or alter another customer's order.
+ * Returns the internal order id, or null when unauthorized/not found.
+ */
+export async function authorizeOrderAccess(reference: string): Promise<string | null> {
+  await ensureDatabaseReady();
+  const trimmed = reference.trim();
+  if (!trimmed) return null;
+
+  // 1) Secret token — the token itself is the authorization (guest flow).
+  const tokenMatch = await prisma.order.findUnique({
+    where: { deliveryToken: trimmed },
+    select: { id: true },
+  });
+  if (tokenMatch) return tokenMatch.id;
+
+  // 2) Internal id — an unguessable cuid, only obtainable from an authorized
+  // view (token/owner-loaded DTO or the guest's own browser). Weak capability.
+  const internalId = await resolveOrderReference(trimmed);
+  if (!internalId) return null;
+  if (internalId === trimmed) return internalId;
+
+  // 3) Public order number — enumerable, so only the logged-in owner may act.
+  const order = await prisma.order.findUnique({
+    where: { id: internalId },
+    select: { customerId: true, customerEmail: true },
+  });
+  if (!order) return null;
+  return (await isOrderOwner(order)) ? internalId : null;
 }
 
 /** True when the current session customer owns the given order. */
@@ -963,17 +1018,47 @@ function normalizeOptionalPhone(value?: string) {
 
 export async function createOrder(
   input: CreateOrderInput,
-): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
+): Promise<
+  | {
+      id: string;
+      publicOrderNumber: string;
+      publicOrderPathSegment: string;
+      /** Per-order secret minted at creation — use for the customer's payment/order links. */
+      accessToken: string | null;
+    }
+  // Customer-safe French message (invalid cart, promo race, unavailable item).
+  | { error: string }
+  | null
+> {
   await ensureDatabaseReady();
   // Hard backstop for the global "Accept customer orders" toggle: refuse to
   // create an order (no incomplete/partial row) while ordering is disabled,
   // even if a caller bypassed the action-layer guard.
   if (!(await isOrderingCurrentlyEnabled())) return null;
+  // Quantities must be sane integers before anything touches the DB. The client
+  // caps at 1..n, but never trust it.
+  const MAX_LINE_QUANTITY = 100;
+  const requestedItems = input.items.filter((item) => item.quantity >= 1);
+  if (requestedItems.length === 0) return { error: "Votre panier est vide." };
+  for (const item of requestedItems) {
+    if (!Number.isInteger(item.quantity) || item.quantity > MAX_LINE_QUANTITY) {
+      return { error: "Quantité invalide pour un article du panier." };
+    }
+  }
   // Resolve + re-price every line from the DB (never trust client prices). The
   // shared resolver also tags each line with its parent product + category so a
   // promo code can be evaluated against product/category restrictions.
-  const resolvedLines = await resolveCartLines(input.items);
-  if (resolvedLines.length === 0) return null;
+  const resolvedLines = await resolveCartLines(requestedItems);
+  // Never create a PARTIAL order: if any requested line failed to resolve (the
+  // product/variant was deactivated or hidden since browsing), refuse instead of
+  // silently charging a different total than the checkout displayed.
+  if (resolvedLines.length !== requestedItems.length) {
+    return {
+      error:
+        "Un article de votre panier n'est plus disponible. Actualisez votre panier puis réessayez.",
+    };
+  }
+  if (resolvedLines.length === 0) return { error: "Votre panier est vide." };
 
   const subtotalMad = resolvedLines.reduce(
     (sum, item) => sum + item.unitPriceMad * item.quantity,
@@ -985,7 +1070,9 @@ export async function createOrder(
     const customerName = sessionCustomer?.name ?? input.customerName;
     const customerEmail = sessionCustomer?.email ?? input.customerEmail.trim().toLowerCase();
     const customerPhone = normalizeOptionalPhone(input.customerPhone);
-    if (customerPhone === undefined) return null;
+    if (customerPhone === undefined) {
+      return { error: "Numéro de téléphone invalide." };
+    }
     const result = await prisma.$transaction(async (tx) => {
       const customer = sessionCustomer
         ? await tx.customer.update({
@@ -994,7 +1081,11 @@ export async function createOrder(
           })
         : await tx.customer.upsert({
             where: { email: customerEmail },
-            update: { name: customerName, phone: customerPhone ?? undefined },
+            // Guest checkout must NEVER mutate an existing account's profile:
+            // an unauthenticated caller typing someone else's email could
+            // otherwise overwrite that customer's name/phone. Profile data is
+            // only written when the row is first created for this email.
+            update: {},
             create: {
               name: customerName,
               email: customerEmail,
@@ -1009,6 +1100,11 @@ export async function createOrder(
           customerEmail,
           paymentMethod: input.paymentMethod ?? "",
           status: "pending_payment",
+          // Unguessable per-order capability, minted at creation. It keys the
+          // customer's payment/order/delivery links and authorizes guest order
+          // actions — the sequential public order number never does. Delivery
+          // reuses this same token (see deliverOrder).
+          deliveryToken: randomBytes(24).toString("base64url"),
           totalMad: subtotalMad,
           items: {
             create: resolvedLines.map((item) => ({
@@ -1122,9 +1218,10 @@ export async function createOrder(
         variables: {
           customer_name: customerName,
           order_number: reference.number,
-          payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
-          order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
-          total: `${totalMad} MAD`,
+          // Token links: authorize the guest without exposing an enumerable path.
+          payment_url: absoluteAppUrl(`/payment/${order.deliveryToken ?? reference.pathSegment}`),
+          order_url: absoluteAppUrl(`/order/${order.deliveryToken ?? reference.pathSegment}`),
+          total: `${totalMad} DH`,
         },
       });
     } catch (emailError) {
@@ -1144,9 +1241,13 @@ export async function createOrder(
       id: order.id,
       publicOrderNumber: reference.number,
       publicOrderPathSegment: reference.pathSegment,
+      accessToken: order.deliveryToken,
     };
   } catch (error) {
     console.error("[createOrder]", error);
+    // Promo failures carry a customer-safe French message (e.g. the last use
+    // was taken in a race) — surface it instead of a generic retry loop.
+    if (error instanceof PromoApplicationError) return { error: error.message };
     return null;
   }
 }

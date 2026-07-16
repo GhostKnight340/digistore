@@ -413,7 +413,13 @@ export function visibleWhyGhost(
  */
 export function visibleReviews(reviews: ReviewSetting[]): ReviewSetting[] {
   return reviews
-    .filter((review) => review.status === "approved" && review.text.trim())
+    // Never surface SEEDED demo reviews as real: they carry names, cities,
+    // dates and a "Vérifié / Achats vérifiés" badge but correspond to no real
+    // order. Until a real Review pipeline exists, only genuine (non-seeded)
+    // admin-approved reviews render; the homepage section self-hides when there
+    // are none. Removing this filter would present fabricated testimonials as
+    // verified purchases.
+    .filter((review) => !review.seeded && review.status === "approved" && review.text.trim())
     .map((review) => ({
       ...review,
       rating: clampRating(review.rating),

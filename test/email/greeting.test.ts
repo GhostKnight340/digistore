@@ -33,3 +33,29 @@ test("body without a greeting still gets exactly one greeting", () => {
   assert.equal(count(rendered.html, "Bonjour Amina"), 1);
   assert.equal(count(rendered.text, "Bonjour Amina"), 1);
 });
+
+test("payment_issue renders its own template (not new_proof_requested)", () => {
+  const rendered = renderEmailTemplate(
+    defaultStoreSettings,
+    "payment_issue",
+    {
+      customer_name: "Amine",
+      order_number: "#000128",
+      payment_url: "https://ghost.ma/payment/tok123",
+      reason: "Le montant reçu ne correspond pas",
+    },
+  );
+  assert.ok(rendered.subject.includes("Problème avec votre paiement"), "subject is the payment_issue one");
+  assert.ok(rendered.html.includes("Voir le paiement"), "CTA is view-payment, not add-proof");
+  assert.ok(!rendered.html.includes("Ajouter un justificatif"), "no proof-upload CTA");
+  assert.ok(rendered.html.includes("Détail du problème"), "motif label rendered");
+});
+
+test("payment_issue with empty reason omits the motif block", () => {
+  const rendered = renderEmailTemplate(
+    defaultStoreSettings,
+    "payment_issue",
+    { customer_name: "Amine", order_number: "#000128", payment_url: "https://ghost.ma/payment/tok123", reason: "" },
+  );
+  assert.ok(!rendered.html.includes("Détail du problème"), "no motif block when reason empty");
+});

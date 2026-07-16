@@ -309,7 +309,7 @@ export const defaultStoreSettings: StoreSettings = {
   ],
   statItems: [
     { id: "delivery", value: "24/7", label: "Livraison digitale", enabled: true },
-    { id: "local-payment", value: "MAD", label: "Paiement local", enabled: true },
+    { id: "local-payment", value: "DH", label: "Paiement local", enabled: true },
     { id: "official-codes", value: "100%", label: "Codes officiels", enabled: true },
   ],
   whyGhost: defaultWhyGhost,
@@ -364,6 +364,12 @@ export const defaultStoreSettings: StoreSettings = {
       // Body only — the shell adds the greeting once, an optional Motif block
       // (from the reason), and the "Ajouter un justificatif" CTA button.
       body: "Nous avons besoin d'un nouveau justificatif de paiement pour votre commande {{order_number}}.",
+    },
+    payment_issue: {
+      subject: "Problème avec votre paiement pour {{order_number}}",
+      // Body only — shell adds greeting, optional Motif block and "Voir le
+      // paiement" CTA. Used for admin "mark issue" and PayPal capture denials.
+      body: "Un problème a été détecté avec le paiement de votre commande {{order_number}}. Vérifiez les informations sur la page de paiement ou contactez notre support.",
     },
     payment_rejected: {
       subject: "Paiement refusé pour {{order_number}}",

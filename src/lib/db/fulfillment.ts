@@ -48,10 +48,16 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
   }
   try {
     await timeAdmin("admin.confirmPayment", "transaction.statusEmailEvent", () => prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+      // Atomic from-status guard: two concurrent confirmations (double click,
+      // admin vs webhook) must not both pass the pre-read check and double-send
+      // the confirmation email. Mirrors setPaymentStatus.
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: order.status },
         data: { status: "payment_confirmed" },
       });
+      if (updated.count !== 1) {
+        throw new Error("Le statut de la commande a changé entre-temps.");
+      }
       await tx.paymentEvent.create({
         data: {
           orderId,
@@ -75,7 +81,7 @@ export async function confirmPayment(orderId: string): Promise<ActionResult> {
         variables: {
           customer_name: order.customerName,
           order_number: reference.number,
-          order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
+          order_url: absoluteAppUrl(`/order/${order.deliveryToken ?? reference.pathSegment}`),
           total: `${order.totalMad} DH`,
         },
       });
@@ -134,6 +140,7 @@ export async function deliverOrder(
           discordMessageId: true,
           discordThreadId: true,
           createdAt: true,
+          deliveryToken: true,
           items: {
             select: {
               id: true,
@@ -184,6 +191,24 @@ export async function deliverOrder(
   // re-purchase the earlier ones too — acceptable for the current
   // single-supplier-item use case, not for high-volume multi-item orders.
   const reloadlyResolutions = new Map<string, ResolvedReloadlyEntry>();
+  // Interim money-safety guard: with no persisted idempotency ledger (see note
+  // above), a partial failure across SEVERAL Reloadly purchases loses the
+  // already-paid codes and re-purchases them on retry. Until a ledger exists,
+  // refuse multi-code Reloadly deliveries — fulfil those entries manually
+  // (buy in the Reloadly dashboard, paste the codes) instead of risking a
+  // double wallet spend.
+  const reloadlyEntryCount = order.items.reduce(
+    (sum, item) =>
+      sum + filledEntriesForItem(item, assignments).filter((e) => e.reloadlyProductId).length,
+    0,
+  );
+  if (reloadlyEntryCount > 1) {
+    return {
+      ok: false,
+      error:
+        "Livraison Reloadly limitée à un code par envoi (protection anti double-achat). Livrez les codes supplémentaires manuellement.",
+    };
+  }
   for (const item of order.items) {
     const entries = filledEntriesForItem(item, assignments);
     for (let index = 0; index < entries.length; index += 1) {
@@ -224,10 +249,12 @@ export async function deliverOrder(
     }
   }
 
-  // Unguessable secret for the delivery-page link. Generated once here, at
-  // delivery, and embedded in the "Voir ma livraison" email link (never the
-  // enumerable public order number). See getCustomerOrder() authorization.
-  const deliveryToken = randomBytes(24).toString("base64url");
+  // Unguessable secret for the delivery-page link, embedded in the "Voir ma
+  // livraison" email (never the enumerable public order number). Orders now get
+  // this token at creation (it also keys the payment/order pages — see
+  // getCustomerOrder() authorization); reuse it so links sent earlier keep
+  // working. Legacy pre-token orders mint one here.
+  const deliveryToken = order.deliveryToken ?? randomBytes(24).toString("base64url");
 
   try {
     const consumedByVariant = new Map<
@@ -298,6 +325,21 @@ export async function deliverOrder(
             deliveryPayload = resolved.fields;
           } else {
             manualCode = entry.manualCode!.trim();
+            // A manually-typed code must never be delivered to two different
+            // orders (copy/paste mistake or double fulfilment in another tab).
+            const duplicate = await tx.deliveredCode.findFirst({
+              where: {
+                manualCode,
+                productId: item.productId,
+                orderId: { not: orderId },
+              },
+              select: { orderId: true },
+            });
+            if (duplicate) {
+              throw new Error(
+                "Ce code a déjà été livré sur une autre commande. Vérifiez le code saisi.",
+              );
+            }
           }
 
           await tx.deliveredCode.create({
@@ -318,10 +360,17 @@ export async function deliverOrder(
         }
       }
 
-      await tx.order.update({
-        where: { id: orderId },
+      // Atomic from-status guard: two concurrent deliveries (double click, two
+      // tabs) must not both write DeliveredCode rows and double-send the email.
+      // The stock-code claim above already protects DigitalCode rows; this
+      // protects manual/Reloadly entries and the status itself.
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: "payment_confirmed" },
         data: { status: "delivered", deliveryToken },
       });
+      if (updated.count !== 1) {
+        throw new Error("La commande a déjà été livrée ou son statut a changé.");
+      }
       await tx.paymentEvent.create({
         data: {
           orderId,

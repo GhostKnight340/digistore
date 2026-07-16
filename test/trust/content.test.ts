@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import {
   visibleReviews,
+  defaultReviews,
   reviewSummary,
   clampRating,
   selectNavigatorTips,
@@ -45,6 +46,22 @@ test("visibleReviews keeps only approved, non-empty reviews", () => {
     result.map((r) => r.id),
     ["a"],
   );
+});
+
+test("visibleReviews excludes seeded demo reviews (never shown as real)", () => {
+  const reviews = [
+    review({ id: "real", seeded: false, status: "approved" }),
+    review({ id: "demo", seeded: true, status: "approved" }),
+  ];
+  const result = visibleReviews(reviews);
+  assert.deepEqual(
+    result.map((r) => r.id),
+    ["real"],
+  );
+});
+
+test("the seeded launch defaults never render as real reviews", () => {
+  assert.equal(visibleReviews(defaultReviews).length, 0);
 });
 
 test("clampRating rounds and bounds to 1..5", () => {

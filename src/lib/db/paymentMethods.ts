@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
+import { isPayPalConfigured } from "@/lib/paypal/config";
 import type {
   PaymentMethodDTO,
   PaymentMethodDetails,
@@ -97,7 +98,14 @@ async function ensureSupportDefaults(): Promise<void> {
 }
 
 function isUsable(row: PaymentMethodRow): boolean {
-  return row.status === "active" && row.visible && !row.archivedAt;
+  if (!(row.status === "active" && row.visible && !row.archivedAt)) return false;
+  // A PayPal method without server credentials + the public SDK client id is a
+  // dead end at checkout ("PayPal n'est pas configuré") — hide it from customers
+  // instead of letting them select it. Admin still sees it (getAdminPaymentMethods).
+  if (row.type === "paypal") {
+    return isPayPalConfigured() && Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID);
+  }
+  return true;
 }
 
 /** Methods a customer should see at checkout: active + visible + not archived. */

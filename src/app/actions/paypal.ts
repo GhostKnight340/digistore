@@ -7,6 +7,7 @@ import {
   type CapturePaypalOrderResult,
 } from "@/lib/paypal/operations";
 import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
+import { authorizeOrderAccess } from "@/lib/db/orders";
 import { ORDERS_UNAVAILABLE_COPY } from "@/lib/storeSettings";
 
 /**
@@ -23,7 +24,10 @@ export async function createPaypalOrderAction(orderId: string): Promise<CreatePa
   if (!orderId || typeof orderId !== "string") {
     return { ok: false, error: "Commande introuvable." };
   }
-  return createPaypalOrderForGhostOrder(orderId);
+  // IDOR guard: token / internal id / logged-in owner only.
+  const authorizedId = await authorizeOrderAccess(orderId);
+  if (!authorizedId) return { ok: false, error: "Accès non autorisé à cette commande." };
+  return createPaypalOrderForGhostOrder(authorizedId);
 }
 
 /**
@@ -43,5 +47,7 @@ export async function capturePaypalOrderAction(
   if (!orderId || typeof orderId !== "string" || !paypalOrderId || typeof paypalOrderId !== "string") {
     return { ok: false, error: "Requête invalide." };
   }
-  return capturePaypalOrderForGhostOrder(orderId, paypalOrderId);
+  const authorizedId = await authorizeOrderAccess(orderId);
+  if (!authorizedId) return { ok: false, error: "Accès non autorisé à cette commande." };
+  return capturePaypalOrderForGhostOrder(authorizedId, paypalOrderId);
 }

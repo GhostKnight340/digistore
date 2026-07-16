@@ -873,6 +873,9 @@ export interface PaymentMethodDetails {
   walletAddress?: string;
   network?: string;
   minAmountNote?: string;
+  /** MAD per 1 USDT, used to display the USDT amount to pay. Defaults to 10
+   * when unset. */
+  cryptoExchangeRate?: number;
   // card
   providerName?: string;
   statusNote?: string;

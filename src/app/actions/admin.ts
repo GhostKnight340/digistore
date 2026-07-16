@@ -185,7 +185,25 @@ export async function getAdminPaymentOrdersAction(): Promise<AdminOrderSummaryDT
 
 export async function getAdminFulfillmentOrdersAction(): Promise<AdminOrderSummaryDTO[]> {
   await assertAdminAccess();
-  return getAdminOrdersPage({ take: 100 });
+  // A paid-but-undelivered order must NEVER fall out of the queue. Fetching the
+  // 100 newest orders of ANY status let an older `payment_confirmed` order be
+  // truncated away once volume grew. Fetch actionable statuses generously (these
+  // stay small — they get worked and leave the set) and a bounded window of
+  // terminal orders for the "delivered"/"refunded" tabs, then merge.
+  const ACTIONABLE = [
+    "pending_payment",
+    "payment_submitted",
+    "payment_issue",
+    "payment_confirmed",
+    "rejected",
+  ];
+  const [actionable, terminal] = await Promise.all([
+    getAdminOrdersPage({ statuses: ACTIONABLE, take: 1000 }),
+    getAdminOrdersPage({ statuses: ["delivered", "refunded"], take: 100 }),
+  ]);
+  const byId = new Map<string, AdminOrderSummaryDTO>();
+  for (const order of [...actionable, ...terminal]) byId.set(order.id, order);
+  return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function getAdminNavCountsAction(): Promise<{

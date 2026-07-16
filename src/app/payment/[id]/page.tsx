@@ -72,12 +72,10 @@ export default function PaymentPage({ params }: { params: Promise<{ id: string }
   }, [refresh]);
 
   const status = data?.order.status;
-  const shouldPoll =
-    ready &&
-    status !== "delivered" &&
-    status !== "rejected" &&
-    status !== "payment_issue" &&
-    status !== "cancelled";
+  // Poll every non-terminal state. Rejected / payment_issue orders still change
+  // (customer resubmits, admin confirms) — a customer parked on that screen must
+  // see the update without a manual refresh. Only delivered/cancelled are final.
+  const shouldPoll = ready && status !== "delivered" && status !== "cancelled";
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -1061,7 +1059,12 @@ function CryptoModule({
   onSelectMethod: (id: string) => void;
 }) {
   const d = method.details;
-  const usdt = madExact(total / 10);
+  // MAD→USDT rate is admin-configurable per method (details.cryptoExchangeRate);
+  // falls back to the historical 10 MAD/USDT when unset. Never hardcode only —
+  // a drifting rate makes every crypto customer under/over-pay.
+  const configuredRate = Number(d.cryptoExchangeRate);
+  const usdtRate = Number.isFinite(configuredRate) && configuredRate > 0 ? configuredRate : 10;
+  const usdt = madExact(total / usdtRate);
   return (
     <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
       <div className="border-b border-white/[0.06] px-[22px] py-[18px]">
@@ -1096,15 +1099,9 @@ function CryptoModule({
         )}
         {d.walletAddress ? (
           <div className="flex items-center gap-[18px]">
-            <div className="grid h-[120px] w-[120px] shrink-0 place-items-center rounded-xl bg-white p-2.5">
-              <div
-                className="h-full w-full rounded-[3px]"
-                style={{
-                  backgroundImage:
-                    "repeating-linear-gradient(90deg,#000 0 6px,#fff 6px 12px),repeating-linear-gradient(0deg,#000 0 6px,transparent 6px 12px)",
-                }}
-              />
-            </div>
+            {/* No decorative fake-QR tile here: customers try to scan it and
+                fail. Copy-paste of the address below is the supported flow;
+                render a real QR of d.walletAddress if one is ever added. */}
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex gap-4">
                 <div>

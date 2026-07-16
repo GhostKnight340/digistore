@@ -52,6 +52,8 @@ export const ALIAS_GROUPS: { canonical: string; aliases: string[] }[] = [
   { canonical: "steam wallet", aliases: ["steam card", "steam wallet code", "carte steam"] },
   { canonical: "free fire", aliases: ["freefire", "free-fire"] },
   { canonical: "xbox", aliases: ["x box"] },
+  { canonical: "netflix", aliases: ["netflx", "netflix gift card", "carte netflix", "abonnement netflix"] },
+  { canonical: "spotify", aliases: ["spotfy", "spotify premium", "carte spotify"] },
   {
     canonical: "gta vi",
     aliases: ["gta 6", "gta6", "grand theft auto vi", "grand theft auto 6", "gta six"],

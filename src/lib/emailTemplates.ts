@@ -12,6 +12,7 @@ export type EmailTemplateKey =
   | "awaiting_payment"
   | "proof_received"
   | "new_proof_requested"
+  | "payment_issue"
   | "payment_rejected"
   | "payment_confirmed"
   | "order_delivered"
@@ -152,6 +153,11 @@ const REVIEW_TEMPLATE_META: Partial<
     ctaText: "Ajoutez un nouveau justificatif de paiement ici :",
     ctaUrlVar: "payment_url",
   },
+  payment_issue: {
+    motifLabel: "Détail du problème",
+    ctaText: "Consultez votre paiement ici :",
+    ctaUrlVar: "payment_url",
+  },
   payment_rejected: {
     motifLabel: "Motif du refus",
     ctaText: "Consultez le détail du paiement ici :",
@@ -282,6 +288,12 @@ function brandedEmailHtml(
       title: subject,
       intro: text,
       ctaLabel: "Ajouter un justificatif",
+      ctaUrl: paymentUrl || orderUrl,
+    },
+    payment_issue: {
+      title: subject,
+      intro: text,
+      ctaLabel: "Voir le paiement",
       ctaUrl: paymentUrl || orderUrl,
     },
     payment_rejected: {
@@ -519,6 +531,7 @@ export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateKey, string> = {
   awaiting_payment: "Paiement en attente",
   proof_received: "Justificatif reçu",
   new_proof_requested: "Nouveau justificatif demandé",
+  payment_issue: "Problème de paiement",
   payment_rejected: "Paiement refusé",
   payment_confirmed: "Paiement confirmé",
   order_delivered: "Commande livrée",
@@ -577,6 +590,13 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
     { key: "payment_url", sample: "https://ghost.ma/payment/example" },
     { key: "order_url", sample: "https://ghost.ma/order/example" },
     { key: "reason", sample: "Justificatif illisible" },
+  ],
+  payment_issue: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "payment_url", sample: "https://ghost.ma/payment/example" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "reason", sample: "Le montant reçu ne correspond pas" },
   ],
   payment_rejected: [
     { key: "customer_name", sample: "Amine" },

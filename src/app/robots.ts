@@ -1,7 +1,14 @@
 import type { MetadataRoute } from "next";
 import { absoluteUrl } from "@/lib/siteUrl";
+import { isProductionRuntime } from "@/lib/env";
 
 export default function robots(): MetadataRoute.Robots {
+  // Only the real production site (ghost.ma) is indexable. Staging/preview
+  // return a blanket disallow so staging.ghost.ma and preview URLs never get
+  // crawled or indexed as duplicate content. See src/lib/env.ts.
+  if (!isProductionRuntime()) {
+    return { rules: { userAgent: "*", disallow: "/" } };
+  }
   return {
     rules: {
       userAgent: "*",

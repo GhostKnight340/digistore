@@ -115,8 +115,8 @@ export async function submitPayment(
         variables: {
           customer_name: order.customerName,
           order_number: reference.number,
-          order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
-          payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
+          order_url: absoluteAppUrl(`/order/${order.deliveryToken ?? reference.pathSegment}`),
+          payment_url: absoluteAppUrl(`/payment/${order.deliveryToken ?? reference.pathSegment}`),
           total: `${order.totalMad} DH`,
         },
       });
@@ -320,16 +320,35 @@ async function setPaymentStatus(
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Commande introuvable." };
+  // Never regress a finalized order. An accidental re-approve or a review-email
+  // action must not pull a delivered/refunded order back into the queue or
+  // corrupt its financial history.
+  const TERMINAL_STATUSES = ["delivered", "refunded"];
+  if (TERMINAL_STATUSES.includes(order.status) && order.status !== toStatus) {
+    return { ok: false, error: `Commande déjà « ${order.status} » ; transition ignorée.` };
+  }
+  // Idempotent: a second identical click must not re-fire the email / Discord ping.
+  if (order.status === toStatus) return { ok: true };
   const templateKey: EmailTemplateKey =
     emailType === "payment_confirmed"
       ? "payment_confirmed"
       : emailType === "payment_rejected"
         ? "payment_rejected"
-        : "new_proof_requested";
+        : emailType === "payment_issue"
+          ? "payment_issue"
+          : "new_proof_requested";
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.order.update({ where: { id: orderId }, data: { status: toStatus } });
+      // Atomic guard against a concurrent transition (TOCTOU): only advance from
+      // the exact status we read. Mirrors the PayPal path (transitionPaypalStatus).
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: order.status },
+        data: { status: toStatus },
+      });
+      if (updated.count !== 1) {
+        throw new Error("Le statut de la commande a changé entre-temps.");
+      }
       await tx.paymentEvent.create({
         data: {
           orderId,
@@ -341,7 +360,10 @@ async function setPaymentStatus(
       });
     });
     try {
-      const preview = await renderPaymentStatusEmailPreview(orderId, templateKey, note);
+      // Quick actions: the `note` is INTERNAL timeline text — never render it as
+      // the customer-facing "Motif" block. Admins who want a customer-visible
+      // reason use the review-email modal (applyPaymentStatusWithEmail).
+      const preview = await renderPaymentStatusEmailPreview(orderId, templateKey, "");
       await sendTransactionalEmail({
         to: order.customerEmail,
         orderId,
@@ -398,6 +420,8 @@ async function setPaymentStatus(
 const DEFAULT_REVIEW_MESSAGE: Partial<Record<EmailTemplateKey, string>> = {
   new_proof_requested:
     "Nous avons besoin d'un nouveau justificatif de paiement pour votre commande {{order_number}}.",
+  payment_issue:
+    "Un problème a été détecté avec le paiement de votre commande {{order_number}}. Vérifiez les informations sur la page de paiement ou contactez notre support.",
   payment_rejected: "Le paiement de votre commande {{order_number}} n'a pas pu être validé.",
   refund_update:
     "Voici une mise à jour concernant le remboursement de votre commande {{order_number}}.",
@@ -425,11 +449,14 @@ export async function renderPaymentStatusEmailPreview(
   if (!order) throw new Error("Commande introuvable.");
   const settings = await getStoreSettings();
   const reference = await publicOrderReference(order);
+  // Token links authorize the guest's page + actions; the enumerable public
+  // number is display-only (legacy tokenless rows fall back to it).
+  const linkSegment = order.deliveryToken ?? reference.pathSegment;
   const variables = {
     customer_name: order.customerName,
     order_number: reference.number,
-    order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
-    payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
+    order_url: absoluteAppUrl(`/order/${linkSegment}`),
+    payment_url: absoluteAppUrl(`/payment/${linkSegment}`),
     total: `${order.totalMad} DH`,
     reason,
   };
@@ -463,10 +490,45 @@ export async function applyPaymentStatusWithEmail(
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Commande introuvable." };
+  // Don't un-finalize an order: never leave `refunded`, and never move a
+  // `delivered` order anywhere except `refunded` (a delivered order can still be
+  // legitimately refunded). Blocks the harmful delivered→rejected / refunded→*
+  // regressions without breaking a genuine refund.
+  if (
+    order.status === "refunded" ||
+    (order.status === "delivered" && toStatus !== "refunded")
+  ) {
+    if (order.status === toStatus) return { ok: true };
+    return { ok: false, error: `Commande déjà « ${order.status} » ; transition ignorée.` };
+  }
+  // Deliberate re-send: the admin composed a review email while the order is
+  // ALREADY in the target status (e.g. a second "nouveau justificatif" request
+  // on a payment_issue order). Skip the transition but still send the email and
+  // record it in the timeline — silently succeeding without sending (the old
+  // behavior) left the customer uninformed while admin saw success.
+  const isResend = order.status === toStatus;
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.order.update({ where: { id: orderId }, data: { status: toStatus } });
+      if (isResend) {
+        await tx.paymentEvent.create({
+          data: {
+            orderId,
+            type: "email",
+            fromStatus: order.status,
+            toStatus,
+            note: `E-mail renvoyé (${templateKey}). ${note}`.trim(),
+          },
+        });
+        return;
+      }
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: order.status },
+        data: { status: toStatus },
+      });
+      if (updated.count !== 1) {
+        throw new Error("Le statut de la commande a changé entre-temps.");
+      }
       await tx.paymentEvent.create({
         data: {
           orderId,
@@ -493,8 +555,8 @@ export async function applyPaymentStatusWithEmail(
         variables: {
           customer_name: order.customerName,
           order_number: reference.number,
-          order_url: absoluteAppUrl(`/order/${reference.pathSegment}`),
-          payment_url: absoluteAppUrl(`/payment/${reference.pathSegment}`),
+          order_url: absoluteAppUrl(`/order/${order.deliveryToken ?? reference.pathSegment}`),
+          payment_url: absoluteAppUrl(`/payment/${order.deliveryToken ?? reference.pathSegment}`),
           total: `${order.totalMad} DH`,
           reason: email.reason,
         },
@@ -504,19 +566,22 @@ export async function applyPaymentStatusWithEmail(
     }
 
     // Mirror setPaymentStatus: reflect the admin review outcome (reject / refund
-    // / issue) on the #orders card so a refusal shows up in Discord too.
-    void notifyPaymentStatusChange({
-      order,
-      publicOrderNumber: reference.number,
-      fromStatus: order.status,
-      toStatus,
-      note,
-      adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
-    });
+    // / issue) on the #orders card so a refusal shows up in Discord too. A pure
+    // e-mail resend is not a status change — no Discord card, no lifecycle.
+    if (!isResend) {
+      void notifyPaymentStatusChange({
+        order,
+        publicOrderNumber: reference.number,
+        fromStatus: order.status,
+        toStatus,
+        note,
+        adminUrl: absoluteAppUrl(`/admin/orders/${orderId}`),
+      });
 
-    // Promo lifecycle for admin-driven outcomes (refund → reverse Ghost Credit,
-    // reject → release reservation). Idempotent and best-effort.
-    await applyPromoLifecycleForStatus(orderId, toStatus);
+      // Promo lifecycle for admin-driven outcomes (refund → reverse Ghost Credit,
+      // reject → release reservation). Idempotent and best-effort.
+      await applyPromoLifecycleForStatus(orderId, toStatus);
+    }
 
     return { ok: true };
   } catch (error) {
@@ -719,7 +784,9 @@ export async function markPaypalCaptureDenied(orderId: string, rawStatus: string
     rawStatus,
     note: "Paiement PayPal refusé par PayPal.",
     emailType: "payment_issue",
-    templateKey: "new_proof_requested",
+    // A PayPal customer has no proof to upload — send the payment-issue email,
+    // not a "new justificatif" request (previous wrong-template bug).
+    templateKey: "payment_issue",
     subject: "Problème avec votre paiement",
     body: "Votre paiement PayPal n'a pas pu être capturé. Contactez notre support WhatsApp.",
   });

@@ -17,6 +17,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
 import { getSiteUrl } from "@/lib/siteUrl";
+import { isProductionRuntime, isPreviewDeployment, runtimeEnvLabel } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -76,29 +77,48 @@ export default async function RootLayout({
     pathname.startsWith("/order") ||
     pathname.startsWith("/delivery") ||
     pathname.startsWith("/find-order");
+  // Visible only on staging/preview (never on production ghost.ma). Warns
+  // testers that data and payments here are throwaway. See src/lib/env.ts.
+  const showStagingBanner = isPreviewDeployment();
+  const gaId = process.env.NEXT_PUBLIC_GA_ID || "G-3DS42J47SN";
+  // Production analytics only: staging/preview page views must not pollute the
+  // live GA property.
+  const analyticsEnabled = isProductionRuntime() && Boolean(gaId);
   const showOrdersBanner = Boolean(
     settings && !isOrderingEnabled(settings) && !showMaintenance && !ordersBannerSuppressed,
   );
 
   return (
-    <html lang="en">
+    <html lang="fr">
       <head>
-        <script
-          async
-          src="https://www.googletagmanager.com/gtag/js?id=G-3DS42J47SN"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
+        {analyticsEnabled ? (
+          <>
+            <script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
-              gtag('config', 'G-3DS42J47SN');
+              gtag('config', '${gaId}');
             `,
-          }}
-        />
+              }}
+            />
+          </>
+        ) : null}
       </head>
       <body className="min-h-screen font-sans antialiased">
+        {showStagingBanner ? (
+          <div
+            role="status"
+            className="sticky top-0 z-[100] bg-amber-500 px-3 py-1 text-center text-[12px] font-semibold uppercase tracking-wide text-black"
+          >
+            {runtimeEnvLabel().toUpperCase()} — données et paiements de test
+          </div>
+        ) : null}
         <StoreSettingsProvider initialSettings={settings}>
           <ProductCatalogProvider
             categories={catalog.categories}

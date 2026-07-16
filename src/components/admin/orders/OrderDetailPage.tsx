@@ -259,8 +259,25 @@ export default function OrderDetailPage({
 
   const refreshOrder = useCallback(async () => {
     const fresh = await getAdminOrderDetailAction(order.id);
-    if (fresh) setOrder(fresh);
+    if (!fresh) return;
+    // Keep the same object when nothing changed: downstream effects re-init the
+    // code-assignment entries on `order` identity, and a no-op poll must not
+    // wipe codes the admin is currently typing.
+    setOrder((current) =>
+      JSON.stringify(fresh) === JSON.stringify(current) ? current : fresh,
+    );
   }, [order.id]);
+
+  // Inbound live updates: a proof resubmitted or a webhook confirmation while
+  // this page is open must appear without a manual reload. Terminal orders
+  // stop polling.
+  useEffect(() => {
+    if (order.status === "delivered" || order.status === "cancelled") return;
+    const interval = setInterval(() => {
+      void refreshOrder();
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [order.status, refreshOrder]);
 
   useEffect(() => {
     setProof("loading");

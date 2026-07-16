@@ -65,6 +65,10 @@ export default function FulfillmentPanel() {
 
   useEffect(() => {
     load();
+    // Keep the queue live: an order confirmed elsewhere (webhook, another tab)
+    // must show up here without a manual reload.
+    const interval = setInterval(load, 15_000);
+    return () => clearInterval(interval);
   }, [load]);
 
   const visibleOrders = useMemo(() => {

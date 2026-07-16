@@ -13,7 +13,7 @@ import {
 } from "@/lib/db/payments";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import { getPublicPaymentMethods, getAdminPaymentMethods } from "@/lib/db/paymentMethods";
-import { getCustomerOrder } from "@/lib/db/orders";
+import { getCustomerOrder, authorizeOrderAccess } from "@/lib/db/orders";
 import { isOrderingCurrentlyEnabled, ORDERING_DISABLED_RESULT } from "@/lib/db/ordering";
 import { requireAdminCustomer } from "@/lib/auth";
 import type {
@@ -69,8 +69,12 @@ export async function submitPaymentAction(formData: FormData): Promise<ActionRes
   // Pre-launch guard: no payment submission / proof upload while ordering is off.
   if (!(await isOrderingCurrentlyEnabled())) return ORDERING_DISABLED_RESULT;
 
-  const orderId = formData.get("orderId") as string | null;
-  if (!orderId) return { ok: false, error: "Missing orderId." };
+  const orderRef = formData.get("orderId") as string | null;
+  if (!orderRef) return { ok: false, error: "Missing orderId." };
+  // IDOR guard: the caller must present the order's secret token, its internal
+  // id, or be the logged-in owner. The enumerable public number never suffices.
+  const orderId = await authorizeOrderAccess(orderRef);
+  if (!orderId) return { ok: false, error: "Accès non autorisé à cette commande." };
 
   const file = formData.get("proof") as File | null;
   let proof: { fileName: string; mimeType: string; dataBase64: string } | undefined;
@@ -103,18 +107,22 @@ function normalizeProofMimeType(file: File): string | null {
 
 /** Customer: switch a pending order to a different (customer-visible) method. */
 export async function changePaymentMethodAction(
-  orderId: string,
+  orderRef: string,
   methodId: string,
 ): Promise<ActionResult> {
   // Pre-launch guard: selecting/switching a payment method is part of paying.
   if (!(await isOrderingCurrentlyEnabled())) return ORDERING_DISABLED_RESULT;
-  if (!orderId || !methodId) return { ok: false, error: "Paramètres manquants." };
+  if (!orderRef || !methodId) return { ok: false, error: "Paramètres manquants." };
+  const orderId = await authorizeOrderAccess(orderRef);
+  if (!orderId) return { ok: false, error: "Accès non autorisé à cette commande." };
   return changeOrderPaymentMethod(orderId, methodId);
 }
 
 /** Customer: cancel a still-unpaid order. Eligibility is enforced server-side. */
-export async function cancelOrderAction(orderId: string): Promise<ActionResult> {
-  if (!orderId) return { ok: false, error: "Paramètres manquants." };
+export async function cancelOrderAction(orderRef: string): Promise<ActionResult> {
+  if (!orderRef) return { ok: false, error: "Paramètres manquants." };
+  const orderId = await authorizeOrderAccess(orderRef);
+  if (!orderId) return { ok: false, error: "Accès non autorisé à cette commande." };
   return cancelOrder(orderId);
 }
 

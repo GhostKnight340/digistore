@@ -22,7 +22,16 @@ export async function createOrderAction(input: {
   promoCode?: string;
   /** Optional Ghost Credit (whole MAD) to spend (re-capped server-side). */
   ghostCreditToApplyMad?: number;
-}): Promise<{ id: string; publicOrderNumber: string; publicOrderPathSegment: string } | null> {
+}): Promise<
+  | {
+      id: string;
+      publicOrderNumber: string;
+      publicOrderPathSegment: string;
+      accessToken: string | null;
+    }
+  | { error: string }
+  | null
+> {
   // Global pre-launch guard: never create an order while ordering is disabled.
   // The DB layer re-checks this too, so a race or a direct call can't slip
   // through (see createOrder in src/lib/db/orders.ts).
@@ -54,13 +63,11 @@ export async function findOrderAction(
 ): Promise<{ found: boolean; id?: string; redirectTo?: string }> {
   const order = await findOrderByEmailAndId(orderNumber.trim(), email.trim().toLowerCase());
   if (!order) return { found: false };
-  // Delivered orders: route via the secret delivery token so codes are revealed
-  // (the email match already authenticated the guest). Falls back to the public
-  // path segment for non-delivered orders or legacy rows without a token.
-  const segment =
-    order.status === "delivered" && order.deliveryToken
-      ? order.deliveryToken
-      : order.publicOrderPathSegment;
+  // Route via the secret per-order token whenever one exists (the email match
+  // already authenticated the guest): it authorizes the payment/order pages and
+  // guest order actions, and reveals codes once delivered. Only legacy rows
+  // without a token fall back to the public path segment.
+  const segment = order.deliveryToken ?? order.publicOrderPathSegment;
   return {
     found: true,
     id: order.id,

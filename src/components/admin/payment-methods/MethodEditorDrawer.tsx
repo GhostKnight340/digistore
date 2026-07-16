@@ -428,6 +428,15 @@ function DetailsTab({
           </select>
         </div>
         <TextField label="Note montant minimum" value={details.minAmountNote ?? ""} onChange={(v) => setDetail("minAmountNote", v)} />
+        <TextField
+          label="Taux de change (MAD pour 1 USDT)"
+          value={details.cryptoExchangeRate != null ? String(details.cryptoExchangeRate) : ""}
+          onChange={(v) => {
+            const parsed = Number(v.replace(",", "."));
+            setDetail("cryptoExchangeRate", Number.isFinite(parsed) && parsed > 0 ? parsed : undefined);
+          }}
+          placeholder="10"
+        />
         <div className="sm:col-span-2">
           <TextField label="Instructions de confirmation" value={details.instructions ?? ""} onChange={(v) => setDetail("instructions", v)} textarea />
         </div>

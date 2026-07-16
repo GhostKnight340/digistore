@@ -10,6 +10,7 @@ import {
   renderEmailTemplate,
 } from "@/lib/emailTemplates";
 import { notifyEmailFailure } from "@/lib/discord/notify";
+import { isProductionRuntime } from "@/lib/env";
 
 type EmailMetadata = Record<string, string | number | boolean | null | undefined>;
 
@@ -63,8 +64,32 @@ function fromAddress() {
   return `${name} <${address}>`;
 }
 
-function shouldSendRealEmail() {
-  return process.env.NODE_ENV === "production" || process.env.ENABLE_REAL_EMAILS === "true";
+/**
+ * Recipients allowed to receive REAL email off-production. Comma-separated in
+ * `EMAIL_TEST_ALLOWLIST`. Empty ⇒ nobody (all sends are simulated). Lets a tester
+ * receive staging mail at their own address without ever mailing real customers.
+ */
+function recipientIsAllowlisted(to: string): boolean {
+  const raw = process.env.EMAIL_TEST_ALLOWLIST;
+  if (!raw) return false;
+  const list = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(to.trim().toLowerCase());
+}
+
+/**
+ * Gate on the REAL production deployment (VERCEL_ENV="production"), NOT NODE_ENV
+ * — Vercel sets NODE_ENV="production" on staging/preview too, so the old check
+ * let staging mail real customers. Off-production we only send to an explicit
+ * `EMAIL_TEST_ALLOWLIST` (and only when ENABLE_REAL_EMAILS opts in); everything
+ * else is simulated + logged. See src/lib/env.ts.
+ */
+function shouldSendRealEmail(to: string): boolean {
+  if (isProductionRuntime()) return true;
+  if (process.env.ENABLE_REAL_EMAILS !== "true") return false;
+  return recipientIsAllowlisted(to);
 }
 
 function metadataToJson(metadata?: EmailMetadata): Prisma.InputJsonValue | undefined {
@@ -172,13 +197,13 @@ export async function sendTransactionalEmail(
       text: rendered.text,
       html: rendered.html,
       provider: "resend",
-      status: shouldSendRealEmail() ? "pending" : "simulated",
+      status: shouldSendRealEmail(input.to) ? "pending" : "simulated",
       manuallyEdited: Boolean(input.manuallyEdited),
       metadata: metadataToJson(input.metadata),
     },
   });
 
-  if (!shouldSendRealEmail()) {
+  if (!shouldSendRealEmail(input.to)) {
     return { ok: true, status: "simulated", logId: log.id };
   }
 

@@ -39,6 +39,10 @@ export default function PaymentsPanel() {
 
   useEffect(() => {
     load();
+    // Keep the review queue live: a customer proof submitted while this tab is
+    // open must appear without a manual reload (same cadence as SupportTicketsPanel).
+    const interval = setInterval(load, 15_000);
+    return () => clearInterval(interval);
   }, [load]);
 
   const countFor = (t: TabFilter) => {
