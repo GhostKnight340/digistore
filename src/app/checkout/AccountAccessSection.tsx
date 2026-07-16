@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginCustomerAction } from "@/app/actions/auth";
+import Checkbox from "@/components/ui/Checkbox";
 import {
   confirmCheckoutCodeAction,
   requestCheckoutCodeAction,
@@ -442,10 +443,12 @@ function InlineLogin({ presetEmail, onAuthenticated }: { presetEmail: string; on
         />
       </div>
       <div className="flex items-center justify-between text-[12.5px]">
-        <label className="flex items-center gap-2 text-muted">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          Se souvenir de moi
-        </label>
+        <Checkbox
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          label="Se souvenir de moi"
+          wrapperClassName="text-[12.5px]"
+        />
         <Link href="/forgot-password" className="text-accent hover:text-accent-hover">
           Mot de passe oublié ?
         </Link>
@@ -599,6 +602,7 @@ export function AccountAccessSection({
               <PasswordInput
                 value={confirmPassword}
                 onChange={setConfirmPassword}
+                placeholder="Retapez votre mot de passe"
                 autoComplete="new-password"
                 ariaLabel="Confirmer le mot de passe"
               />
@@ -609,25 +613,33 @@ export function AccountAccessSection({
               )}
             </div>
 
-            <label className="flex items-start gap-2.5 text-[12.5px] leading-relaxed text-muted">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={acceptTerms}
-                onChange={(e) => setAcceptTerms(e.target.checked)}
-              />
-              <span>
-                Je confirme avoir 16 ans ou plus et j’accepte les{" "}
-                <Link href="/conditions" className="text-accent hover:text-accent-hover">
-                  conditions générales
-                </Link>{" "}
-                et l’
-                <Link href="/privacy" className="text-accent hover:text-accent-hover">
-                  avis de confidentialité
-                </Link>
-                .
-              </span>
-            </label>
+            <Checkbox
+              align="start"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              wrapperClassName="text-[12.5px] leading-relaxed"
+              label={
+                <>
+                  Je confirme avoir 16 ans ou plus et j’accepte les{" "}
+                  <Link
+                    href="/conditions"
+                    className="text-accent hover:text-accent-hover"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    conditions générales
+                  </Link>{" "}
+                  et l’
+                  <Link
+                    href="/privacy"
+                    className="text-accent hover:text-accent-hover"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    avis de confidentialité
+                  </Link>
+                  .
+                </>
+              }
+            />
           </div>
         )}
       </div>

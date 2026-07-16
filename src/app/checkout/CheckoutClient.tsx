@@ -418,6 +418,7 @@ export default function CheckoutClient({
               phoneField={
                 <PhoneBlock
                   isLoggedIn={false}
+                  plain
                   phoneLocal={phoneLocal}
                   setPhoneLocal={setPhoneLocal}
                   phoneValid={phoneValid}
@@ -1165,6 +1166,7 @@ function PhoneBlock({
   phoneValid,
   editingPhone,
   setEditingPhone,
+  plain = false,
 }: {
   isLoggedIn: boolean;
   phoneLocal: string;
@@ -1172,6 +1174,10 @@ function PhoneBlock({
   phoneValid: boolean;
   editingPhone: boolean;
   setEditingPhone: (v: boolean) => void;
+  // "plain" renders it like a normal required field (no "Requis" status badge,
+  // no amber highlight) — used in the register form where every field is
+  // required and singling phone out would look inconsistent.
+  plain?: boolean;
 }) {
   // Collapsed saved row for a logged-in account that already has a number.
   if (isLoggedIn && phoneValid && !editingPhone) {
@@ -1204,14 +1210,18 @@ function PhoneBlock({
   return (
     <label className="block">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-[#EAF0FF]">Numéro de téléphone</span>
-        <span className={`text-[11.5px] ${phoneValid ? "text-[#5BC98C]" : "text-[#E8A838]"}`}>
-          {phoneValid ? "Enregistré" : "Requis"}
+        <span className={plain ? "text-sm font-medium text-white" : "text-[13px] font-semibold text-[#EAF0FF]"}>
+          Numéro de téléphone
         </span>
+        {!plain && (
+          <span className={`text-[11.5px] ${phoneValid ? "text-[#5BC98C]" : "text-[#E8A838]"}`}>
+            {phoneValid ? "Enregistré" : "Requis"}
+          </span>
+        )}
       </div>
       <div
         className={`flex h-[46px] items-center gap-2.5 rounded-[11px] border bg-[#0B0C10] pl-3.5 pr-2 transition ${
-          phoneValid
+          phoneValid || plain
             ? "border-white/[0.09]"
             : "border-[#E8A838]/50 shadow-[0_0_0_3px_rgba(232,168,56,0.1)]"
         }`}
