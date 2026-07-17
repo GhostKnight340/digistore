@@ -569,3 +569,27 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .gta-glow, .gta-glow--slow, .gta-shimmer, .gta-arrow { animation: none; }
 }
+
+/*
+ * Print: turn a guide into a clean, ink-friendly handout. Site chrome and
+ * decorative surfaces (nav, footer, TOC, feedback, related rails) opt out via
+ * Tailwind's `print:hidden`; here we reset the dark theme to light ink so the
+ * activation steps read well on paper.
+ */
+@media print {
+  :root { color-scheme: light; }
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+  main, .container-page, article, article * {
+    background: transparent !important;
+    color: #111 !important;
+    box-shadow: none !important;
+  }
+  article h1, article h2, article h3 { color: #000 !important; }
+  article a { color: #111 !important; text-decoration: underline; }
+  article figure, article .card, article [class*="border"] {
+    border-color: #ccc !important;
+  }
+}
