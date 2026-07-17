@@ -12,7 +12,7 @@ import {
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveFooterPaymentBadges } from "@/lib/footerConfig";
 import { notifyEmailFailure } from "@/lib/discord/notify";
-import { isProductionRuntime } from "@/lib/env";
+import { isPreviewDeployment, isProductionRuntime } from "@/lib/env";
 
 type EmailMetadata = Record<string, string | number | boolean | null | undefined>;
 
@@ -91,6 +91,11 @@ function recipientIsAllowlisted(to: string): boolean {
  */
 function shouldSendRealEmail(to: string): boolean {
   if (isProductionRuntime()) return true;
+  // ⚠️ TEMPORARY — real customer-flow testing on staging. This bypasses the test
+  // allowlist so staging sends real email to ANY recipient, exactly like prod.
+  // REVERT THIS: delete the line below to restore the allowlist gate so staging
+  // can never mail real customers again.
+  if (isPreviewDeployment()) return true;
   if (process.env.ENABLE_REAL_EMAILS !== "true") return false;
   return recipientIsAllowlisted(to);
 }
