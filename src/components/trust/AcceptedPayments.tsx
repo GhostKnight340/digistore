@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getPaymentConfigAction } from "@/app/actions/payments";
-import PaymentBrandMark from "@/components/PaymentBrandMark";
+import PaymentBadge from "@/components/PaymentBadge";
 import TrackSectionView from "@/components/analytics/TrackSectionView";
 import { paymentMethodDisplay } from "@/lib/paymentDisplay";
 import { announcedPaymentMethods } from "@/lib/paymentMethod";
@@ -69,19 +69,10 @@ export default function AcceptedPayments({
     return (
       <div className={className}>
         <TrackSectionView event="payment_methods_viewed" params={{ variant }} />
-        <ul className="flex flex-wrap items-center gap-2.5">
+        <ul className="grid gap-[14px] [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
           {options.map((option) => (
-            <li
-              key={option.method.id}
-              className="flex items-center gap-2 rounded-[10px] border border-border bg-surface px-2.5 py-1.5"
-            >
-              <PaymentBrandMark
-                display={option.display}
-                className="h-[22px] w-[22px] shrink-0 rounded-[7px] text-[8px]"
-              />
-              <span className="text-[12.5px] font-medium text-muted">
-                {option.display.displayName}
-              </span>
+            <li key={option.method.id}>
+              <PaymentBadge method={option.method} display={option.display} />
             </li>
           ))}
         </ul>
@@ -107,25 +98,9 @@ export default function AcceptedPayments({
           {subtitle && <p className="mt-1.5 text-sm text-muted sm:text-[15px]">{subtitle}</p>}
         </div>
       )}
-      <div className="mt-7 grid gap-[14px] min-[420px]:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-7 grid gap-[14px] [grid-template-columns:repeat(auto-fill,236px)] max-sm:[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
         {options.map((option) => (
-          <div
-            key={option.method.id}
-            className="flex items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-4"
-          >
-            <PaymentBrandMark
-              display={option.display}
-              className="h-11 w-11 shrink-0 rounded-[11px] text-[11px]"
-            />
-            <div className="min-w-0">
-              <p className="truncate text-[14px] font-semibold text-text">
-                {option.display.displayName}
-              </p>
-              {option.display.subtitle && (
-                <p className="truncate text-[12px] text-faint">{option.display.subtitle}</p>
-              )}
-            </div>
-          </div>
+          <PaymentBadge key={option.method.id} method={option.method} display={option.display} />
         ))}
       </div>
       {showNote && (
