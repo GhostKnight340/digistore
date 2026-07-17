@@ -69,10 +69,10 @@ export default function AcceptedPayments({
     return (
       <div className={className}>
         <TrackSectionView event="payment_methods_viewed" params={{ variant }} />
-        <ul className="grid gap-[14px] [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
+        <ul className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(170px,1fr))]">
           {options.map((option) => (
             <li key={option.method.id}>
-              <PaymentBadge method={option.method} display={option.display} />
+              <PaymentBadge method={option.method} display={option.display} size="compact" />
             </li>
           ))}
         </ul>
