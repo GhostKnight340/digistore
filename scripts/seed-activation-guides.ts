@@ -653,11 +653,31 @@ async function main() {
   assertWriteAllowed("seed:activation-guides");
   const dryRun = process.argv.includes("--dry-run");
 
+  // Echo the target DB host (creds redacted) so a run is never ambiguous about
+  // WHICH database it writes to — dev vs staging vs production all differ.
+  const dbHost =
+    (process.env.DATABASE_URL || "").match(/@([^/?]+)/)?.[1]?.replace(/-pooler\b/, "") ?? "(unknown)";
+  console.log(`→ Base de données cible : ${dbHost}\n`);
+
+  // Match related products by keyword against the ACTUAL catalog, so links
+  // resolve whatever database this runs against (dev/staging/prod all differ).
+  const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const products = await prisma.product.findMany({
-    where: { slug: { in: SPECS.map((s) => s.productSlug).filter(Boolean) as string[] } },
-    select: { id: true, slug: true },
+    where: { active: true },
+    select: { id: true, name: true, brand: true, category: true, slug: true },
   });
-  const productIdBySlug = new Map(products.map((p) => [p.slug, p.id]));
+  const productHay = products.map((p) => ({
+    id: p.id,
+    hay: norm(`${p.name} ${p.brand ?? ""} ${p.category} ${p.slug}`),
+  }));
+  const matchProducts = (s: Spec): string[] => {
+    const keywords = [s.platform, ...s.aliases].map(norm).filter((k) => k.length >= 4);
+    return productHay
+      .filter((p) => keywords.some((k) => p.hay.includes(k)))
+      .map((p) => p.id)
+      .slice(0, 3);
+  };
+
   const categoryIds = new Set((await prisma.category.findMany({ select: { id: true } })).map((c) => c.id));
   const now = new Date();
 
@@ -665,8 +685,7 @@ async function main() {
     const content = normalizeGuideBlocks(buildBlocks(s));
     const faq = normalizeGuideFaq(s.faq.map(([question, answer], i) => ({ id: `${s.slug}-faq-${i + 1}`, question, answer })));
     const navigatorTip = normalizeGuideNavigatorTip({ enabled: true, ...s.tip });
-    const relatedProductIds =
-      s.productSlug && productIdBySlug.has(s.productSlug) ? [productIdBySlug.get(s.productSlug) as string] : [];
+    const relatedProductIds = matchProducts(s);
     const categoryId = s.categoryId && categoryIds.has(s.categoryId) ? s.categoryId : null;
 
     const data = {
@@ -691,11 +710,13 @@ async function main() {
     };
 
     if (dryRun) {
-      console.log(`↳ [dry-run] ${s.slug} — ${content.length} blocs, ${faq.length} FAQ, ${s.platform} (${s.icon})`);
+      console.log(
+        `↳ [dry-run] ${s.slug} — ${content.length} blocs, ${faq.length} FAQ, ${relatedProductIds.length} produit(s), ${s.platform}`,
+      );
       continue;
     }
     await prisma.guide.upsert({ where: { slug: s.slug }, create: { slug: s.slug, ...data }, update: data });
-    console.log(`✔ ${s.slug} publié`);
+    console.log(`✔ ${s.slug} publié (${relatedProductIds.length} produit(s) liés)`);
   }
 
   if (dryRun) {
