@@ -30,6 +30,7 @@ export default function GuideContent({
             return (
               <h2
                 key={block.id}
+                id={block.id}
                 className="scroll-mt-24 text-xl font-semibold tracking-tight text-white sm:text-2xl"
               >
                 {block.text}
