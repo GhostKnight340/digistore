@@ -279,25 +279,27 @@ export type ActivityItem = {
 };
 
 /**
- * Merged, newest-first operational feed from four bounded sources (orders,
- * payment events, supplier calls, email failures). Client filters by `kind`.
+ * Merged, newest-first operational events from four sources (orders, payment
+ * status changes, supplier calls, email failures). `perSource` bounds each
+ * query so the merge stays cheap; the caller slices/filters/paginates. Shared
+ * by the dashboard feed (small window) and the full activity log (large window).
  */
-export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
+export async function fetchActivityWindow(perSource: number): Promise<ActivityItem[]> {
   const [orders, payments, supplierLogs, emailFails] = await Promise.all([
     prisma.order.findMany({
       orderBy: { createdAt: "desc" },
-      take: 12,
+      take: perSource,
       select: { id: true, orderNumber: true, customerName: true, createdAt: true },
     }),
     prisma.paymentEvent.findMany({
       where: { type: "status_change" },
       orderBy: { createdAt: "desc" },
-      take: 12,
+      take: perSource,
       select: { id: true, orderId: true, toStatus: true, createdAt: true },
     }),
     prisma.supplierLog.findMany({
       orderBy: { createdAt: "desc" },
-      take: 12,
+      take: perSource,
       select: {
         id: true,
         supplierId: true,
@@ -311,7 +313,7 @@ export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
     prisma.emailLog.findMany({
       where: { status: "failed" },
       orderBy: { createdAt: "desc" },
-      take: 8,
+      take: perSource,
       select: { id: true, recipient: true, type: true, createdAt: true },
     }),
   ]);
@@ -350,7 +352,13 @@ export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
     })),
   ];
 
-  return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
+  return items.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** Small newest-first feed for the dashboard card. */
+export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
+  const items = await fetchActivityWindow(Math.max(8, Math.ceil(limit / 2)));
+  return items.slice(0, limit);
 }
 
 function paymentEventTitle(toStatus: string | null): string {

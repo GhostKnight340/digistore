@@ -15,10 +15,17 @@ import {
   testSupplierConnectionAction,
 } from "@/app/actions/supplierManagement";
 import { getOpsKpi, type OpsTimeRange } from "@/lib/ops/overview";
+import { getActivityLog } from "@/lib/ops/activityLog";
 import { SUPPLIER_SLUGS } from "@/lib/suppliers/registry";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { STORE_SETTINGS_TAG } from "@/lib/cacheTags";
-import type { ActionResult, OperationsSnapshotDTO, OpsKpiSnapshotDTO } from "@/lib/dto";
+import type {
+  ActionResult,
+  OperationsSnapshotDTO,
+  OpsActivityLogFilters,
+  OpsActivityLogPageDTO,
+  OpsKpiSnapshotDTO,
+} from "@/lib/dto";
 
 const RANGES: OpsTimeRange[] = ["today", "7d", "30d"];
 function coerceRange(range: string): OpsTimeRange {
@@ -36,6 +43,14 @@ export async function getOperationsSnapshotAction(
 export async function getOpsKpiAction(range: string): Promise<OpsKpiSnapshotDTO> {
   await requireAdminCustomer();
   return getOpsKpi(coerceRange(range));
+}
+
+/** Full activity log — filter/search/sort/paginate. */
+export async function getActivityLogAction(
+  filters: OpsActivityLogFilters,
+): Promise<OpsActivityLogPageDTO> {
+  await requireAdminCustomer();
+  return getActivityLog(filters);
 }
 
 /**

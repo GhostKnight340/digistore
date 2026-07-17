@@ -20,7 +20,6 @@ import { relativeTime } from "./shared";
 /** Auto-refresh cadence — cheap snapshot (cached supplier state, no provider calls). */
 const POLL_MS = 20_000;
 type Range = "today" | "7d" | "30d";
-type ActivityFilter = "all" | "order" | "payment" | "system";
 
 /** Severity palette — verbatim from the design tokens (05-Design-Tokens.md). */
 const SEV = {
@@ -40,7 +39,6 @@ export default function OperationsDashboard({ initial }: { initial: OperationsSn
   const [range, setRange] = useState<Range>((initial.kpi.range as Range) ?? "7d");
   const [refreshing, setRefreshing] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [dismissed, setDismissed] = useState<string | null>(null);
   const busyRef = useRef(false);
 
@@ -214,7 +212,7 @@ export default function OperationsDashboard({ initial }: { initial: OperationsSn
         <div className="flex min-w-0 flex-col gap-3.5">
           <SupplierSync snapshot={snapshot} busy={refreshing} onAction={runQuickAction} />
           <PrepaidFloat snapshot={snapshot} />
-          <LiveActivity snapshot={snapshot} filter={activityFilter} onFilter={setActivityFilter} />
+          <LiveActivity snapshot={snapshot} />
         </div>
       </div>
     </div>
@@ -553,12 +551,6 @@ function PrepaidFloat({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
 
 // ── 6f · Live activity ────────────────────────────────────────────────────────
 
-const ACTIVITY_FILTERS: { value: ActivityFilter; label: string }[] = [
-  { value: "all", label: "Tout" },
-  { value: "order", label: "Commandes" },
-  { value: "payment", label: "Paiements" },
-  { value: "system", label: "Système" },
-];
 const ACTIVITY_DOT: Record<OpsActivityItemDTO["kind"], string> = {
   order: "#7FA6FF",
   payment: "#5BC98C",
@@ -566,44 +558,20 @@ const ACTIVITY_DOT: Record<OpsActivityItemDTO["kind"], string> = {
   email: "#E05C5C",
 };
 
-function LiveActivity({
-  snapshot,
-  filter,
-  onFilter,
-}: {
-  snapshot: OperationsSnapshotDTO;
-  filter: ActivityFilter;
-  onFilter: (f: ActivityFilter) => void;
-}) {
-  const items = snapshot.activity.filter((a) => {
-    if (filter === "all") return true;
-    if (filter === "system") return a.kind === "supplier" || a.kind === "email";
-    return a.kind === filter;
-  });
+/** Dashboard feed: the 5 most recent events + a link to the full log. Full
+ *  filtering/search/sort/pagination lives on /admin/operations/activity. */
+function LiveActivity({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+  const items = snapshot.activity.slice(0, 5);
   return (
-    <div className="flex min-h-[200px] flex-1 flex-col rounded-[14px] p-[18px]" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
+    <div className="flex flex-col rounded-[14px] p-[18px]" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
       <div className="mb-3 flex items-center gap-2">
         <span className="text-sm font-semibold text-white">Activité en direct</span>
         <span className="h-[5px] w-[5px] rounded-full" style={{ background: "#5BC98C", boxShadow: "0 0 6px #5BC98C" }} />
+        <Link href="/admin/operations/activity" className="ml-auto text-[12px]" style={{ color: "#9FB8FF" }}>
+          Voir tout →
+        </Link>
       </div>
-      <div className="mb-3 flex gap-1.5">
-        {ACTIVITY_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            onClick={() => onFilter(f.value)}
-            className="rounded-[7px] px-2.5 py-1 text-[11.5px]"
-            style={
-              filter === f.value
-                ? { color: "#EAF0FF", background: "rgba(62,123,250,0.13)", border: "1px solid rgba(62,123,250,0.25)" }
-                : { color: "#9A9FAB", background: "#121319", border: "1px solid rgba(255,255,255,0.06)" }
-            }
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto">
+      <div className="flex flex-col gap-2.5">
         {items.length === 0 ? (
           <p className="py-6 text-center text-xs text-faint">Aucune activité.</p>
         ) : (

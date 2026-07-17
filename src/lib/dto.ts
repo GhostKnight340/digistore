@@ -1068,13 +1068,35 @@ export interface OpsNotificationsDTO {
   recentEmailErrors: { id: string; recipient: string; message: string; at: string }[];
 }
 
+export type OpsActivityKind = "order" | "payment" | "supplier" | "email";
+
 export interface OpsActivityItemDTO {
   id: string;
-  kind: "order" | "payment" | "supplier" | "email";
+  kind: OpsActivityKind;
   title: string;
   detail: string;
   at: string;
   href?: string;
+}
+
+export interface OpsActivityLogRowDTO extends OpsActivityItemDTO {
+  kindLabel: string;
+}
+
+export interface OpsActivityLogFilters {
+  type?: OpsActivityKind | "all";
+  search?: string;
+  sort?: "newest" | "oldest";
+  page?: number;
+}
+
+export interface OpsActivityLogPageDTO {
+  rows: OpsActivityLogRowDTO[];
+  total: number;
+  page: number;
+  pageSize: number;
+  /** True when the bounded window is full — older events may exist beyond it. */
+  windowSaturated: boolean;
 }
 
 export interface OpsKpiTileDTO {
