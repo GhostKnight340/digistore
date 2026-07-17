@@ -153,7 +153,7 @@ export function computeWarnings(input: WarningInputs): OperationalWarning[] {
       "warning",
       `${input.payments.misconfiguredCount} moyen(s) de paiement mal configuré(s)`,
       "Un moyen actif est incomplet — les clients ne pourront pas payer.",
-      "/admin?tab=payment-methods",
+      "/admin?tab=payment-settings",
     );
   }
   const decidedToday = input.payments.rejectedToday + input.payments.confirmedToday;

@@ -450,7 +450,7 @@ function FooterStrip({
               <button type="button" onClick={() => setConfirm("maintenance")} className="h-[38px] flex-1 rounded-[9px] text-[12.5px] font-semibold" style={{ color: "#E8A838", background: "rgba(232,168,56,0.08)", border: "1px solid rgba(232,168,56,0.3)" }}>
                 {snapshot.maintenanceEnabled ? "Sortir de maintenance" : "Bannière de maintenance"}
               </button>
-              <Link href="/admin?tab=payment-methods" className="flex h-[38px] flex-1 items-center justify-center rounded-[9px] text-[12.5px] font-semibold text-muted" style={{ background: "#121319", border: "1px solid rgba(255,255,255,0.1)" }}>
+              <Link href="/admin?tab=payment-settings" className="flex h-[38px] flex-1 items-center justify-center rounded-[9px] text-[12.5px] font-semibold text-muted" style={{ background: "#121319", border: "1px solid rgba(255,255,255,0.1)" }}>
                 Gérer les paiements
               </Link>
             </>
