@@ -43,6 +43,8 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   feedback: "/admin/feedback",
   // Suppliers is a full management area (list + per-supplier detail + logs).
   suppliers: "/admin/suppliers",
+  // Operations is the standalone operational control center.
+  operations: "/admin/operations",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
@@ -66,6 +68,16 @@ const icon = (children: ReactNode) => (
 const NAV: NavGroup[] = [
   {
     items: [
+      {
+        id: "operations",
+        label: "Centre de contrôle",
+        icon: icon(
+          <>
+            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+            <circle cx="12" cy="12" r="4" />
+          </>,
+        ),
+      },
       {
         id: "overview",
         label: "Vue d'ensemble",

@@ -1002,6 +1002,99 @@ export interface ReloadlyMetricsDTO {
   range: SupplierTimeRange;
 }
 
+// ─── Operations dashboard DTOs (/admin/operations) ───────────────────────────
+
+export type OpsHealthStatus = "healthy" | "warning" | "offline" | "unknown";
+export type OpsWarningSeverity = "critical" | "warning" | "info";
+
+export interface OpsHealthResultDTO {
+  key: string;
+  label: string;
+  status: OpsHealthStatus;
+  message: string;
+  checkedAt: string;
+  responseTimeMs: number | null;
+  action?: string;
+  href?: string;
+}
+
+export interface OpsWarningDTO {
+  id: string;
+  severity: OpsWarningSeverity;
+  title: string;
+  description: string;
+  detectedAt: string;
+  resolveHref?: string;
+}
+
+export interface OpsOrdersDTO {
+  pendingPayment: number;
+  paymentSubmitted: number;
+  readyForFulfillment: number;
+  paymentIssue: number;
+  deliveredToday: number;
+  cancelledToday: number;
+  rejectedToday: number;
+  waitingTooLong: number;
+  recentFailedPurchases: number;
+  newest: { id: string; label: string; status: string; createdAt: string }[];
+}
+
+export interface OpsPaymentsDTO {
+  activeMethods: number;
+  disabledMethods: number;
+  awaitingReview: number;
+  confirmedToday: number;
+  rejectedToday: number;
+  avgConfirmationMinutes: number | null;
+  misconfiguredMethods: { id: string; name: string; reason: string }[];
+}
+
+export interface OpsProductsDTO {
+  totalParents: number;
+  hidden: number;
+  missingSupplyRoute: number;
+  incompleteMapping: number;
+  manualOnly: number;
+  missingImage: number;
+  missingPrice: number;
+  outOfStock: number | null;
+}
+
+export interface OpsNotificationsDTO {
+  emailFailures24h: number;
+  discordFailures24h: number;
+  supplierFailures24h: number;
+  recentEmailErrors: { id: string; recipient: string; message: string; at: string }[];
+}
+
+export interface OpsActivityItemDTO {
+  id: string;
+  kind: "order" | "payment" | "supplier" | "email";
+  title: string;
+  detail: string;
+  at: string;
+  href?: string;
+}
+
+/** The full operational snapshot rendered by the dashboard in one payload. */
+export interface OperationsSnapshotDTO {
+  generatedAt: string;
+  environmentLabel: string;
+  version: string;
+  maintenanceEnabled: boolean;
+  ordersEnabled: boolean;
+  overallStatus: OpsHealthStatus;
+  health: OpsHealthResultDTO[];
+  suppliers: SupplierCardDTO[];
+  orders: OpsOrdersDTO;
+  payments: OpsPaymentsDTO;
+  products: OpsProductsDTO;
+  notifications: OpsNotificationsDTO;
+  warnings: OpsWarningDTO[];
+  activity: OpsActivityItemDTO[];
+}
+
 // ─── Supplier management DTOs (/admin/suppliers) ─────────────────────────────
 
 /** 🟢 healthy · 🟡 warning · 🔴 offline · plus admin states. */
