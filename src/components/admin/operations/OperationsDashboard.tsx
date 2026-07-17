@@ -97,7 +97,11 @@ export default function OperationsDashboard({ initial }: { initial: OperationsSn
     snapshot.announcement && snapshot.announcement.message !== dismissed;
 
   return (
-    <div className="min-w-0 space-y-4">
+    // The admin shell's content slot is overflow-hidden and expects each page
+    // to own its scroll + padding (see AdminShell content slot + the design
+    // handoff: height:100%; overflow-y:auto; padding 24/28/32). Without this
+    // the dashboard is taller than the viewport and gets clipped, not scrolled.
+    <div className="h-full min-w-0 space-y-4 overflow-y-auto px-6 pb-8 pt-5 lg:px-7">
       {/* 1 · Announcement */}
       {announcementVisible && snapshot.announcement && (
         <div
