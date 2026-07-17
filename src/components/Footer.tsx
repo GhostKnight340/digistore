@@ -83,6 +83,7 @@ export default function Footer() {
           title="Aide"
           links={[
             { href: "/support", label: "Centre d'aide" },
+            { href: "/guides", label: "Guides d'activation" },
             { href: "/faq", label: "Questions fréquentes" },
             { href: "/#how-it-works", label: "Comment ça marche" },
             { href: "/contact", label: "Contact" },

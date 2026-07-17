@@ -10,6 +10,7 @@ import HeaderSearch from "./HeaderSearch";
 
 const links = [
   { href: "/products", label: "Catalogue" },
+  { href: "/guides", label: "Guides" },
   { href: "/find-order", label: "Suivi commande" },
   { href: "/support", label: "Support" },
 ];
