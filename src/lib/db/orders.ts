@@ -90,6 +90,88 @@ function buildEmailLogDTO(log: {
   };
 }
 
+type OrderVariantMappingRow = {
+  supplier: string;
+  enabled: boolean;
+  autoFulfillEnabled: boolean;
+  priority: number;
+  supplierProductId: string;
+  supplierCategoryId: string | null;
+  supplierKind: string | null;
+  supplierRegion: string | null;
+  lastValidationOk: boolean | null;
+};
+
+/**
+ * Derives the admin delivery UI's supplier-route fields from the variant's
+ * mappings (best usable mapping per supplier, priority order). A mapping is
+ * usable when enabled + auto-fulfillment allowed + last validation didn't
+ * fail; global supplier state is enforced again server-side at delivery.
+ * Falls back to the legacy inline variant columns when no mapping row exists.
+ */
+function supplierRouteFields(
+  variant:
+    | {
+        reloadlyProductId: number | null;
+        reloadlyCountryCode: string | null;
+        fazercardsKind: string | null;
+        fazercardsCategoryId: string | null;
+        fazercardsOfferId: string | null;
+        supplierMappings?: OrderVariantMappingRow[];
+      }
+    | null
+    | undefined,
+): {
+  variantReloadlyProductId: number | null;
+  variantReloadlyCountryCode: string | null;
+  variantFazercardsKind: string | null;
+  variantFazercardsCategoryId: string | null;
+  variantFazercardsOfferId: string | null;
+} {
+  const mappings = variant?.supplierMappings ?? [];
+  const usable = (supplier: string) =>
+    mappings.find(
+      (mapping) =>
+        mapping.supplier === supplier &&
+        mapping.enabled &&
+        mapping.autoFulfillEnabled &&
+        mapping.lastValidationOk !== false,
+    );
+
+  const reloadly = usable("reloadly");
+  const reloadlyProductId = reloadly ? Number(reloadly.supplierProductId) : null;
+  const fazercards = usable("fazercards");
+
+  return {
+    variantReloadlyProductId:
+      reloadly && Number.isInteger(reloadlyProductId)
+        ? reloadlyProductId
+        : mappings.length === 0
+          ? (variant?.reloadlyProductId ?? null)
+          : null,
+    variantReloadlyCountryCode: reloadly
+      ? reloadly.supplierRegion
+      : mappings.length === 0
+        ? (variant?.reloadlyCountryCode ?? null)
+        : null,
+    variantFazercardsKind: fazercards
+      ? fazercards.supplierKind
+      : mappings.length === 0
+        ? (variant?.fazercardsKind ?? null)
+        : null,
+    variantFazercardsCategoryId: fazercards
+      ? fazercards.supplierCategoryId
+      : mappings.length === 0
+        ? (variant?.fazercardsCategoryId ?? null)
+        : null,
+    variantFazercardsOfferId: fazercards
+      ? fazercards.supplierProductId
+      : mappings.length === 0
+        ? (variant?.fazercardsOfferId ?? null)
+        : null,
+  };
+}
+
 function orderItemName(item: {
   product: { name: string };
   variant?: {
@@ -168,11 +250,10 @@ function buildCustomerDTO(
       unitPriceMad: item.unitPriceMad,
       variantRegion: item.variant?.region || item.product.region || "",
       variantStockControl: item.variant?.stockControl,
-      variantReloadlyProductId: item.variant?.reloadlyProductId ?? null,
-      variantReloadlyCountryCode: item.variant?.reloadlyCountryCode ?? null,
-      variantFazercardsKind: item.variant?.fazercardsKind ?? null,
-      variantFazercardsCategoryId: item.variant?.fazercardsCategoryId ?? null,
-      variantFazercardsOfferId: item.variant?.fazercardsOfferId ?? null,
+      // Supplier routes come from the VariantSupplierMapping table (priority
+      // order, unusable mappings skipped); the legacy inline variant columns
+      // remain a fallback for variants that predate the mapping backfill.
+      ...supplierRouteFields(item.variant),
     })),
     deliveredCodes: canExposeCodes
       ? data.deliveredCodes.map((delivered) => {
@@ -238,6 +319,20 @@ function loadOrder(id: string) {
               fazercardsKind: true,
               fazercardsCategoryId: true,
               fazercardsOfferId: true,
+              supplierMappings: {
+                select: {
+                  supplier: true,
+                  enabled: true,
+                  autoFulfillEnabled: true,
+                  priority: true,
+                  supplierProductId: true,
+                  supplierCategoryId: true,
+                  supplierKind: true,
+                  supplierRegion: true,
+                  lastValidationOk: true,
+                },
+                orderBy: { priority: "asc" as const },
+              },
             },
           },
         },
@@ -477,7 +572,14 @@ export async function getOrderSummaries(
     where: { id: { in: ids } },
     orderBy: { createdAt: "desc" },
     include: {
-      items: { include: { product: true, variant: true } },
+      items: {
+        include: {
+          product: true,
+          // supplierMappings feed the mapping-derived supplier-route fields in
+          // buildCustomerDTO (same shape as loadOrder's narrow select).
+          variant: { include: { supplierMappings: true } },
+        },
+      },
       deliveredCodes: { include: { product: true, digitalCode: true } },
       paymentProof: { select: { id: true, mimeType: true } },
       paymentEvents: { orderBy: { createdAt: "asc" } },

@@ -150,6 +150,18 @@ export async function deliverOrder(
                   fazercardsOfferId: true,
                   faceValue: true,
                   faceCurrency: true,
+                  supplierMappings: {
+                    select: {
+                      supplier: true,
+                      enabled: true,
+                      autoFulfillEnabled: true,
+                      supplierProductId: true,
+                      supplierCategoryId: true,
+                      supplierKind: true,
+                      supplierRegion: true,
+                      lastValidationOk: true,
+                    },
+                  },
                 },
               },
             },
@@ -497,6 +509,34 @@ function filledEntriesForItem(
  * SupplierProvider registry. Adding a supplier = add its discriminator here
  * and its provider file in src/lib/suppliers/providers/.
  */
+type DeliveryVariantMapping = {
+  supplier: string;
+  enabled: boolean;
+  autoFulfillEnabled: boolean;
+  supplierProductId: string;
+  supplierCategoryId: string | null;
+  supplierKind: string | null;
+  supplierRegion: string | null;
+  lastValidationOk: boolean | null;
+};
+
+/** A mapping deliverOrder may purchase from right now (global supplier state
+ *  is enforced separately via isSupplierEnabled). */
+function usableMapping(
+  mappings: DeliveryVariantMapping[] | undefined,
+  supplier: SupplierSlug,
+): DeliveryVariantMapping | null {
+  return (
+    mappings?.find(
+      (mapping) =>
+        mapping.supplier === supplier &&
+        mapping.enabled &&
+        mapping.autoFulfillEnabled &&
+        mapping.lastValidationOk !== false,
+    ) ?? null
+  );
+}
+
 function providerRequestForEntry(
   entry: AssignmentEntry,
   item: {
@@ -505,17 +545,29 @@ function providerRequestForEntry(
       reloadlyCountryCode: string | null;
       fazercardsCategoryId: string | null;
       fazercardsOfferId: string | null;
+      supplierMappings: DeliveryVariantMapping[];
     } | null;
   },
 ):
   | { ok: true; value: { slug: SupplierSlug; entryParams: Record<string, unknown> } | null }
   | { ok: false; error: string } {
+  const variant = item.variant;
   if (entry.reloadlyProductId) {
-    const variant = item.variant;
     // The entry must match the variant’s CURRENT mapping — a stale admin tab
-    // pointing at a re-mapped variant must not buy the wrong product.
-    if (!variant || variant.reloadlyProductId !== entry.reloadlyProductId) {
-      return { ok: false, error: "Configuration Reloadly invalide pour cet article." };
+    // pointing at a re-mapped/disabled variant must not buy the wrong product.
+    // Legacy inline columns are only honoured when no mapping rows exist at
+    // all (pre-backfill data).
+    const mapping = variant ? usableMapping(variant.supplierMappings, "reloadly") : null;
+    const mappingProductId = mapping ? Number(mapping.supplierProductId) : null;
+    const legacyOk =
+      variant &&
+      variant.supplierMappings.length === 0 &&
+      variant.reloadlyProductId === entry.reloadlyProductId;
+    if (!variant || (mappingProductId !== entry.reloadlyProductId && !legacyOk)) {
+      return {
+        ok: false,
+        error: "Configuration Reloadly invalide ou désactivée pour cet article.",
+      };
     }
     return {
       ok: true,
@@ -523,19 +575,27 @@ function providerRequestForEntry(
         slug: "reloadly",
         entryParams: {
           reloadlyProductId: entry.reloadlyProductId,
-          reloadlyCountryCode: variant.reloadlyCountryCode,
+          reloadlyCountryCode: mapping?.supplierRegion ?? variant.reloadlyCountryCode,
         },
       },
     };
   }
   if (entry.fazercards) {
-    const variant = item.variant;
-    if (
-      !variant ||
-      variant.fazercardsCategoryId !== entry.fazercards.categoryId ||
-      variant.fazercardsOfferId !== entry.fazercards.offerId
-    ) {
-      return { ok: false, error: "Configuration FazerCards invalide pour cet article." };
+    const mapping = variant ? usableMapping(variant.supplierMappings, "fazercards") : null;
+    const mappingOk =
+      mapping &&
+      mapping.supplierCategoryId === entry.fazercards.categoryId &&
+      mapping.supplierProductId === entry.fazercards.offerId;
+    const legacyOk =
+      variant &&
+      variant.supplierMappings.length === 0 &&
+      variant.fazercardsCategoryId === entry.fazercards.categoryId &&
+      variant.fazercardsOfferId === entry.fazercards.offerId;
+    if (!variant || (!mappingOk && !legacyOk)) {
+      return {
+        ok: false,
+        error: "Configuration FazerCards invalide ou désactivée pour cet article.",
+      };
     }
     return { ok: true, value: { slug: "fazercards", entryParams: { fazercards: entry.fazercards } } };
   }

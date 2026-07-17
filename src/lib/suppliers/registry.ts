@@ -74,6 +74,35 @@ export type SupplierPurchaseResult = {
   afterDelivered?: () => void;
 };
 
+/** Inputs a provider needs to verify one variant↔product mapping. */
+export type SupplierMappingCheckInput = {
+  supplierProductId: string;
+  supplierCategoryId: string | null;
+  supplierKind: string | null;
+  supplierRegion: string | null;
+  faceValue: number | null;
+  faceCurrency: string | null;
+};
+
+/**
+ * Outcome of a read-only mapping check. `refresh` carries authoritative
+ * catalog facts (name, region, cost…) the caller may persist onto the
+ * mapping — the provider itself never writes anything.
+ */
+export type SupplierMappingCheckResult = {
+  ok: boolean;
+  /** Admin-safe French diagnostic (never a raw provider response). */
+  message: string;
+  refresh?: {
+    supplierProductName?: string;
+    supplierRegion?: string;
+    faceValue?: number;
+    faceCurrency?: string;
+    costAmount?: number;
+    costCurrency?: string;
+  };
+};
+
 export type SupplierProvider = {
   slug: SupplierSlug;
   name: string;
@@ -92,6 +121,9 @@ export type SupplierProvider = {
   testConnection(): Promise<SupplierConnectionTest>;
   /** Read-only wallet balance. Only present when supportsBalance. */
   getBalance?(): Promise<SupplierBalance>;
+  /** Read-only catalog check that a mapping points at a real, compatible,
+   *  available supplier product. MUST never place an order. */
+  validateMapping(input: SupplierMappingCheckInput): Promise<SupplierMappingCheckResult>;
   /** Places ONE real order (idempotent per idempotencyScope) and returns the
    *  normalized delivery payload. Throws a safe-to-display Error on failure. */
   purchase(request: SupplierPurchaseRequest): Promise<SupplierPurchaseResult>;

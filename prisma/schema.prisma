@@ -314,15 +314,69 @@ model ProductVariant {
   active                      Boolean  @default(true)
   featured                    Boolean  @default(false)
   sortOrder                   Int      @default(0)
+  // Whether an admin may fulfil this variant by hand (stock/manual code).
+  // Acts as the fallback fulfillment route when no valid supplier mapping
+  // exists — see src/lib/suppliers/eligibility.ts.
+  manualFulfillmentAllowed    Boolean  @default(true)
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @default(now()) @updatedAt
 
-  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
-  digitalCodes DigitalCode[]
-  orderItems   OrderItem[]
+  product          Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  digitalCodes     DigitalCode[]
+  orderItems       OrderItem[]
+  supplierMappings VariantSupplierMapping[]
 
   @@index([productId])
   @@index([productId, active])
+}
+
+// ── Variant ↔ supplier product mapping ─────────────────────────────────────
+// One row per (variant, supplier): which supplier SKU fulfils this variant,
+// at what cost, and whether automatic fulfillment may use it. Priority
+// expresses preference (1 = fournisseur préféré, 2 = secours, …) — no
+// separate preferred/backup columns to keep one source of truth. Replaces
+// the legacy inline ProductVariant.reloadly*/fazercards* columns (kept for
+// backward compatibility and backfilled into this table by the migration).
+// Never stores credentials; validation stores only an admin-safe message.
+model VariantSupplierMapping {
+  id                    String    @id @default(cuid())
+  variantId             String
+  // Registry slug ("reloadly" | "fazercards" | …) — src/lib/suppliers/registry.ts.
+  supplier              String
+  enabled               Boolean   @default(true)
+  // Whether deliverOrder may purchase from this mapping automatically.
+  autoFulfillEnabled    Boolean   @default(true)
+  // 1 = préféré, 2 = secours, then further fallbacks.
+  priority              Int       @default(1)
+  // Provider SKU: Reloadly productId (stringified) / FazerCards card|offer|key id.
+  supplierProductId     String
+  // FazerCards two-level catalog: category/game id. Null for Reloadly.
+  supplierCategoryId    String?
+  // FazerCards product family: "gift_card" | "topup" | "game_key". Null for Reloadly.
+  supplierKind          String?
+  supplierProductName   String?
+  // Provider-side region/country (e.g. Reloadly country ISO).
+  supplierRegion        String?
+  // Provider denomination this mapping purchases.
+  faceValue             Float?
+  faceCurrency          String?
+  // Supplier cost snapshot (provider currency) — informational; the margin
+  // display converts via the internal FX table when available.
+  costAmount            Float?
+  costCurrency          String?
+  costUpdatedAt         DateTime?
+  // Last "Vérifier le mapping" outcome (read-only catalog check, never an order).
+  lastValidatedAt       DateTime?
+  lastValidationOk      Boolean?
+  lastValidationMessage String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, supplier])
+  @@index([supplier, enabled])
+  @@index([variantId, priority])
 }
 
 model DigitalCode {

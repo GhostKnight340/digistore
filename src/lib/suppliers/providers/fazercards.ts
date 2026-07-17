@@ -8,8 +8,10 @@ import { isFazerCardsConfigured } from "@/lib/fazercards/config";
 import { describeFazerCardsError } from "@/lib/fazercards/client";
 import {
   getBalance,
+  getGiftCardOffers,
   getOrder,
   getProfile,
+  getTopupOffers,
   placeGiftCardOrder,
   placeTopupOrder,
   type FazerCardsOrder,
@@ -176,6 +178,78 @@ export const fazercardsProvider: SupplierProvider = {
   async getBalance() {
     const balance = await getBalance();
     return { amount: balance.balance, currency: balance.currency };
+  },
+
+  /**
+   * Read-only mapping check against the FazerCards catalog: lists the mapped
+   * category's offers and confirms the offer/card id exists (with stock for
+   * gift cards). Never places an order. Limitation: `game_key` mappings are
+   * not yet checkable (no gamekeys catalog operation wired) — reported as a
+   * failure with an explicit message rather than a false "ok".
+   */
+  async validateMapping(input) {
+    if (!isFazerCardsConfigured()) {
+      return { ok: false, message: "FazerCards n’est pas configuré (FAZERCARDS_API_KEY manquant)." };
+    }
+    if (!input.supplierCategoryId?.trim()) {
+      return { ok: false, message: "Category/Game ID FazerCards manquant sur le mapping." };
+    }
+    try {
+      if (input.supplierKind === "gift_card") {
+        const catalog = await getGiftCardOffers(input.supplierCategoryId);
+        const offer = catalog.offers.find((o) => o.card_id === input.supplierProductId);
+        if (!offer) {
+          return {
+            ok: false,
+            message: `Carte « ${input.supplierProductId} » introuvable dans la catégorie ${catalog.name}.`,
+          };
+        }
+        const refresh = {
+          supplierProductName: offer.name,
+          costAmount: Number(offer.price_usd),
+          costCurrency: "USD",
+        };
+        if (offer.stock <= 0) {
+          return { ok: false, message: `« ${offer.name} » est en rupture de stock chez FazerCards.`, refresh };
+        }
+        return {
+          ok: true,
+          message: `« ${offer.name} » disponible (stock : ${offer.stock}, coût ${offer.price_usd} USD).`,
+          refresh,
+        };
+      }
+      if (input.supplierKind === "topup") {
+        const catalog = await getTopupOffers(input.supplierCategoryId);
+        const offer = catalog.offers.find((o) => o.offer_id === input.supplierProductId);
+        if (!offer) {
+          return {
+            ok: false,
+            message: `Offre « ${input.supplierProductId} » introuvable dans ${catalog.name}.`,
+          };
+        }
+        const requiredFields = catalog.fields.map((field) => field.key).join(", ");
+        return {
+          ok: true,
+          message:
+            `« ${offer.name} » disponible (coût ${offer.price_usd} USD).` +
+            (requiredFields
+              ? ` Attention : champs acheteur requis (${requiredFields}) — non collectés au checkout pour l’instant.`
+              : ""),
+          refresh: {
+            supplierProductName: offer.name,
+            costAmount: Number(offer.price_usd),
+            costCurrency: "USD",
+          },
+        };
+      }
+      return {
+        ok: false,
+        message:
+          "Vérification non prise en charge pour ce type FazerCards (game_key) — validez manuellement dans le tableau de bord fournisseur.",
+      };
+    } catch (error) {
+      return { ok: false, message: describeFazerCardsError("validate-mapping", error) };
+    }
   },
 
   /**

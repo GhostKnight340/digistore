@@ -26,17 +26,31 @@ import { variantSku, variantTitle as computeVariantTitle } from "@/lib/pricing/v
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isInventoryEnabled } from "@/lib/storeSettings";
 import AliasEditor from "@/components/admin/AliasEditor";
+import VariantSupplierSection from "@/components/admin/products/VariantSupplierSection";
+import { getProductSupplySummariesAction } from "@/app/actions/variantMappings";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
 const STOCK_CONTROLS = ["manual", "api", "reloadly", "fazercards"];
 
-const FAZERCARDS_KINDS = [
-  { value: "gift_card", label: "Carte cadeau" },
-  { value: "topup", label: "Recharge de jeu (top-up)" },
-  { value: "game_key", label: "Clé de jeu" },
-];
+/** Compact supply-status dot for the product list (labels per eligibility.ts). */
+function SupplyBadge({ summary }: { summary: string | undefined }) {
+  if (!summary) return null;
+  const styles: Record<string, { color: string; label: string }> = {
+    ready: { color: "#2EA067", label: "Prêt" },
+    manual_only: { color: "#7FA6FF", label: "Manuel" },
+    incomplete: { color: "#E8A838", label: "Mapping incomplet" },
+    none: { color: "#E5484D", label: "Aucun approvisionnement" },
+  };
+  const style = styles[summary];
+  if (!style) return null;
+  return (
+    <span className="inline-flex items-center gap-1" title={style.label}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: style.color }} />
+    </span>
+  );
+}
 const STOCK_MODE_OPTIONS = [
   { value: "automatic", label: "Automatique" },
   { value: "force_in_stock", label: "Forcer en stock" },
@@ -78,6 +92,10 @@ function emptyParent(category = ""): ParentProductDTO {
 export default function ProductsPanel() {
   // Lean list for the sidebar
   const [items, setItems] = useState<ProductListItemDTO[]>([]);
+  // Per-parent supply summary ("ready"|"manual_only"|"incomplete"|"none") for
+  // the list badges + Approvisionnement filter. Loaded lazily, never blocking.
+  const [supplySummaries, setSupplySummaries] = useState<Record<string, string>>({});
+  const [supplyFilter, setSupplyFilter] = useState("");
   const [categories, setCategories] = useState<AdminCategoryDTO[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -109,6 +127,11 @@ export default function ProductsPanel() {
       ]);
       setItems(data);
       setCategories(categoryData);
+      // Supply summaries load after the list (non-blocking): the badges and
+      // the "Approvisionnement" filter appear once available.
+      void getProductSupplySummariesAction()
+        .then(setSupplySummaries)
+        .catch(() => {});
     } catch (e) {
       setListError(String(e));
     } finally {
@@ -592,6 +615,22 @@ export default function ProductsPanel() {
             </button>
           </div>
 
+          {/* Approvisionnement filter (supply summaries are computed server-side). */}
+          <div className="border-b border-border px-4 py-2">
+            <select
+              className="input h-8 w-full text-xs"
+              value={supplyFilter}
+              onChange={(e) => setSupplyFilter(e.target.value)}
+              aria-label="Filtrer par approvisionnement"
+            >
+              <option value="">Approvisionnement : tous</option>
+              <option value="ready">Prêt</option>
+              <option value="manual_only">Manuel uniquement</option>
+              <option value="incomplete">Mapping incomplet</option>
+              <option value="none">Aucun approvisionnement</option>
+            </select>
+          </div>
+
           {listLoading ? (
             <p className="px-4 py-6 text-sm text-muted">Chargement…</p>
           ) : listError ? (
@@ -605,7 +644,11 @@ export default function ProductsPanel() {
             <div className="divide-y divide-border">
               {categories.map((category) => {
                 const catId = category.id;
-                const group = items.filter((p) => p.category === catId);
+                const group = items.filter(
+                  (p) =>
+                    p.category === catId &&
+                    (!supplyFilter || (supplySummaries[p.slug] ?? "") === supplyFilter),
+                );
                 return (
                   <div key={catId}>
                     <div className="flex items-center justify-between gap-3 px-4 py-2">
@@ -638,6 +681,7 @@ export default function ProductsPanel() {
                             {" · "}
                             {p.active ? "Actif" : <span className="text-yellow-500">Masqué</span>}
                             <RegionBadge code={p.region} variant="chip" size="micro" />
+                            <SupplyBadge summary={supplySummaries[p.slug]} />
                           </div>
                         </div>
                       </button>
@@ -1399,11 +1443,15 @@ function VariantForm({
   onChange,
   parentRegion,
   parentSlug,
+  persisted = false,
 }: {
   v: VariantDTO;
   onChange: <K extends keyof VariantDTO>(k: K, val: VariantDTO[K]) => void;
   parentRegion: string;
   parentSlug: string;
+  /** Saved variants get the Approvisionnement (supplier mapping) section —
+   *  mappings reference the variant row, so drafts must be saved first. */
+  persisted?: boolean;
 }) {
   const { settings } = useStoreSettings();
   const inventoryOn = isInventoryEnabled(settings);
@@ -1517,63 +1565,14 @@ function VariantForm({
             {STOCK_CONTROLS.map((s) => <option key={s}>{s}</option>)}
           </select>
         </Field>
-        {v.stockControl === "reloadly" && (
-          <>
-            <Field label="Reloadly - Product ID">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                value={v.reloadlyProductId ?? ""}
-                onChange={(e) =>
-                  onChange("reloadlyProductId", e.target.value === "" ? null : Number(e.target.value))
-                }
-                placeholder="ex. 18681"
-              />
-            </Field>
-            <Field label="Reloadly - Code pays">
-              <input
-                className="input"
-                value={v.reloadlyCountryCode ?? ""}
-                onChange={(e) => onChange("reloadlyCountryCode", e.target.value.toUpperCase() || null)}
-                placeholder="ex. US"
-                maxLength={2}
-              />
-            </Field>
-          </>
-        )}
-        {v.stockControl === "fazercards" && (
-          <>
-            <Field label="FazerCards - Type">
-              <select
-                className="input"
-                value={v.fazercardsKind ?? "gift_card"}
-                onChange={(e) => onChange("fazercardsKind", e.target.value)}
-              >
-                {FAZERCARDS_KINDS.map((kind) => (
-                  <option key={kind.value} value={kind.value}>
-                    {kind.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="FazerCards - Category / Game ID">
-              <input
-                className="input"
-                value={v.fazercardsCategoryId ?? ""}
-                onChange={(e) => onChange("fazercardsCategoryId", e.target.value.trim() || null)}
-                placeholder="ex. gc_steam_1"
-              />
-            </Field>
-            <Field label="FazerCards - Card / Offer / Key ID">
-              <input
-                className="input"
-                value={v.fazercardsOfferId ?? ""}
-                onChange={(e) => onChange("fazercardsOfferId", e.target.value.trim() || null)}
-                placeholder="ex. card_10usd"
-              />
-            </Field>
-          </>
+        {(v.stockControl === "reloadly" || v.stockControl === "fazercards") && (
+          <Field label="Fournisseurs">
+            <p className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
+              Les identifiants fournisseur se gèrent désormais dans la section
+              « Approvisionnement » ci-dessous (mappings par fournisseur, priorité,
+              vérification). Les anciennes valeurs ont été migrées automatiquement.
+            </p>
+          </Field>
         )}
         {inventoryOn && (
           <>
@@ -1612,6 +1611,7 @@ function VariantForm({
           onChange={(val) => onChange("featured", val)}
         />
       </div>
+      {persisted && <VariantSupplierSection variantId={v.id} />}
     </>
   );
 }
@@ -1962,6 +1962,7 @@ function VariantsTab({
                   v={v}
                   parentRegion={draft.region}
                   parentSlug={draft.slug}
+                  persisted
                   onChange={(k, val) => updateVariant(orig.slug, k, val)}
                 />
               </div>

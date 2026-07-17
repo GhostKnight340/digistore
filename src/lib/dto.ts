@@ -1095,6 +1095,100 @@ export interface SupplierLogsPageDTO {
   pageSize: number;
 }
 
+// ─── Variant ↔ supplier mapping DTOs (Approvisionnement) ─────────────────────
+
+/** Serialized margin computation for one mapping (display only). */
+export type MappingMarginDTO =
+  | { computable: true; costMad: number; marginMad: number; marginPct: number; converted: boolean }
+  | { computable: false; reason: "missing_cost" | "missing_fx_rate" };
+
+export type MappingWarningCode =
+  | "validation_failed"
+  | "never_validated"
+  | "supplier_disabled"
+  | "supplier_unconfigured"
+  | "mapping_incomplete"
+  | "cost_missing"
+  | "cost_stale"
+  | "cost_above_price"
+  | "low_margin"
+  | "region_mismatch"
+  | "denomination_mismatch";
+
+export interface VariantMappingDTO {
+  id: string;
+  supplier: string;
+  supplierName: string;
+  supplierAccentColor: string;
+  supplierInitials: string;
+  supplierGloballyEnabled: boolean;
+  supplierConfigured: boolean;
+  enabled: boolean;
+  autoFulfillEnabled: boolean;
+  priority: number;
+  supplierProductId: string;
+  supplierCategoryId: string | null;
+  supplierKind: string | null;
+  supplierProductName: string | null;
+  supplierRegion: string | null;
+  faceValue: number | null;
+  faceCurrency: string | null;
+  costAmount: number | null;
+  costCurrency: string | null;
+  costUpdatedAt: string | null;
+  lastValidatedAt: string | null;
+  lastValidationOk: boolean | null;
+  lastValidationMessage: string | null;
+  margin: MappingMarginDTO;
+  warnings: MappingWarningCode[];
+}
+
+/** Everything the variant editor's Approvisionnement section renders. */
+export interface VariantSupplyDTO {
+  variantId: string;
+  sellingPriceMad: number;
+  variantFaceValue: number | null;
+  variantFaceCurrency: string;
+  variantRegion: string | null;
+  manualFulfillmentAllowed: boolean;
+  mappings: VariantMappingDTO[];
+  /** "ready" | "manual_only" | "incomplete" | "none" (labels in eligibility.ts). */
+  summary: string;
+  summaryLabel: string;
+}
+
+export interface SaveVariantMappingInput {
+  /** Present for edits; absent creates a mapping. */
+  id?: string;
+  variantId: string;
+  supplier: string;
+  supplierProductId: string;
+  supplierCategoryId?: string | null;
+  supplierKind?: string | null;
+  supplierProductName?: string | null;
+  supplierRegion?: string | null;
+  faceValue?: number | null;
+  faceCurrency?: string | null;
+  costAmount?: number | null;
+  costCurrency?: string | null;
+  enabled: boolean;
+  autoFulfillEnabled: boolean;
+}
+
+export interface MappingValidationResultDTO {
+  ok: boolean;
+  message: string;
+  checkedAt: string;
+}
+
+/** One FazerCards catalog offer surfaced by the mapping selector. */
+export interface FazerCardsCatalogOfferDTO {
+  offerId: string;
+  name: string;
+  priceUsd: string;
+  stock: number | null;
+}
+
 /** Read-only FazerCards connection/auth test result (admin Fournisseurs). */
 export interface FazerCardsHealthDTO {
   ok: boolean;

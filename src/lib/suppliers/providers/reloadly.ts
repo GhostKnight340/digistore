@@ -10,6 +10,7 @@ import {
 } from "@/lib/reloadly/config";
 import { describeReloadlyError } from "@/lib/reloadly/client";
 import {
+  buildReloadlyCostInputs,
   getAccountBalance,
   getGiftCardOrderCards,
   getGiftCardOrderStatus,
@@ -136,6 +137,62 @@ export const reloadlyProvider: SupplierProvider = {
   async getBalance() {
     const balance = await getAccountBalance();
     return { amount: String(balance.balance), currency: balance.currencyCode };
+  },
+
+  /**
+   * Read-only mapping check against the Reloadly catalog: the product id must
+   * exist, be ACTIVE, match the configured country, and offer the mapped
+   * denomination. Returns authoritative name/region/cost for prefill. Never
+   * places an order.
+   */
+  async validateMapping(input) {
+    const productId = Number(input.supplierProductId);
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return { ok: false, message: "Identifiant produit Reloadly invalide (nombre attendu)." };
+    }
+    let product;
+    try {
+      product = await getGiftCardProduct(productId);
+    } catch (error) {
+      return { ok: false, message: describeReloadlyError("validate-mapping", error) };
+    }
+    if (product.status !== "ACTIVE") {
+      return {
+        ok: false,
+        message: `Produit Reloadly « ${product.productName} » indisponible (statut ${product.status}).`,
+      };
+    }
+    const { fxRatesToMad } = await getPricingSettings();
+    const { ok, issues, infos } = validateReloadlyDenomination(
+      product,
+      {
+        faceValue: input.faceValue,
+        currency: input.faceCurrency,
+        countryCode: input.supplierRegion,
+      },
+      fxRatesToMad,
+    );
+    // Authoritative cost estimate for the mapped denomination (sender currency).
+    const costInputs =
+      input.faceValue != null ? buildReloadlyCostInputs(product, input.faceValue) : null;
+    const refresh = {
+      supplierProductName: product.productName,
+      supplierRegion: product.country?.isoName,
+      ...(costInputs
+        ? {
+            costAmount: Math.round(costInputs.senderBase * 100) / 100,
+            costCurrency: costInputs.senderCurrency,
+          }
+        : {}),
+    };
+    if (!ok) return { ok: false, message: issues.join(" "), refresh };
+    return {
+      ok: true,
+      message:
+        `Produit « ${product.productName} » (${product.country?.isoName ?? "?"}) disponible.` +
+        (infos.length ? ` ${infos.join(" ")}` : ""),
+      refresh,
+    };
   },
 
   /**

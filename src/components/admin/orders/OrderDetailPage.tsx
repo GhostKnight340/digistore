@@ -227,9 +227,9 @@ export default function OrderDetailPage({
   // admin can fix the mapping/price before attempting delivery.
   const hasReloadlyItem = useMemo(
     () =>
-      order.items.some(
-        (i) => i.variantStockControl === "reloadly" && i.variantReloadlyProductId != null,
-      ),
+      // Route fields are mapping-derived server-side (orders.ts); presence
+      // alone means the supplier route is usable.
+      order.items.some((i) => i.variantReloadlyProductId != null),
     [order.items],
   );
   useEffect(() => {
@@ -1623,11 +1623,11 @@ function DeliverySection({
             const filled = Boolean(
               entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId || entry.fazercards,
             );
-            const reloadlyAvailable =
-              item.variantStockControl === "reloadly" && item.variantReloadlyProductId != null;
+            // Route fields are mapping-derived server-side (orders.ts):
+            // present ⇔ an enabled, auto-fulfillable, non-failed mapping exists.
+            const reloadlyAvailable = item.variantReloadlyProductId != null;
             const reloadlyChosen = Boolean(entry.reloadlyProductId);
             const fazercardsAvailable =
-              item.variantStockControl === "fazercards" &&
               item.variantFazercardsKind != null &&
               item.variantFazercardsCategoryId != null &&
               item.variantFazercardsOfferId != null;
