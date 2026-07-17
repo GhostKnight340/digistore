@@ -101,7 +101,8 @@ export default async function ProductDetailPage({
       </nav>
 
       <div className="grid min-w-0 gap-10 lg:grid-cols-[1fr_0.95fr] lg:gap-14">
-        <div>
+        {/* Product image — top-left on desktop, first on mobile. */}
+        <div className="lg:col-start-1 lg:row-start-1">
           <div className="relative">
             <ProductArt
               category={product.category}
@@ -111,24 +112,11 @@ export default async function ProductDetailPage({
             />
             <RegionBadge code={displayRegion} variant="overlay" className="absolute left-3.5 top-3.5" />
           </div>
-
-          {(product.longDescription || product.description) && (
-            <ProductInfoCard text={product.longDescription || product.description} />
-          )}
-
-          <NavigatorTips tips={settings.navigatorTips} keywords={tipKeywords} className="mt-8" />
-
-          {settings.homepage.showDelivery && (
-            <DeliverySteps
-              steps={settings.deliverySteps}
-              title="Comment se passe la livraison"
-              variant="compact"
-              className="mt-10"
-            />
-          )}
         </div>
 
-        <aside className="lg:sticky lg:top-24 lg:self-start">
+        {/* Purchase panel — right column on desktop; on mobile it sits right
+            after the image, before the long descriptive text below. */}
+        <aside className="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-24 lg:self-start">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
             Livraison après confirmation
           </span>
@@ -174,6 +162,7 @@ export default async function ProductDetailPage({
                       <Link
                         key={code}
                         href={`/products/${product.id}?region=${encodeURIComponent(code)}`}
+                        scroll={false}
                         aria-current={active ? "true" : undefined}
                         className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${
                           active
@@ -203,6 +192,7 @@ export default async function ProductDetailPage({
                     <Link
                       key={item.id}
                       href={variantHref(item.id)}
+                      scroll={false}
                       className={`rounded-xl border px-3 py-2 text-sm transition ${
                         item.id === selectedVariant?.id
                           ? "border-accent bg-accent/10 text-white"
@@ -254,6 +244,25 @@ export default async function ProductDetailPage({
             ))}
           </div>
         </aside>
+
+        {/* Descriptive text — below the image on desktop; pushed below the
+            purchase panel on mobile so it doesn't bury the selectors. */}
+        <div className="lg:col-start-1 lg:row-start-2">
+          {(product.longDescription || product.description) && (
+            <ProductInfoCard text={product.longDescription || product.description} />
+          )}
+
+          <NavigatorTips tips={settings.navigatorTips} keywords={tipKeywords} className="mt-8" />
+
+          {settings.homepage.showDelivery && (
+            <DeliverySteps
+              steps={settings.deliverySteps}
+              title="Comment se passe la livraison"
+              variant="compact"
+              className="mt-10"
+            />
+          )}
+        </div>
       </div>
 
       {/* Records this parent product in the local "Consultés récemment" history. */}
