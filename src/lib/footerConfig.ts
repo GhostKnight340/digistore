@@ -91,7 +91,20 @@ export function resolveFooterPaymentBadges(
       const method = announced.find((item) => item.id === methodId);
       if (method) resolved.push({ id: badge.id, label: method.name, method });
     } else {
-      resolved.push({ id: badge.id, label: badge.label });
+      // Legacy static badges (e.g. the seeded `paypal` entry) predate the
+      // registry link. If the label matches a live method, render it branded
+      // like every other method so the footer never mixes hi-fi badges with
+      // flat pills. Genuine network badges (Visa, Mastercard) match no method
+      // and stay as neutral pills.
+      const method = announced.find(
+        (item) =>
+          item.name.trim().toLowerCase() === badge.label.trim().toLowerCase(),
+      );
+      if (method) {
+        resolved.push({ id: badge.id, label: method.name, method });
+      } else {
+        resolved.push({ id: badge.id, label: badge.label });
+      }
     }
   }
 
