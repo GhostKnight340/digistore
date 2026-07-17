@@ -66,6 +66,9 @@ function toVariant(product: ProductRow, variant: ProductRow["variants"][number])
     inventoryUnused: variant._count.digitalCodes,
     reloadlyProductId: variant.reloadlyProductId,
     reloadlyCountryCode: variant.reloadlyCountryCode,
+    fazercardsKind: variant.fazercardsKind,
+    fazercardsCategoryId: variant.fazercardsCategoryId,
+    fazercardsOfferId: variant.fazercardsOfferId,
   };
 }
 
@@ -87,6 +90,9 @@ function productAsFallbackVariant(product: ProductRow): VariantDTO {
     inventoryUnused: product._count.digitalCodes,
     reloadlyProductId: null,
     reloadlyCountryCode: null,
+    fazercardsKind: null,
+    fazercardsCategoryId: null,
+    fazercardsOfferId: null,
   };
 }
 
@@ -667,6 +673,13 @@ export async function saveVariant(data: SaveVariantInput): Promise<ActionResult>
       featured: data.featured,
       reloadlyProductId: data.reloadlyProductId,
       reloadlyCountryCode: data.reloadlyCountryCode,
+      // The editor's kind <select> shows "gift_card" as its default — persist
+      // that same default when the admin never touched the select, so a
+      // fazercards variant can never save with a null kind.
+      fazercardsKind:
+        data.stockControl === "fazercards" ? (data.fazercardsKind ?? "gift_card") : data.fazercardsKind,
+      fazercardsCategoryId: data.fazercardsCategoryId,
+      fazercardsOfferId: data.fazercardsOfferId,
     };
 
     if ((originalSlug === product.slug || originalSlug === product.id) && product.variants.length === 0) {

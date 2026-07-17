@@ -1620,10 +1620,18 @@ function DeliverySection({
 
           return Array.from({ length: item.quantity }).map((_, index) => {
             const entry = list[index] ?? {};
-            const filled = Boolean(entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId);
+            const filled = Boolean(
+              entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId || entry.fazercards,
+            );
             const reloadlyAvailable =
               item.variantStockControl === "reloadly" && item.variantReloadlyProductId != null;
             const reloadlyChosen = Boolean(entry.reloadlyProductId);
+            const fazercardsAvailable =
+              item.variantStockControl === "fazercards" &&
+              item.variantFazercardsKind != null &&
+              item.variantFazercardsCategoryId != null &&
+              item.variantFazercardsOfferId != null;
+            const fazercardsChosen = Boolean(entry.fazercards);
             const mismatch = reloadlyAvailable ? reloadlyChecks[item.id] : undefined;
             const showMismatch = Boolean(mismatch && mismatch.ok === false && mismatch.message);
             return (
@@ -1635,6 +1643,10 @@ function DeliverySection({
                 {reloadlyChosen ? (
                   <span style={{ flex: 1, fontSize: 12.5, color: C.accentText }}>
                     Livraison automatique via Reloadly
+                  </span>
+                ) : fazercardsChosen ? (
+                  <span style={{ flex: 1, fontSize: 12.5, color: C.accentText }}>
+                    Livraison automatique via FazerCards
                   </span>
                 ) : manualMode ? (
                   <input
@@ -1727,6 +1739,40 @@ function DeliverySection({
                     }}
                   >
                     {reloadlyChosen ? "✕ Reloadly" : "⚡ Via Reloadly"}
+                  </button>
+                )}
+                {fazercardsAvailable && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSetEntry(
+                        item.id,
+                        index,
+                        fazercardsChosen
+                          ? {}
+                          : {
+                              fazercards: {
+                                kind: item.variantFazercardsKind!,
+                                categoryId: item.variantFazercardsCategoryId!,
+                                offerId: item.variantFazercardsOfferId!,
+                              },
+                            },
+                      )
+                    }
+                    style={{
+                      flexShrink: 0,
+                      height: 28,
+                      padding: "0 10px",
+                      borderRadius: 7,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: `1px solid ${fazercardsChosen ? C.accentBorder : C.borderInput}`,
+                      background: fazercardsChosen ? C.accentSoft : "transparent",
+                      color: fazercardsChosen ? C.accentText : C.muted,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {fazercardsChosen ? "✕ FazerCards" : "⚡ Via FazerCards"}
                   </button>
                 )}
                 <span style={{ fontSize: 11, color: filled ? C.successText : C.faint, flexShrink: 0 }}>

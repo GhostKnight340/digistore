@@ -20,7 +20,11 @@ import {
   getReloadlyDeliveryTargets,
 } from "@/lib/db/suppliers";
 import { getPricingSettings } from "@/lib/db/pricing-settings";
+import { isFazerCardsConfigured } from "@/lib/fazercards/config";
+import { describeFazerCardsError } from "@/lib/fazercards/client";
+import { getProfile as getFazerCardsProfile, getBalance as getFazerCardsBalance } from "@/lib/fazercards/operations";
 import type {
+  FazerCardsHealthDTO,
   ReloadlyAvailabilityDTO,
   ReloadlyCatalogPageDTO,
   ReloadlyHealthDTO,
@@ -82,6 +86,60 @@ export async function testReloadlyConnectionAction(): Promise<ReloadlyHealthDTO>
       checkedAt,
       balance: null,
       error: describeReloadlyError("health", error),
+    };
+  }
+}
+
+/** Read-only FazerCards connection/auth test. Never places an order. */
+export async function testFazerCardsConnectionAction(): Promise<FazerCardsHealthDTO> {
+  await requireAdminCustomer();
+  const checkedAt = new Date().toISOString();
+
+  if (!isFazerCardsConfigured()) {
+    return {
+      ok: false,
+      configured: false,
+      authWorking: false,
+      plan: null,
+      subscriptionActive: null,
+      checkedAt,
+      balance: null,
+      error: "FazerCards n’est pas configuré (FAZERCARDS_API_KEY manquant).",
+    };
+  }
+
+  try {
+    // Cheapest authenticated read that proves the key works, and surfaces the
+    // subscription state (a lapsed plan 403s the catalog/order routes).
+    const profile = await getFazerCardsProfile();
+    let balance: FazerCardsHealthDTO["balance"] = null;
+    try {
+      const b = await getFazerCardsBalance();
+      balance = { amount: b.balance, currency: b.currency };
+    } catch {
+      // Balance read is best-effort — not fatal for the health verdict.
+      balance = null;
+    }
+    return {
+      ok: true,
+      configured: true,
+      authWorking: true,
+      plan: profile.plan,
+      subscriptionActive: profile.subscriptionActive,
+      checkedAt,
+      balance,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      configured: true,
+      authWorking: false,
+      plan: null,
+      subscriptionActive: null,
+      checkedAt,
+      balance: null,
+      error: describeFazerCardsError("health", error),
     };
   }
 }

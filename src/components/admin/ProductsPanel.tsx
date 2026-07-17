@@ -30,7 +30,13 @@ import AliasEditor from "@/components/admin/AliasEditor";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CURRENCIES = ["MAD", "EUR", "USD", "GBP", "SAR"];
-const STOCK_CONTROLS = ["manual", "api", "reloadly"];
+const STOCK_CONTROLS = ["manual", "api", "reloadly", "fazercards"];
+
+const FAZERCARDS_KINDS = [
+  { value: "gift_card", label: "Carte cadeau" },
+  { value: "topup", label: "Recharge de jeu (top-up)" },
+  { value: "game_key", label: "Clé de jeu" },
+];
 const STOCK_MODE_OPTIONS = [
   { value: "automatic", label: "Automatique" },
   { value: "force_in_stock", label: "Forcer en stock" },
@@ -204,6 +210,9 @@ export default function ProductsPanel() {
       stockMode: variant.stockMode,
       reloadlyProductId: variant.reloadlyProductId,
       reloadlyCountryCode: variant.reloadlyCountryCode,
+      fazercardsKind: variant.fazercardsKind,
+      fazercardsCategoryId: variant.fazercardsCategoryId,
+      fazercardsOfferId: variant.fazercardsOfferId,
     };
   }
 
@@ -332,6 +341,9 @@ export default function ProductsPanel() {
       inventoryUnused: 0,
       reloadlyProductId: null,
       reloadlyCountryCode: null,
+      fazercardsKind: null,
+      fazercardsCategoryId: null,
+      fazercardsOfferId: null,
     });
     setDraft(parent);
     setMsg(null);
@@ -369,6 +381,9 @@ export default function ProductsPanel() {
       stockMode: newVariantDraft.stockMode,
       reloadlyProductId: newVariantDraft.reloadlyProductId,
       reloadlyCountryCode: newVariantDraft.reloadlyCountryCode,
+      fazercardsKind: newVariantDraft.fazercardsKind,
+      fazercardsCategoryId: newVariantDraft.fazercardsCategoryId,
+      fazercardsOfferId: newVariantDraft.fazercardsOfferId,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -452,6 +467,9 @@ export default function ProductsPanel() {
       stockMode: v.stockMode,
       reloadlyProductId: v.reloadlyProductId,
       reloadlyCountryCode: v.reloadlyCountryCode,
+      fazercardsKind: v.fazercardsKind,
+      fazercardsCategoryId: v.fazercardsCategoryId,
+      fazercardsOfferId: v.fazercardsOfferId,
     };
     const result = await saveVariantAction(input);
     if (result.ok) {
@@ -936,7 +954,10 @@ function isVariantDirty(original: VariantDTO, draft: VariantDTO) {
     original.stockControl !== draft.stockControl ||
     original.stockMode !== draft.stockMode ||
     original.reloadlyProductId !== draft.reloadlyProductId ||
-    original.reloadlyCountryCode !== draft.reloadlyCountryCode
+    original.reloadlyCountryCode !== draft.reloadlyCountryCode ||
+    original.fazercardsKind !== draft.fazercardsKind ||
+    original.fazercardsCategoryId !== draft.fazercardsCategoryId ||
+    original.fazercardsOfferId !== draft.fazercardsOfferId
   );
 }
 
@@ -1517,6 +1538,39 @@ function VariantForm({
                 onChange={(e) => onChange("reloadlyCountryCode", e.target.value.toUpperCase() || null)}
                 placeholder="ex. US"
                 maxLength={2}
+              />
+            </Field>
+          </>
+        )}
+        {v.stockControl === "fazercards" && (
+          <>
+            <Field label="FazerCards - Type">
+              <select
+                className="input"
+                value={v.fazercardsKind ?? "gift_card"}
+                onChange={(e) => onChange("fazercardsKind", e.target.value)}
+              >
+                {FAZERCARDS_KINDS.map((kind) => (
+                  <option key={kind.value} value={kind.value}>
+                    {kind.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="FazerCards - Category / Game ID">
+              <input
+                className="input"
+                value={v.fazercardsCategoryId ?? ""}
+                onChange={(e) => onChange("fazercardsCategoryId", e.target.value.trim() || null)}
+                placeholder="ex. gc_steam_1"
+              />
+            </Field>
+            <Field label="FazerCards - Card / Offer / Key ID">
+              <input
+                className="input"
+                value={v.fazercardsOfferId ?? ""}
+                onChange={(e) => onChange("fazercardsOfferId", e.target.value.trim() || null)}
+                placeholder="ex. card_10usd"
               />
             </Field>
           </>

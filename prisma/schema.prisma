@@ -282,7 +282,7 @@ model ProductVariant {
   // for multiple regions; the storefront shows a "Région" selector only when a
   // product has more than one distinct variant region.
   region                      String?
-  // stockControl: "manual" | "api" | "reloadly"
+  // stockControl: "manual" | "api" | "reloadly" | "fazercards"
   stockControl                String   @default("manual")
   stockMode                   String   @default("automatic")
   supplierCost                Float?
@@ -290,6 +290,14 @@ model ProductVariant {
   // Only used when stockControl = "reloadly"
   reloadlyProductId           Int?
   reloadlyCountryCode         String?
+  // Only used when stockControl = "fazercards". Category + offer identify one
+  // sellable SKU: gift cards use (category_id, card_id), top-ups
+  // (category_id, offer_id), game keys (game_id, key_id) — the offer column
+  // stores whichever second-level id applies. `fazercardsKind` selects the
+  // order endpoint: "gift_card" | "topup" | "game_key".
+  fazercardsKind              String?
+  fazercardsCategoryId        String?
+  fazercardsOfferId           String?
   // ── Pricing-policy overrides (suggested-price engine ONLY) ──────────────
   // These never mutate priceMad. They shape what the engine *suggests*; a
   // human still explicitly publishes. See docs/pricing-architecture.md.
@@ -780,11 +788,14 @@ model DeliveredCode {
   productId             String
   digitalCodeId         String?
   manualCode            String?
-  // source: "local" | "reloadly" — audit metadata only, code text lives in
-  // digitalCode.code (local) or manualCode (manual entry + reloadly)
+  // source: "local" | "reloadly" | "fazercards" — audit metadata only, code
+  // text lives in digitalCode.code (local) or manualCode (manual entry +
+  // provider single-code deliveries)
   source                String   @default("local")
   reloadlyTransactionId Int?
   reloadlyOrderId       Int?
+  // FazerCards public order id ("ord-…") when source = "fazercards".
+  fazercardsOrderId     String?
   // Normalized, provider-specific delivery fields for sources whose payload is
   // richer than a single code (e.g. Reloadly returns cardNumber/pinCode and
   // some products deliver a redemption URL). Shape: an array of

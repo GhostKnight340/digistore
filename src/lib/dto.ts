@@ -30,6 +30,11 @@ export interface OrderItemDTO {
   variantStockControl?: string;
   variantReloadlyProductId?: number | null;
   variantReloadlyCountryCode?: string | null;
+  // Present only when the item's variant is FazerCards-sourced
+  // (variant.stockControl === "fazercards").
+  variantFazercardsKind?: string | null;
+  variantFazercardsCategoryId?: string | null;
+  variantFazercardsOfferId?: string | null;
 }
 
 /**
@@ -411,6 +416,10 @@ export interface VariantDTO {
   inventoryUnused: number;
   reloadlyProductId: number | null;
   reloadlyCountryCode: string | null;
+  /** "gift_card" | "topup" | "game_key" — used when stockControl = "fazercards". */
+  fazercardsKind: string | null;
+  fazercardsCategoryId: string | null;
+  fazercardsOfferId: string | null;
 }
 
 export interface ParentProductDTO {
@@ -473,6 +482,9 @@ export interface SaveVariantInput {
   stockMode: string;
   reloadlyProductId: number | null;
   reloadlyCountryCode: string | null;
+  fazercardsKind: string | null;
+  fazercardsCategoryId: string | null;
+  fazercardsOfferId: string | null;
 }
 
 export interface FeaturedVariantOptionDTO {
@@ -541,6 +553,14 @@ export interface AssignmentEntry {
   // instead of using a local/manual code. Mutually exclusive with the two
   // fields above.
   reloadlyProductId?: number;
+  // Presence signals "place a FazerCards order at delivery time". Mutually
+  // exclusive with all fields above. Carries the variant's provider mapping
+  // (kind + category + offer) so delivery does not re-read the variant.
+  fazercards?: {
+    kind: string; // "gift_card" | "topup" | "game_key"
+    categoryId: string;
+    offerId: string;
+  };
 }
 
 export interface ItemAssignment {
@@ -980,6 +1000,19 @@ export interface ReloadlyMetricsDTO {
   /** Successful Reloadly deliveries within the selected range. */
   providerOrders: number;
   range: SupplierTimeRange;
+}
+
+/** Read-only FazerCards connection/auth test result (admin Fournisseurs). */
+export interface FazerCardsHealthDTO {
+  ok: boolean;
+  configured: boolean;
+  authWorking: boolean;
+  /** Reseller plan ("bronze" | "silver" | "gold") — null when auth failed. */
+  plan: string | null;
+  subscriptionActive: boolean | null;
+  checkedAt: string;
+  balance: { amount: string; currency: string } | null;
+  error: string | null;
 }
 
 export type ReloadlyMappingStatus = "linked" | "incomplete" | "unlinked" | "disabled";

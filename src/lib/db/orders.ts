@@ -170,6 +170,9 @@ function buildCustomerDTO(
       variantStockControl: item.variant?.stockControl,
       variantReloadlyProductId: item.variant?.reloadlyProductId ?? null,
       variantReloadlyCountryCode: item.variant?.reloadlyCountryCode ?? null,
+      variantFazercardsKind: item.variant?.fazercardsKind ?? null,
+      variantFazercardsCategoryId: item.variant?.fazercardsCategoryId ?? null,
+      variantFazercardsOfferId: item.variant?.fazercardsOfferId ?? null,
     })),
     deliveredCodes: canExposeCodes
       ? data.deliveredCodes.map((delivered) => {
@@ -232,6 +235,9 @@ function loadOrder(id: string) {
               stockControl: true,
               reloadlyProductId: true,
               reloadlyCountryCode: true,
+              fazercardsKind: true,
+              fazercardsCategoryId: true,
+              fazercardsOfferId: true,
             },
           },
         },
