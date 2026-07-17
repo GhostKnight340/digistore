@@ -9,6 +9,8 @@ import {
   type RenderedEmailTemplate,
   renderEmailTemplate,
 } from "@/lib/emailTemplates";
+import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
+import { resolveFooterPaymentBadges } from "@/lib/footerConfig";
 import { notifyEmailFailure } from "@/lib/discord/notify";
 import { isProductionRuntime } from "@/lib/env";
 
@@ -130,7 +132,19 @@ export async function renderTransactionalEmail(
           body: overrides.body ?? settings.emailTemplates[templateKey]?.body ?? "",
         }
       : undefined;
-  const rendered = renderEmailTemplate(settings, templateKey, variables, templateOverride);
+  // Footer badges resolved against the live payment-method registry so
+  // e-mails always match the site footer (renames/deactivations propagate).
+  const paymentBadges = resolveFooterPaymentBadges(
+    settings,
+    (await getPublicPaymentMethods()).methods,
+  );
+  const rendered = renderEmailTemplate(
+    settings,
+    templateKey,
+    variables,
+    templateOverride,
+    paymentBadges,
+  );
   const text = overrides.text ?? rendered.text;
   const overrideHtml = overrides.html?.trim();
   const html =

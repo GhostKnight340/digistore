@@ -42,7 +42,9 @@ import {
   restorePaymentMethod,
   deletePaymentMethod,
   updateSupportConfig,
+  getPublicPaymentMethods,
 } from "@/lib/db/paymentMethods";
+import { resolveFooterPaymentBadges } from "@/lib/footerConfig";
 import {
   deleteVariant,
   duplicateVariant,
@@ -136,7 +138,12 @@ export async function previewEmailTemplateAction(
   await assertAdminAccess();
   const settings = await getStoreSettings();
   const variables = sampleVariablesForKey(templateKey);
-  return renderEmailTemplate(settings, templateKey, variables, { subject, body });
+  // Same live badge resolution as real sends, so the preview matches.
+  const paymentBadges = resolveFooterPaymentBadges(
+    settings,
+    (await getPublicPaymentMethods()).methods,
+  );
+  return renderEmailTemplate(settings, templateKey, variables, { subject, body }, paymentBadges);
 }
 
 export async function sendTestEmailAction(
@@ -152,7 +159,13 @@ export async function sendTestEmailAction(
   }
   const settings = await getStoreSettings();
   const variables = sampleVariablesForKey(templateKey);
-  const rendered = renderEmailTemplate(settings, templateKey, variables, { subject, body });
+  const rendered = renderEmailTemplate(
+    settings,
+    templateKey,
+    variables,
+    { subject, body },
+    resolveFooterPaymentBadges(settings, (await getPublicPaymentMethods()).methods),
+  );
   const result = await sendTransactionalEmail({
     to: recipient,
     templateKey,

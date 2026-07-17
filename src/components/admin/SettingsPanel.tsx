@@ -1,33 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import {
   defaultStoreSettings,
   isInventoryEnabled,
   isOrderingEnabled,
-  type FooterPaymentBadgeSetting,
   type StoreSettings,
 } from "@/lib/storeSettings";
 import { getStorefrontProductsAction, getCategoryStockStatusesAction } from "@/app/actions/storefront";
 import { getAdminPaymentConfigAction } from "@/app/actions/payments";
-import { announcedPaymentMethods } from "@/lib/paymentMethod";
+import { footerBadgeOptions } from "@/lib/footerConfig";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { adminSectionId } from "@/lib/admin/adminSections";
 import { uploadImageFile } from "@/lib/clientUpload";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import SegmentedControl from "@/components/ui/SegmentedControl";
-import type { PaymentMethod, Product, StockMode, StockStatus } from "@/lib/types";
-
-const paymentLabels: Record<PaymentMethod, string> = {
-  test: "Paiement test",
-  bank: "Virement bancaire",
-  usdt: "USDT",
-  crypto: "Crypto",
-  paypal: "PayPal",
-  card: "Carte bancaire",
-};
+import type { PaymentMethodDTO } from "@/lib/dto";
+import type { Product, StockMode, StockStatus } from "@/lib/types";
 
 // Fallback when a legacy/cached settings blob lacks the `features` section, so
 // the editor never reads undefined. Save re-merges via mergeStoreSettings.
@@ -114,7 +106,9 @@ export default function SettingsPanel() {
   const [message, setMessage] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [autoStockStatuses, setAutoStockStatuses] = useState<Record<string, StockStatus>>({});
-  const [methodBadgeOptions, setMethodBadgeOptions] = useState<FooterPaymentBadgeSetting[]>([]);
+  // Live payment-method registry ("Modes de paiement") — single source of
+  // truth for both the read-only Paiements summary and the footer badge list.
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodDTO[] | null>(null);
 
   const sectionParam = searchParams.get("section");
   const [activeTab, setActiveTab] = useState<SettingsTab>(
@@ -131,38 +125,20 @@ export default function SettingsPanel() {
   useEffect(() => {
     getStorefrontProductsAction().then(setProducts);
     getCategoryStockStatusesAction().then(setAutoStockStatuses);
-    // Offer one badge toggle per customer-facing payment method (banks
-    // collapsed into the single "Virement bancaire" entry). New options start
-    // disabled; they only persist once the admin toggles and saves.
     // Admin-gated source (unaffected by the public "orders unavailable" guard).
-    // Mirror the customer-visible filter so badge options match checkout.
     getAdminPaymentConfigAction()
-      .then((config) => {
-        const usable = config.methods.filter(
-          (method) => method.status === "active" && method.visible && !method.archivedAt,
-        );
-        setMethodBadgeOptions(
-          announcedPaymentMethods(usable).map((method) => ({
-            id: `method:${method.id}`,
-            label: method.name,
-            enabled: false,
-          })),
-        );
-      })
-      .catch(() => {});
+      .then((config) => setPaymentMethods(config.methods.filter((method) => !method.archivedAt)))
+      .catch(() => setPaymentMethods([]));
   }, []);
 
-  const footerBadgeOptions = [
-    ...draft.footer.paymentBadges,
-    ...methodBadgeOptions.filter(
-      (option) =>
-        !draft.footer.paymentBadges.some(
-          (badge) =>
-            badge.id === option.id ||
-            badge.label.trim().toLowerCase() === option.label.trim().toLowerCase(),
-        ),
-    ),
-  ];
+  // One badge toggle per customer-visible method (banks collapsed into the
+  // single "Virement bancaire" entry, linked by method id so renames follow)
+  // plus the static Visa/Mastercard network badges. Stale stored badges whose
+  // method disappeared are dropped automatically.
+  const customerVisibleMethods = (paymentMethods ?? []).filter(
+    (method) => method.status === "active" && method.visible,
+  );
+  const badgeOptions = footerBadgeOptions(draft.footer.paymentBadges, customerVisibleMethods);
 
   useEffect(() => {
     setDraft(settings);
@@ -205,11 +181,6 @@ export default function SettingsPanel() {
       setMessage("La couleur de fond doit être un code hexadécimal valide.");
       return;
     }
-    if (!Object.values(draft.paymentMethods).some(Boolean)) {
-      setMessage("Activez au moins une méthode de paiement.");
-      return;
-    }
-
     saveSettings(draft);
     setMessage("Paramètres sauvegardés.");
   }
@@ -629,30 +600,57 @@ export default function SettingsPanel() {
 
         {activeTab === "payments" && (
           <Panel title="Modes de paiement">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {(Object.keys(draft.paymentMethods) as PaymentMethod[]).map((method) => (
-                <div
-                  key={method}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-canvas px-3 py-3"
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted">
-                    {paymentLabels[method]}
-                    {method === "test" && (
-                      <span className="rounded border border-[#E8A838]/40 bg-[#E8A838]/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#E8B85C]">
-                        TEST
+            {/* Read-only mirror of the "Modes de paiement" registry — the
+                single source of truth used by le checkout, le pied de page et
+                les e-mails. Editing happens on its dedicated page. */}
+            <p className="text-xs text-muted">
+              Les modes de paiement sont gérés depuis la page{" "}
+              <span className="font-medium text-white">Paiements → Modes de paiement</span>. Ce
+              sont eux qui apparaissent au checkout, dans le pied de page et les e-mails.
+            </p>
+            <div className="mt-4 space-y-2">
+              {paymentMethods === null ? (
+                <p className="text-sm text-muted">Chargement…</p>
+              ) : paymentMethods.length === 0 ? (
+                <p className="text-sm text-muted">Aucun mode de paiement configuré.</p>
+              ) : (
+                paymentMethods.map((method) => (
+                  <div
+                    key={method.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-canvas px-3 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{method.name}</p>
+                      {method.subtitle && (
+                        <p className="truncate text-xs text-muted">{method.subtitle}</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2 text-[11px] font-semibold">
+                      <span
+                        className={
+                          method.status === "active"
+                            ? "rounded-full border border-[#2EA067]/40 bg-[#2EA067]/15 px-2 py-0.5 text-[#4CC38A]"
+                            : "rounded-full border border-border bg-surface px-2 py-0.5 text-muted"
+                        }
+                      >
+                        {method.status === "active" ? "Actif" : "Inactif"}
                       </span>
-                    )}
-                  </span>
-                  <ToggleSwitch
-                    showState={false}
-                    checked={draft.paymentMethods[method]}
-                    onChange={(checked) =>
-                      update("paymentMethods", { ...draft.paymentMethods, [method]: checked })
-                    }
-                  />
-                </div>
-              ))}
+                      {!method.visible && (
+                        <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-muted">
+                          Masqué
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+            <Link
+              href="/admin?tab=payment-settings"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-white transition hover:border-accent/50"
+            >
+              Gérer les modes de paiement
+            </Link>
           </Panel>
         )}
 
@@ -691,7 +689,7 @@ export default function SettingsPanel() {
                 Ces badges sont affichés dans le pied de page du site et des e-mails.
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                {footerBadgeOptions.map((badge) => (
+                {badgeOptions.map((badge) => (
                   <ToggleSwitch
                     key={badge.id}
                     className="rounded-xl border border-border bg-canvas px-3 py-3"
@@ -700,7 +698,9 @@ export default function SettingsPanel() {
                     onChange={(checked) =>
                       update("footer", {
                         ...draft.footer,
-                        paymentBadges: footerBadgeOptions.map((item) =>
+                        // Persist the full option list (linked by method id);
+                        // labels are snapshots — rendering re-resolves live.
+                        paymentBadges: badgeOptions.map((item) =>
                           item.id === badge.id ? { ...item, enabled: checked } : item,
                         ),
                       })

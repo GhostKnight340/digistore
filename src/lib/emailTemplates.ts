@@ -72,9 +72,13 @@ function brandedButton(label: string, href: string) {
     </table>`;
 }
 
-function emailFooterHtml(settings: StoreSettings, supportEmail: string, currentYear: string) {
+function emailFooterHtml(
+  settings: StoreSettings,
+  supportEmail: string,
+  currentYear: string,
+  paymentBadges: { label: string }[],
+) {
   const socialLinks = getFooterSocialLinks(settings);
-  const paymentBadges = getEnabledFooterPaymentBadges(settings);
   const supportWhatsappUrl = whatsappUrl(settings.footer.whatsappNumber);
 
   const socialHtml = socialLinks.length
@@ -205,6 +209,7 @@ function brandedEmailHtml(
   text: string,
   variables: Variables,
   settings: StoreSettings,
+  paymentBadges: { label: string }[],
 ) {
   const customerName = variableString(variables, "customer_name") || "client";
   const supportEmail = variableString(variables, "support_email") || "support@ghost.ma";
@@ -446,7 +451,7 @@ function brandedEmailHtml(
             </tr>
             <tr>
               <td>
-                ${emailFooterHtml(settings, supportEmail, currentYear)}
+                ${emailFooterHtml(settings, supportEmail, currentYear, paymentBadges)}
               </td>
             </tr>
           </table>
@@ -471,6 +476,10 @@ export function renderEmailTemplate(
   key: EmailTemplateKey,
   variables: Variables,
   templateOverride?: { subject: string; body: string },
+  // Live-resolved footer badges (see resolveFooterPaymentBadges). Server
+  // callers pass them so e-mails track the payment-method registry; without
+  // them we fall back to the stored labels (may be stale on renames).
+  resolvedPaymentBadges?: { label: string }[],
 ): RenderedEmailTemplate {
   const template = templateOverride ?? settings.emailTemplates[key] ?? {
     subject: key,
@@ -554,7 +563,14 @@ export function renderEmailTemplate(
     text,
     // Always pass the greeting-stripped body so the shell greeting is added
     // exactly once (the body must not carry its own).
-    html: brandedEmailHtml(key, subject, bodyForShell, baseVariables, settings),
+    html: brandedEmailHtml(
+      key,
+      subject,
+      bodyForShell,
+      baseVariables,
+      settings,
+      resolvedPaymentBadges ?? getEnabledFooterPaymentBadges(settings),
+    ),
   };
 }
 

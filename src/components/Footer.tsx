@@ -6,7 +6,7 @@ import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { getFooterSocialLinks } from "@/lib/footerConfig";
 import { categoryHref } from "@/lib/categoryUrl";
-import AcceptedPayments from "@/components/trust/AcceptedPayments";
+import FooterPaymentBadges from "@/components/trust/FooterPaymentBadges";
 
 export default function Footer() {
   const { settings } = useStoreSettings();
@@ -45,9 +45,9 @@ export default function Footer() {
             <p>E-mail : {settings.footer.contactEmail}</p>
             <p>WhatsApp : {settings.footer.whatsappNumber}</p>
           </div>
-          {/* Real, admin-configured accepted methods — disabled methods vanish
-              automatically. Self-fetches (footer is a client component). */}
-          <AcceptedPayments variant="inline" showNote={false} className="mt-5" />
+          {/* Admin-selected footer badges (Boutique → Pied de page), resolved
+              against the live payment-method registry — same list as e-mails. */}
+          <FooterPaymentBadges className="mt-5" />
           {socialLinks.length > 0 && (
             <div className="mt-5 flex items-center gap-2">
               {socialLinks.map((link) => (

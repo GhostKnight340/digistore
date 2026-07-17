@@ -1,4 +1,4 @@
-import type { PaymentMethod, StockMode } from "./types";
+import type { StockMode } from "./types";
 import {
   defaultWhyGhost,
   defaultReviews,
@@ -158,7 +158,6 @@ export type StoreSettings = {
       seoDescription: string;
     }
   >;
-  paymentMethods: Record<PaymentMethod, boolean>;
   paymentDisplay: Record<string, PaymentDisplaySetting>;
   footer: {
     contactEmail: string;
@@ -460,14 +459,6 @@ export const defaultStoreSettings: StoreSettings = {
       content:
         "Pour toute question sur une commande, un paiement ou un produit numérique, contactez le support ghost.ma.\n\nE-mail : {{support_email}}\nWhatsApp : {{support_whatsapp}}\n\nMerci d'indiquer votre numéro de commande et l'adresse e-mail utilisée lors de l'achat afin d'accélérer le traitement.",
     },
-  },
-  paymentMethods: {
-    bank: true,
-    usdt: true,
-    crypto: true,
-    paypal: true,
-    card: false,
-    test: true,
   },
   paymentDisplay: {},
   footer: {
@@ -800,10 +791,6 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
       value.featuredOutOfStock === "hide" || value.featuredOutOfStock === "show"
         ? value.featuredOutOfStock
         : defaultStoreSettings.featuredOutOfStock,
-    paymentMethods: {
-      ...defaultStoreSettings.paymentMethods,
-      ...(isObject(value.paymentMethods) ? value.paymentMethods : {}),
-    },
     paymentDisplay: isObject(value.paymentDisplay)
       ? (value.paymentDisplay as Record<string, PaymentDisplaySetting>)
       : defaultStoreSettings.paymentDisplay,
