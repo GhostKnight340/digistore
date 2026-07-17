@@ -7,6 +7,7 @@ import { loginCustomerAction } from "@/app/actions/auth";
 import Checkbox from "@/components/ui/Checkbox";
 import {
   confirmCheckoutCodeAction,
+  registerCheckoutAccountAction,
   requestCheckoutCodeAction,
 } from "@/app/actions/checkoutAuth";
 
@@ -471,10 +472,13 @@ function InlineLogin({ presetEmail, onAuthenticated }: { presetEmail: string; on
 export function AccountAccessSection({
   onChange,
   phoneField,
+  phone,
 }: {
   onChange: (state: AccountGateState) => void;
   /** Phone input rendered inline with the account fields (register mode). */
   phoneField?: ReactNode;
+  /** Current phone value (E.164-ish), saved on the account when valid. */
+  phone?: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"register" | "login">("register");
@@ -484,6 +488,8 @@ export function AccountAccessSection({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const pwdLongEnough = password.length >= 8;
   const pwdLetterDigit = /[A-Za-z]/.test(password) && /[0-9]/.test(password);
@@ -520,6 +526,42 @@ export function AccountAccessSection({
   const handleAuthenticated = useCallback(() => {
     router.refresh();
   }, [router]);
+
+  // Explicit "Créer mon compte" — creates the account and logs in right away;
+  // the refreshed page then shows the normal authenticated checkout, where the
+  // CTA proceeds straight to payment.
+  const createAccount = useCallback(async () => {
+    if (!ready || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await registerCheckoutAccountAction({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        confirmPassword,
+        acceptTerms,
+        phone,
+      });
+      if (!res.ok) {
+        setCreating(false);
+        if (res.accountExists) {
+          setCreateError(
+            "Un compte existe déjà pour cette adresse. Connectez-vous pour continuer.",
+          );
+          setMode("login");
+          return;
+        }
+        setCreateError(res.error ?? "Une erreur est survenue. Veuillez réessayer.");
+        return;
+      }
+      // Keep `creating` on while the refreshed (logged-in) checkout renders.
+      router.refresh();
+    } catch {
+      setCreating(false);
+      setCreateError("Une erreur est survenue. Veuillez réessayer.");
+    }
+  }, [ready, creating, name, email, password, confirmPassword, acceptTerms, phone, router]);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0F1015]">
@@ -641,6 +683,23 @@ export function AccountAccessSection({
                 </>
               }
             />
+
+            {createError && (
+              <p className="rounded-lg border border-red-500/25 bg-red-500/[0.06] px-3 py-2 text-[12.5px] text-red-400">
+                {createError}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={createAccount}
+              disabled={!ready || creating}
+              className="btn-primary h-[46px] w-full disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {creating ? "Création du compte…" : "Créer mon compte"}
+            </button>
+            {!ready && (
+              <p className="-mt-2 text-center text-[12px] text-faint">{incompleteReason}</p>
+            )}
           </div>
         )}
       </div>

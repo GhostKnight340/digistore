@@ -1480,6 +1480,79 @@ export async function createVerifiedAccountAndOrder(input: {
   }
 }
 
+/**
+ * Create a verified customer account WITHOUT an order — the explicit
+ * "Créer mon compte" step in checkout. Same proof consumption, race check and
+ * guest-row upgrade as createVerifiedAccountAndOrder; the order is then placed
+ * separately through the normal authenticated checkout action.
+ */
+export async function createVerifiedAccount(input: {
+  name: string;
+  email: string;
+  passwordHash: string;
+  phone?: string;
+  /** Checkout-session id the verification proof is bound to. */
+  sessionId: string;
+}): Promise<{ customerId: string } | { accountExists: true } | { error: string } | null> {
+  await ensureDatabaseReady();
+
+  const customerName = input.name.trim();
+  const customerEmail = input.email.trim().toLowerCase();
+  const customerPhone = normalizeOptionalPhone(input.phone);
+  if (customerPhone === undefined) return { error: "Numéro de téléphone invalide." };
+
+  try {
+    const customer = await prisma.$transaction(async (tx) => {
+      // 1) Consume the verification proof (single-use, server-authoritative).
+      const proofOk = await consumeVerifiedProofTx(tx, customerEmail, input.sessionId);
+      if (!proofOk) throw new VerificationRequiredError();
+
+      // 2) Refuse to duplicate a real account (race with a concurrent register).
+      const existing = await tx.customer.findUnique({ where: { email: customerEmail } });
+      if (existing && (existing.passwordHash || existing.googleId || existing.discordId)) {
+        throw new AccountExistsError();
+      }
+
+      // 3) Create the account, or upgrade a guest row in place — never a duplicate.
+      return existing
+        ? tx.customer.update({
+            where: { id: existing.id },
+            data: {
+              name: customerName,
+              passwordHash: input.passwordHash,
+              phone: customerPhone ?? existing.phone ?? undefined,
+              emailVerified: true,
+              emailVerifiedAt: new Date(),
+              authProvider: "password",
+            },
+          })
+        : tx.customer.create({
+            data: {
+              name: customerName,
+              email: customerEmail,
+              passwordHash: input.passwordHash,
+              phone: customerPhone,
+              emailVerified: true,
+              emailVerifiedAt: new Date(),
+              authProvider: "password",
+            },
+          });
+    });
+
+    return { customerId: customer.id };
+  } catch (error) {
+    if (error instanceof AccountExistsError) return { accountExists: true };
+    if (error instanceof VerificationRequiredError) {
+      return { error: "Vérifiez votre adresse e-mail pour continuer vers le paiement." };
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { accountExists: true };
+    }
+    console.error("[createVerifiedAccount]", error);
+    return null;
+  }
+}
+
 export async function findOrderByEmailAndId(
   id: string,
   email: string,

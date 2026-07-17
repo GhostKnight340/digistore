@@ -16,7 +16,7 @@ import {
   type ConfirmCodeResult,
   type RequestCodeResult,
 } from "@/lib/checkout/emailVerification";
-import { createVerifiedAccountAndOrder } from "@/lib/db/orders";
+import { createVerifiedAccount, createVerifiedAccountAndOrder } from "@/lib/db/orders";
 import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
 
 function isEmail(value: string) {
@@ -56,6 +56,68 @@ export async function confirmCheckoutCodeAction(input: {
     revalidatePath("/account/security");
   }
   return result;
+}
+
+export type RegisterAccountResult =
+  | { ok: true }
+  | { ok: false; error?: string; accountExists?: boolean };
+
+/**
+ * Explicit "Créer mon compte" step: create the verified account only (no
+ * order), then log the customer in. The order is placed afterwards through the
+ * normal authenticated checkout action. Same server-side re-validation as the
+ * atomic register+order path.
+ */
+export async function registerCheckoutAccountAction(input: {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  acceptTerms: boolean;
+  phone?: string;
+}): Promise<RegisterAccountResult> {
+  const existingSession = await getCurrentCustomer();
+  if (existingSession) {
+    return { ok: false, error: "Vous êtes déjà connecté. Actualisez la page pour continuer." };
+  }
+
+  const name = input.name.trim();
+  const email = normalizeEmail(input.email);
+  if (name.length < 2) return { ok: false, error: "Veuillez saisir votre nom complet." };
+  if (!isEmail(email)) return { ok: false, error: "Veuillez saisir une adresse e-mail valide." };
+  if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
+  if (input.password !== input.confirmPassword) {
+    return { ok: false, error: "Les mots de passe ne correspondent pas." };
+  }
+  const passwordError = validatePassword(input.password);
+  if (passwordError) return { ok: false, error: passwordError };
+
+  const sessionId = await getCheckoutSessionId();
+  if (!sessionId || !(await hasVerifiedProof(email, sessionId))) {
+    return {
+      ok: false,
+      error: "Vérifiez votre adresse e-mail pour continuer vers le paiement.",
+    };
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const result = await createVerifiedAccount({
+    name,
+    email,
+    passwordHash,
+    phone: input.phone,
+    sessionId,
+  });
+
+  if (!result) return { ok: false, error: "Une erreur est survenue. Veuillez réessayer." };
+  if ("accountExists" in result) return { ok: false, accountExists: true };
+  if ("error" in result) return { ok: false, error: result.error };
+
+  await setCustomerSession(result.customerId, false);
+  revalidatePath("/checkout");
+  revalidatePath("/account");
+
+  return { ok: true };
 }
 
 export type RegisterAndOrderResult =

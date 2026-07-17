@@ -415,6 +415,7 @@ export default function CheckoutClient({
           ) : (
             <AccountAccessSection
               onChange={setAccountGate}
+              phone={phoneValid ? `+212 ${phoneLocal.trim()}` : undefined}
               phoneField={
                 <PhoneBlock
                   isLoggedIn={false}
