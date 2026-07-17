@@ -472,6 +472,37 @@ export async function validateVariantMapping(id: string): Promise<MappingValidat
 }
 
 /**
+ * Re-runs the read-only catalog check on EVERY mapping (optionally scoped to
+ * one supplier) — the "Revalider tous les mappings" bulk action. Sequential
+ * so provider rate limits are respected (each check is one catalog read); the
+ * catalogue is small enough that this stays well within a request budget.
+ * Never places an order. Returns an outcome summary.
+ */
+export async function revalidateAllMappings(
+  supplier?: string,
+): Promise<{ total: number; ok: number; failed: number }> {
+  await ensureDatabaseReady();
+  const mappings = await prisma.variantSupplierMapping.findMany({
+    where: supplier ? { supplier } : {},
+    select: { id: true },
+    orderBy: { updatedAt: "asc" },
+  });
+  let ok = 0;
+  let failed = 0;
+  for (const mapping of mappings) {
+    try {
+      const result = await validateVariantMapping(mapping.id);
+      if (result.ok) ok += 1;
+      else failed += 1;
+    } catch (error) {
+      console.error("[variantMappings:revalidate-all]", error);
+      failed += 1;
+    }
+  }
+  return { total: mappings.length, ok, failed };
+}
+
+/**
  * Per-parent supply summary for the admin product list ("Prêt" / "Manuel
  * uniquement" / "Mapping incomplet" / "Aucun approvisionnement"): the WORST
  * summary across the parent's active variants, so a single unfulfillable

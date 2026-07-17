@@ -6,6 +6,7 @@ import {
   refreshSupplierBalanceAction,
   testSupplierConnectionAction,
 } from "@/app/actions/supplierManagement";
+import { revalidateAllMappingsAction } from "@/app/actions/variantMappings";
 import type { SupplierCardDTO } from "@/lib/dto";
 import {
   EnvironmentBadge,
@@ -22,6 +23,8 @@ import {
  */
 export default function SuppliersListView({ initial }: { initial: SupplierCardDTO[] }) {
   const [cards, setCards] = useState(initial);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   function patchCard(slug: string, patch: Partial<SupplierCardDTO>) {
     setCards((current) =>
@@ -29,14 +32,54 @@ export default function SuppliersListView({ initial }: { initial: SupplierCardDT
     );
   }
 
+  async function revalidateAll() {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const result = await revalidateAllMappingsAction();
+      setSyncMessage({
+        ok: result.failed === 0,
+        text:
+          result.total === 0
+            ? "Aucun mapping à revalider."
+            : `${result.total} mapping(s) revalidé(s) — ${result.ok} OK, ${result.failed} en échec.`,
+      });
+    } catch {
+      setSyncMessage({ ok: false, text: "Revalidation impossible." });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="min-w-0">
-      <header className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Fournisseurs</h1>
-        <p className="text-sm text-muted">
-          Santé, soldes et journaux des fournisseurs d’approvisionnement.
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-white">Fournisseurs</h1>
+          <p className="text-sm text-muted">
+            Santé, soldes et journaux des fournisseurs d’approvisionnement.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={revalidateAll}
+          disabled={syncing}
+          className="btn-ghost h-9 px-4 text-sm disabled:opacity-60"
+          title="Revérifie tous les mappings produit↔fournisseur via les catalogues (aucune commande)"
+        >
+          {syncing ? "Revalidation…" : "Revalider tous les mappings"}
+        </button>
       </header>
+
+      {syncMessage && (
+        <p
+          className={`mb-4 rounded-lg px-3 py-2 text-sm ${
+            syncMessage.ok ? "bg-green-500/10 text-green-400" : "bg-amber-500/10 text-amber-400"
+          }`}
+        >
+          {syncMessage.text}
+        </p>
+      )}
 
       {cards.length === 0 ? (
         <div className="card p-10 text-center text-sm text-muted">

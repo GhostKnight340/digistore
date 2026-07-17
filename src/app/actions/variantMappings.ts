@@ -12,6 +12,7 @@ import {
   getProductSupplySummaries,
   getVariantSupply,
   reorderVariantMappings,
+  revalidateAllMappings,
   saveVariantMapping,
   setManualFulfillment,
   setVariantMappingEnabled,
@@ -86,6 +87,17 @@ export async function validateVariantMappingAction(
 export async function getProductSupplySummariesAction(): Promise<Record<string, string>> {
   await requireAdminCustomer();
   return getProductSupplySummaries();
+}
+
+/**
+ * Bulk "Revalider tous les mappings" — read-only catalog re-check of every
+ * mapping (optionally one supplier). Never places an order.
+ */
+export async function revalidateAllMappingsAction(
+  supplier?: string,
+): Promise<{ total: number; ok: number; failed: number }> {
+  await requireAdminCustomer();
+  return revalidateAllMappings(supplier);
 }
 
 // ── FazerCards catalog assistance (read-only) ────────────────────────────────
