@@ -4,45 +4,80 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   getOperationsSnapshotAction,
+  getOpsKpiAction,
   refreshAllSupplierBalancesAction,
   refreshAllSupplierHealthAction,
   toggleMaintenanceAction,
+  toggleOrderingAction,
 } from "@/app/actions/operations";
-import type { OperationsSnapshotDTO, OpsActivityItemDTO } from "@/lib/dto";
-import { MetricTile, OpsCard, StatusBadge, StatusDot, WarningRow, relativeTime } from "./shared";
+import type {
+  OperationsSnapshotDTO,
+  OpsActivityItemDTO,
+  OpsHealthStatus,
+} from "@/lib/dto";
+import { relativeTime } from "./shared";
 
-/** Auto-refresh cadence. Cheap snapshot (cached supplier state, no provider calls). */
+/** Auto-refresh cadence — cheap snapshot (cached supplier state, no provider calls). */
 const POLL_MS = 20_000;
+type Range = "today" | "7d" | "30d";
+type ActivityFilter = "all" | "order" | "payment" | "system";
+
+/** Severity palette — verbatim from the design tokens (05-Design-Tokens.md). */
+const SEV = {
+  ok: { dot: "#2EA067", text: "#5BC98C", bg: "rgba(46,160,103,0.10)", border: "rgba(46,160,103,0.28)" },
+  warn: { dot: "#E8A838", text: "#E8A838", bg: "rgba(232,168,56,0.10)", border: "rgba(232,168,56,0.28)" },
+  danger: { dot: "#E05C5C", text: "#E05C5C", bg: "rgba(224,92,92,0.10)", border: "rgba(224,92,92,0.28)" },
+  neutral: { dot: "#646A77", text: "#9A9FAB", bg: "#121319", border: "rgba(255,255,255,0.08)" },
+} as const;
+type SevKey = keyof typeof SEV;
+
+function sevOf(status: OpsHealthStatus): SevKey {
+  return status === "healthy" ? "ok" : status === "warning" ? "warn" : status === "offline" ? "danger" : "neutral";
+}
 
 export default function OperationsDashboard({ initial }: { initial: OperationsSnapshotDTO }) {
   const [snapshot, setSnapshot] = useState(initial);
+  const [range, setRange] = useState<Range>((initial.kpi.range as Range) ?? "7d");
   const [refreshing, setRefreshing] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [activityFilter, setActivityFilter] = useState<OpsActivityItemDTO["kind"] | "all">("all");
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [dismissed, setDismissed] = useState<string | null>(null);
   const busyRef = useRef(false);
 
-  const reload = useCallback(async (manual = false) => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    if (manual) setRefreshing(true);
-    try {
-      setSnapshot(await getOperationsSnapshotAction());
-    } catch {
-      /* keep the last good snapshot on a transient failure */
-    } finally {
-      busyRef.current = false;
-      if (manual) setRefreshing(false);
-    }
-  }, []);
+  const reload = useCallback(
+    async (manual = false) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      if (manual) setRefreshing(true);
+      try {
+        setSnapshot(await getOperationsSnapshotAction(range));
+      } catch {
+        /* keep last good snapshot on a transient failure */
+      } finally {
+        busyRef.current = false;
+        if (manual) setRefreshing(false);
+      }
+    },
+    [range],
+  );
 
-  // Live polling — only refetches the snapshot; no full-page reload. Pauses
-  // while the tab is hidden to avoid needless load.
+  // Live polling — refetches the snapshot only; pauses while the tab is hidden.
   useEffect(() => {
     const timer = setInterval(() => {
       if (!document.hidden) void reload();
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [reload]);
+
+  async function changeRange(next: Range) {
+    setRange(next);
+    try {
+      const kpi = await getOpsKpiAction(next);
+      setSnapshot((s) => ({ ...s, kpi }));
+    } catch {
+      /* keep current tiles */
+    }
+  }
 
   async function runQuickAction(label: string, fn: () => Promise<unknown>) {
     setActionMsg(null);
@@ -58,559 +93,564 @@ export default function OperationsDashboard({ initial }: { initial: OperationsSn
     }
   }
 
-  const filteredActivity =
-    activityFilter === "all"
-      ? snapshot.activity
-      : snapshot.activity.filter((a) => a.kind === activityFilter);
+  const announcementVisible =
+    snapshot.announcement && snapshot.announcement.message !== dismissed;
 
   return (
-    <div className="min-w-0 space-y-5">
-      {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <StatusDot status={snapshot.overallStatus} pulse />
-          <div>
-            <h1 className="text-xl font-semibold text-white">Centre de contrôle</h1>
-            <p className="text-xs text-muted">
-              {snapshot.environmentLabel} · version {snapshot.version} · mis à jour{" "}
-              {relativeTime(snapshot.generatedAt)}
-            </p>
-          </div>
+    <div className="min-w-0 space-y-4">
+      {/* 1 · Announcement */}
+      {announcementVisible && snapshot.announcement && (
+        <div
+          className="flex items-center gap-3 rounded-[11px] px-4 py-2.5"
+          style={{ background: "rgba(62,123,250,0.07)", border: "1px solid rgba(62,123,250,0.18)" }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7FA6FF" strokeWidth="1.8" className="shrink-0">
+            <path d="M12 2a5 5 0 0 0-5 5c0 3-2 4-2 7h14c0-3-2-4-2-7a5 5 0 0 0-5-5z" />
+            <path d="M9 21h6" />
+          </svg>
+          <span className="min-w-0 flex-1 text-[13px]" style={{ color: "#C7D3F0" }}>
+            {snapshot.announcement.message}
+          </span>
+          <button
+            type="button"
+            onClick={() => setDismissed(snapshot.announcement!.message)}
+            className="shrink-0 px-2 py-1 text-[12.5px] text-faint hover:text-muted"
+          >
+            Masquer
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={snapshot.overallStatus} />
+      )}
+
+      {/* 2 · Header */}
+      <header className="flex flex-wrap items-center gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
+            Bonjour, {snapshot.greetingName}
+          </h1>
+          <p className="mt-0.5 text-[13.5px] text-faint">
+            {new Date(snapshot.generatedAt).toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}{" "}
+            · {snapshot.environmentLabel}
+            {snapshot.warnings.length > 0 && ` · ${snapshot.warnings.length} point(s) à traiter`}
+          </p>
+        </div>
+        <div className="ml-auto flex items-center gap-2.5">
+          <div
+            className="flex items-center overflow-hidden rounded-[9px]"
+            style={{ background: "#121319", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            {(["today", "7d", "30d"] as Range[]).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => changeRange(r)}
+                className="h-[34px] px-[11px] text-[12.5px]"
+                style={
+                  range === r
+                    ? { color: "#EAF0FF", background: "rgba(62,123,250,0.13)", boxShadow: "inset 0 0 0 1px rgba(62,123,250,0.2)" }
+                    : { color: "#646A77", background: "transparent" }
+                }
+              >
+                {r === "today" ? "Aujourd’hui" : r === "7d" ? "7 j" : "30 j"}
+              </button>
+            ))}
+          </div>
+          <ExportButton snapshot={snapshot} />
           <button
             type="button"
             onClick={() => reload(true)}
             disabled={refreshing}
-            className="btn-ghost h-9 px-4 text-sm disabled:opacity-60"
+            className="btn-ghost h-[34px] px-3 text-xs disabled:opacity-60"
           >
-            {refreshing ? "Actualisation…" : "Actualiser"}
+            {refreshing ? "…" : "Actualiser"}
           </button>
         </div>
       </header>
 
       {actionMsg && (
-        <p
-          className={`rounded-lg px-3 py-2 text-sm ${
-            actionMsg.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"
-          }`}
-        >
+        <p className={`rounded-lg px-3 py-2 text-sm ${actionMsg.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
           {actionMsg.text}
         </p>
       )}
 
-      {/* Warnings — auto-resolve (disappear) once the condition clears. */}
-      {snapshot.warnings.length > 0 && (
-        <section className="space-y-2">
-          {snapshot.warnings.map((w) => (
-            <WarningRow
-              key={w.id}
-              severity={w.severity}
-              title={w.title}
-              description={w.description}
-              href={w.resolveHref}
-            />
-          ))}
-        </section>
-      )}
+      {/* 3 · System status bar */}
+      <SystemStatusBar snapshot={snapshot} />
 
-      {/* Quick actions toolbar */}
-      <QuickActions
-        maintenanceEnabled={snapshot.maintenanceEnabled}
-        busy={refreshing}
-        onAction={runQuickAction}
-      />
+      {/* 4 · Needs attention */}
+      {snapshot.warnings.length > 0 && <NeedsAttention snapshot={snapshot} />}
 
-      {/* Main grid */}
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SystemHealthCard snapshot={snapshot} />
-        <SuppliersCard snapshot={snapshot} />
-        <OrdersCard snapshot={snapshot} />
-        <PaymentsCard snapshot={snapshot} />
-        <ProductsCard snapshot={snapshot} />
-        <NotificationsCard snapshot={snapshot} />
+      {/* 5 · Today snapshot */}
+      <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
+        {snapshot.kpi.tiles.map((tile) => (
+          <div key={tile.label} className="rounded-[12px] p-4" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div className="mb-1.5 text-xs text-muted">{tile.label}</div>
+            <div className="font-mono text-[20px] font-semibold tracking-[-0.02em] text-white">
+              {tile.value} {tile.unit && <span className="text-xs font-normal text-faint">{tile.unit}</span>}
+            </div>
+            <div className="mt-1.5 text-[11.5px]" style={{ color: tile.tone === "good" ? "#5BC98C" : tile.tone === "bad" ? "#E05C5C" : "#646A77" }}>
+              {tile.trendLabel}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Recent activity */}
-      <ActivityFeed
-        items={filteredActivity}
-        filter={activityFilter}
-        onFilter={setActivityFilter}
-        total={snapshot.activity.length}
-      />
+      {/* 6 · Main grid */}
+      <div className="grid gap-3.5 xl:grid-cols-[1.6fr_1fr]">
+        {/* Left column */}
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <OrderPipeline snapshot={snapshot} />
+          <RecentOrders snapshot={snapshot} />
+          <FooterStrip snapshot={snapshot} busy={refreshing} onAction={runQuickAction} />
+        </div>
+        {/* Right column */}
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <SupplierSync snapshot={snapshot} busy={refreshing} onAction={runQuickAction} />
+          <PrepaidFloat snapshot={snapshot} />
+          <LiveActivity snapshot={snapshot} filter={activityFilter} onFilter={setActivityFilter} />
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Quick actions ─────────────────────────────────────────────────────────────
+// ── 3 · System status bar ─────────────────────────────────────────────────────
 
-function QuickActions({
-  maintenanceEnabled,
+function SystemStatusBar({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+  const s = snapshot.systemStatus;
+  const sev = sevOf(s.overall);
+  const degraded = s.overall !== "healthy";
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-[12px] px-[18px] py-3"
+      style={{
+        background: degraded ? SEV[sev].bg : "rgba(46,160,103,0.05)",
+        border: `1px solid ${degraded ? SEV[sev].border : "rgba(46,160,103,0.16)"}`,
+      }}
+    >
+      <div className="flex shrink-0 items-center gap-2.5 border-r border-white/8 pr-4">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: SEV[sev].dot, boxShadow: `0 0 10px ${SEV[sev].dot}99` }} />
+        <span className="whitespace-nowrap text-[14.5px] font-semibold text-white">{s.headline}</span>
+      </div>
+      {s.chips.map((chip) => {
+        const cs = sevOf(chip.status);
+        return (
+          <div key={chip.key} className="flex shrink-0 items-center gap-1.5">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: SEV[cs].dot }} />
+            <span className="whitespace-nowrap text-[12.5px] text-muted">{chip.label}</span>
+            <span className="whitespace-nowrap text-[12.5px] font-medium" style={{ color: SEV[cs].text }}>
+              {chip.sub}
+            </span>
+          </div>
+        );
+      })}
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
+        <span
+          className="whitespace-nowrap rounded-[6px] px-2 py-[3px] font-mono text-[11px]"
+          style={{ color: "#9FB8FF", background: "rgba(62,123,250,0.13)", border: "1px solid rgba(62,123,250,0.25)" }}
+        >
+          {snapshot.environmentLabel.toUpperCase()}
+        </span>
+        <span className="whitespace-nowrap text-xs text-faint">
+          {snapshot.orders.pendingPayment + snapshot.orders.paymentSubmitted + snapshot.orders.readyForFulfillment} en cours
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── 4 · Needs attention ───────────────────────────────────────────────────────
+
+function NeedsAttention({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+  return (
+    <div className="rounded-[14px] p-[18px]" style={{ background: "#0F1015", border: "1px solid rgba(232,168,56,0.18)" }}>
+      <div className="mb-3 flex items-center gap-2.5">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8A838" strokeWidth="1.9">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+        <span className="text-[14.5px] font-semibold text-white">Points à traiter</span>
+        <span className="rounded-[6px] px-2 py-0.5 font-mono text-[11.5px] font-semibold" style={{ color: "#E8A838", background: "rgba(232,168,56,0.14)" }}>
+          {snapshot.warnings.length}
+        </span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {snapshot.warnings.map((w) => {
+          const sev = w.severity === "critical" ? "danger" : w.severity === "warning" ? "warn" : "neutral";
+          return (
+            <div key={w.id} className="flex items-center gap-3 rounded-[10px] px-3 py-2.5" style={{ background: "#121319", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: SEV[sev].dot, boxShadow: `0 0 8px ${SEV[sev].dot}` }} />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13.5px] font-medium text-white">{w.title}</div>
+                <div className="mt-0.5 text-xs text-faint">{w.description}</div>
+              </div>
+              <span className="shrink-0 font-mono text-[11px] text-faint">{relativeTime(w.detectedAt)}</span>
+              {w.resolveHref && (
+                <Link
+                  href={w.resolveHref}
+                  className="h-[30px] shrink-0 rounded-[8px] px-3 text-[12px] font-semibold leading-[30px]"
+                  style={{ color: SEV[sev].text, background: SEV[sev].bg, border: `1px solid ${SEV[sev].border}` }}
+                >
+                  Traiter
+                </Link>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── 6a · Order pipeline ───────────────────────────────────────────────────────
+
+function OrderPipeline({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+  return (
+    <div className="rounded-[14px] p-[18px]" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="mb-3.5 flex items-center">
+        <span className="text-sm font-semibold text-white">Pipeline des commandes</span>
+        <span className="ml-auto text-xs text-faint">cliquez un statut pour filtrer</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
+        {snapshot.pipeline.map((stage) => (
+          <Link
+            key={stage.key}
+            href={stage.href}
+            className="rounded-[10px] px-2.5 py-3"
+            style={{ background: "#121319", border: "1px solid rgba(255,255,255,0.06)", borderTop: `2px solid ${stage.accent}` }}
+          >
+            <div className="font-mono text-[19px] font-semibold tracking-[-0.02em] text-white">{stage.count}</div>
+            <div className="mt-1 text-[11px] leading-tight text-muted">{stage.label}</div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 6b · Recent orders ────────────────────────────────────────────────────────
+
+function RecentOrders({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+  return (
+    <div className="flex flex-col rounded-[14px] px-[18px] pb-2 pt-4" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="mb-2.5 flex items-center">
+        <span className="text-sm font-semibold text-white">Commandes récentes</span>
+        <Link href="/admin?tab=orders" className="ml-auto text-[12.5px]" style={{ color: "#9FB8FF" }}>
+          Toutes les commandes →
+        </Link>
+      </div>
+      {snapshot.recentOrders.length === 0 ? (
+        <p className="py-8 text-center text-xs text-faint">Aucune commande pour l’instant.</p>
+      ) : (
+        <div className="flex flex-col">
+          {snapshot.recentOrders.map((o) => {
+            const badge = statusBadge(o.status);
+            return (
+              <Link key={o.id} href={`/admin/orders/${o.id}`} className="flex items-center gap-3 border-b border-white/[0.045] py-2.5 last:border-0 hover:bg-white/[0.02]">
+                <span className="w-[68px] shrink-0 font-mono text-[12.5px] text-muted">{o.orderNumber}</span>
+                <span className="w-[110px] shrink-0 truncate text-[12.5px] text-white">{o.customer}</span>
+                <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{o.item}</span>
+                <span className="w-[80px] shrink-0 text-right font-mono text-[12.5px]" style={{ color: "#C4C8D1" }}>{o.amountMad} MAD</span>
+                <span className="w-[110px] shrink-0 text-center text-[11px] font-semibold" style={{ color: badge.text, background: badge.bg, border: `1px solid ${badge.border}`, borderRadius: 6, padding: "3px 0" }}>
+                  {o.statusLabel}
+                </span>
+                <span className="w-[52px] shrink-0 text-right text-[11.5px]" style={{ color: "#9FB8FF" }}>{o.action}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function statusBadge(status: string): { text: string; bg: string; border: string } {
+  const key: SevKey =
+    status === "delivered"
+      ? "ok"
+      : status === "payment_submitted"
+        ? "warn"
+        : status === "payment_issue" || status === "rejected" || status === "refunded"
+          ? "danger"
+          : "neutral";
+  return { text: SEV[key].text, bg: SEV[key].bg, border: SEV[key].border };
+}
+
+// ── 6c · Footer strip: jobs + version + emergency ─────────────────────────────
+
+function FooterStrip({
+  snapshot,
   busy,
   onAction,
 }: {
-  maintenanceEnabled: boolean;
+  snapshot: OperationsSnapshotDTO;
   busy: boolean;
   onAction: (label: string, fn: () => Promise<unknown>) => Promise<void>;
 }) {
-  const [confirmMaint, setConfirmMaint] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState<null | "checkout" | "maintenance">(null);
 
   return (
-    <section className="card p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-faint">
-          Actions rapides
+    <div className="rounded-[14px] px-[18px] py-3.5" style={{ background: "#0C0D11", border: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="flex flex-wrap items-center gap-x-[22px] gap-y-2">
+        {snapshot.jobs.map((job) => {
+          const sev = sevOf(job.status);
+          return (
+            <div key={job.name} className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: SEV[sev].dot }} />
+              <span className="text-xs text-muted">{job.name}</span>
+              <span className="font-mono text-[11px]" style={{ color: "#4d525d" }}>{job.detail}</span>
+            </div>
+          );
+        })}
+        <div className="flex-1" />
+        <span className="font-mono text-[11.5px]" style={{ color: "#4d525d" }}>
+          {snapshot.environmentLabel} · {snapshot.version}
         </span>
         <button
           type="button"
-          disabled={busy}
-          onClick={() => onAction("Test des fournisseurs", refreshAllSupplierHealthAction)}
-          className="btn-ghost h-8 px-3 text-xs disabled:opacity-60"
+          onClick={() => setOpen((v) => !v)}
+          className="h-7 rounded-[8px] px-3 text-[11.5px] font-semibold"
+          style={{ color: "#E05C5C", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.3)" }}
         >
-          Tester les fournisseurs
+          Contrôles d’urgence
         </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onAction("Actualisation des soldes", refreshAllSupplierBalancesAction)}
-          className="btn-ghost h-8 px-3 text-xs disabled:opacity-60"
-        >
-          Actualiser les soldes
-        </button>
-        <QuickLink href="/admin?tab=orders" label="Paiements à vérifier" />
-        <QuickLink href="/admin/suppliers" label="Journaux fournisseurs" />
-        <QuickLink href="/admin?tab=email-templates" label="E-mails échoués" />
-        <span className="flex-1" />
-        {/* Maintenance toggle — confirmation required (takes the shop down). */}
-        {confirmMaint ? (
-          <span className="flex items-center gap-2">
-            <span className="text-xs text-amber-400">
-              {maintenanceEnabled ? "Désactiver la maintenance ?" : "Activer la maintenance ?"}
-            </span>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                await onAction(
-                  maintenanceEnabled ? "Maintenance désactivée" : "Maintenance activée",
-                  () => toggleMaintenanceAction(!maintenanceEnabled),
-                );
-                setConfirmMaint(false);
-              }}
-              className="h-8 rounded-lg bg-amber-500/15 px-3 text-xs font-medium text-amber-400"
-            >
-              Confirmer
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmMaint(false)}
-              className="btn-ghost h-8 px-3 text-xs"
-            >
-              Annuler
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setConfirmMaint(true)}
-            className="h-8 rounded-lg border border-border-strong px-3 text-xs text-text disabled:opacity-60"
-          >
-            {maintenanceEnabled ? "Sortir de maintenance" : "Mode maintenance"}
-          </button>
-        )}
       </div>
-    </section>
+      {open && (
+        <div className="mt-3 flex flex-wrap gap-2.5 border-t border-white/[0.06] pt-3">
+          {confirm === "checkout" ? (
+            <ConfirmInline
+              label={snapshot.ordersEnabled ? "Suspendre le paiement ?" : "Réactiver le paiement ?"}
+              busy={busy}
+              onConfirm={() => {
+                void onAction(snapshot.ordersEnabled ? "Paiement suspendu" : "Paiement réactivé", () => toggleOrderingAction(!snapshot.ordersEnabled));
+                setConfirm(null);
+              }}
+              onCancel={() => setConfirm(null)}
+            />
+          ) : confirm === "maintenance" ? (
+            <ConfirmInline
+              label={snapshot.maintenanceEnabled ? "Sortir de maintenance ?" : "Activer la maintenance ?"}
+              busy={busy}
+              onConfirm={() => {
+                void onAction(snapshot.maintenanceEnabled ? "Maintenance désactivée" : "Maintenance activée", () => toggleMaintenanceAction(!snapshot.maintenanceEnabled));
+                setConfirm(null);
+              }}
+              onCancel={() => setConfirm(null)}
+            />
+          ) : (
+            <>
+              <button type="button" onClick={() => setConfirm("checkout")} className="h-[38px] flex-1 rounded-[9px] text-[12.5px] font-semibold" style={{ color: "#9FB8FF", background: "rgba(62,123,250,0.14)", border: "1px solid rgba(62,123,250,0.35)" }}>
+                {snapshot.ordersEnabled ? "Suspendre le paiement" : "Réactiver le paiement"}
+              </button>
+              <button type="button" onClick={() => setConfirm("maintenance")} className="h-[38px] flex-1 rounded-[9px] text-[12.5px] font-semibold" style={{ color: "#E8A838", background: "rgba(232,168,56,0.08)", border: "1px solid rgba(232,168,56,0.3)" }}>
+                {snapshot.maintenanceEnabled ? "Sortir de maintenance" : "Bannière de maintenance"}
+              </button>
+              <Link href="/admin?tab=payment-methods" className="flex h-[38px] flex-1 items-center justify-center rounded-[9px] text-[12.5px] font-semibold text-muted" style={{ background: "#121319", border: "1px solid rgba(255,255,255,0.1)" }}>
+                Gérer les paiements
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-function QuickLink({ href, label }: { href: string; label: string }) {
+function ConfirmInline({ label, busy, onConfirm, onCancel }: { label: string; busy: boolean; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <Link href={href} className="btn-ghost h-8 px-3 text-xs">
-      {label}
-    </Link>
+    <div className="flex flex-1 items-center gap-2">
+      <span className="text-xs text-amber-400">{label}</span>
+      <button type="button" disabled={busy} onClick={onConfirm} className="h-[34px] rounded-lg bg-amber-500/15 px-4 text-xs font-medium text-amber-400 disabled:opacity-60">
+        Confirmer
+      </button>
+      <button type="button" onClick={onCancel} className="btn-ghost h-[34px] px-4 text-xs">Annuler</button>
+    </div>
   );
 }
 
-// ── Section cards ─────────────────────────────────────────────────────────────
+// ── 6d · Supplier sync ────────────────────────────────────────────────────────
 
-function SystemHealthCard({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+function SupplierSync({
+  snapshot,
+  busy,
+  onAction,
+}: {
+  snapshot: OperationsSnapshotDTO;
+  busy: boolean;
+  onAction: (label: string, fn: () => Promise<unknown>) => Promise<void>;
+}) {
   return (
-    <OpsCard title="Santé du système" status={snapshot.overallStatus}>
-      <ul className="divide-y divide-border">
-        {snapshot.health.map((h) => (
-          <li key={h.key} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-            <StatusDot status={h.status} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[13px] font-medium text-white">{h.label}</p>
-                {h.responseTimeMs != null && (
-                  <span className="shrink-0 text-[11px] tabular-nums text-faint">{h.responseTimeMs} ms</span>
-                )}
-              </div>
-              <p className="text-xs text-muted">{h.message}</p>
-              {h.action && h.status !== "healthy" && (
-                <p className="mt-0.5 text-[11px] text-amber-400">{h.action}</p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </OpsCard>
+    <div className="rounded-[14px] p-[18px]" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="mb-3 flex items-center">
+        <span className="text-sm font-semibold text-white">Fournisseurs</span>
+        <button type="button" disabled={busy} onClick={() => onAction("Test des fournisseurs", refreshAllSupplierHealthAction)} className="ml-auto text-[12px] disabled:opacity-60" style={{ color: "#9FB8FF" }}>
+          Tester
+        </button>
+      </div>
+      <div className="flex flex-col">
+        {snapshot.suppliers.map((s) => {
+          const sev = sevOf(
+            s.health === "offline" ? "offline" : s.health === "warning" ? "warning" : s.health === "healthy" ? "healthy" : "unknown",
+          );
+          return (
+            <Link key={s.slug} href={`/admin/suppliers/${s.slug}`} className="flex items-center gap-2.5 border-b border-white/[0.04] py-2 last:border-0 hover:bg-white/[0.02]">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: SEV[sev].dot }} />
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-white">{s.name}</span>
+              <span className="font-mono text-[11px]" style={{ color: SEV[sev].text }}>
+                {s.configured ? (s.enabled ? "actif" : "désactivé") : "non configuré"}
+              </span>
+              <span className="w-[64px] text-right font-mono text-[11px] text-faint">
+                {s.lastCheckedAt ? relativeTime(s.lastCheckedAt) : "jamais"}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-function SuppliersCard({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+// ── 6e · Prepaid float ────────────────────────────────────────────────────────
+
+function PrepaidFloat({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
   return (
-    <OpsCard
-      title="Fournisseurs"
-      headerRight={
-        <Link href="/admin/suppliers" className="text-xs text-accent-blue hover:underline">
-          Gérer
-        </Link>
-      }
-    >
-      {snapshot.suppliers.length === 0 ? (
-        <EmptyState text="Aucun fournisseur configuré." />
+    <div className="rounded-[14px] p-[18px]" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="mb-3 flex items-center">
+        <span className="text-sm font-semibold text-white">Portefeuilles prépayés</span>
+      </div>
+      {snapshot.wallets.length === 0 ? (
+        <p className="py-4 text-center text-xs text-faint">Aucun portefeuille fournisseur.</p>
       ) : (
-        <ul className="space-y-2">
-          {snapshot.suppliers.map((s) => {
-            const status =
-              s.health === "healthy"
-                ? "healthy"
-                : s.health === "offline"
-                  ? "offline"
-                  : s.health === "warning"
-                    ? "warning"
-                    : "unknown";
+        <div className="flex flex-col gap-2.5">
+          {snapshot.wallets.map((w) => {
+            const sev = sevOf(w.tier);
             return (
-              <li key={s.slug}>
-                <Link
-                  href={`/admin/suppliers/${s.slug}`}
-                  className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 hover:border-border-strong"
-                >
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white"
-                    style={{
-                      background: `linear-gradient(150deg, ${s.accentColor}55, ${s.accentColor}22)`,
-                      border: `1px solid ${s.accentColor}66`,
-                    }}
-                  >
-                    {s.initials}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[13px] font-semibold text-white">{s.name}</p>
-                      <StatusDot status={status} />
-                      {!s.enabled && s.configured && (
-                        <span className="text-[10px] text-faint">désactivé</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-muted">
-                      {s.balance
-                        ? `Solde ${s.balance.amount} ${s.balance.currency}`
-                        : s.supportsBalance
-                          ? "Solde non chargé"
-                          : "Solde non supporté"}
-                      {s.recentPurchases.failed > 0 && (
-                        <span className="text-red-400"> · {s.recentPurchases.failed} échec(s) 7 j</span>
-                      )}
-                    </p>
-                  </div>
-                  {s.environment && (
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-faint">
-                      {s.environment}
-                    </span>
-                  )}
-                </Link>
-              </li>
+              <div key={w.slug}>
+                <div className="mb-1.5 flex items-center">
+                  <span className="text-[12.5px]" style={{ color: "#C4C8D1" }}>{w.name}</span>
+                  <span className="ml-auto font-mono text-[11.5px]" style={{ color: SEV[sev].text }}>{w.amount}</span>
+                </div>
+                <div className="h-[5px] overflow-hidden rounded-[3px]" style={{ background: "#121319" }}>
+                  <div className="h-full rounded-[3px]" style={{ background: SEV[sev].dot, width: `${w.pct}%` }} />
+                </div>
+              </div>
             );
           })}
-        </ul>
-      )}
-    </OpsCard>
-  );
-}
-
-function OrdersCard({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
-  const o = snapshot.orders;
-  return (
-    <OpsCard
-      title="Commandes"
-      headerRight={
-        <Link href="/admin?tab=orders" className="text-xs text-accent-blue hover:underline">
-          Toutes
-        </Link>
-      }
-    >
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <MetricTile label="En attente paiement" value={o.pendingPayment} href="/admin?tab=orders" />
-        <MetricTile
-          label="À vérifier"
-          value={o.paymentSubmitted}
-          tone={o.paymentSubmitted > 0 ? "warn" : "neutral"}
-          href="/admin?tab=orders"
-        />
-        <MetricTile
-          label="Prêt à livrer"
-          value={o.readyForFulfillment}
-          tone={o.readyForFulfillment > 0 ? "good" : "neutral"}
-          href="/admin?tab=orders"
-        />
-        <MetricTile
-          label="Problème paiement"
-          value={o.paymentIssue}
-          tone={o.paymentIssue > 0 ? "bad" : "neutral"}
-          href="/admin?tab=orders"
-        />
-        <MetricTile
-          label="Attente trop longue"
-          value={o.waitingTooLong}
-          tone={o.waitingTooLong > 0 ? "warn" : "neutral"}
-          href="/admin?tab=orders"
-        />
-        <MetricTile
-          label="Achats échoués (auj.)"
-          value={o.recentFailedPurchases}
-          tone={o.recentFailedPurchases > 0 ? "bad" : "neutral"}
-          href="/admin/suppliers"
-        />
-        <MetricTile label="Livrées (auj.)" value={o.deliveredToday} tone="good" />
-        <MetricTile label="Annulées (auj.)" value={o.cancelledToday} />
-        <MetricTile label="Refusées (auj.)" value={o.rejectedToday} />
-      </div>
-      {o.newest.length > 0 && (
-        <div className="mt-3 border-t border-border pt-2.5">
-          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-faint">
-            Dernières commandes
-          </p>
-          <ul className="space-y-1">
-            {o.newest.slice(0, 4).map((row) => (
-              <li key={row.id}>
-                <Link
-                  href={`/admin/orders/${row.id}`}
-                  className="flex items-center justify-between gap-2 text-xs text-muted hover:text-white"
-                >
-                  <span className="truncate">{row.label}</span>
-                  <span className="shrink-0 text-faint">{relativeTime(row.createdAt)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
-    </OpsCard>
+    </div>
   );
 }
 
-function PaymentsCard({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
-  const p = snapshot.payments;
-  return (
-    <OpsCard
-      title="Paiements"
-      headerRight={
-        <Link href="/admin?tab=payment-methods" className="text-xs text-accent-blue hover:underline">
-          Moyens
-        </Link>
-      }
-    >
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <MetricTile label="Moyens actifs" value={p.activeMethods} tone="good" href="/admin?tab=payment-methods" />
-        <MetricTile label="Moyens désactivés" value={p.disabledMethods} href="/admin?tab=payment-methods" />
-        <MetricTile
-          label="À vérifier"
-          value={p.awaitingReview}
-          tone={p.awaitingReview > 0 ? "warn" : "neutral"}
-          href="/admin?tab=orders"
-        />
-        <MetricTile label="Confirmés (auj.)" value={p.confirmedToday} tone="good" />
-        <MetricTile label="Refusés (auj.)" value={p.rejectedToday} tone={p.rejectedToday > 0 ? "warn" : "neutral"} />
-        <MetricTile
-          label="Délai confirmation"
-          value={p.avgConfirmationMinutes != null ? `${p.avgConfirmationMinutes} min` : "—"}
-          hint="moyenne 7 j"
-        />
-      </div>
-      {p.misconfiguredMethods.length > 0 && (
-        <div className="mt-3 space-y-1.5 border-t border-border pt-2.5">
-          {p.misconfiguredMethods.map((m) => (
-            <p key={m.id} className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-400">
-              ⚠ {m.name} : {m.reason}
-            </p>
-          ))}
-        </div>
-      )}
-    </OpsCard>
-  );
-}
+// ── 6f · Live activity ────────────────────────────────────────────────────────
 
-function ProductsCard({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
-  const p = snapshot.products;
-  return (
-    <OpsCard
-      title="Produits"
-      headerRight={
-        <Link href="/admin?tab=products" className="text-xs text-accent-blue hover:underline">
-          Gérer
-        </Link>
-      }
-    >
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <MetricTile label="Produits parents" value={p.totalParents} href="/admin?tab=products" />
-        <MetricTile label="Masqués" value={p.hidden} href="/admin?tab=products" />
-        <MetricTile
-          label="Sans approvisionnement"
-          value={p.missingSupplyRoute}
-          tone={p.missingSupplyRoute > 0 ? "bad" : "neutral"}
-          href="/admin?tab=products"
-        />
-        <MetricTile
-          label="Mapping incomplet"
-          value={p.incompleteMapping}
-          tone={p.incompleteMapping > 0 ? "warn" : "neutral"}
-          href="/admin?tab=products"
-        />
-        <MetricTile
-          label="Sans image"
-          value={p.missingImage}
-          tone={p.missingImage > 0 ? "warn" : "neutral"}
-          href="/admin?tab=products"
-        />
-        <MetricTile
-          label="Sans prix"
-          value={p.missingPrice}
-          tone={p.missingPrice > 0 ? "bad" : "neutral"}
-          href="/admin?tab=products"
-        />
-        <MetricTile label="Manuel uniquement" value={p.manualOnly} href="/admin?tab=products" />
-        {p.outOfStock != null && (
-          <MetricTile
-            label="En rupture"
-            value={p.outOfStock}
-            tone={p.outOfStock > 0 ? "warn" : "neutral"}
-            href="/admin?tab=products"
-          />
-        )}
-      </div>
-    </OpsCard>
-  );
-}
-
-function NotificationsCard({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
-  const n = snapshot.notifications;
-  const quiet = n.emailFailures24h === 0 && n.discordFailures24h === 0 && n.supplierFailures24h === 0;
-  return (
-    <OpsCard title="Notifications & erreurs">
-      <div className="grid grid-cols-3 gap-2">
-        <MetricTile label="E-mails échoués" value={n.emailFailures24h} tone={n.emailFailures24h > 0 ? "bad" : "neutral"} />
-        <MetricTile label="Discord échoués" value={n.discordFailures24h} tone={n.discordFailures24h > 0 ? "warn" : "neutral"} />
-        <MetricTile label="Fournisseurs échoués" value={n.supplierFailures24h} tone={n.supplierFailures24h > 0 ? "warn" : "neutral"} />
-      </div>
-      {quiet ? (
-        <p className="mt-3 text-center text-xs text-faint">Aucune erreur sur les dernières 24 h. ✓</p>
-      ) : (
-        n.recentEmailErrors.length > 0 && (
-          <ul className="mt-3 space-y-1 border-t border-border pt-2.5">
-            {n.recentEmailErrors.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-2 text-[11px] text-muted">
-                <span className="truncate">{e.recipient} — {e.message}</span>
-                <span className="shrink-0 text-faint">{relativeTime(e.at)}</span>
-              </li>
-            ))}
-          </ul>
-        )
-      )}
-    </OpsCard>
-  );
-}
-
-// ── Activity feed ─────────────────────────────────────────────────────────────
-
-const ACTIVITY_FILTERS: { value: OpsActivityItemDTO["kind"] | "all"; label: string }[] = [
+const ACTIVITY_FILTERS: { value: ActivityFilter; label: string }[] = [
   { value: "all", label: "Tout" },
   { value: "order", label: "Commandes" },
   { value: "payment", label: "Paiements" },
-  { value: "supplier", label: "Fournisseurs" },
-  { value: "email", label: "E-mails" },
+  { value: "system", label: "Système" },
 ];
-
 const ACTIVITY_DOT: Record<OpsActivityItemDTO["kind"], string> = {
   order: "#7FA6FF",
   payment: "#5BC98C",
-  supplier: "#F0C466",
-  email: "#F08084",
+  supplier: "#E8A838",
+  email: "#E05C5C",
 };
 
-function ActivityFeed({
-  items,
+function LiveActivity({
+  snapshot,
   filter,
   onFilter,
-  total,
 }: {
-  items: OpsActivityItemDTO[];
-  filter: OpsActivityItemDTO["kind"] | "all";
-  onFilter: (f: OpsActivityItemDTO["kind"] | "all") => void;
-  total: number;
+  snapshot: OperationsSnapshotDTO;
+  filter: ActivityFilter;
+  onFilter: (f: ActivityFilter) => void;
 }) {
+  const items = snapshot.activity.filter((a) => {
+    if (filter === "all") return true;
+    if (filter === "system") return a.kind === "supplier" || a.kind === "email";
+    return a.kind === filter;
+  });
   return (
-    <OpsCard
-      title="Activité récente"
-      headerRight={
-        <div className="flex gap-1">
-          {ACTIVITY_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => onFilter(f.value)}
-              className={`rounded-md px-2 py-1 text-[11px] ${
-                filter === f.value ? "bg-white/10 text-white" : "text-faint hover:text-muted"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      }
-    >
-      {total === 0 ? (
-        <EmptyState text="Aucune activité récente." />
-      ) : items.length === 0 ? (
-        <EmptyState text="Aucune activité pour ce filtre." />
-      ) : (
-        <ul className="divide-y divide-border">
-          {items.map((item) => {
+    <div className="flex min-h-[200px] flex-1 flex-col rounded-[14px] p-[18px]" style={{ background: "#0F1015", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-sm font-semibold text-white">Activité en direct</span>
+        <span className="h-[5px] w-[5px] rounded-full" style={{ background: "#5BC98C", boxShadow: "0 0 6px #5BC98C" }} />
+      </div>
+      <div className="mb-3 flex gap-1.5">
+        {ACTIVITY_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => onFilter(f.value)}
+            className="rounded-[7px] px-2.5 py-1 text-[11.5px]"
+            style={
+              filter === f.value
+                ? { color: "#EAF0FF", background: "rgba(62,123,250,0.13)", border: "1px solid rgba(62,123,250,0.25)" }
+                : { color: "#9A9FAB", background: "#121319", border: "1px solid rgba(255,255,255,0.06)" }
+            }
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto">
+        {items.length === 0 ? (
+          <p className="py-6 text-center text-xs text-faint">Aucune activité.</p>
+        ) : (
+          items.map((ev) => {
             const row = (
-              <div className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: ACTIVITY_DOT[item.kind] }}
-                />
+              <div className="flex gap-2.5">
+                <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ACTIVITY_DOT[ev.kind] }} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] text-white">{item.title}</p>
-                  {item.detail && <p className="truncate text-[11px] text-muted">{item.detail}</p>}
+                  <div className="text-[12.5px] leading-snug" style={{ color: "#C4C8D1" }}>{ev.title}</div>
+                  {ev.detail && <div className="truncate text-[11px] text-muted">{ev.detail}</div>}
+                  <div className="mt-px text-[11px]" style={{ color: "#4d525d" }}>{relativeTime(ev.at)}</div>
                 </div>
-                <span className="shrink-0 text-[11px] text-faint">{relativeTime(item.at)}</span>
               </div>
             );
-            return (
-              <li key={item.id}>
-                {item.href ? (
-                  <Link href={item.href} className="block hover:opacity-90">
-                    {row}
-                  </Link>
-                ) : (
-                  row
-                )}
-              </li>
+            return ev.href ? (
+              <Link key={ev.id} href={ev.href} className="hover:opacity-90">{row}</Link>
+            ) : (
+              <div key={ev.id}>{row}</div>
             );
-          })}
-        </ul>
-      )}
-    </OpsCard>
+          })
+        )}
+      </div>
+    </div>
   );
 }
 
-function EmptyState({ text }: { text: string }) {
-  return <p className="py-6 text-center text-xs text-faint">{text}</p>;
+// ── Export ────────────────────────────────────────────────────────────────────
+
+function ExportButton({ snapshot }: { snapshot: OperationsSnapshotDTO }) {
+  function exportCsv() {
+    const header = ["Commande", "Client", "Article", "Montant MAD", "Statut"];
+    const rows = snapshot.recentOrders.map((o) => [o.orderNumber, o.customer, o.item, String(o.amountMad), o.statusLabel]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ghost-operations-commandes.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  return (
+    <button
+      type="button"
+      onClick={exportCsv}
+      className="flex h-[34px] items-center gap-1.5 rounded-[9px] px-3 text-[12.5px] font-medium text-muted"
+      style={{ background: "#121319", border: "1px solid rgba(255,255,255,0.1)" }}
+    >
+      Exporter
+    </button>
+  );
 }

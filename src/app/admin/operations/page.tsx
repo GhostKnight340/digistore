@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AdminOperationsPage() {
   const customer = await requireAdminCustomer();
-  const snapshot = await getOperationsSnapshot();
+  const snapshot = await getOperationsSnapshot({ adminName: customer.name });
 
   return (
     <AdminShellRoute active="operations" admin={toAdminIdentity(customer.name, customer.role)}>

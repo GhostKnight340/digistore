@@ -1077,14 +1077,89 @@ export interface OpsActivityItemDTO {
   href?: string;
 }
 
+export interface OpsKpiTileDTO {
+  label: string;
+  value: string;
+  unit: string;
+  trendLabel: string;
+  tone: "neutral" | "good" | "warn" | "bad";
+}
+
+export interface OpsKpiSnapshotDTO {
+  range: "today" | "7d" | "30d";
+  tiles: OpsKpiTileDTO[];
+}
+
+export interface OpsPipelineStageDTO {
+  key: string;
+  label: string;
+  count: number;
+  accent: string;
+  href: string;
+}
+
+export interface OpsRecentOrderDTO {
+  id: string;
+  orderNumber: string;
+  customer: string;
+  item: string;
+  amountMad: number;
+  status: string;
+  statusLabel: string;
+  action: string;
+}
+
+export interface OpsJobDTO {
+  name: string;
+  detail: string;
+  status: OpsHealthStatus;
+}
+
+export interface OpsWalletDTO {
+  slug: string;
+  name: string;
+  amount: string;
+  currency: string;
+  pct: number;
+  tier: OpsHealthStatus;
+}
+
+/** One chip in the system-status bar (Checkout / Payments / Suppliers / Email). */
+export interface OpsStatusChipDTO {
+  key: string;
+  label: string;
+  sub: string;
+  status: OpsHealthStatus;
+}
+
+export interface OpsSystemStatusDTO {
+  headline: string;
+  overall: OpsHealthStatus;
+  chips: OpsStatusChipDTO[];
+}
+
+/** Derived, dismissible operational announcement (message is admin-driven state). */
+export interface OpsAnnouncementDTO {
+  message: string;
+  tone: "info" | "warn";
+}
+
 /** The full operational snapshot rendered by the dashboard in one payload. */
 export interface OperationsSnapshotDTO {
   generatedAt: string;
+  greetingName: string;
   environmentLabel: string;
   version: string;
   maintenanceEnabled: boolean;
   ordersEnabled: boolean;
   overallStatus: OpsHealthStatus;
+  announcement: OpsAnnouncementDTO | null;
+  systemStatus: OpsSystemStatusDTO;
+  kpi: OpsKpiSnapshotDTO;
+  pipeline: OpsPipelineStageDTO[];
+  recentOrders: OpsRecentOrderDTO[];
+  wallets: OpsWalletDTO[];
+  jobs: OpsJobDTO[];
   health: OpsHealthResultDTO[];
   suppliers: SupplierCardDTO[];
   orders: OpsOrdersDTO;

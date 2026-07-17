@@ -14,14 +14,28 @@ import {
   refreshSupplierBalanceAction,
   testSupplierConnectionAction,
 } from "@/app/actions/supplierManagement";
+import { getOpsKpi, type OpsTimeRange } from "@/lib/ops/overview";
 import { SUPPLIER_SLUGS } from "@/lib/suppliers/registry";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { STORE_SETTINGS_TAG } from "@/lib/cacheTags";
-import type { ActionResult, OperationsSnapshotDTO } from "@/lib/dto";
+import type { ActionResult, OperationsSnapshotDTO, OpsKpiSnapshotDTO } from "@/lib/dto";
 
-export async function getOperationsSnapshotAction(): Promise<OperationsSnapshotDTO> {
+const RANGES: OpsTimeRange[] = ["today", "7d", "30d"];
+function coerceRange(range: string): OpsTimeRange {
+  return (RANGES as string[]).includes(range) ? (range as OpsTimeRange) : "7d";
+}
+
+export async function getOperationsSnapshotAction(
+  range?: string,
+): Promise<OperationsSnapshotDTO> {
+  const customer = await requireAdminCustomer();
+  return getOperationsSnapshot({ adminName: customer.name, range: coerceRange(range ?? "7d") });
+}
+
+/** Recompute only the time-ranged KPI tiles when the operator switches range. */
+export async function getOpsKpiAction(range: string): Promise<OpsKpiSnapshotDTO> {
   await requireAdminCustomer();
-  return getOperationsSnapshot();
+  return getOpsKpi(coerceRange(range));
 }
 
 /**
@@ -62,6 +76,26 @@ export async function toggleMaintenanceAction(enabled: boolean): Promise<ActionR
       ...settings,
       maintenance: { ...settings.maintenance, enabled },
     });
+    revalidateTag(STORE_SETTINGS_TAG);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Modification impossible.",
+    };
+  }
+}
+
+/**
+ * Resume/pause checkout (the emergency control). Flips ordersEnabled — the
+ * single switch that lets customers create/pay for orders. UI confirms first.
+ */
+export async function toggleOrderingAction(enabled: boolean): Promise<ActionResult> {
+  await requireAdminCustomer();
+  try {
+    const settings = await getStoreSettings();
+    await saveStoreSettings({ ...settings, ordersEnabled: enabled });
     revalidateTag(STORE_SETTINGS_TAG);
     revalidatePath("/", "layout");
     return { ok: true };
