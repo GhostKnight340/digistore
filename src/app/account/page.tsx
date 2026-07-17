@@ -92,7 +92,11 @@ export default async function AccountPage() {
           </div>
         </div>
       ) : (
-        <AccountProfileForm name={customer.name} phone={customer.phone} />
+        <AccountProfileForm
+          name={customer.name}
+          phone={customer.phone}
+          birthday={customer.birthday ? customer.birthday.toISOString().slice(0, 10) : null}
+        />
       )}
 
       <LoginMethods

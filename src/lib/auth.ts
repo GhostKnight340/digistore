@@ -21,6 +21,8 @@ export type AuthCustomer = {
   name: string;
   email: string;
   phone: string | null;
+  /** Optional date of birth (date-only; time component is meaningless). */
+  birthday: Date | null;
   image: string | null;
   googleId: string | null;
   role: string;
@@ -315,6 +317,7 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
       name: true,
       email: true,
       phone: true,
+      birthday: true,
       image: true,
       googleId: true,
       role: true,
@@ -354,6 +357,7 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     name: customer.name,
     email: customer.email,
     phone: customer.phone,
+    birthday: customer.birthday,
     image: customer.image,
     googleId: customer.googleId,
     role: customer.role,

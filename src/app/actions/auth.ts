@@ -369,6 +369,49 @@ export async function updateCustomerPhoneAction(phoneInput: string): Promise<Aut
   return { ok: true, message: "Numéro de téléphone enregistré." };
 }
 
+/**
+ * Sets or clears the account birthday from the account dashboard. Deliberately
+ * NOT part of checkout account creation — the field only exists here. An empty
+ * input clears the stored value.
+ */
+export async function updateCustomerBirthdayAction(
+  birthdayInput: string,
+): Promise<AuthActionResult> {
+  await ensureDatabaseReady();
+  const customer = await getCurrentCustomer();
+  if (!customer) return { ok: false, error: "Veuillez vous connecter." };
+
+  const raw = birthdayInput.trim();
+  if (!raw) {
+    await prisma.customer.update({
+      where: { id: customer.id },
+      data: { birthday: null },
+    });
+    revalidatePath("/account");
+    return { ok: true, message: "Date de naissance supprimée." };
+  }
+
+  // Native <input type="date"> submits YYYY-MM-DD. Parse as UTC midnight so the
+  // stored date-only value never shifts with the server timezone.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return { ok: false, error: "Veuillez saisir une date valide." };
+  }
+  const birthday = new Date(`${raw}T00:00:00Z`);
+  if (Number.isNaN(birthday.getTime()) || birthday.toISOString().slice(0, 10) !== raw) {
+    return { ok: false, error: "Veuillez saisir une date valide." };
+  }
+  if (birthday.getUTCFullYear() < 1900 || birthday.getTime() > Date.now()) {
+    return { ok: false, error: "Veuillez saisir une date de naissance valide." };
+  }
+
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: { birthday },
+  });
+  revalidatePath("/account");
+  return { ok: true, message: "Date de naissance enregistrée." };
+}
+
 export async function changePasswordAction(input: {
   currentPassword: string;
   password: string;

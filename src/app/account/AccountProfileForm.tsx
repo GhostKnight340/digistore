@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { updateCustomerNameAction, updateCustomerPhoneAction } from "@/app/actions/auth";
+import {
+  updateCustomerBirthdayAction,
+  updateCustomerNameAction,
+  updateCustomerPhoneAction,
+} from "@/app/actions/auth";
 import { PencilIcon } from "@/components/account/icons";
 
 const MESSAGE_TIMEOUT_MS = 3000;
@@ -12,12 +16,27 @@ function normalizeSpaces(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+/** Renders an ISO YYYY-MM-DD date as a French long date for the read-only view. */
+function formatBirthday(iso: string) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export default function AccountProfileForm({
   name,
   phone,
+  birthday,
 }: {
   name: string;
   phone: string | null;
+  /** ISO date (YYYY-MM-DD) or null. */
+  birthday: string | null;
 }) {
   return (
     <div className="card p-6">
@@ -44,6 +63,17 @@ export default function AccountProfileForm({
           inputMode="tel"
           autoComplete="tel"
         />
+
+        <EditableField
+          label="Date de naissance"
+          editLabel="Modifier la date de naissance"
+          initial={birthday ?? ""}
+          successMessage="Date de naissance mise à jour."
+          save={(value) => updateCustomerBirthdayAction(value)}
+          type="date"
+          autoComplete="bday"
+          formatDisplay={formatBirthday}
+        />
       </div>
     </div>
   );
@@ -59,6 +89,8 @@ function EditableField({
   save,
   inputMode,
   autoComplete,
+  type = "text",
+  formatDisplay,
 }: {
   label: string;
   editLabel: string;
@@ -69,6 +101,9 @@ function EditableField({
   save: (value: string) => Promise<{ ok: boolean; error?: string }>;
   inputMode?: "tel" | "text";
   autoComplete?: string;
+  type?: "text" | "date";
+  /** Optional read-only rendering of the saved value (e.g. ISO date → fr-FR). */
+  formatDisplay?: (value: string) => string;
 }) {
   const [savedValue, setSavedValue] = useState(initial);
   const [draft, setDraft] = useState(initial);
@@ -132,6 +167,7 @@ function EditableField({
             {label}
           </label>
           <input
+            type={type}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             className="input"
@@ -165,7 +201,11 @@ function EditableField({
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wide text-faint">{label}</p>
               <p className="mt-0.5 truncate text-base text-white">
-                {savedValue || <span className="text-muted">Non renseigné</span>}
+                {savedValue ? (
+                  formatDisplay ? formatDisplay(savedValue) : savedValue
+                ) : (
+                  <span className="text-muted">Non renseigné</span>
+                )}
               </p>
             </div>
             <button

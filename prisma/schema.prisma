@@ -456,6 +456,9 @@ model Customer {
   updatedAt            DateTime  @default(now()) @updatedAt
   firstName            String?
   lastName             String?
+  // Optional date of birth. Only editable from the account dashboard — never
+  // asked during checkout account creation.
+  birthday             DateTime? @db.Date
 
   // ── Admin-managed account state (Customer Management) ─────────────────────
   // Operational account status set by admins. "active" (default) | "disabled"
