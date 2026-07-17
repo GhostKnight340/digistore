@@ -495,7 +495,7 @@ function MappingForm({
       <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <FormField label={supplier === "reloadly" ? "Product ID Reloadly" : "Card / Offer / Key ID"}>
           <input
-            className="input h-8 text-xs"
+            className="input h-8 py-0 text-xs"
             value={form.supplierProductId}
             onChange={(e) => patch({ supplierProductId: e.target.value })}
             placeholder={supplier === "reloadly" ? "ex. 18681" : "ex. card_10usd"}
@@ -504,7 +504,7 @@ function MappingForm({
         {supplier === "fazercards" && (
           <FormField label="Category / Game ID">
             <input
-              className="input h-8 text-xs"
+              className="input h-8 py-0 text-xs"
               value={form.supplierCategoryId ?? ""}
               onChange={(e) => patch({ supplierCategoryId: e.target.value || null })}
               placeholder="ex. gc_steam_1"
@@ -513,14 +513,14 @@ function MappingForm({
         )}
         <FormField label="Nom produit fournisseur">
           <input
-            className="input h-8 text-xs"
+            className="input h-8 py-0 text-xs"
             value={form.supplierProductName ?? ""}
             onChange={(e) => patch({ supplierProductName: e.target.value || null })}
           />
         </FormField>
         <FormField label="Région fournisseur">
           <input
-            className="input h-8 text-xs"
+            className="input h-8 py-0 text-xs"
             value={form.supplierRegion ?? ""}
             onChange={(e) => patch({ supplierRegion: e.target.value.toUpperCase() || null })}
             placeholder="ex. US"
@@ -528,7 +528,7 @@ function MappingForm({
         </FormField>
         <FormField label="Dénomination">
           <input
-            className="input h-8 text-xs"
+            className="input h-8 py-0 text-xs"
             type="number"
             value={form.faceValue ?? ""}
             onChange={(e) => patch({ faceValue: e.target.value === "" ? null : Number(e.target.value) })}
@@ -536,7 +536,7 @@ function MappingForm({
         </FormField>
         <FormField label="Devise dénomination">
           <input
-            className="input h-8 text-xs"
+            className="input h-8 py-0 text-xs"
             value={form.faceCurrency ?? ""}
             onChange={(e) => patch({ faceCurrency: e.target.value.toUpperCase() || null })}
             placeholder="USD"
@@ -544,7 +544,7 @@ function MappingForm({
         </FormField>
         <FormField label="Coût fournisseur">
           <input
-            className="input h-8 text-xs"
+            className="input h-8 py-0 text-xs"
             type="number"
             step="0.01"
             value={form.costAmount ?? ""}
@@ -553,7 +553,7 @@ function MappingForm({
         </FormField>
         <FormField label="Devise du coût">
           <input
-            className="input h-8 text-xs"
+            className="input h-8 py-0 text-xs"
             value={form.costCurrency ?? ""}
             onChange={(e) => patch({ costCurrency: e.target.value.toUpperCase() || null })}
             placeholder="USD"
@@ -653,14 +653,14 @@ function ReloadlyPicker({
       </p>
       <div className="mt-1.5 flex flex-wrap gap-2">
         <input
-          className="input h-8 flex-1 text-xs"
+          className="input h-8 py-0 flex-1 text-xs"
           placeholder="ex. Steam, Google Play…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void search()}
         />
         <input
-          className="input h-8 w-20 text-xs"
+          className="input h-8 py-0 w-20 text-xs"
           placeholder="Pays"
           maxLength={2}
           value={country}
@@ -750,7 +750,7 @@ function FazerCardsPicker({
         Catalogue FazerCards (nécessite la clé API)
       </p>
       <div className="mt-1.5 flex flex-wrap gap-2">
-        <select className="input h-8 w-40 text-xs" value={kind} onChange={(e) => onKind(e.target.value)}>
+        <select className="input h-8 py-0 w-40 text-xs" value={kind} onChange={(e) => onKind(e.target.value)}>
           {FAZERCARDS_KINDS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -758,7 +758,7 @@ function FazerCardsPicker({
           ))}
         </select>
         <select
-          className="input h-8 flex-1 text-xs"
+          className="input h-8 py-0 flex-1 text-xs"
           value={categoryId ?? ""}
           onChange={(e) => onCategory(e.target.value || null)}
           disabled={loadingCatalog || categories.length === 0}

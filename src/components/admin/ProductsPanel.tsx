@@ -618,7 +618,7 @@ export default function ProductsPanel() {
           {/* Approvisionnement filter (supply summaries are computed server-side). */}
           <div className="border-b border-border px-4 py-2">
             <select
-              className="input h-8 w-full text-xs"
+              className="input h-8 py-0 w-full text-xs"
               value={supplyFilter}
               onChange={(e) => setSupplyFilter(e.target.value)}
               aria-label="Filtrer par approvisionnement"

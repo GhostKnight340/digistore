@@ -78,7 +78,7 @@ export default function SupplierLogsView({
         <FilterField label="Du">
           <input
             type="date"
-            className="input h-9 text-xs"
+            className="input h-9 py-0 text-xs"
             value={filters.from ?? ""}
             onChange={(e) => apply({ from: e.target.value || undefined })}
           />
@@ -86,14 +86,14 @@ export default function SupplierLogsView({
         <FilterField label="Au">
           <input
             type="date"
-            className="input h-9 text-xs"
+            className="input h-9 py-0 text-xs"
             value={filters.to ?? ""}
             onChange={(e) => apply({ to: e.target.value || undefined })}
           />
         </FilterField>
         <FilterField label="Résultat">
           <select
-            className="input h-9 text-xs"
+            className="input h-9 py-0 text-xs"
             value={filters.result ?? ""}
             onChange={(e) => apply({ result: (e.target.value as SupplierLogFilters["result"]) || "" })}
           >
@@ -104,7 +104,7 @@ export default function SupplierLogsView({
         </FilterField>
         <FilterField label="Type">
           <select
-            className="input h-9 text-xs"
+            className="input h-9 py-0 text-xs"
             value={filters.requestType ?? ""}
             onChange={(e) => apply({ requestType: e.target.value || undefined })}
           >
@@ -117,7 +117,7 @@ export default function SupplierLogsView({
         </FilterField>
         <FilterField label="Produit">
           <input
-            className="input h-9 text-xs"
+            className="input h-9 py-0 text-xs"
             placeholder="Filtrer par produit…"
             defaultValue={filters.product ?? ""}
             onKeyDown={(e) => {
