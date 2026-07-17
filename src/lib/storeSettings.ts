@@ -612,6 +612,29 @@ const NAVIGATOR_TIP_TYPES: NavigatorTipType[] = [
 ];
 const REVIEW_STATUSES: ReviewStatus[] = ["approved", "pending", "hidden"];
 
+/**
+ * Per-template merge of stored email templates over the defaults. A stored
+ * subject/body only wins when it's a non-empty string; a subject equal to the
+ * raw template key (an old bug that leaked keys like
+ * "checkout_email_verification" into real inbox subjects) is treated as
+ * missing so the default subject is used instead.
+ */
+function mergeEmailTemplates(stored: unknown): StoreSettings["emailTemplates"] {
+  const merged = { ...defaultStoreSettings.emailTemplates };
+  if (!isObject(stored)) return merged;
+  for (const [key, raw] of Object.entries(stored)) {
+    if (!isObject(raw)) continue;
+    const fallback = merged[key] ?? { subject: key, body: "" };
+    const subject = str(raw.subject).trim();
+    const body = str(raw.body);
+    merged[key] = {
+      subject: subject && subject !== key ? subject : fallback.subject,
+      body: body.trim() ? body : fallback.body,
+    };
+  }
+  return merged;
+}
+
 export function mergeStoreSettings(value: unknown): StoreSettings {
   if (!isObject(value)) return defaultStoreSettings;
 
@@ -760,12 +783,7 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
     featuredProductIds: Array.isArray(value.featuredProductIds)
       ? value.featuredProductIds.filter((id): id is string => typeof id === "string")
       : defaultStoreSettings.featuredProductIds,
-    emailTemplates: isObject(value.emailTemplates)
-      ? {
-          ...defaultStoreSettings.emailTemplates,
-          ...(value.emailTemplates as StoreSettings["emailTemplates"]),
-        }
-      : defaultStoreSettings.emailTemplates,
+    emailTemplates: mergeEmailTemplates(value.emailTemplates),
     legalPages: isObject(value.legalPages)
       ? {
           ...defaultStoreSettings.legalPages,
