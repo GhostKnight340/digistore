@@ -815,6 +815,62 @@ model DeliveredCode {
   @@index([orderId])
 }
 
+// ── Supplier management ───────────────────────────────────────────────────
+// One row per fulfillment supplier (slug matches the code registry in
+// src/lib/suppliers/registry.ts — "reloadly" | "fazercards" | …). Stores ONLY
+// operational state; static metadata (name, logo, description, capabilities)
+// lives in code so adding a supplier is one provider file + one registry
+// entry. Rows are created lazily on first admin access.
+model Supplier {
+  id                 String    @id // registry slug
+  // Kill switch: a disabled supplier is refused by deliverOrder and greyed
+  // out in the admin. Never flipped automatically.
+  enabled            Boolean   @default(true)
+  lastSuccessAt      DateTime?
+  lastFailureAt      DateTime?
+  // Last failure's admin-safe message (never raw payloads/credentials).
+  lastFailureMessage String?
+  // Last explicit "Test Connection" run (success or failure).
+  lastCheckedAt      DateTime?
+  // Cached wallet balance from the last refresh, for the list page.
+  balanceAmount      String?
+  balanceCurrency    String?
+  balanceUpdatedAt   DateTime?
+  // Last catalog/cost sync (set by importer/pricing sync where applicable).
+  lastSyncAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  logs SupplierLog[]
+}
+
+// Per-call operational log for supplier APIs: purchases at delivery time,
+// connection tests, balance refreshes. Deliberately stores NO request/response
+// payloads (codes, credentials, customer data) — only outcome metadata safe to
+// show any admin.
+model SupplierLog {
+  id             String   @id @default(cuid())
+  supplierId     String
+  // "purchase" | "health_check" | "balance" | "status_poll"
+  requestType    String
+  ok             Boolean
+  responseTimeMs Int?
+  // Ghost order context (purchase logs only).
+  orderId        String?
+  productName    String?
+  // Provider-side order/transaction reference.
+  providerRef    String?
+  // Admin-safe error message (French), never a raw stack trace.
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId, createdAt])
+  @@index([supplierId, requestType, createdAt])
+  @@index([supplierId, ok, createdAt])
+}
+
 model EmailLog {
   id                String   @id @default(cuid())
   orderId           String?

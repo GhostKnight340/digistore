@@ -26,7 +26,6 @@ const EmailTemplatesPanel = lazy(() => import("@/components/admin/EmailTemplates
 const LegalPagesPanel = lazy(() => import("@/components/admin/LegalPagesPanel"));
 const MaintenancePanel = lazy(() => import("@/components/admin/MaintenancePanel"));
 const GtaPreorderPanel = lazy(() => import("@/components/admin/GtaPreorderPanel"));
-const SuppliersPanel = lazy(() => import("@/components/admin/SuppliersPanel"));
 const PricingPanel = lazy(() => import("@/components/admin/PricingPanel"));
 const ExpensesPanel = lazy(() => import("@/components/admin/ExpensesPanel"));
 const PromoCodesPanel = lazy(() => import("@/components/admin/PromoCodesPanel"));
@@ -130,7 +129,17 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
         />
       );
     case "suppliers":
-      return <SuppliersPanel />;
+      // Suppliers moved to the dedicated management area at /admin/suppliers
+      // (list, per-supplier detail with the Reloadly tooling, purchase logs).
+      return (
+        <RestoredPanel
+          title="Fournisseurs"
+          eyebrow="Section admin"
+          text="La gestion des fournisseurs dispose désormais de sa propre page."
+          href="/admin/suppliers"
+          linkLabel="Ouvrir les fournisseurs"
+        />
+      );
     case "refunds":
       return (
         <RestoredPanel

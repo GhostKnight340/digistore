@@ -17,22 +17,15 @@ import {
   notifyStockAlert,
 } from "@/lib/discord/notify";
 import { deliverOrderViaDiscord } from "@/lib/discord/dm";
-import { recordReloadlyCostReconciliation } from "@/lib/db/pricing";
-import { getPricingSettings } from "@/lib/db/pricing-settings";
 import type { ActionResult, AssignmentEntry, DeliveredFieldDTO, ItemAssignment } from "@/lib/dto";
 import {
-  placeGiftCardOrder,
-  getGiftCardOrderStatus,
-  getGiftCardOrderCards,
-  getGiftCardProduct,
-  validateReloadlyDenomination,
-  type ReloadlyGiftCardOrderCard,
-} from "@/lib/reloadly/operations";
+  getSupplierProvider,
+  type SupplierPurchaseResult,
+  type SupplierSlug,
+} from "@/lib/suppliers/registry";
+import { isSupplierEnabled, recordSupplierLog } from "@/lib/db/supplierManagement";
 
 const LOW_STOCK_THRESHOLD = 3;
-const RELOADLY_SENDER_NAME = "ghost.ma";
-const RELOADLY_STATUS_POLL_ATTEMPTS = 3;
-const RELOADLY_STATUS_POLL_DELAY_MS = 1500;
 
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
   await ensureDatabaseReady();
@@ -147,10 +140,14 @@ export async function deliverOrder(
               productId: true,
               variantId: true,
               quantity: true,
+              product: { select: { name: true } },
               variant: {
                 select: {
                   reloadlyProductId: true,
                   reloadlyCountryCode: true,
+                  fazercardsKind: true,
+                  fazercardsCategoryId: true,
+                  fazercardsOfferId: true,
                   faceValue: true,
                   faceCurrency: true,
                 },
@@ -179,72 +176,97 @@ export async function deliverOrder(
     }
   }
 
-  // Resolve any Reloadly-sourced entries BEFORE opening a DB transaction —
+  // Resolve any supplier-sourced entries BEFORE opening a DB transaction —
   // these are slow, fallible external HTTP calls (and real wallet spend) and
   // must never happen while a Postgres transaction is held open. If any
   // fails, we abort here with zero DB writes, same as the validation above.
+  // All provider specifics live behind the SupplierProvider registry; the
+  // only supplier-aware code here is the AssignmentEntry → provider mapping.
   //
-  // Note: this purchases from Reloadly per-entry, sequentially, with no
-  // persisted idempotency ledger. For an order with a single Reloadly item
-  // this is safe (all-or-nothing). If a delivery request spans multiple
-  // Reloadly-sourced items and a later one fails, re-clicking "Livrer" will
-  // re-purchase the earlier ones too — acceptable for the current
-  // single-supplier-item use case, not for high-volume multi-item orders.
-  const reloadlyResolutions = new Map<string, ResolvedReloadlyEntry>();
-  // Interim money-safety guard: with no persisted idempotency ledger (see note
-  // above), a partial failure across SEVERAL Reloadly purchases loses the
-  // already-paid codes and re-purchases them on retry. Until a ledger exists,
-  // refuse multi-code Reloadly deliveries — fulfil those entries manually
-  // (buy in the Reloadly dashboard, paste the codes) instead of risking a
-  // double wallet spend.
-  const reloadlyEntryCount = order.items.reduce(
+  // Interim money-safety guard: purchases run per-entry, sequentially, with
+  // no persisted idempotency ledger spanning entries. A partial failure
+  // across SEVERAL supplier purchases would re-purchase earlier ones on
+  // retry, so multi-code supplier deliveries are refused — fulfil those
+  // entries manually instead of risking a double wallet spend.
+  const providerEntryCount = order.items.reduce(
     (sum, item) =>
-      sum + filledEntriesForItem(item, assignments).filter((e) => e.reloadlyProductId).length,
+      sum +
+      filledEntriesForItem(item, assignments).filter(
+        (e) => e.reloadlyProductId || e.fazercards,
+      ).length,
     0,
   );
-  if (reloadlyEntryCount > 1) {
+  if (providerEntryCount > 1) {
     return {
       ok: false,
       error:
-        "Livraison Reloadly limitée à un code par envoi (protection anti double-achat). Livrez les codes supplémentaires manuellement.",
+        "Livraison fournisseur limitée à un code par envoi (protection anti double-achat). Livrez les codes supplémentaires manuellement.",
     };
   }
+
+  const providerResolutions = new Map<
+    string,
+    { slug: SupplierSlug; result: SupplierPurchaseResult }
+  >();
   for (const item of order.items) {
     const entries = filledEntriesForItem(item, assignments);
     for (let index = 0; index < entries.length; index += 1) {
-      const entry = entries[index];
-      if (!entry.reloadlyProductId) continue;
+      const request = providerRequestForEntry(entries[index], item);
+      if (!request.ok) return { ok: false, error: request.error };
+      if (!request.value) continue;
 
-      const variant = item.variant;
-      if (!variant || variant.reloadlyProductId !== entry.reloadlyProductId) {
-        return { ok: false, error: "Configuration Reloadly invalide pour cet article." };
-      }
-      if (!variant.reloadlyCountryCode) {
-        return { ok: false, error: "Code pays Reloadly manquant pour cette variante." };
-      }
-      if (variant.faceValue == null) {
-        return { ok: false, error: "Valeur faciale manquante pour la variante Reloadly." };
-      }
-
-      try {
-        const resolved = await resolveReloadlyEntry({
-          productId: variant.reloadlyProductId,
-          countryCode: variant.reloadlyCountryCode,
-          unitPrice: variant.faceValue,
-          currency: variant.faceCurrency,
-          customIdentifier: `${orderId}-${item.id}-${index}`,
-          recipientEmail: order.customerEmail,
-        });
-        reloadlyResolutions.set(`${item.id}:${index}`, resolved);
-      } catch (error) {
-        console.error("[deliverOrder:reloadly]", error);
+      const { slug, entryParams } = request.value;
+      const provider = getSupplierProvider(slug);
+      // A disabled supplier must NEVER be used for purchases — the admin
+      // switch in /admin/suppliers is enforced here, on the money path.
+      if (!(await isSupplierEnabled(slug))) {
         return {
           ok: false,
-          error:
-            error instanceof Error
-              ? `Échec de la commande Reloadly : ${error.message}`
-              : "Échec de la commande Reloadly.",
+          error: `${provider.name} est désactivé dans Fournisseurs — réactivez-le ou livrez ce code manuellement.`,
         };
+      }
+
+      const startedAt = Date.now();
+      try {
+        const result = await provider.purchase({
+          // Stable across retries: a re-clicked "Livrer" replays the SAME
+          // provider order (Idempotency-Key / customIdentifier) instead of
+          // spending the wallet twice.
+          idempotencyScope: `${orderId}-${item.id}-${index}`,
+          entryParams,
+          context: {
+            orderId,
+            customerEmail: order.customerEmail,
+            faceValue: item.variant?.faceValue ?? null,
+            faceCurrency: item.variant?.faceCurrency ?? "MAD",
+          },
+        });
+        providerResolutions.set(`${item.id}:${index}`, { slug, result });
+        void recordSupplierLog({
+          slug,
+          requestType: "purchase",
+          ok: true,
+          responseTimeMs: Date.now() - startedAt,
+          orderId,
+          productName: item.product?.name ?? null,
+          providerRef: result.providerRef,
+        });
+      } catch (error) {
+        console.error(`[deliverOrder:${slug}]`, error);
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "Erreur fournisseur inattendue.";
+        void recordSupplierLog({
+          slug,
+          requestType: "purchase",
+          ok: false,
+          responseTimeMs: Date.now() - startedAt,
+          orderId,
+          productName: item.product?.name ?? null,
+          errorMessage: message,
+        });
+        return { ok: false, error: `Échec de la commande ${provider.name} : ${message}` };
       }
     }
   }
@@ -272,6 +294,7 @@ export async function deliverOrder(
           let source: string | undefined;
           let reloadlyTransactionId: number | null = null;
           let reloadlyOrderId: number | null = null;
+          let fazercardsOrderId: string | null = null;
           let deliveryPayload: DeliveredFieldDTO[] | null = null;
 
           if (entry.digitalCodeId) {
@@ -313,16 +336,17 @@ export async function deliverOrder(
                 count: 1,
               });
             }
-          } else if (entry.reloadlyProductId) {
-            const resolved = reloadlyResolutions.get(`${item.id}:${index}`);
+          } else if (entry.reloadlyProductId || entry.fazercards) {
+            const resolved = providerResolutions.get(`${item.id}:${index}`);
             if (!resolved) {
-              throw new Error("Code Reloadly non résolu.");
+              throw new Error("Code fournisseur non résolu.");
             }
-            manualCode = resolved.primary;
-            source = "reloadly";
-            reloadlyTransactionId = resolved.transactionId;
-            reloadlyOrderId = resolved.reloadlyOrderId;
-            deliveryPayload = resolved.fields;
+            manualCode = resolved.result.primary;
+            source = resolved.slug;
+            reloadlyTransactionId = resolved.result.providerRefs.reloadlyTransactionId ?? null;
+            reloadlyOrderId = resolved.result.providerRefs.reloadlyOrderId ?? null;
+            fazercardsOrderId = resolved.result.providerRefs.fazercardsOrderId ?? null;
+            deliveryPayload = resolved.result.fields;
           } else {
             manualCode = entry.manualCode!.trim();
             // A manually-typed code must never be delivered to two different
@@ -352,6 +376,7 @@ export async function deliverOrder(
               ...(source ? { source } : {}),
               reloadlyTransactionId,
               reloadlyOrderId,
+              fazercardsOrderId,
               ...(deliveryPayload
                 ? { deliveryPayload: deliveryPayload as unknown as Prisma.InputJsonValue }
                 : {}),
@@ -422,18 +447,14 @@ export async function deliverOrder(
     // never throws, never affects the delivered order status (see dm.ts).
     void deliverOrderViaDiscord(orderId);
 
-    // §10 cost reconciliation — estimated (synced catalog) vs actual (Reloadly
-    // balanceInfo.cost). Append-only audit; never affects the delivered order,
-    // customer prices, or what the customer sees. Non-blocking.
-    for (const resolved of reloadlyResolutions.values()) {
-      void recordReloadlyCostReconciliation({
-        orderId,
-        reloadlyTransactionId: resolved.transactionId,
-        reloadlyProductId: resolved.reconciliation.reloadlyProductId,
-        recipientFaceValue: resolved.reconciliation.recipientFaceValue,
-        actualProviderCost: resolved.reconciliation.actualProviderCost,
-        currency: resolved.reconciliation.currency,
-      });
+    // Provider post-delivery hooks (e.g. Reloadly §10 cost reconciliation).
+    // Best-effort, append-only side effects; never affect the delivered order.
+    for (const { result } of providerResolutions.values()) {
+      try {
+        result.afterDelivered?.();
+      } catch (hookError) {
+        console.error("[deliverOrder:afterDelivered]", hookError);
+      }
     }
 
     void checkStockThresholds([...consumedByVariant.values()]);
@@ -460,148 +481,65 @@ function filledEntriesForItem(
 ): AssignmentEntry[] {
   const assignment = assignments.find((entry) => entry.orderItemId === item.id);
   return (assignment?.codes ?? [])
-    .filter((entry) => entry.digitalCodeId || entry.manualCode?.trim() || entry.reloadlyProductId)
+    .filter(
+      (entry) =>
+        entry.digitalCodeId ||
+        entry.manualCode?.trim() ||
+        entry.reloadlyProductId ||
+        entry.fazercards,
+    )
     .slice(0, item.quantity);
 }
 
-type ResolvedReloadlyEntry = {
-  /** Structured, per-card fields (code / pin / url) — never a malformed join. */
-  fields: DeliveredFieldDTO[];
-  /** Compact single-value representation kept on DeliveredCode.manualCode for the admin record. */
-  primary: string;
-  transactionId: number;
-  reloadlyOrderId: number | null;
-  /** For §10 cost reconciliation — captured from the order's balanceInfo. */
-  reconciliation: {
-    reloadlyProductId: number;
-    recipientFaceValue: number | null;
-    actualProviderCost: number;
-    currency: string;
-  };
-};
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function looksLikeUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value.trim());
-}
-
 /**
- * Normalizes Reloadly cards into labelled fields by meaning rather than
- * concatenating unrelated values into a malformed string like
- * "https://reloadly.com / 86125test". A URL-shaped cardNumber becomes a
- * redemption link (`url`); otherwise it is the redeem `code`. `pinCode`, when
- * present, is a separate PIN. Only fields that exist are set — payload shape is
- * not assumed to be uniform across products.
+ * Maps one AssignmentEntry onto a provider purchase request. This is the ONLY
+ * supplier-aware branch in fulfillment — everything past it goes through the
+ * SupplierProvider registry. Adding a supplier = add its discriminator here
+ * and its provider file in src/lib/suppliers/providers/.
  */
-function normalizeReloadlyCards(cards: ReloadlyGiftCardOrderCard[]): DeliveredFieldDTO[] {
-  return cards
-    .map((card) => {
-      const field: DeliveredFieldDTO = {};
-      const cardNumber = card.cardNumber?.trim();
-      const pinCode = card.pinCode?.trim();
-      if (cardNumber) {
-        if (looksLikeUrl(cardNumber)) field.url = cardNumber;
-        else field.code = cardNumber;
-      }
-      if (pinCode) field.pin = pinCode;
-      return field;
-    })
-    .filter((field) => field.code || field.pin || field.url);
-}
-
-/** Compact human-readable value for the admin record (never shown in emails). */
-function primaryDeliveryValue(fields: DeliveredFieldDTO[]): string {
-  return fields
-    .map((field) => field.url ?? field.code ?? field.pin ?? "")
-    .filter(Boolean)
-    .join("\n");
-}
-
-/**
- * Places one Reloadly order and retrieves its redeem code, retrying the
- * status check briefly if the order isn't immediately SUCCESSFUL (verified
- * live: a normal sandbox order returns SUCCESSFUL synchronously from
- * placeGiftCardOrder(), so this is a safety net, not the common path).
- */
-async function resolveReloadlyEntry(input: {
-  productId: number;
-  countryCode: string;
-  unitPrice: number;
-  currency: string;
-  customIdentifier: string;
-  recipientEmail: string;
-}): Promise<ResolvedReloadlyEntry> {
-  // Pre-flight: confirm the face value is an actually-offered denomination
-  // BEFORE spending from the wallet. This turns Reloadly's opaque
-  // "400 Invalid price" into a clear, actionable French message and avoids a
-  // wasted order attempt.
-  const product = await getGiftCardProduct(input.productId);
-  // FX table lets the validator accept a MAD-priced variant mapped to a
-  // USD/EUR product (cross-currency cost) while still failing when no
-  // conversion rate is configured. The Reloadly charge itself stays in the
-  // provider currency and unitPrice is passed through untouched (no margin).
-  const { fxRatesToMad } = await getPricingSettings();
-  const { ok, issues } = validateReloadlyDenomination(
-    product,
-    {
-      faceValue: input.unitPrice,
-      currency: input.currency,
-      countryCode: input.countryCode,
-    },
-    fxRatesToMad,
-  );
-  if (!ok) {
-    throw new Error(issues.join(" "));
+function providerRequestForEntry(
+  entry: AssignmentEntry,
+  item: {
+    variant: {
+      reloadlyProductId: number | null;
+      reloadlyCountryCode: string | null;
+      fazercardsCategoryId: string | null;
+      fazercardsOfferId: string | null;
+    } | null;
+  },
+):
+  | { ok: true; value: { slug: SupplierSlug; entryParams: Record<string, unknown> } | null }
+  | { ok: false; error: string } {
+  if (entry.reloadlyProductId) {
+    const variant = item.variant;
+    // The entry must match the variant’s CURRENT mapping — a stale admin tab
+    // pointing at a re-mapped variant must not buy the wrong product.
+    if (!variant || variant.reloadlyProductId !== entry.reloadlyProductId) {
+      return { ok: false, error: "Configuration Reloadly invalide pour cet article." };
+    }
+    return {
+      ok: true,
+      value: {
+        slug: "reloadly",
+        entryParams: {
+          reloadlyProductId: entry.reloadlyProductId,
+          reloadlyCountryCode: variant.reloadlyCountryCode,
+        },
+      },
+    };
   }
-
-  const order = await placeGiftCardOrder({
-    productId: input.productId,
-    countryCode: input.countryCode,
-    quantity: 1,
-    unitPrice: input.unitPrice,
-    customIdentifier: input.customIdentifier,
-    senderName: RELOADLY_SENDER_NAME,
-    recipientEmail: input.recipientEmail,
-  });
-
-  let status = order.status;
-  for (
-    let attempt = 0;
-    status !== "SUCCESSFUL" && status !== "FAILED" && attempt < RELOADLY_STATUS_POLL_ATTEMPTS;
-    attempt += 1
-  ) {
-    await sleep(RELOADLY_STATUS_POLL_DELAY_MS);
-    status = (await getGiftCardOrderStatus(order.transactionId)).status;
+  if (entry.fazercards) {
+    const variant = item.variant;
+    if (
+      !variant ||
+      variant.fazercardsCategoryId !== entry.fazercards.categoryId ||
+      variant.fazercardsOfferId !== entry.fazercards.offerId
+    ) {
+      return { ok: false, error: "Configuration FazerCards invalide pour cet article." };
+    }
+    return { ok: true, value: { slug: "fazercards", entryParams: { fazercards: entry.fazercards } } };
   }
-
-  if (status !== "SUCCESSFUL") {
-    throw new Error(`Commande Reloadly non aboutie (statut: ${status}).`);
-  }
-
-  const cards = await getGiftCardOrderCards(order.transactionId);
-  const fields = normalizeReloadlyCards(cards);
-  const primary = primaryDeliveryValue(fields);
-  if (fields.length === 0 || !primary) {
-    throw new Error("Reloadly n’a retourné aucun code pour cette commande.");
-  }
-
-  return {
-    fields,
-    primary,
-    transactionId: order.transactionId,
-    reloadlyOrderId: null,
-    reconciliation: {
-      reloadlyProductId: input.productId,
-      recipientFaceValue: input.unitPrice,
-      // balanceInfo.cost is the authoritative wallet-currency spend for this
-      // order; fall back to the transaction fee/amount only if absent.
-      actualProviderCost: order.balanceInfo?.cost ?? order.amount ?? 0,
-      currency: order.balanceInfo?.currencyCode ?? order.currencyCode,
-    },
-  };
+  return { ok: true, value: null };
 }
 
 /**

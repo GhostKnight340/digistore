@@ -1002,6 +1002,99 @@ export interface ReloadlyMetricsDTO {
   range: SupplierTimeRange;
 }
 
+// ─── Supplier management DTOs (/admin/suppliers) ─────────────────────────────
+
+/** 🟢 healthy · 🟡 warning · 🔴 offline · plus admin states. */
+export type SupplierHealthLevel =
+  | "healthy"
+  | "warning"
+  | "offline"
+  | "disabled"
+  | "unconfigured";
+
+/** One supplier tile on the /admin/suppliers list page. */
+export interface SupplierCardDTO {
+  slug: string;
+  name: string;
+  description: string;
+  accentColor: string;
+  initials: string;
+  enabled: boolean;
+  configured: boolean;
+  environment: "sandbox" | "live" | null;
+  supportsBalance: boolean;
+  health: SupplierHealthLevel;
+  balance: { amount: string; currency: string; updatedAt: string } | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastFailureMessage: string | null;
+  lastCheckedAt: string | null;
+  lastSyncAt: string | null;
+  /** Purchase outcomes over the trailing 7 days, for the list-page glance. */
+  recentPurchases: { ok: number; failed: number };
+}
+
+export interface SupplierStatsDTO {
+  purchasesOk: number;
+  purchasesFailed: number;
+  /** Percentage 0–100, null when there are no purchases yet. */
+  successRatePct: number | null;
+  avgResponseMs: number | null;
+  /** DeliveredCode rows attributed to this supplier (all time). */
+  totalDelivered: number;
+}
+
+export interface SupplierDetailDTO extends SupplierCardDTO {
+  /** Env-var names + whether each is set — values are NEVER exposed. */
+  credentials: { name: string; set: boolean }[];
+  stats: SupplierStatsDTO;
+}
+
+export interface SupplierTestResultDTO {
+  ok: boolean;
+  message: string;
+  responseTimeMs: number;
+  checkedAt: string;
+  details: { label: string; value: string }[];
+}
+
+export interface SupplierBalanceResultDTO {
+  ok: boolean;
+  balance: { amount: string; currency: string; updatedAt: string } | null;
+  /** Failure reason, or "not supported" notice. */
+  message: string | null;
+}
+
+export interface SupplierLogRowDTO {
+  id: string;
+  createdAt: string;
+  requestType: string;
+  ok: boolean;
+  responseTimeMs: number | null;
+  orderId: string | null;
+  publicOrderNumber: string | null;
+  productName: string | null;
+  providerRef: string | null;
+  errorMessage: string | null;
+}
+
+export interface SupplierLogFilters {
+  /** ISO date (YYYY-MM-DD) bounds, inclusive. */
+  from?: string;
+  to?: string;
+  result?: "ok" | "failed" | "";
+  requestType?: string;
+  product?: string;
+  page?: number;
+}
+
+export interface SupplierLogsPageDTO {
+  rows: SupplierLogRowDTO[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 /** Read-only FazerCards connection/auth test result (admin Fournisseurs). */
 export interface FazerCardsHealthDTO {
   ok: boolean;

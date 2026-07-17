@@ -41,6 +41,8 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   // in-place dashboard panel.
   customers: "/admin/clients",
   feedback: "/admin/feedback",
+  // Suppliers is a full management area (list + per-supplier detail + logs).
+  suppliers: "/admin/suppliers",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
