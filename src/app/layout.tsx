@@ -14,6 +14,7 @@ import Footer from "@/components/Footer";
 import SupportPill from "@/components/support/SupportPill";
 import FeedbackButton from "@/components/feedback/FeedbackButton";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
 import { getSiteUrl } from "@/lib/siteUrl";
@@ -183,6 +184,7 @@ export default async function RootLayout({
           </ProductCatalogProvider>
         </StoreSettingsProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
