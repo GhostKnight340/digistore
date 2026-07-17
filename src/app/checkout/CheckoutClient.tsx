@@ -8,7 +8,6 @@ import { useProductCatalog } from "@/context/ProductCatalogContext";
 import PaymentBrandMark from "@/components/PaymentBrandMark";
 import { formatDH } from "@/lib/format";
 import { createOrderAction } from "@/app/actions/orders";
-import { registerAndCreateOrderAction } from "@/app/actions/checkoutAuth";
 import { AccountAccessSection, AccountVerifyPanel, type AccountGateState } from "./AccountAccessSection";
 import { getPaymentConfigAction } from "@/app/actions/payments";
 import { validatePromoCodeAction } from "@/app/actions/promo";
@@ -171,20 +170,19 @@ export default function CheckoutClient({
   const phoneValid = phoneDigits.length >= 9;
   const needsRegion = restrictedItems.length > 0;
 
-  // Account gating. An authenticated customer must be email-verified; a new
-  // customer must finish the inline account form AND verify their email. In the
-  // not-logged-in "login" sub-mode nothing can be placed until they log in
-  // (which refreshes into the authenticated view).
-  const accountReady = isLoggedIn
-    ? accountVerified
-    : accountGate?.mode === "register" && accountGate.ready === true;
+  // Account gating. An authenticated customer must be email-verified. A new
+  // customer must ACTUALLY create their account first ("Créer mon compte", which
+  // creates the account, logs them in, and refreshes into the authenticated
+  // view) — merely filling and verifying the register form is not enough. So
+  // while not logged in the order can never be placed; the CTA stays disabled
+  // until a real account exists.
+  const accountReady = isLoggedIn ? accountVerified : false;
   const accountIncomplete: string | null = isLoggedIn
     ? accountVerified
       ? null
       : "Vérifiez votre adresse e-mail pour continuer vers le paiement."
-    : accountReady
-      ? null
-      : accountGate?.incompleteReason ?? "Créez votre compte pour continuer vers le paiement.";
+    : accountGate?.incompleteReason ??
+      "Créez votre compte pour continuer vers le paiement.";
 
   const canPlace = accountReady && phoneValid && (!needsRegion || regionConfirmed);
   // Ordered so the CTA surfaces the first blocking step: account → phone → region.
@@ -243,6 +241,18 @@ export default function CheckoutClient({
     e.preventDefault();
     setError("");
 
+    // A new customer must create their account first ("Créer mon compte"), which
+    // logs them in and refreshes into the authenticated checkout. The order is
+    // never placed from the not-logged-in state — the CTA stays disabled until a
+    // real account exists, and this guard also covers a keyboard Enter-submit.
+    if (!isLoggedIn) {
+      setError(
+        accountGate?.incompleteReason ??
+          "Créez votre compte pour continuer vers le paiement.",
+      );
+      return;
+    }
+
     if (!phoneValid) {
       setError("Veuillez saisir un numéro de téléphone valide.");
       return;
@@ -253,42 +263,6 @@ export default function CheckoutClient({
     }
 
     const items = cart.map((i) => ({ productId: i.productId, quantity: i.quantity }));
-
-    // ── New customer: register + create the order atomically on the server. ──
-    if (!isLoggedIn) {
-      if (!accountGate || accountGate.mode !== "register" || !accountGate.ready) {
-        setError(accountGate?.incompleteReason ?? "Veuillez compléter la création de votre compte.");
-        return;
-      }
-      setSubmitting(true);
-      try {
-        const res = await registerAndCreateOrderAction({
-          name: accountGate.values.name,
-          email: accountGate.values.email,
-          password: accountGate.values.password,
-          confirmPassword: accountGate.values.confirmPassword,
-          acceptTerms: accountGate.values.acceptTerms,
-          phone: `+212 ${phoneLocal.trim()}`,
-          items,
-          promoCode: promo ? promo.code : undefined,
-        });
-        if (!res.ok) {
-          setSubmitting(false);
-          if (res.accountExists) {
-            setError("Un compte peut déjà être associé à cette adresse. Connectez-vous pour continuer.");
-            return;
-          }
-          setError(res.error ?? "Une erreur est survenue. Veuillez réessayer.");
-          return;
-        }
-        clearCart();
-        router.push(`/payment/${res.order.accessToken ?? res.order.publicOrderPathSegment}`);
-      } catch {
-        setSubmitting(false);
-        setError("Une erreur est survenue. Veuillez réessayer.");
-      }
-      return;
-    }
 
     // ── Authenticated customer. Verification is enforced server-side too. ──
     if (!accountVerified) {
