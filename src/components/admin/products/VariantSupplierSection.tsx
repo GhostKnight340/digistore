@@ -215,11 +215,34 @@ export default function VariantSupplierSection({ variantId }: { variantId: strin
             setEditing(null);
           }}
           onSave={async (input) => {
-            await run(editing ? "Mapping mis à jour." : "Mapping ajouté.", () =>
-              saveVariantMappingAction(input),
-            );
-            setAdding(null);
-            setEditing(null);
+            setBusy(true);
+            setMessage(null);
+            try {
+              const result = await saveVariantMappingAction(input);
+              if (!result.ok) {
+                setMessage({ ok: false, text: result.error ?? "Enregistrement impossible." });
+              } else {
+                // Mapping is auto-vérifié on save — surface the check result
+                // (and the automatic manual-delivery switch-off) directly.
+                const parts = [editing ? "Mapping mis à jour." : "Mapping ajouté."];
+                if (result.validation) {
+                  parts.push(
+                    result.validation.ok
+                      ? `Vérifié : ${result.validation.message}`
+                      : `Vérification échouée : ${result.validation.message}`,
+                  );
+                }
+                if (result.manualDisabled) {
+                  parts.push("Livraison manuelle désactivée automatiquement (fournisseur automatique en place).");
+                }
+                setMessage({ ok: result.validation ? result.validation.ok : true, text: parts.join(" ") });
+                setAdding(null);
+                setEditing(null);
+              }
+              await refresh();
+            } finally {
+              setBusy(false);
+            }
           }}
         />
       )}

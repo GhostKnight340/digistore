@@ -39,7 +39,7 @@ export async function getVariantSupplyAction(variantId: string): Promise<Variant
 
 export async function saveVariantMappingAction(
   input: SaveVariantMappingInput,
-): Promise<ActionResult> {
+): Promise<ActionResult & { validation?: MappingValidationResultDTO; manualDisabled?: boolean }> {
   await requireAdminCustomer();
   return saveVariantMapping(input);
 }

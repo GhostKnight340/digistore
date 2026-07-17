@@ -223,7 +223,9 @@ function sanitizeNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-export async function saveVariantMapping(input: SaveVariantMappingInput): Promise<ActionResult> {
+export async function saveVariantMapping(
+  input: SaveVariantMappingInput,
+): Promise<ActionResult & { validation?: MappingValidationResultDTO; manualDisabled?: boolean }> {
   await ensureDatabaseReady();
   if (!isSupplierSlug(input.supplier)) return { ok: false, error: "Fournisseur inconnu." };
   const supplier: SupplierSlug = input.supplier;
@@ -262,6 +264,9 @@ export async function saveVariantMapping(input: SaveVariantMappingInput): Promis
   };
 
   try {
+    let mappingId: string;
+    let isCreate = false;
+
     if (input.id) {
       // Edit: the mapping must exist AND belong to the claimed variant —
       // the supplier itself is immutable on edit (delete + recreate instead).
@@ -284,27 +289,59 @@ export async function saveVariantMapping(input: SaveVariantMappingInput): Promis
             : {}),
         },
       });
-      return { ok: true };
+      mappingId = input.id;
+    } else {
+      // Create: next priority slot; the DB unique (variantId, supplier) blocks
+      // duplicate supplier mappings even under concurrent creates.
+      const created = await prisma.$transaction(async (tx) => {
+        const max = await tx.variantSupplierMapping.aggregate({
+          where: { variantId: input.variantId },
+          _max: { priority: true },
+        });
+        return tx.variantSupplierMapping.create({
+          data: {
+            variantId: input.variantId,
+            supplier,
+            priority: Math.min((max._max.priority ?? 0) + 1, MAX_PRIORITY),
+            ...data,
+            ...(data.costAmount != null ? { costUpdatedAt: new Date() } : {}),
+          },
+        });
+      });
+      mappingId = created.id;
+      isCreate = true;
     }
 
-    // Create: next priority slot; the DB unique (variantId, supplier) blocks
-    // duplicate supplier mappings even under concurrent creates.
-    await prisma.$transaction(async (tx) => {
-      const max = await tx.variantSupplierMapping.aggregate({
+    // Auto-verify on save so the admin never has to click "Vérifier" as a
+    // separate step. Best-effort: a provider/network error just records a
+    // failed validation on the mapping (surfaced in the UI) — the save itself
+    // still succeeds.
+    let validation: MappingValidationResultDTO | undefined;
+    try {
+      validation = await validateVariantMapping(mappingId);
+    } catch (validationError) {
+      console.error("[variantMappings:auto-validate]", validationError);
+    }
+
+    // When a variant's FIRST supplier mapping validates OK, automatic
+    // fulfillment now covers it — so default manual delivery OFF (the admin
+    // can always re-enable it, and can still deliver a manual code by hand at
+    // delivery time; this flag only drives the readiness summary).
+    let manualDisabled = false;
+    if (isCreate && validation?.ok) {
+      const count = await prisma.variantSupplierMapping.count({
         where: { variantId: input.variantId },
-        _max: { priority: true },
       });
-      await tx.variantSupplierMapping.create({
-        data: {
-          variantId: input.variantId,
-          supplier,
-          priority: Math.min((max._max.priority ?? 0) + 1, MAX_PRIORITY),
-          ...data,
-          ...(data.costAmount != null ? { costUpdatedAt: new Date() } : {}),
-        },
-      });
-    });
-    return { ok: true };
+      if (count === 1) {
+        const updated = await prisma.productVariant.updateMany({
+          where: { id: input.variantId, manualFulfillmentAllowed: true },
+          data: { manualFulfillmentAllowed: false },
+        });
+        manualDisabled = updated.count > 0;
+      }
+    }
+
+    return { ok: true, validation, manualDisabled };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return { ok: false, error: "Un mapping existe déjà pour ce fournisseur sur cette variante." };
