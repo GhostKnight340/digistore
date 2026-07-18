@@ -19,6 +19,7 @@ import {
   getGuideEditorOptionsAction,
   reorderGuidesAction,
   saveGuideAction,
+  seedActivationGuidesAction,
   setGuideArchivedAction,
 } from "@/app/actions/guides";
 import type {
@@ -86,6 +87,7 @@ export default function GuidesPanel() {
   const [draft, setDraft] = useState<AdminGuideDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState<string>("");
   const [message, setMessage] = useState<string>("");
 
@@ -123,6 +125,35 @@ export default function GuidesPanel() {
     setError("");
     setMessage("");
     setDraft({ ...row });
+  }
+
+  async function onSeedLibrary() {
+    if (
+      !window.confirm(
+        "Générer la bibliothèque de guides d'activation (Steam, PlayStation, Netflix…) ? " +
+          "Les guides existants portant le même nom seront mis à jour.",
+      )
+    ) {
+      return;
+    }
+    setSeeding(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await seedActivationGuidesAction();
+      if (result.ok) {
+        setMessage(
+          `Bibliothèque publiée : ${result.created ?? 0} créé(s), ${result.updated ?? 0} mis à jour.`,
+        );
+        await load();
+      } else {
+        setError(result.error || "Échec de la génération.");
+      }
+    } catch {
+      setError("Échec de la génération de la bibliothèque.");
+    } finally {
+      setSeeding(false);
+    }
   }
 
   async function onSave() {
@@ -217,9 +248,20 @@ export default function GuidesPanel() {
             Pages de contenu client publiées sur /guides.
           </p>
         </div>
-        <button type="button" className="btn-primary" onClick={startCreate}>
-          Nouveau guide
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={onSeedLibrary}
+            disabled={seeding}
+            title="Créer/mettre à jour les guides d'activation standard (Steam, PlayStation, Netflix…)"
+          >
+            {seeding ? "Génération…" : "Générer la bibliothèque"}
+          </button>
+          <button type="button" className="btn-primary" onClick={startCreate}>
+            Nouveau guide
+          </button>
+        </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
