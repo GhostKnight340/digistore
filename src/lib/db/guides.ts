@@ -16,6 +16,7 @@ import {
   normalizeGuideSteps,
   normalizeGuideTroubleshooting,
   normalizeGuideLabels,
+  isValidGuideUrl,
   defaultGuideNavigatorTip,
 } from "@/lib/guide";
 import {
@@ -306,6 +307,17 @@ function toAdminDTO(
     relatedGuideIds: row.relatedGuideIds ?? [],
     aliases: row.aliases ?? [],
     expectedProducts: row.expectedProducts ?? [],
+    difficulty: normalizeGuideDifficulty(row.difficulty),
+    durationMinutes: row.durationMinutes,
+    supportedRegions: row.supportedRegions ?? [],
+    supportedDevices: row.supportedDevices ?? [],
+    officialUrl: row.officialUrl ?? "",
+    vendor: row.vendor ?? "",
+    verifiedAt: row.verifiedAt?.toISOString() ?? null,
+    verifiedBy: row.verifiedBy ?? "",
+    requirements: row.requirements ?? [],
+    steps: normalizeGuideSteps(row.steps),
+    troubleshooting: normalizeGuideTroubleshooting(row.troubleshooting),
     coverage,
     published: row.published,
     publiclyVisible: row.publiclyVisible,
@@ -532,6 +544,24 @@ export async function saveGuide(
     ).slice(0, 12),
     aliases: normalizeGuideAliases(input.aliases),
     expectedProducts: normalizeExpectedProducts(input.expectedProducts),
+    difficulty: normalizeGuideDifficulty(input.difficulty),
+    durationMinutes:
+      Number.isFinite(input.durationMinutes) && (input.durationMinutes ?? 0) > 0
+        ? Math.trunc(input.durationMinutes as number)
+        : null,
+    supportedRegions: normalizeGuideLabels(input.supportedRegions, 6),
+    supportedDevices: normalizeGuideLabels(input.supportedDevices, 6),
+    officialUrl: isValidGuideUrl(input.officialUrl.trim())
+      ? input.officialUrl.trim().slice(0, 500)
+      : null,
+    vendor: input.vendor.trim().slice(0, 60) || null,
+    verifiedAt: input.verifiedAt ? new Date(input.verifiedAt) : null,
+    verifiedBy: input.verifiedBy.trim().slice(0, 60),
+    requirements: normalizeGuideLabels(input.requirements, 12).map((r) => r.slice(0, 200)),
+    steps: normalizeGuideSteps(input.steps) as unknown as Prisma.InputJsonValue,
+    troubleshooting: normalizeGuideTroubleshooting(
+      input.troubleshooting,
+    ) as unknown as Prisma.InputJsonValue,
     published: nowPublished,
     // Default to visible for new guides so publishing behaves as expected.
     publiclyVisible: input.publiclyVisible !== false,
@@ -628,6 +658,19 @@ export async function duplicateGuide(
         })),
       },
       expectedProducts: source.expectedProducts,
+      difficulty: source.difficulty,
+      durationMinutes: source.durationMinutes,
+      supportedRegions: source.supportedRegions,
+      supportedDevices: source.supportedDevices,
+      officialUrl: source.officialUrl,
+      vendor: source.vendor,
+      verifiedAt: source.verifiedAt,
+      verifiedBy: source.verifiedBy,
+      requirements: source.requirements,
+      steps: (source.steps ?? undefined) as Prisma.InputJsonValue | undefined,
+      troubleshooting: (source.troubleshooting ?? undefined) as
+        | Prisma.InputJsonValue
+        | undefined,
       slug,
       title: `${source.title} (copie)`,
       summary: source.summary,

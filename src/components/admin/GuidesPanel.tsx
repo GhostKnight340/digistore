@@ -26,6 +26,7 @@ import {
 import { summarizeCoverage } from "@/lib/guides/coverage";
 import { CoverageSummaryLine, CoverageDetails } from "./GuideCoverage";
 import GuideProductsSection from "./GuideProductsSection";
+import GuideArticleEditor from "./GuideArticleEditor";
 import type {
   AdminGuideDTO,
   CollectionProductOptionDTO,
@@ -139,6 +140,17 @@ function emptyDraft(): AdminGuideDTO {
     relatedGuideIds: [],
     aliases: [],
     expectedProducts: [],
+    difficulty: "",
+    durationMinutes: null,
+    supportedRegions: [],
+    supportedDevices: [],
+    officialUrl: "",
+    vendor: "",
+    verifiedAt: null,
+    verifiedBy: "",
+    requirements: [],
+    steps: [],
+    troubleshooting: [],
     coverage: summarizeCoverage([], []),
     published: false,
     publiclyVisible: true,
@@ -321,6 +333,17 @@ export default function GuidesPanel() {
         relatedGuideIds: draft.relatedGuideIds,
         aliases: draft.aliases,
         expectedProducts: draft.expectedProducts,
+        difficulty: draft.difficulty,
+        durationMinutes: draft.durationMinutes,
+        supportedRegions: draft.supportedRegions,
+        supportedDevices: draft.supportedDevices,
+        officialUrl: draft.officialUrl,
+        vendor: draft.vendor,
+        verifiedAt: draft.verifiedAt,
+        verifiedBy: draft.verifiedBy,
+        requirements: draft.requirements,
+        steps: draft.steps,
+        troubleshooting: draft.troubleshooting,
         published: draft.published,
         publiclyVisible: draft.publiclyVisible,
         featured: draft.featured,
@@ -878,6 +901,24 @@ function GuideEditor({
             </div>
           )}
         </div>
+
+        {/* Article template fields (hero meta, requirements, steps, dépannage) */}
+        <GuideArticleEditor
+          difficulty={draft.difficulty}
+          durationMinutes={draft.durationMinutes}
+          supportedRegions={draft.supportedRegions}
+          supportedDevices={draft.supportedDevices}
+          officialUrl={draft.officialUrl}
+          vendor={draft.vendor}
+          verifiedAt={draft.verifiedAt}
+          verifiedBy={draft.verifiedBy}
+          requirements={draft.requirements}
+          steps={draft.steps}
+          troubleshooting={draft.troubleshooting}
+          onUpdate={(key, value) =>
+            onUpdate(key as keyof AdminGuideDTO, value as AdminGuideDTO[keyof AdminGuideDTO])
+          }
+        />
 
         {/* Produits concernés — real catalog links + expected-products list */}
         <GuideProductsSection

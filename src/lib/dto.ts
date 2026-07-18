@@ -10,6 +10,8 @@ import type {
   GuideBlock,
   GuideFaqItem,
   GuideNavigatorTip,
+  GuideStep,
+  GuideTroubleshootingItem,
 } from "./guide";
 import type { GuideCoverageSummary } from "./guides/coverage";
 
@@ -601,6 +603,21 @@ export interface AdminGuideDTO {
   productLinks: GuideProductLinkDTO[];
   relatedGuideIds: string[];
   aliases: string[];
+  // ── Article template fields (design handoff) ────────────────────────────
+  /** "facile" | "moyen" | "avance" | "" (unset → no chip). */
+  difficulty: string;
+  /** Authored minutes; null → article falls back to the derived estimate. */
+  durationMinutes: number | null;
+  supportedRegions: string[];
+  supportedDevices: string[];
+  officialUrl: string;
+  vendor: string;
+  /** ISO string or null. Rendered with verifiedBy as "Vérifié le … par …". */
+  verifiedAt: string | null;
+  verifiedBy: string;
+  requirements: string[];
+  steps: GuideStep[];
+  troubleshooting: GuideTroubleshootingItem[];
   /** Admin-authored "Produits attendus" labels. Documentation only. */
   expectedProducts: string[];
   /** Live coverage derived from the catalog — never stored. */
@@ -637,6 +654,21 @@ export interface SaveGuideInput {
   relatedProductIds: string[];
   relatedGuideIds: string[];
   aliases: string[];
+  // ── Article template fields (design handoff) ────────────────────────────
+  /** "facile" | "moyen" | "avance" | "" (unset → no chip). */
+  difficulty: string;
+  /** Authored minutes; null → article falls back to the derived estimate. */
+  durationMinutes: number | null;
+  supportedRegions: string[];
+  supportedDevices: string[];
+  officialUrl: string;
+  vendor: string;
+  /** ISO string or null. Rendered with verifiedBy as "Vérifié le … par …". */
+  verifiedAt: string | null;
+  verifiedBy: string;
+  requirements: string[];
+  steps: GuideStep[];
+  troubleshooting: GuideTroubleshootingItem[];
   /** Free-text "Produits attendus" labels — never become catalog products. */
   expectedProducts: string[];
   published: boolean;
