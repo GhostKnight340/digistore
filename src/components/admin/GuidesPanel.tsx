@@ -128,14 +128,6 @@ export default function GuidesPanel() {
   }
 
   async function onSeedLibrary() {
-    if (
-      !window.confirm(
-        "Générer la bibliothèque de guides d'activation (Steam, PlayStation, Netflix…) ? " +
-          "Les guides existants portant le même nom seront mis à jour.",
-      )
-    ) {
-      return;
-    }
     setSeeding(true);
     setError("");
     setMessage("");
