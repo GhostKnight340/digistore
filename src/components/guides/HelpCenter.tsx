@@ -169,9 +169,10 @@ export default function HelpCenter({ guides }: { guides: GuideIndexItem[] }) {
           {categories.length >= 2 && (
             <CategoryBrowse categories={categories} onSelect={selectPlatform} />
           )}
-          {/* No "Guides populaires" rail: the hub browses by platform and by
-              recency (matching the design handoff). `popular` is still computed
-              because the empty state falls back to it for suggestions. */}
+          {/* Neither a "Guides populaires" nor a "Tous les guides" rail: the hub
+              browses by platform and by recency (matching the design handoff).
+              Every guide stays reachable via the platform grid and the search —
+              `popular` is still computed for the empty state's suggestions. */}
           {guides.length > 6 && (
             <GuideRail
               title="Récemment mis à jour"
@@ -179,7 +180,6 @@ export default function HelpCenter({ guides }: { guides: GuideIndexItem[] }) {
               guides={recent}
             />
           )}
-          <GuideRail title="Tous les guides" guides={guides} />
         </>
       )}
 
