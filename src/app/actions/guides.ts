@@ -10,6 +10,7 @@ import {
   getGuideOptions,
   reorderGuides,
   saveGuide,
+  seedActivationGuides,
   setGuideArchived,
 } from "@/lib/db/guides";
 import { getCollectionProductOptions } from "@/lib/db/collections";
@@ -74,6 +75,20 @@ export async function duplicateGuideAction(
 ): Promise<ActionResult & { id?: string }> {
   await requireAdminCustomer();
   const result = await duplicateGuide(id);
+  if (result.ok) revalidateGuides();
+  return result;
+}
+
+/**
+ * One-click populate: create/refresh the standard activation-guide library on
+ * the database the app is connected to (staging on staging, prod on prod). Admin
+ * only, idempotent, and revalidates the public surfaces on success.
+ */
+export async function seedActivationGuidesAction(): Promise<
+  ActionResult & { created?: number; updated?: number; total?: number }
+> {
+  await requireAdminCustomer();
+  const result = await seedActivationGuides();
   if (result.ok) revalidateGuides();
   return result;
 }

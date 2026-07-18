@@ -14,6 +14,12 @@ import {
   normalizeGuideIcon,
   defaultGuideNavigatorTip,
 } from "@/lib/guide";
+import {
+  ACTIVATION_GUIDE_SPECS,
+  buildActivationBlocks,
+  buildActivationFaq,
+  activationMatchKeywords,
+} from "@/lib/guides/activationLibrary";
 import type { Prisma } from "@prisma/client";
 import type {
   AdminGuideDTO,
@@ -424,6 +430,106 @@ export async function deleteGuide(id: string): Promise<ActionResult> {
   if (!existing) return { ok: false, error: "Guide introuvable." };
   await prisma.guide.delete({ where: { id } });
   return { ok: true };
+}
+
+/**
+ * Populate (or refresh) the standard activation-guide library — the platforms we
+ * sell plus the popular ones customers ask about. Idempotent: upserts by slug, so
+ * re-running restores the canonical content without creating duplicates. Related
+ * products + brand categories are matched against the LIVE catalog at run time,
+ * so links resolve whatever database this runs against. Sibling guides are
+ * cross-linked by family (icon) in a second pass. The caller revalidates.
+ */
+export async function seedActivationGuides(): Promise<
+  ActionResult & { created?: number; updated?: number; total?: number }
+> {
+  await ensureDatabaseReady();
+
+  const [products, categories] = await Promise.all([
+    prisma.product.findMany({
+      where: { active: true },
+      select: { id: true, name: true, brand: true, category: true, slug: true },
+    }),
+    prisma.category.findMany({ select: { id: true, slug: true, name: true } }),
+  ]);
+
+  const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const productHay = products.map((p) => ({
+    id: p.id,
+    hay: norm(`${p.name} ${p.brand ?? ""} ${p.category} ${p.slug}`),
+  }));
+  const categoryHay = categories.map((c) => ({ id: c.id, hay: norm(`${c.id} ${c.slug} ${c.name}`) }));
+
+  const now = new Date();
+  let created = 0;
+  let updated = 0;
+
+  for (const [index, spec] of ACTIVATION_GUIDE_SPECS.entries()) {
+    const keywords = activationMatchKeywords(spec)
+      .map(norm)
+      .filter((k) => k.length >= 4);
+    const relatedProductIds = productHay
+      .filter((p) => keywords.some((k) => p.hay.includes(k)))
+      .map((p) => p.id)
+      .slice(0, 3);
+    const categoryId = categoryHay.find((c) => keywords.some((k) => c.hay.includes(k)))?.id ?? null;
+
+    const existing = await prisma.guide.findUnique({
+      where: { slug: spec.slug },
+      select: { id: true, publishedAt: true },
+    });
+
+    const data = {
+      title: spec.title,
+      summary: spec.summary,
+      platform: spec.platform,
+      categoryId,
+      icon: spec.icon,
+      content: normalizeGuideBlocks(buildActivationBlocks(spec)) as unknown as Prisma.InputJsonValue,
+      faq: normalizeGuideFaq(buildActivationFaq(spec)) as unknown as Prisma.InputJsonValue,
+      navigatorTip: normalizeGuideNavigatorTip({
+        enabled: true,
+        ...spec.tip,
+      }) as unknown as Prisma.InputJsonValue,
+      relatedProductIds,
+      aliases: normalizeGuideAliases(spec.aliases),
+      published: true,
+      featured: Boolean(spec.featured),
+      sortOrder: index + 1,
+      publishedAt: existing?.publishedAt ?? now,
+      scheduledAt: null,
+      archivedAt: null,
+      seoTitle: spec.seoTitle,
+      seoDescription: spec.seoDescription,
+    };
+
+    if (existing) {
+      await prisma.guide.update({ where: { slug: spec.slug }, data });
+      updated += 1;
+    } else {
+      await prisma.guide.create({ data: { slug: spec.slug, ...data } });
+      created += 1;
+    }
+  }
+
+  // Cross-link siblings sharing a family (icon), up to 4 each.
+  const rows = await prisma.guide.findMany({
+    where: { slug: { in: ACTIVATION_GUIDE_SPECS.map((s) => s.slug) } },
+    select: { id: true, slug: true },
+  });
+  const idBySlug = new Map(rows.map((r) => [r.slug, r.id]));
+  const familyBySlug = new Map(ACTIVATION_GUIDE_SPECS.map((s) => [s.slug, s.icon]));
+  for (const spec of ACTIVATION_GUIDE_SPECS) {
+    const relatedGuideIds = ACTIVATION_GUIDE_SPECS.filter(
+      (o) => o.slug !== spec.slug && familyBySlug.get(o.slug) === spec.icon,
+    )
+      .slice(0, 4)
+      .map((o) => idBySlug.get(o.slug))
+      .filter((id): id is string => Boolean(id));
+    await prisma.guide.update({ where: { slug: spec.slug }, data: { relatedGuideIds } });
+  }
+
+  return { ok: true, created, updated, total: ACTIVATION_GUIDE_SPECS.length };
 }
 
 /** Convenience re-export so link sites can import from one place. */
