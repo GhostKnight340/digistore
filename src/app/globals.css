@@ -26,7 +26,10 @@ body {
     transparent 60%
   );
   background-attachment: fixed;
-  overflow-x: hidden;
+  /* No overflow-x here on purpose: it would make <body> a scroll container
+     while the page actually scrolls on <html>, which silently breaks every
+     position:sticky descendant (guide rail, TOC). html's overflow-x:hidden
+     above already clips horizontal overflow for the whole document. */
 }
 
 /*

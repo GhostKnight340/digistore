@@ -5,10 +5,11 @@ import type { TocItem } from "@/lib/guideMeta";
 import { trackEvent } from "@/lib/analytics";
 
 /**
- * "Sur cette page" — a sticky table of contents built from the guide's heading
- * blocks (their stable ids are emitted as anchors by GuideContent). A single
+ * "Sur cette page" — a table of contents built from the guide's heading blocks
+ * (their stable ids are emitted as anchors by GuideContent). A single
  * IntersectionObserver highlights the section currently in view. Renders nothing
- * for short guides (< 2 headings) and is hidden on print.
+ * for short guides (< 2 headings) and is hidden on print. Stickiness and
+ * breakpoint visibility come from the guide page's right rail.
  */
 export default function GuideToc({ items, slug }: { items: TocItem[]; slug: string }) {
   const [activeId, setActiveId] = useState<string>(items[0]?.id ?? "");
@@ -51,8 +52,8 @@ export default function GuideToc({ items, slug }: { items: TocItem[]; slug: stri
   }
 
   return (
-    <nav aria-label="Sur cette page" className="hidden lg:block print:hidden">
-      <div className="sticky top-24">
+    <nav aria-label="Sur cette page" className="print:hidden">
+      <div className="rounded-2xl border border-border bg-card p-5">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-faint">
           Sur cette page
         </p>

@@ -185,8 +185,11 @@ export default async function GuidePage({
         }
       : null;
 
+  // Guide articles run wider than the site container: the two-column reading
+  // layout needs ~820px of measure plus a 320px rail. Scoped here on purpose —
+  // `container-page` stays as-is for every other page.
   return (
-    <div className="container-page pt-6 pb-20 sm:py-10">
+    <div className="mx-auto w-full max-w-[1280px] px-4 pt-6 pb-20 sm:px-6 sm:py-10 lg:px-8">
       <GuideReadingProgress />
       <script
         type="application/ld+json"
@@ -328,10 +331,9 @@ export default async function GuidePage({
         </div>
       </header>
 
-      {/* 3-column: TOC · article · help rail */}
-      <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[200px_minmax(0,1fr)_270px]">
-        <GuideToc items={toc} slug={guide.slug} />
-
+      {/* Two-column: article · sticky rail (TOC + help). Below lg the rail
+          collapses and the in-flow support block below takes over. */}
+      <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,820px)_320px] xl:justify-center xl:gap-x-12">
         <article className="min-w-0">
         {useStructured ? (
           <>
@@ -412,7 +414,7 @@ export default async function GuidePage({
         )}
 
         {/* On small screens the right rail is hidden, so keep a support block. */}
-        <section className="mt-12 rounded-2xl border border-border bg-card p-6 text-center xl:hidden print:hidden">
+        <section className="mt-12 rounded-2xl border border-border bg-card p-6 text-center lg:hidden print:hidden">
           <h2 className="text-lg font-semibold text-white">Besoin d&apos;aide ?</h2>
           <p className="mt-1 text-sm text-muted">
             Notre support répond à vos questions avant et après l&apos;achat.
@@ -420,30 +422,52 @@ export default async function GuidePage({
           <Link href="/support" className="btn-primary mt-4">
             Contacter le support
           </Link>
+          <Link
+            href="/support"
+            className="mt-4 block text-[11.5px] text-faint transition hover:text-muted"
+          >
+            Signaler une information incorrecte
+          </Link>
         </section>
         </article>
 
-        {/* Right help rail — design hides it below 1180px (xl). */}
-        <aside className="hidden xl:block print:hidden">
-          <div className="sticky top-24 rounded-2xl border border-border bg-card p-5">
-            <h2 className="text-[15px] font-semibold text-white">Besoin d&apos;aide ?</h2>
-            <p className="mt-1 text-xs text-muted">
-              Notre équipe répond avant et après l&apos;achat.
-            </p>
-            <div className="mt-4 space-y-2">
-              <Link href="/support" className="btn-primary w-full justify-center">
-                Contacter le support
-              </Link>
-              <Link href="/contact" className="btn-ghost w-full justify-center">
-                Ouvrir un ticket
+        {/* Right rail — TOC + help. Sticky under the header, capped to the
+            viewport so long guides scroll inside it, with bottom room so the
+            card never runs under the floating chat widget. */}
+        <aside className="hidden lg:block print:hidden">
+          <div className="sticky top-24 max-h-[calc(100vh-7rem)] space-y-5 overflow-y-auto pb-24">
+            <GuideToc items={toc} slug={guide.slug} />
+
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <h2 className="text-[15px] font-semibold text-white">Besoin d&apos;aide ?</h2>
+              <p className="mt-1 text-xs text-muted">
+                Notre équipe répond avant et après l&apos;achat.
+              </p>
+              <div className="mt-4 space-y-2">
+                {guide.officialUrl && (
+                  <a
+                    href={guide.officialUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="btn-ghost w-full justify-center"
+                  >
+                    Page d&apos;activation officielle
+                  </a>
+                )}
+                <Link href="/support" className="btn-primary w-full justify-center">
+                  Contacter le support
+                </Link>
+                <Link href="/contact" className="btn-ghost w-full justify-center">
+                  Ouvrir un ticket
+                </Link>
+              </div>
+              <Link
+                href="/support"
+                className="mt-4 block text-center text-[11.5px] text-faint transition hover:text-muted"
+              >
+                Signaler une information incorrecte
               </Link>
             </div>
-            <Link
-              href="/support"
-              className="mt-4 block text-center text-[11.5px] text-faint transition hover:text-muted"
-            >
-              Signaler une information incorrecte
-            </Link>
           </div>
         </aside>
       </div>
