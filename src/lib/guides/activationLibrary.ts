@@ -11,7 +11,17 @@
  * (src/lib/db/guides.ts) and the CLI seed (scripts/seed-activation-guides.ts).
  * Client-safe (no `server-only`).
  */
-import type { GuideBlock, NavigatorTipType } from "@/lib/guide";
+import type {
+  GuideBlock,
+  GuideStep,
+  GuideTroubleshootingItem,
+  NavigatorTipType,
+} from "@/lib/guide";
+import {
+  ACTIVATION_GUIDE_META,
+  ACTIVATION_GUIDE_RICH_STEPS,
+  type ActivationGuideMeta,
+} from "./activationMeta";
 
 export interface ActivationGuideSpec {
   slug: string;
@@ -617,4 +627,60 @@ export function buildActivationFaq(s: ActivationGuideSpec) {
 /** Keywords used to match a guide to catalog products + brand categories. */
 export function activationMatchKeywords(s: ActivationGuideSpec): string[] {
   return [s.platform, ...s.aliases];
+}
+
+/**
+ * Structured step cards for the article template. Guides with authored
+ * title+description content (currently the Steam flagship, from the design
+ * handoff) use it; every other guide reuses its existing step sentence as the
+ * card title with NO invented description — an empty description simply renders
+ * a title-only card rather than filler prose.
+ */
+export function buildActivationSteps(s: ActivationGuideSpec): GuideStep[] {
+  const rich = ACTIVATION_GUIDE_RICH_STEPS[s.slug];
+  if (rich) {
+    return rich.map((r, i) => ({
+      id: `${s.slug}-step-${i + 1}`,
+      title: r.title,
+      description: r.description,
+      tip: r.tip ?? "",
+      warning: r.warning ?? "",
+      // Left empty on purpose: the design gates the screenshot block on this,
+      // so nothing renders until a real capture is uploaded.
+      screenshotUrl: "",
+    }));
+  }
+  return s.steps.map((text, i) => ({
+    id: `${s.slug}-step-${i + 1}`,
+    title: text,
+    description: "",
+    tip: "",
+    warning: "",
+    screenshotUrl: "",
+  }));
+}
+
+/**
+ * Troubleshooting accordion entries. The library writes each line as
+ * "Symptôme : explication", which splits cleanly into a question/answer pair.
+ * Lines without a separator are dropped rather than shown as an empty answer.
+ */
+export function buildActivationTroubleshooting(
+  s: ActivationGuideSpec,
+): GuideTroubleshootingItem[] {
+  return s.troubleshooting
+    .map((line, i) => {
+      const idx = line.indexOf(" : ");
+      return {
+        id: `${s.slug}-trouble-${i + 1}`,
+        question: idx > 0 ? line.slice(0, idx).trim() : line.trim(),
+        answer: idx > 0 ? line.slice(idx + 3).trim() : "",
+      };
+    })
+    .filter((t) => t.question && t.answer);
+}
+
+/** Authored article metadata for a guide, or null when none exists. */
+export function activationMetaFor(slug: string): ActivationGuideMeta | null {
+  return ACTIVATION_GUIDE_META[slug] ?? null;
 }

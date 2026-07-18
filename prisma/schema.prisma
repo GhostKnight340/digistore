@@ -192,6 +192,35 @@ model Guide {
   content           Json?
   // Visible FAQ items [{ id, question, answer }] — the ONLY source of FAQ schema.
   faq               Json?
+  // ── Article template fields (design handoff) ───────────────────────────────
+  // Every one of these is ADMIN-AUTHORED. Nothing here is inferred, so a meta
+  // chip is rendered only when a human actually filled it in — an empty field
+  // hides its chip rather than showing a guessed value.
+  //
+  // "facile" | "moyen" | "avance" | "" (unset → no difficulty chip).
+  difficulty        String    @default("")
+  // Authored activation time in minutes. Null → fall back to the derived
+  // reading estimate (see src/lib/guideMeta.ts), which is labelled "≈".
+  durationMinutes   Int?
+  // Free labels, e.g. ["Selon carte"] or ["Europe","France"]. Empty → no chip.
+  supportedRegions  String[]  @default([])
+  // e.g. ["PC","Mac","Mobile"]. Empty → no chip.
+  supportedDevices  String[]  @default([])
+  // Official activation page, powering "Ouvrir le site officiel" + copy-link.
+  officialUrl       String?
+  // Publisher/vendor for the eyebrow line ("STEAM · VALVE").
+  vendor            String?
+  // Editorial review stamp ("Vérifié le … par …"). Both must be set to render.
+  verifiedAt        DateTime?
+  verifiedBy        String    @default("")
+  // "Ce qu'il vous faut" checklist lines.
+  requirements      String[]  @default([])
+  // Structured step cards: [{ id, title, description, tip, warning, screenshotUrl }].
+  // Richer than the generic `content` "steps" block: each step can carry its own
+  // screenshot and callouts. Sanitized on write like every other JSON column.
+  steps             Json?
+  // Troubleshooting accordion: [{ id, question, answer }].
+  troubleshooting   Json?
   // Navigator tip { enabled, title, message, type, ctaLabel, ctaUrl }.
   navigatorTip      Json?
   // Related content resolved live; hidden/inactive targets are dropped at render.

@@ -186,6 +186,19 @@ export interface GuideDetail {
   /** Related published guides, resolved live. */
   /** True only when an associated product can actually be purchased now. */
   hasSellableProduct: boolean;
+  // ── Article template fields (all admin-authored; empty → chip not rendered) ──
+  difficulty: import("./guide").GuideDifficulty | "";
+  /** Authored minutes; null → fall back to the derived "≈" estimate. */
+  durationMinutes: number | null;
+  supportedRegions: string[];
+  supportedDevices: string[];
+  officialUrl: string | null;
+  vendor: string | null;
+  verifiedAt: string | null;
+  verifiedBy: string;
+  requirements: string[];
+  steps: import("./guide").GuideStep[];
+  troubleshooting: import("./guide").GuideTroubleshootingItem[];
   relatedGuides: GuideIndexItem[];
   seoTitle: string;
   seoDescription: string;

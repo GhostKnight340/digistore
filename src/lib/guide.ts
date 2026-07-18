@@ -115,6 +115,50 @@ export interface GuideFaqItem {
   answer: string;
 }
 
+// ── Article template model (design handoff) ─────────────────────────────────
+
+/** Difficulty levels shown as the hero chip. "" = unset → no chip rendered. */
+export const GUIDE_DIFFICULTIES = ["facile", "moyen", "avance"] as const;
+export type GuideDifficulty = (typeof GUIDE_DIFFICULTIES)[number];
+
+/** French labels for the difficulty chip. */
+export const GUIDE_DIFFICULTY_LABELS: Record<GuideDifficulty, string> = {
+  facile: "Facile",
+  moyen: "Moyen",
+  avance: "Avancé",
+};
+
+export function normalizeGuideDifficulty(value: unknown): GuideDifficulty | "" {
+  if (typeof value !== "string") return "";
+  const key = value.trim().toLowerCase();
+  return (GUIDE_DIFFICULTIES as readonly string[]).includes(key)
+    ? (key as GuideDifficulty)
+    : "";
+}
+
+/**
+ * One numbered step card. `screenshotUrl` stays empty until a real capture
+ * exists — the design gates the screenshot block on it, so an empty value
+ * simply renders no image rather than a placeholder.
+ */
+export interface GuideStep {
+  id: string;
+  title: string;
+  description: string;
+  /** Optional green tip callout. */
+  tip: string;
+  /** Optional red warning callout. */
+  warning: string;
+  /** Optional step screenshot. */
+  screenshotUrl: string;
+}
+
+export interface GuideTroubleshootingItem {
+  id: string;
+  question: string;
+  answer: string;
+}
+
 export interface GuideNavigatorTip {
   enabled: boolean;
   title: string;
@@ -151,6 +195,11 @@ const LIMITS = {
   question: 200,
   answer: 2000,
   id: 60,
+  // Article-template fields
+  stepTitle: 160,
+  stepDescription: 800,
+  stepCallout: 400,
+  label: 60,
 } as const;
 
 const MAX_BLOCKS = 60;
@@ -299,6 +348,67 @@ export function normalizeGuideFaq(value: unknown): GuideFaqItem[] {
     out.push({ id: str(entry.id, LIMITS.id) || `faq-${index}`, question, answer });
   });
   return out.slice(0, MAX_FAQ_ITEMS);
+}
+
+/** Coerce persisted/admin JSON into safe, ordered step cards. */
+export function normalizeGuideSteps(value: unknown): GuideStep[] {
+  const raw = Array.isArray(value) ? value : [];
+  const out: GuideStep[] = [];
+  raw.forEach((entry, index) => {
+    if (!isObject(entry)) return;
+    const title = str(entry.title, LIMITS.stepTitle);
+    const description = str(entry.description, LIMITS.stepDescription);
+    // A step with no title AND no description carries no meaning — drop it.
+    if (!title && !description) return;
+    out.push({
+      id: str(entry.id, LIMITS.id) || `step-${index}`,
+      title,
+      description,
+      tip: str(entry.tip, LIMITS.stepCallout),
+      warning: str(entry.warning, LIMITS.stepCallout),
+      // Only http(s) or internal paths — never javascript:/data: URLs.
+      screenshotUrl: isValidGuideUrl(str(entry.screenshotUrl, LIMITS.imageUrl))
+        ? str(entry.screenshotUrl, LIMITS.imageUrl)
+        : "",
+    });
+  });
+  return out.slice(0, MAX_STEP_ITEMS);
+}
+
+/** Coerce persisted/admin JSON into safe troubleshooting Q&A entries. */
+export function normalizeGuideTroubleshooting(
+  value: unknown,
+): GuideTroubleshootingItem[] {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  const out: GuideTroubleshootingItem[] = [];
+  raw.forEach((entry, index) => {
+    if (!isObject(entry)) return;
+    const question = str(entry.question, LIMITS.question);
+    const answer = str(entry.answer, LIMITS.answer);
+    if (!question || !answer) return;
+    const key = question.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ id: str(entry.id, LIMITS.id) || `trouble-${index}`, question, answer });
+  });
+  return out.slice(0, MAX_FAQ_ITEMS);
+}
+
+/** Trim/cap free-text label lists (requirements, regions, devices). */
+export function normalizeGuideLabels(value: unknown, maxItems = 12): string[] {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const entry of raw) {
+    const label = typeof entry === "string" ? entry.trim().slice(0, LIMITS.label) : "";
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out.slice(0, maxItems);
 }
 
 export function defaultGuideNavigatorTip(): GuideNavigatorTip {

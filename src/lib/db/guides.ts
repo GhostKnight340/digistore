@@ -12,13 +12,20 @@ import {
   normalizeGuideNavigatorTip,
   normalizeGuideAliases,
   normalizeGuideIcon,
+  normalizeGuideDifficulty,
+  normalizeGuideSteps,
+  normalizeGuideTroubleshooting,
+  normalizeGuideLabels,
   defaultGuideNavigatorTip,
 } from "@/lib/guide";
 import {
   ACTIVATION_GUIDE_SPECS,
   buildActivationBlocks,
   buildActivationFaq,
+  buildActivationSteps,
+  buildActivationTroubleshooting,
   activationMatchKeywords,
+  activationMetaFor,
 } from "@/lib/guides/activationLibrary";
 import {
   computeProductCoverage,
@@ -202,6 +209,17 @@ export async function getGuideBySlug(
     content: normalizeGuideBlocks(row.content),
     faq: normalizeGuideFaq(row.faq),
     navigatorTip: normalizeGuideNavigatorTip(row.navigatorTip),
+    difficulty: normalizeGuideDifficulty(row.difficulty),
+    durationMinutes: row.durationMinutes,
+    supportedRegions: row.supportedRegions ?? [],
+    supportedDevices: row.supportedDevices ?? [],
+    officialUrl: row.officialUrl,
+    vendor: row.vendor,
+    verifiedAt: row.verifiedAt?.toISOString() ?? null,
+    verifiedBy: row.verifiedBy,
+    requirements: row.requirements ?? [],
+    steps: normalizeGuideSteps(row.steps),
+    troubleshooting: normalizeGuideTroubleshooting(row.troubleshooting),
     relatedProducts,
     hasSellableProduct: coverage.hasSellableProduct,
     relatedGuides,
@@ -720,12 +738,31 @@ export async function seedActivationGuides(): Promise<
       select: { id: true, publishedAt: true },
     });
 
+    // Authored article metadata (chips, official link, checklist). Absent →
+    // the article renders no chips rather than guessing values.
+    const meta = activationMetaFor(spec.slug);
+
     const data = {
       title: spec.title,
       summary: spec.summary,
       platform: spec.platform,
       categoryId,
       icon: spec.icon,
+      difficulty: meta?.difficulty ?? "",
+      durationMinutes: meta?.durationMinutes ?? null,
+      supportedRegions: meta?.regions ?? [],
+      supportedDevices: meta?.devices ?? [],
+      officialUrl: meta?.officialUrl ?? null,
+      vendor: meta?.vendor ?? null,
+      requirements: meta?.requirements ?? [],
+      verifiedAt: now,
+      verifiedBy: "l'équipe Ghost.ma",
+      steps: normalizeGuideSteps(
+        buildActivationSteps(spec),
+      ) as unknown as Prisma.InputJsonValue,
+      troubleshooting: normalizeGuideTroubleshooting(
+        buildActivationTroubleshooting(spec),
+      ) as unknown as Prisma.InputJsonValue,
       content: normalizeGuideBlocks(buildActivationBlocks(spec)) as unknown as Prisma.InputJsonValue,
       faq: normalizeGuideFaq(buildActivationFaq(spec)) as unknown as Prisma.InputJsonValue,
       navigatorTip: normalizeGuideNavigatorTip({
