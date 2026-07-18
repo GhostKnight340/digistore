@@ -169,13 +169,9 @@ export default function HelpCenter({ guides }: { guides: GuideIndexItem[] }) {
           {categories.length >= 2 && (
             <CategoryBrowse categories={categories} onSelect={selectPlatform} />
           )}
-          {popular.length >= 2 && (
-            <GuideRail
-              title="Guides populaires"
-              subtitle="Les activations les plus consultées"
-              guides={popular}
-            />
-          )}
+          {/* No "Guides populaires" rail: the hub browses by platform and by
+              recency (matching the design handoff). `popular` is still computed
+              because the empty state falls back to it for suggestions. */}
           {guides.length > 6 && (
             <GuideRail
               title="Récemment mis à jour"
