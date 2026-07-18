@@ -2,7 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { ensureDatabaseReady, prisma } from "./prisma";
-import { getPublicParentCards } from "./catalog";
+import { getPublicParentCards, getStoreSettings } from "./catalog";
 import { CATALOG_TAG, GUIDES_TAG } from "@/lib/cacheTags";
 import {
   guideHref,
@@ -20,10 +20,19 @@ import {
   buildActivationFaq,
   activationMatchKeywords,
 } from "@/lib/guides/activationLibrary";
+import {
+  computeProductCoverage,
+  summarizeCoverage,
+  type CoverageSettings,
+  type GuideCoverageSummary,
+  type ProductCoverage,
+} from "@/lib/guides/coverage";
+import { isInventoryEnabled, isStockTracked } from "@/lib/storeSettings";
 import type { Prisma } from "@prisma/client";
 import type {
   AdminGuideDTO,
   GuideOptionDTO,
+  GuideProductLinkDTO,
   SaveGuideInput,
   ActionResult,
 } from "@/lib/dto";
@@ -36,6 +45,10 @@ import type { GuideDetail, GuideIndexItem } from "@/lib/types";
 function publicGuideWhere(now: Date): Prisma.GuideWhereInput {
   return {
     published: true,
+    // Independent visibility switch. Turning it off removes the guide from the
+    // index, search, rails, platform filters, sitemap AND its direct URL, while
+    // leaving `published`/`archivedAt` untouched.
+    publiclyVisible: true,
     archivedAt: null,
     OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
   };
@@ -114,21 +127,50 @@ export async function getPublishedGuideSlugs(): Promise<
  * Related products and guides are resolved LIVE and visibility-filtered here —
  * hidden/inactive products and unpublished related guides never render.
  */
-export async function getGuideBySlug(slug: string): Promise<GuideDetail | null> {
+export async function getGuideBySlug(
+  slug: string,
+  opts?: { preview?: boolean },
+): Promise<GuideDetail | null> {
   await ensureDatabaseReady();
   const clean = slug.trim().toLowerCase();
   if (!clean) return null;
   const now = new Date();
+  // Admin preview intentionally bypasses the visibility/publication gates so a
+  // hidden or draft guide can still be reviewed before going live. The CALLER
+  // is responsible for proving the viewer is an admin.
+  const where: Prisma.GuideWhereInput = opts?.preview
+    ? { slug: clean, archivedAt: null }
+    : { slug: clean, ...publicGuideWhere(now) };
   const row = await prisma.guide.findFirst({
-    where: { slug: clean, ...publicGuideWhere(now) },
-    include: { category: { select: { name: true } } },
+    where,
+    include: {
+      category: { select: { name: true } },
+      products: { orderBy: { sortOrder: "asc" }, select: { productId: true } },
+    },
   });
   if (!row) return null;
 
-  const productMap = await getPublicParentCards(row.relatedProductIds);
-  const relatedProducts = row.relatedProductIds
+  // Source links from the relation, falling back to the legacy array for rows
+  // written before the relation existed. `getPublicParentCards` already drops
+  // anything not publicly sellable, so a non-empty result is exactly the
+  // condition for showing a product CTA on the guide.
+  const linkedProductIds =
+    row.products.length > 0
+      ? Array.from(new Set(row.products.map((p) => p.productId)))
+      : row.relatedProductIds;
+  const productMap = await getPublicParentCards(linkedProductIds);
+  const relatedProducts = linkedProductIds
     .map((id) => productMap.get(id))
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+  // Whether a customer can ACTUALLY buy something right now. Deliberately
+  // stricter than `relatedProducts`: a card can render while every variant is
+  // out of stock. Using the same coverage rule as the admin guarantees the
+  // public CTA and admin coverage can never disagree.
+  const coverage = summarizeCoverage(
+    (await loadGuideCoverage([row.id])).get(row.id) ?? [],
+    row.expectedProducts ?? [],
+  );
 
   let relatedGuides: GuideIndexItem[] = [];
   if (row.relatedGuideIds.length > 0) {
@@ -161,6 +203,7 @@ export async function getGuideBySlug(slug: string): Promise<GuideDetail | null> 
     faq: normalizeGuideFaq(row.faq),
     navigatorTip: normalizeGuideNavigatorTip(row.navigatorTip),
     relatedProducts,
+    hasSellableProduct: coverage.hasSellableProduct,
     relatedGuides,
     seoTitle: row.seoTitle,
     seoDescription: row.seoDescription,
@@ -218,7 +261,11 @@ const getSearchableGuidesCached = unstable_cache(
 
 // ── Admin reads/writes ───────────────────────────────────────────────────────
 
-function toAdminDTO(row: Prisma.GuideGetPayload<object>): AdminGuideDTO {
+function toAdminDTO(
+  row: Prisma.GuideGetPayload<object>,
+  coverage: GuideCoverageSummary = summarizeCoverage([], []),
+  productLinks: GuideProductLinkDTO[] = [],
+): AdminGuideDTO {
   return {
     id: row.id,
     slug: row.slug,
@@ -231,10 +278,19 @@ function toAdminDTO(row: Prisma.GuideGetPayload<object>): AdminGuideDTO {
     content: normalizeGuideBlocks(row.content),
     faq: normalizeGuideFaq(row.faq),
     navigatorTip: normalizeGuideNavigatorTip(row.navigatorTip),
-    relatedProductIds: row.relatedProductIds ?? [],
+    // Sourced from the GuideProduct relation when available (the legacy array
+    // is kept in sync on write and only used as a fallback for stale rows).
+    relatedProductIds:
+      productLinks.length > 0
+        ? Array.from(new Set(productLinks.map((l) => l.productId)))
+        : row.relatedProductIds ?? [],
+    productLinks,
     relatedGuideIds: row.relatedGuideIds ?? [],
     aliases: row.aliases ?? [],
+    expectedProducts: row.expectedProducts ?? [],
+    coverage,
     published: row.published,
+    publiclyVisible: row.publiclyVisible,
     featured: row.featured,
     sortOrder: row.sortOrder,
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
@@ -248,12 +304,112 @@ function toAdminDTO(row: Prisma.GuideGetPayload<object>): AdminGuideDTO {
   };
 }
 
+/**
+ * Resolve every guide↔product link against the LIVE catalog and roll it into a
+ * per-guide coverage summary. One batched query for all guides — availability is
+ * derived, never stored, so a product going inactive is reflected immediately.
+ * `guideIds` scopes the load; omit it to cover every guide.
+ */
+async function loadGuideCoverage(
+  guideIds?: string[],
+): Promise<Map<string, ProductCoverage[]>> {
+  const settings = await getStoreSettings();
+  const coverageSettings: CoverageSettings = {
+    inventoryEnabled: isInventoryEnabled(settings),
+    stockTracked: isStockTracked(settings),
+  };
+
+  const links = await prisma.guideProduct.findMany({
+    where: guideIds ? { guideId: { in: guideIds } } : undefined,
+    orderBy: [{ sortOrder: "asc" }],
+    select: {
+      guideId: true,
+      productId: true,
+      variantId: true,
+      product: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          active: true,
+          region: true,
+          categoryRecord: { select: { active: true } },
+          variants: {
+            select: {
+              id: true,
+              name: true,
+              active: true,
+              stockMode: true,
+              region: true,
+              manualFulfillmentAllowed: true,
+              _count: {
+                select: {
+                  digitalCodes: { where: { status: "unused" } },
+                  supplierMappings: { where: { enabled: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const byGuide = new Map<string, ProductCoverage[]>();
+  for (const link of links) {
+    const product = link.product
+      ? {
+          id: link.product.id,
+          name: link.product.name,
+          slug: link.product.slug,
+          active: link.product.active,
+          region: link.product.region,
+          // A product with no (or a disabled) category record is not publicly
+          // sellable — mirrors the getPublicParentCards category filter.
+          categoryActive: link.product.categoryRecord?.active === true,
+          variants: link.product.variants.map((v) => ({
+            id: v.id,
+            name: v.name,
+            active: v.active,
+            stockMode: v.stockMode,
+            region: v.region,
+            manualFulfillmentAllowed: v.manualFulfillmentAllowed,
+            enabledSupplierMappings: v._count.supplierMappings,
+            unusedCodes: v._count.digitalCodes,
+          })),
+        }
+      : null;
+    const coverage = computeProductCoverage(
+      { productId: link.productId, variantId: link.variantId, product },
+      coverageSettings,
+    );
+    const list = byGuide.get(link.guideId) ?? [];
+    list.push(coverage);
+    byGuide.set(link.guideId, list);
+  }
+  return byGuide;
+}
+
+/** Guides + their live product coverage, for the admin list. */
 export async function getAdminGuides(): Promise<AdminGuideDTO[]> {
   await ensureDatabaseReady();
   const rows = await prisma.guide.findMany({
     orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
+    include: {
+      products: {
+        orderBy: { sortOrder: "asc" },
+        select: { productId: true, variantId: true },
+      },
+    },
   });
-  return rows.map(toAdminDTO);
+  const coverageByGuide = await loadGuideCoverage(rows.map((r) => r.id));
+  return rows.map((row) =>
+    toAdminDTO(
+      row,
+      summarizeCoverage(coverageByGuide.get(row.id) ?? [], row.expectedProducts ?? []),
+      row.products.map((p) => ({ productId: p.productId, variantId: p.variantId })),
+    ),
+  );
 }
 
 /** Compact guide options for the admin related-guides picker. */
@@ -316,6 +472,19 @@ export async function saveGuide(
     categoryId = cat?.id ?? null;
   }
 
+  // Only link products that still exist — a stale client id must never break a
+  // save (and the GuideProduct FK would reject it anyway).
+  const requestedProductIds = Array.from(new Set(input.relatedProductIds)).slice(0, 24);
+  const productIds =
+    requestedProductIds.length > 0
+      ? (
+          await prisma.product.findMany({
+            where: { id: { in: requestedProductIds } },
+            select: { id: true },
+          })
+        ).map((p) => p.id)
+      : [];
+
   const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
   const nowPublished = Boolean(input.published);
   // Stamp publishedAt the first time it goes live; keep the original afterwards.
@@ -338,12 +507,16 @@ export async function saveGuide(
     navigatorTip: normalizeGuideNavigatorTip(
       input.navigatorTip,
     ) as unknown as Prisma.InputJsonValue,
-    relatedProductIds: Array.from(new Set(input.relatedProductIds)).slice(0, 12),
+    // Legacy mirror of the GuideProduct relation, kept in sync for one release.
+    relatedProductIds: productIds,
     relatedGuideIds: Array.from(
       new Set(input.relatedGuideIds.filter((id) => id !== input.id)),
     ).slice(0, 12),
     aliases: normalizeGuideAliases(input.aliases),
+    expectedProducts: normalizeExpectedProducts(input.expectedProducts),
     published: nowPublished,
+    // Default to visible for new guides so publishing behaves as expected.
+    publiclyVisible: input.publiclyVisible !== false,
     featured: Boolean(input.featured),
     sortOrder: Number.isFinite(input.sortOrder) ? Math.trunc(input.sortOrder) : 0,
     scheduledAt,
@@ -353,22 +526,90 @@ export async function saveGuide(
     socialImageUrl: input.socialImageUrl.trim() || null,
   } satisfies Prisma.GuideUncheckedCreateInput;
 
-  const saved = input.id
-    ? await prisma.guide.update({ where: { id: input.id }, data })
-    : await prisma.guide.create({ data });
+  // Persist the guide and its product links together, so a partial write can
+  // never leave the relation disagreeing with the legacy mirror.
+  const saved = await prisma.$transaction(async (tx) => {
+    const guide = input.id
+      ? await tx.guide.update({ where: { id: input.id }, data })
+      : await tx.guide.create({ data });
+    await tx.guideProduct.deleteMany({ where: { guideId: guide.id } });
+    if (productIds.length > 0) {
+      await tx.guideProduct.createMany({
+        data: productIds.map((productId, index) => ({
+          guideId: guide.id,
+          productId,
+          variantId: null,
+          sortOrder: index,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    return guide;
+  });
   return { ok: true, id: saved.id };
+}
+
+/** Trim, cap and de-duplicate the admin-authored "Produits attendus" labels. */
+function normalizeExpectedProducts(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const entry of raw) {
+    const label = typeof entry === "string" ? entry.trim().slice(0, 120) : "";
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out.slice(0, 30);
+}
+
+/**
+ * Flip a guide's public visibility without touching publication or archive
+ * state. Returns the new value so the caller can reconcile optimistic UI.
+ */
+export async function setGuideVisibility(
+  id: string,
+  visible: boolean,
+): Promise<ActionResult & { publiclyVisible?: boolean }> {
+  await ensureDatabaseReady();
+  const existing = await prisma.guide.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) return { ok: false, error: "Guide introuvable." };
+  const updated = await prisma.guide.update({
+    where: { id },
+    data: { publiclyVisible: visible },
+    select: { publiclyVisible: true },
+  });
+  return { ok: true, publiclyVisible: updated.publiclyVisible };
 }
 
 export async function duplicateGuide(
   id: string,
 ): Promise<ActionResult & { id?: string }> {
   await ensureDatabaseReady();
-  const source = await prisma.guide.findUnique({ where: { id } });
+  const source = await prisma.guide.findUnique({
+    where: { id },
+    include: {
+      products: { orderBy: { sortOrder: "asc" }, select: { productId: true, variantId: true } },
+    },
+  });
   if (!source) return { ok: false, error: "Guide introuvable." };
   const slug = await ensureUniqueSlug(`${source.slug}-copie`, null);
   const count = await prisma.guide.count();
   const created = await prisma.guide.create({
     data: {
+      // Carry over the product links and planning list so the copy keeps its
+      // coverage. Visibility follows the default (true) but stays invisible in
+      // practice because the duplicate starts unpublished.
+      products: {
+        create: source.products.map((p, index) => ({
+          productId: p.productId,
+          variantId: p.variantId,
+          sortOrder: index,
+        })),
+      },
+      expectedProducts: source.expectedProducts,
       slug,
       title: `${source.title} (copie)`,
       summary: source.summary,
@@ -503,12 +744,24 @@ export async function seedActivationGuides(): Promise<
       seoDescription: spec.seoDescription,
     };
 
-    if (existing) {
-      await prisma.guide.update({ where: { slug: spec.slug }, data });
-      updated += 1;
-    } else {
-      await prisma.guide.create({ data: { slug: spec.slug, ...data } });
-      created += 1;
+    const guide = existing
+      ? await prisma.guide.update({ where: { slug: spec.slug }, data, select: { id: true } })
+      : await prisma.guide.create({ data: { slug: spec.slug, ...data }, select: { id: true } });
+    if (existing) updated += 1;
+    else created += 1;
+
+    // Mirror the matched products into the real relation (authoritative).
+    await prisma.guideProduct.deleteMany({ where: { guideId: guide.id } });
+    if (relatedProductIds.length > 0) {
+      await prisma.guideProduct.createMany({
+        data: relatedProductIds.map((productId, index) => ({
+          guideId: guide.id,
+          productId,
+          variantId: null,
+          sortOrder: index,
+        })),
+        skipDuplicates: true,
+      });
     }
   }
 

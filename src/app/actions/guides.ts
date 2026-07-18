@@ -12,6 +12,7 @@ import {
   saveGuide,
   seedActivationGuides,
   setGuideArchived,
+  setGuideVisibility,
 } from "@/lib/db/guides";
 import { getCollectionProductOptions } from "@/lib/db/collections";
 import { getCategoryOptions } from "@/lib/db/categories";
@@ -75,6 +76,21 @@ export async function duplicateGuideAction(
 ): Promise<ActionResult & { id?: string }> {
   await requireAdminCustomer();
   const result = await duplicateGuide(id);
+  if (result.ok) revalidateGuides();
+  return result;
+}
+
+/**
+ * Toggle a guide's public visibility. Independent of publication and archive
+ * state; returns the persisted value so the client can reconcile (or roll back)
+ * its optimistic toggle.
+ */
+export async function setGuideVisibilityAction(
+  id: string,
+  visible: boolean,
+): Promise<ActionResult & { publiclyVisible?: boolean }> {
+  await requireAdminCustomer();
+  const result = await setGuideVisibility(id, visible);
   if (result.ok) revalidateGuides();
   return result;
 }

@@ -184,6 +184,8 @@ export interface GuideDetail {
   /** Related active products, resolved live (hidden ones dropped). */
   relatedProducts: Product[];
   /** Related published guides, resolved live. */
+  /** True only when an associated product can actually be purchased now. */
+  hasSellableProduct: boolean;
   relatedGuides: GuideIndexItem[];
   seoTitle: string;
   seoDescription: string;

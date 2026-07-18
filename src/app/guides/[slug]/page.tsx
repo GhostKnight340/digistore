@@ -14,6 +14,7 @@ import NavigatorTip from "@/components/category/NavigatorTip";
 import ProductCard from "@/components/ProductCard";
 import ShareButton from "@/components/ShareButton";
 import { getGuideBySlug } from "@/lib/db/guides";
+import { getCurrentCustomer, isAdminCustomer } from "@/lib/auth";
 import { getPublicParentCards } from "@/lib/db/catalog";
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { guideHref } from "@/lib/guide";
@@ -64,11 +65,21 @@ export async function generateMetadata({
 
 export default async function GuidePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }) {
   const { slug } = await params;
-  const guide = await getGuideBySlug(slug);
+  const { preview } = await searchParams;
+
+  // `?preview=1` lets an ADMIN review a hidden/draft guide. Non-admins get the
+  // normal public gate, so the flag can never leak a masked guide.
+  const wantsPreview = preview === "1";
+  const viewer = wantsPreview ? await getCurrentCustomer() : null;
+  const isAdminPreview = wantsPreview && isAdminCustomer(viewer);
+
+  const guide = await getGuideBySlug(slug, { preview: isAdminPreview });
   if (!guide) notFound();
 
   // Resolve any product-recommendation blocks (visibility-filtered) + payment
@@ -86,6 +97,25 @@ export default async function GuidePage({
   const steps = countSteps(guide.content);
   const minutes = estimateReadingMinutes(guide.content);
   const toc = buildToc(guide.content);
+
+  // The CTA is gated on `hasSellableProduct`, which uses the SAME coverage rule
+  // as the admin (a product card can render while every variant is out of
+  // stock). `relatedProducts` only supplies the link target, so the CTA is never
+  // empty, broken, or shown for something that can't actually be bought.
+  const sellableProducts = guide.hasSellableProduct ? guide.relatedProducts : [];
+  const firstProduct = sellableProducts[0];
+  const productCtaHref =
+    sellableProducts.length === 1 && firstProduct
+      ? firstProduct.href ?? `/products/${firstProduct.id}`
+      : "#produits-associes";
+  const productCtaLabel =
+    sellableProducts.length === 1 && firstProduct
+      ? guide.platform
+        ? `Acheter une carte ${guide.platform}`
+        : `Acheter ${firstProduct.name}`
+      : guide.platform
+        ? `Voir les produits ${guide.platform}`
+        : "Voir les produits associés";
 
   const breadcrumbLd = {
     "@context": "https://schema.org",
@@ -138,6 +168,12 @@ export default async function GuidePage({
         />
       )}
 
+      {isAdminPreview && (
+        <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300 print:hidden">
+          Aperçu admin — ce guide n&apos;est pas forcément visible publiquement.
+        </div>
+      )}
+
       <nav aria-label="Fil d'Ariane" className="pt-4 text-xs text-faint">
         <ol className="flex flex-wrap items-center gap-1.5">
           <li>
@@ -185,6 +221,19 @@ export default async function GuidePage({
             />
             <GuidePrintButton slug={guide.slug} />
           </div>
+
+          {/* Product CTA — rendered ONLY when at least one associated product is
+              currently sellable. `relatedProducts` is already filtered to
+              publicly purchasable parent cards, so this can never be an empty or
+              broken link. */}
+          {sellableProducts.length > 0 && (
+            <div className="mt-5 print:hidden">
+              <Link href={productCtaHref} className="btn-primary inline-flex items-center gap-2">
+                {productCtaLabel}
+                <span aria-hidden>→</span>
+              </Link>
+            </div>
+          )}
         </header>
 
         {guide.heroImageUrl ? (
@@ -223,7 +272,7 @@ export default async function GuidePage({
         <GuideHelpful slug={guide.slug} />
 
         {guide.relatedProducts.length > 0 && (
-          <section className="mt-12 print:hidden">
+          <section id="produits-associes" className="mt-12 scroll-mt-24 print:hidden">
             <h2 className="text-2xl font-semibold tracking-tight text-white">
               Produits associés
             </h2>

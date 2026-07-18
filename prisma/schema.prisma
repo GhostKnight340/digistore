@@ -51,6 +51,7 @@ model Product {
   promoCodeLinks  PromoCodeProduct[]
   wishlistItems   WishlistItem[]
   recentlyViewed  RecentlyViewedProduct[]
+  guideLinks      GuideProduct[]
 
   @@index([active, sortOrder])
   @@index([category, active])
@@ -201,6 +202,17 @@ model Guide {
   // Publication. `published` gates public visibility & sitemap inclusion.
   // `scheduledAt` in the future keeps it out of public reads until then.
   published         Boolean   @default(false)
+  // Independent public-visibility switch, separate from `published` and
+  // `archivedAt`. A guide is publicly reachable only when published AND
+  // publiclyVisible AND not archived. Turning this off removes it from the
+  // index, search, popular/recent rails, platform filters, the sitemap AND its
+  // direct URL — while the admin preview keeps working.
+  publiclyVisible   Boolean   @default(true)
+  // Admin-authored "Produits attendus": free-text labels for products/families
+  // this guide covers but that the catalog does NOT sell yet (e.g. "Steam
+  // Wallet USA"). Documentation only — never joined to Product, never rendered
+  // as a purchasable item.
+  expectedProducts  String[]  @default([])
   featured          Boolean   @default(false)
   sortOrder         Int       @default(0)
   publishedAt       DateTime?
@@ -213,11 +225,38 @@ model Guide {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @default(now()) @updatedAt
 
-  category Category? @relation(fields: [categoryId], references: [id])
+  category Category?    @relation(fields: [categoryId], references: [id])
+  products GuideProduct[]
 
   @@index([published, sortOrder])
   @@index([published, featured])
+  @@index([published, publiclyVisible])
   @@index([categoryId])
+}
+
+/// Explicit many-to-many link between a guide and the catalog products it
+/// applies to. Replaces the legacy `Guide.relatedProductIds` array (backfilled
+/// on migration). `variantId` is optional: a null variant means the link covers
+/// the whole product family (every denomination/region), while a set variant
+/// pins the guide to one concrete denomination. Availability is never stored
+/// here — it is always derived live from the product/variant/inventory state so
+/// admin coverage can't drift from the storefront.
+model GuideProduct {
+  id        String   @id @default(cuid())
+  guideId   String
+  productId String
+  variantId String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  guide   Guide           @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([guideId, productId, variantId])
+  @@index([guideId])
+  @@index([productId])
+  @@index([variantId])
 }
 
 // Persistent per-customer wishlist ("Favoris"). One row per customer + parent
@@ -325,6 +364,7 @@ model ProductVariant {
   digitalCodes     DigitalCode[]
   orderItems       OrderItem[]
   supplierMappings VariantSupplierMapping[]
+  guideLinks       GuideProduct[]
 
   @@index([productId])
   @@index([productId, active])

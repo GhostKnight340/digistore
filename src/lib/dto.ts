@@ -11,6 +11,7 @@ import type {
   GuideFaqItem,
   GuideNavigatorTip,
 } from "./guide";
+import type { GuideCoverageSummary } from "./guides/coverage";
 
 // Plain serializable shapes passed between server (DB) and client components.
 // `productId` always refers to the catalog SLUG (e.g. "steam-100") so existing
@@ -575,6 +576,12 @@ export interface ActionResult {
 
 // ─── Guide (Contenu → Guides) DTOs ───────────────────────────────────────────
 
+/** One guide↔product association. `variantId` null covers the whole family. */
+export interface GuideProductLinkDTO {
+  productId: string;
+  variantId: string | null;
+}
+
 /** Full guide record for the admin editor (all editable fields, serializable). */
 export interface AdminGuideDTO {
   id: string;
@@ -588,10 +595,19 @@ export interface AdminGuideDTO {
   content: GuideBlock[];
   faq: GuideFaqItem[];
   navigatorTip: GuideNavigatorTip;
+  /** Distinct product ids, derived from `productLinks`. */
   relatedProductIds: string[];
+  /** The real guide↔product relation rows (variantId null = whole family). */
+  productLinks: GuideProductLinkDTO[];
   relatedGuideIds: string[];
   aliases: string[];
+  /** Admin-authored "Produits attendus" labels. Documentation only. */
+  expectedProducts: string[];
+  /** Live coverage derived from the catalog — never stored. */
+  coverage: GuideCoverageSummary;
   published: boolean;
+  /** Public visibility, independent of `published` and `archivedAt`. */
+  publiclyVisible: boolean;
   featured: boolean;
   sortOrder: number;
   /** ISO string or null. Future value keeps the guide out of public reads. */
@@ -621,7 +637,10 @@ export interface SaveGuideInput {
   relatedProductIds: string[];
   relatedGuideIds: string[];
   aliases: string[];
+  /** Free-text "Produits attendus" labels — never become catalog products. */
+  expectedProducts: string[];
   published: boolean;
+  publiclyVisible: boolean;
   featured: boolean;
   sortOrder: number;
   scheduledAt: string | null;

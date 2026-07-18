@@ -21,7 +21,11 @@ import {
   saveGuideAction,
   seedActivationGuidesAction,
   setGuideArchivedAction,
+  setGuideVisibilityAction,
 } from "@/app/actions/guides";
+import { summarizeCoverage } from "@/lib/guides/coverage";
+import { CoverageSummaryLine, CoverageDetails } from "./GuideCoverage";
+import GuideProductsSection from "./GuideProductsSection";
 import type {
   AdminGuideDTO,
   CollectionProductOptionDTO,
@@ -33,6 +37,76 @@ type EditorOptions = {
   products: CollectionProductOptionDTO[];
   categories: { id: string; name: string }[];
 };
+
+type GuideFilter =
+  | "all"
+  | "visible"
+  | "hidden"
+  | "no_products"
+  | "has_unavailable"
+  | "full_coverage"
+  | "archived";
+
+const GUIDE_FILTERS: { id: GuideFilter; label: string; hint: string }[] = [
+  { id: "all", label: "Tous", hint: "Tous les guides non archivés" },
+  { id: "visible", label: "Visibles", hint: "Publiés et visibles publiquement" },
+  { id: "hidden", label: "Masqués", hint: "Masqués du site public" },
+  { id: "no_products", label: "Sans produit lié", hint: "Aucun produit associé" },
+  {
+    id: "has_unavailable",
+    label: "Avec produits indisponibles",
+    hint: "Au moins un produit lié n'est pas vendable",
+  },
+  {
+    id: "full_coverage",
+    label: "Couverture complète",
+    hint: "Tous les produits liés sont disponibles, aucun produit attendu",
+  },
+  { id: "archived", label: "Archivés", hint: "Guides archivés" },
+];
+
+/** Accent/case-insensitive haystack match, mirroring the storefront search. */
+function matchesSearch(row: AdminGuideDTO, needle: string): boolean {
+  if (!needle) return true;
+  const hay = [
+    row.title,
+    row.slug,
+    row.platform,
+    ...row.coverage.available.map((p) => p.name),
+    ...row.coverage.unavailable.map((p) => p.name),
+    ...row.expectedProducts,
+  ]
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return hay.includes(needle);
+}
+
+function matchesFilter(row: AdminGuideDTO, filter: GuideFilter): boolean {
+  const archived = Boolean(row.archivedAt);
+  if (filter === "archived") return archived;
+  // Every other filter hides archived guides so they stay a separate concept.
+  if (archived) return false;
+  switch (filter) {
+    case "visible":
+      return row.publiclyVisible && row.published;
+    case "hidden":
+      return !row.publiclyVisible;
+    case "no_products":
+      return row.coverage.counts.linked === 0;
+    case "has_unavailable":
+      return row.coverage.counts.unavailable > 0;
+    case "full_coverage":
+      return (
+        row.coverage.counts.linked > 0 &&
+        row.coverage.counts.unavailable === 0 &&
+        row.coverage.counts.expected === 0
+      );
+    default:
+      return true;
+  }
+}
 
 let tempCounter = 0;
 function tempId(prefix: string): string {
@@ -61,9 +135,13 @@ function emptyDraft(): AdminGuideDTO {
       ctaUrl: "",
     },
     relatedProductIds: [],
+    productLinks: [],
     relatedGuideIds: [],
     aliases: [],
+    expectedProducts: [],
+    coverage: summarizeCoverage([], []),
     published: false,
+    publiclyVisible: true,
     featured: false,
     sortOrder: 0,
     scheduledAt: null,
@@ -90,6 +168,79 @@ export default function GuidesPanel() {
   const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState<string>("");
   const [message, setMessage] = useState<string>("");
+  /** Ids whose visibility toggle is mid-flight (shows a pending state). */
+  const [visibilityPending, setVisibilityPending] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<GuideFilter>("all");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /**
+   * Flip public visibility optimistically, then reconcile with the server.
+   * Rollback is safe here because the row's only affected field is a boolean we
+   * already hold, so a failure restores the exact previous value.
+   */
+  async function onToggleVisibility(row: AdminGuideDTO, next: boolean) {
+    setError("");
+    setMessage("");
+    setVisibilityPending((p) => new Set(p).add(row.id));
+    setGuides((prev) =>
+      prev.map((g) => (g.id === row.id ? { ...g, publiclyVisible: next } : g)),
+    );
+    try {
+      const result = await setGuideVisibilityAction(row.id, next);
+      if (!result.ok) {
+        setGuides((prev) =>
+          prev.map((g) => (g.id === row.id ? { ...g, publiclyVisible: !next } : g)),
+        );
+        setError(result.error ?? "Impossible de modifier la visibilité.");
+      } else {
+        // Reconcile with the persisted value in case it differs.
+        const persisted = result.publiclyVisible ?? next;
+        setGuides((prev) =>
+          prev.map((g) => (g.id === row.id ? { ...g, publiclyVisible: persisted } : g)),
+        );
+        setMessage(persisted ? "Guide visible publiquement." : "Guide masqué du site public.");
+      }
+    } catch {
+      setGuides((prev) =>
+        prev.map((g) => (g.id === row.id ? { ...g, publiclyVisible: !next } : g)),
+      );
+      setError("Impossible de modifier la visibilité.");
+    } finally {
+      setVisibilityPending((p) => {
+        const n = new Set(p);
+        n.delete(row.id);
+        return n;
+      });
+    }
+  }
+
+  const normalizedSearch = useMemo(
+    () =>
+      search
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase(),
+    [search],
+  );
+
+  const visibleGuides = useMemo(
+    () => guides.filter((g) => matchesFilter(g, filter) && matchesSearch(g, normalizedSearch)),
+    [guides, filter, normalizedSearch],
+  );
+
+  /** True while a filter/search narrows the list — reordering is then ambiguous. */
+  const isFiltering = filter !== "all" || normalizedSearch.length > 0;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -169,7 +320,9 @@ export default function GuidesPanel() {
         relatedProductIds: draft.relatedProductIds,
         relatedGuideIds: draft.relatedGuideIds,
         aliases: draft.aliases,
+        expectedProducts: draft.expectedProducts,
         published: draft.published,
+        publiclyVisible: draft.publiclyVisible,
         featured: draft.featured,
         sortOrder: draft.sortOrder,
         scheduledAt: draft.scheduledAt,
@@ -256,6 +409,36 @@ export default function GuidesPanel() {
         </div>
       </div>
 
+      {/* Filters + search */}
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrer les guides">
+          {GUIDE_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilter(f.id)}
+              aria-pressed={filter === f.id}
+              title={f.hint}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                filter === f.id
+                  ? "border-accent bg-accent/15 text-white"
+                  : "border-border text-muted hover:text-white"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher : titre, slug, plateforme, produit lié ou attendu…"
+          aria-label="Rechercher un guide"
+          className="input"
+        />
+      </div>
+
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {message && <p className="mb-4 text-sm text-green-400">{message}</p>}
 
@@ -265,44 +448,98 @@ export default function GuidesPanel() {
         <div className="card px-6 py-12 text-center">
           <p className="text-sm text-muted">Aucun guide pour le moment.</p>
         </div>
+      ) : visibleGuides.length === 0 ? (
+        <div className="card px-6 py-12 text-center">
+          <p className="text-sm text-muted">Aucun guide ne correspond à ce filtre.</p>
+          <button
+            type="button"
+            className="btn-ghost mt-3"
+            onClick={() => {
+              setFilter("all");
+              setSearch("");
+            }}
+          >
+            Réinitialiser les filtres
+          </button>
+        </div>
       ) : (
         <ul className="space-y-2">
-          {guides.map((row, index) => (
+          {visibleGuides.map((row) => {
+            // Reorder acts on the FULL ordered list, so resolve the real index
+            // (a filtered index would move the wrong guide).
+            const realIndex = guides.findIndex((g) => g.id === row.id);
+            const isExpanded = expanded.has(row.id);
+            const pendingVisibility = visibilityPending.has(row.id);
+            return (
             <li
               key={row.id}
-              className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              className="card flex flex-col gap-3 px-4 py-3"
             >
-              <div className="min-w-0">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-medium text-white">{row.title}</span>
                   <StatusBadge row={row} />
+                  {!row.publiclyVisible && (
+                    <span
+                      className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-faint"
+                      title="Ce guide n'apparaît pas sur le site public."
+                    >
+                      Masqué
+                    </span>
+                  )}
                 </div>
                 <p className="truncate text-xs text-faint">/{row.slug}</p>
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(row.id)}
+                  aria-expanded={isExpanded}
+                  className="mt-1 flex items-center gap-1.5 text-left transition hover:opacity-80"
+                >
+                  <CoverageSummaryLine coverage={row.coverage} />
+                  <span aria-hidden className="text-[10px] text-faint">
+                    {isExpanded ? "▲" : "▼"}
+                  </span>
+                </button>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                <ToggleSwitch
+                  checked={row.publiclyVisible}
+                  onChange={(next) => onToggleVisibility(row, next)}
+                  disabled={pendingVisibility}
+                  size="sm"
+                  checkedLabel={pendingVisibility ? "…" : "Visible"}
+                  uncheckedLabel={pendingVisibility ? "…" : "Masqué"}
+                  className="mr-1"
+                />
                 <button
                   type="button"
                   className="btn-ghost h-8 px-2 text-xs"
-                  onClick={() => onReorder(index, -1)}
+                  onClick={() => onReorder(realIndex, -1)}
                   aria-label="Monter"
-                  disabled={index === 0}
+                  disabled={realIndex <= 0 || isFiltering}
+                  title={isFiltering ? "Réinitialisez les filtres pour réordonner" : "Monter"}
                 >
                   ↑
                 </button>
                 <button
                   type="button"
                   className="btn-ghost h-8 px-2 text-xs"
-                  onClick={() => onReorder(index, 1)}
+                  onClick={() => onReorder(realIndex, 1)}
                   aria-label="Descendre"
-                  disabled={index === guides.length - 1}
+                  disabled={realIndex === guides.length - 1 || isFiltering}
+                  title={isFiltering ? "Réinitialisez les filtres pour réordonner" : "Descendre"}
                 >
                   ↓
                 </button>
                 <a
-                  href={guideHref(row.slug)}
+                  // ?preview=1 keeps the preview working for hidden/draft
+                  // guides (admin-gated server-side).
+                  href={`${guideHref(row.slug)}?preview=1`}
                   target="_blank"
                   rel="noreferrer"
                   className="btn-ghost h-8 px-3 text-xs"
+                  title="Ouvrir l'aperçu (fonctionne même si le guide est masqué)"
                 >
                   Aperçu
                 </a>
@@ -335,8 +572,16 @@ export default function GuidesPanel() {
                   Suppr.
                 </button>
               </div>
+              </div>
+
+              {isExpanded && (
+                <div className="border-t border-border pt-3">
+                  <CoverageDetails coverage={row.coverage} />
+                </div>
+              )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>
@@ -528,11 +773,25 @@ function GuideEditor({
               label="Publié"
             />
             <ToggleSwitch
+              checked={draft.publiclyVisible}
+              onChange={(v) => onUpdate("publiclyVisible", v)}
+              label="Visible publiquement"
+              checkedLabel="Visible"
+              uncheckedLabel="Masqué"
+            />
+            <ToggleSwitch
               checked={draft.featured}
               onChange={(v) => onUpdate("featured", v)}
               label="À la une"
             />
           </div>
+          {draft.published && !draft.publiclyVisible && (
+            <p className="text-xs text-amber-400">
+              Ce guide est publié mais masqué : il n&apos;apparaît nulle part sur le site
+              public et son URL directe renvoie une page introuvable. L&apos;aperçu admin
+              continue de fonctionner.
+            </p>
+          )}
           <Field
             label="Planifier la publication"
             hint="Publié + date future = masqué jusqu'à cette date."
@@ -620,15 +879,15 @@ function GuideEditor({
           )}
         </div>
 
-        {/* Related products */}
-        <ChipPicker
-          label="Produits associés"
-          selected={draft.relatedProductIds}
-          options={options.products.map((p) => ({
-            id: p.productId,
-            label: `${p.name} · ${p.categoryName}`,
-          }))}
-          onChange={(ids) => onUpdate("relatedProductIds", ids)}
+        {/* Produits concernés — real catalog links + expected-products list */}
+        <GuideProductsSection
+          selectedProductIds={draft.relatedProductIds}
+          onChangeProducts={(ids) => onUpdate("relatedProductIds", ids)}
+          expectedProducts={draft.expectedProducts}
+          onChangeExpected={(labels) => onUpdate("expectedProducts", labels)}
+          options={options.products}
+          coverage={draft.coverage}
+          isNewGuide={!draft.id}
         />
 
         {/* Related guides */}
