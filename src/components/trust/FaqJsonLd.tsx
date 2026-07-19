@@ -26,10 +26,12 @@ export default function FaqJsonLd({
     })),
   };
 
+  // JSON.stringify does not escape "<": an admin-authored answer containing a
+  // closing script tag would otherwise break out of this element.
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }}
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }}
     />
   );
 }

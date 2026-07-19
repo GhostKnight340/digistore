@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -22,10 +23,52 @@ import Faq from "@/components/trust/Faq";
 import { getRegion } from "@/lib/regions";
 import { getStoreSettings } from "@/lib/db/catalog";
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
+import { getSiteUrl } from "@/lib/siteUrl";
+import type { Product } from "@/lib/types";
 
 export async function generateStaticParams() {
   const slugs = await getParentProductSlugs().catch(() => []);
   return slugs.map((id) => ({ id }));
+}
+
+/** One-line sales description, reused by the metadata and the JSON-LD offer. */
+function productDescription(product: Product): string {
+  return (
+    product.shortDescription ||
+    product.description ||
+    `Achetez ${product.name} au Maroc : paiement local en dirham, code officiel livré par e-mail après confirmation.`
+  );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const product = await getProductBySlug(id);
+  if (!product) return { title: "Produit introuvable - ghost.ma" };
+
+  const title = `${product.name} au Maroc | ghost.ma`;
+  const description = productDescription(product);
+  // Always the parent path: ?region=/?variant= are selection state, not
+  // separate documents, so every denomination consolidates onto one canonical.
+  const canonical = `/products/${product.id}`;
+  const images = product.imageUrl ? [product.imageUrl] : undefined;
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url: canonical,
+      images,
+    },
+    twitter: { card: "summary_large_image", title, description, images },
+  };
 }
 
 export default async function ProductDetailPage({
@@ -60,10 +103,19 @@ export default async function ProductDetailPage({
 
   // Selected value: the requested one if it's in this region, else reset to the
   // first value available in the selected region.
+  // An explicit ?variant= wins even when it's sold out (the page then shows the
+  // rupture state for it); otherwise default to the first AVAILABLE denomination
+  // rather than the first one, so the panel doesn't open on a dead end.
   const selectedVariant =
     regionVariants.find((item) => item.id === rawVariant) ??
+    regionVariants.find((item) => item.stockStatus !== "out_of_stock") ??
     regionVariants.find((item) => item.id === product.selectedVariantId) ??
     regionVariants[0];
+  // This product only sells through its denominations (checkout refuses a
+  // parent-price purchase of a variant-bearing product — see promoResolve), so
+  // "no selectable variant" is itself an out-of-stock state.
+  const outOfStock =
+    !selectedVariant || selectedVariant.stockStatus === "out_of_stock";
 
   const displayRegion = selectedVariant?.region ?? product.region;
   const variantHref = (variantId: string) =>
@@ -86,8 +138,61 @@ export default async function ProductDetailPage({
     displayRegion,
   ].filter((value): value is string => Boolean(value));
 
+  // Product + Offer structured data. One offer per public denomination, each
+  // with its own availability taken from the SAME rule the buy button and
+  // checkout use — so a rich result can never advertise an unbuyable price.
+  const siteUrl = getSiteUrl();
+  const productUrl = `${siteUrl}/products/${product.id}`;
+  const offers = variants.map((item) => ({
+    "@type": "Offer",
+    url: `${productUrl}?variant=${encodeURIComponent(item.id)}`,
+    price: item.price,
+    priceCurrency: "MAD",
+    availability:
+      item.stockStatus === "out_of_stock"
+        ? "https://schema.org/OutOfStock"
+        : "https://schema.org/InStock",
+    itemCondition: "https://schema.org/NewCondition",
+  }));
+  const productLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: productDescription(product),
+    url: productUrl,
+    category: product.categoryName,
+    ...(product.imageUrl
+      ? {
+          image: product.imageUrl.startsWith("http")
+            ? product.imageUrl
+            : `${siteUrl}${product.imageUrl}`,
+        }
+      : {}),
+    brand: { "@type": "Brand", name: product.categoryName },
+    offers:
+      offers.length > 0
+        ? offers
+        : {
+            "@type": "Offer",
+            url: productUrl,
+            price: product.price,
+            priceCurrency: "MAD",
+            availability: outOfStock
+              ? "https://schema.org/OutOfStock"
+              : "https://schema.org/InStock",
+          },
+  };
+
   return (
     <div className="container-page pt-8 pb-20 sm:py-10">
+      {/* JSON.stringify does not escape "<" — escape it so product copy can
+          never break out of the script element. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(productLd).replace(/</g, "\\u003c"),
+        }}
+      />
       <nav className="mb-9 flex flex-wrap items-center gap-2 text-[13.5px] text-faint">
         <Link href="/" className="text-muted transition hover:text-white">
           Accueil
@@ -188,21 +293,38 @@ export default async function ProductDetailPage({
               <div className="mb-5">
                 <p className="mb-2 text-sm font-medium text-faint">Montant</p>
                 <div className="grid gap-2 min-[420px]:grid-cols-2">
-                  {regionVariants.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={variantHref(item.id)}
-                      scroll={false}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        item.id === selectedVariant?.id
-                          ? "border-accent bg-accent/10 text-white"
-                          : "border-border text-muted hover:border-border-strong hover:text-white"
-                      }`}
-                    >
-                      <span className="block font-medium">{item.title}</span>
-                      <span className="font-mono text-xs">{item.price} DH</span>
-                    </Link>
-                  ))}
+                  {regionVariants.map((item) => {
+                    // Unavailable denominations stay visible (so the range reads
+                    // correctly) but are not selectable: picking one would show
+                    // a price and a buy button that checkout then refuses.
+                    if (item.stockStatus === "out_of_stock") {
+                      return (
+                        <span
+                          key={item.id}
+                          aria-disabled="true"
+                          className="cursor-not-allowed rounded-xl border border-border/60 px-3 py-2 text-sm text-faint opacity-60"
+                        >
+                          <span className="block font-medium line-through">{item.title}</span>
+                          <span className="text-xs">Rupture de stock</span>
+                        </span>
+                      );
+                    }
+                    return (
+                      <Link
+                        key={item.id}
+                        href={variantHref(item.id)}
+                        scroll={false}
+                        className={`rounded-xl border px-3 py-2 text-sm transition ${
+                          item.id === selectedVariant?.id
+                            ? "border-accent bg-accent/10 text-white"
+                            : "border-border text-muted hover:border-border-strong hover:text-white"
+                        }`}
+                      >
+                        <span className="block font-medium">{item.title}</span>
+                        <span className="font-mono text-xs">{item.price} DH</span>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -215,6 +337,7 @@ export default async function ProductDetailPage({
                 faceCurrency: selectedVariant?.faceCurrency,
                 region: selectedVariant?.region ?? product.region,
               }}
+              outOfStock={outOfStock}
             />
             <div className="mt-4 flex items-center gap-2 text-xs text-faint">
               Paiement sécurisé

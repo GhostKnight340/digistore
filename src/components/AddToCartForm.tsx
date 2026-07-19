@@ -14,11 +14,18 @@ export default function AddToCartForm({
   productId,
   price,
   identity,
+  outOfStock = false,
 }: {
   productId: string;
   price?: number;
   /** Natural-key parts stored with the cart line so it survives SKU renames. */
   identity?: CartIdentity;
+  /**
+   * The selected denomination is unavailable (same rule checkout applies —
+   * lib/search/stock.ts). Buying would be refused when the order is placed, so
+   * the buttons are replaced by a "Rupture de stock" state instead.
+   */
+  outOfStock?: boolean;
 }) {
   const { addToCart } = useStore();
   const { settings } = useStoreSettings();
@@ -40,6 +47,8 @@ export default function AddToCartForm({
 
   return (
     <div>
+      {!outOfStock && (
+      <>
       <div className="mb-5 flex items-center justify-between">
         <span className="text-sm font-medium text-faint">Quantité</span>
         <div className="flex items-center overflow-hidden rounded-[10px] border border-border bg-surface">
@@ -73,8 +82,18 @@ export default function AddToCartForm({
           </div>
         </div>
       )}
+      </>
+      )}
 
-      {orderingEnabled ? (
+      {outOfStock ? (
+        <div className="rounded-[10px] border border-[#F7B14A]/25 bg-[#F7B14A]/[0.07] px-3.5 py-3.5 text-center">
+          <p className="text-[15px] font-semibold text-[#D9B27C]">Rupture de stock</p>
+          <p className="mt-1 text-[13px] text-muted">
+            Ce montant n&apos;est pas disponible pour le moment. Choisissez un autre
+            montant ou revenez plus tard.
+          </p>
+        </div>
+      ) : orderingEnabled ? (
         <div className="flex flex-col gap-3">
           <button onClick={handleBuyNow} className="btn-primary h-[52px] w-full text-base">
             Acheter maintenant

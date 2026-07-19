@@ -54,6 +54,18 @@ export const ALIAS_GROUPS: { canonical: string; aliases: string[] }[] = [
   { canonical: "xbox", aliases: ["x box"] },
   { canonical: "netflix", aliases: ["netflx", "netflix gift card", "carte netflix", "abonnement netflix"] },
   { canonical: "spotify", aliases: ["spotfy", "spotify premium", "carte spotify"] },
+  // In-game currencies: customers search the currency name, not the game.
+  { canonical: "fortnite", aliases: ["v bucks", "vbucks", "v-bucks", "vbuck"] },
+  {
+    canonical: "league of legends",
+    aliases: ["rp", "riot points", "lol", "lol rp", "league"],
+  },
+  { canonical: "pubg", aliases: ["uc", "unknown cash", "pubg uc", "pubg mobile"] },
+  { canonical: "roblox", aliases: ["robux", "roblox robux"] },
+  {
+    canonical: "valorant",
+    aliases: ["valorant points", "vp", "points valorant"],
+  },
   {
     canonical: "gta vi",
     aliases: ["gta 6", "gta6", "grand theft auto vi", "grand theft auto 6", "gta six"],
@@ -77,7 +89,15 @@ export function aliasCanonicalTerms(rawQuery: string): string[] {
   const nq = normalizeSearch(rawQuery);
   if (!nq) return [];
   const out = new Set<string>();
+  const nqTokens = tokenize(nq);
   for (const { alias, canonical } of ALIAS_LOOKUP) {
+    // Very short aliases ("rp", "uc", "vp") are dangerous as substrings — they
+    // would fire on unrelated queries ("voucher" ⊃ "uc"). Those match on a whole
+    // token only; longer aliases keep the loose substring behavior.
+    if (alias.length <= 3) {
+      if (nq === alias || nqTokens.includes(alias)) out.add(canonical);
+      continue;
+    }
     if (nq === alias || nq.includes(alias) || alias.includes(nq)) out.add(canonical);
   }
   for (const group of ALIAS_GROUPS) {

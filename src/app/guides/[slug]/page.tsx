@@ -6,6 +6,8 @@ import GuideIcon from "@/components/guides/GuideIcon";
 import GuideCard from "@/components/guides/GuideCard";
 import GuideMetaStrip from "@/components/guides/GuideMetaStrip";
 import GuideToc from "@/components/guides/GuideToc";
+import GuideSectionHeading from "@/components/guides/GuideSectionHeading";
+import { guideAccent, guideAccentVars } from "@/lib/guides/platformAccent";
 import GuideReadingProgress from "@/components/guides/GuideReadingProgress";
 import GuideHelpful from "@/components/guides/GuideHelpful";
 import GuidePrintButton from "@/components/guides/GuidePrintButton";
@@ -185,11 +187,19 @@ export default async function GuidePage({
         }
       : null;
 
+  // Platform identity: one accent pair, exposed as CSS custom properties and
+  // consumed by the .guide-* rules in globals.css. Unmapped platforms fall back
+  // to Ghost.ma blue, so nothing depends on this resolving.
+  const accent = guideAccent(guide.platform, guide.vendor);
+
   // Guide articles run wider than the site container: the two-column reading
   // layout needs ~820px of measure plus a 320px rail. Scoped here on purpose —
   // `container-page` stays as-is for every other page.
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-4 pt-6 pb-20 sm:px-6 sm:py-10 lg:px-8">
+    <div
+      className="guide-article mx-auto w-full max-w-[1280px] px-4 pt-6 pb-20 sm:px-6 sm:py-10 lg:px-8"
+      style={guideAccentVars(accent)}
+    >
       <GuideReadingProgress />
       <script
         type="application/ld+json"
@@ -262,12 +272,19 @@ export default async function GuidePage({
 
         <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <span className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-xl border border-border bg-surface2 text-accent">
+            <div className="flex items-center gap-3.5">
+              <span className="guide-platform-tile grid h-[52px] w-[52px] shrink-0 place-items-center rounded-xl border">
                 <GuideIcon icon={guide.icon} className="h-7 w-7" />
               </span>
-              <span className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-faint">
-                {[guide.platform, guide.vendor].filter(Boolean).join(" · ")}
+              <span className="flex flex-col gap-1">
+                <span className="guide-platform-label text-[11.5px] font-semibold uppercase tracking-[0.14em]">
+                  {guide.platform || "Guide"}
+                </span>
+                {guide.vendor && (
+                  <span className="text-[11.5px] uppercase tracking-[0.14em] text-faint">
+                    {guide.vendor}
+                  </span>
+                )}
               </span>
             </div>
 
@@ -286,6 +303,9 @@ export default async function GuidePage({
               devices={guide.supportedDevices}
             />
 
+            {/* Action hierarchy: one filled primary, one platform-tinted
+                secondary, then quiet tertiary utilities — so the row no longer
+                reads as four equally important buttons. */}
             <div className="mt-5 flex flex-wrap items-center gap-2 print:hidden">
               {guide.officialUrl && (
                 <a
@@ -303,17 +323,31 @@ export default async function GuidePage({
                 </a>
               )}
               {guide.officialUrl && (
-                <GuideCopyLink url={guide.officialUrl} slug={guide.slug} />
+                <span className="guide-action-secondary">
+                  <GuideCopyLink url={guide.officialUrl} slug={guide.slug} />
+                </span>
               )}
-              <ShareButton url={canonical} title={guide.title} text={guide.summary || undefined} />
-              <GuidePrintButton slug={guide.slug} />
+              <span className="guide-actions-quiet flex items-center gap-1">
+                <ShareButton url={canonical} title={guide.title} text={guide.summary || undefined} />
+                <GuidePrintButton slug={guide.slug} />
+              </span>
             </div>
 
             {/* Product CTA — only when an associated product is genuinely
-                purchasable right now (same rule as admin coverage). */}
+                purchasable right now (same rule as admin coverage). Carries a
+                commerce (emerald) tint so it never competes with the blue
+                activation CTA above. */}
             {sellableProducts.length > 0 && (
               <div className="mt-4 print:hidden">
-                <Link href={productCtaHref} className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover">
+                <Link
+                  href={productCtaHref}
+                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-3.5 py-2 text-sm font-medium text-emerald-300 transition hover:border-emerald-500/45 hover:bg-emerald-500/[0.12]"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+                    <path d="M3 5h2l1.6 9.3a2 2 0 0 0 2 1.7h7.7a2 2 0 0 0 2-1.6L20 8H6.2" />
+                    <circle cx="9.5" cy="19.5" r="1.3" />
+                    <circle cx="17" cy="19.5" r="1.3" />
+                  </svg>
                   {productCtaLabel}
                   <span aria-hidden>→</span>
                 </Link>
@@ -358,12 +392,12 @@ export default async function GuidePage({
 
         {guide.troubleshooting.length > 0 && (
           <section id="depannage" className="mt-12 scroll-mt-24">
-            <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-              Dépannage
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              Les erreurs les plus courantes, et quoi faire.
-            </p>
+            <GuideSectionHeading
+              eyebrow="Si ça bloque"
+              title="Dépannage"
+              icon="wrench"
+              description="Les erreurs les plus courantes, et quoi faire."
+            />
             <div className="mt-4">
               <GuideAccordion
                 items={guide.troubleshooting}
@@ -376,9 +410,11 @@ export default async function GuidePage({
 
         {guide.faq.length > 0 && (
           <section id="faq" className="mt-12 scroll-mt-24">
-            <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-              Questions fréquentes
-            </h2>
+            <GuideSectionHeading
+              eyebrow="Bon à savoir"
+              title="Questions fréquentes"
+              icon="question"
+            />
             <div className="mt-4">
               <GuideAccordion items={guide.faq} slug={guide.slug} event="guide_faq_open" />
             </div>
@@ -438,26 +474,43 @@ export default async function GuidePage({
           <div className="sticky top-24 max-h-[calc(100vh-7rem)] space-y-5 overflow-y-auto pb-24">
             <GuideToc items={toc} slug={guide.slug} />
 
-            <div className="rounded-2xl border border-border bg-card p-5">
-              <h2 className="text-[15px] font-semibold text-white">Besoin d&apos;aide ?</h2>
-              <p className="mt-1 text-xs text-muted">
+            <div className="rounded-2xl border border-border bg-surface2/70 p-5">
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-sky-500/25 bg-sky-500/10 text-sky-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+                    <path d="M21 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
+                  </svg>
+                </span>
+                <h2 className="text-[15px] font-semibold text-white">Besoin d&apos;aide ?</h2>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
                 Notre équipe répond avant et après l&apos;achat.
               </p>
               <div className="mt-4 space-y-2">
-                {guide.officialUrl && (
-                  <a
-                    href={guide.officialUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="btn-ghost w-full justify-center"
-                  >
-                    Page d&apos;activation officielle
-                  </a>
-                )}
                 <Link href="/support" className="btn-primary w-full justify-center">
                   Contacter le support
                 </Link>
-                <Link href="/contact" className="btn-ghost w-full justify-center">
+                {guide.officialUrl && (
+                  <span className="guide-action-secondary block">
+                    <a
+                      href={guide.officialUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="btn-ghost w-full justify-center gap-1.5 text-[13px]"
+                    >
+                      Page d&apos;activation officielle
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden>
+                        <path d="M14 4h6v6" />
+                        <path d="M20 4 10 14" />
+                        <path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />
+                      </svg>
+                    </a>
+                  </span>
+                )}
+                <Link
+                  href="/contact"
+                  className="block rounded-xl px-3 py-2 text-center text-[13px] font-medium text-muted transition hover:bg-surface2 hover:text-white"
+                >
                   Ouvrir un ticket
                 </Link>
               </div>

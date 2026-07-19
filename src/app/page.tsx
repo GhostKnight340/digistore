@@ -15,7 +15,13 @@ import AcceptedPayments from "@/components/trust/AcceptedPayments";
 import Faq from "@/components/trust/Faq";
 import FaqJsonLd from "@/components/trust/FaqJsonLd";
 import GtaPreorderBanner from "@/components/gta/GtaPreorderBanner";
-import { getActiveCategories, getCatalogData, getStoreSettings } from "@/lib/db/catalog";
+import TrackItemList from "@/components/analytics/TrackItemList";
+import {
+  getActiveCategories,
+  getCatalogData,
+  getFeaturedVariantCards,
+  getStoreSettings,
+} from "@/lib/db/catalog";
 import { getHomepageCollectionCards } from "@/lib/db/collections";
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveBrandColor } from "@/lib/brandAssets";
@@ -23,8 +29,12 @@ import { visibleReviews } from "@/lib/trust/content";
 
 export const revalidate = 3600;
 
+/** GA4 list id for the "Produits populaires" carousel — shared by the
+ *  view_item_list impression and each card's select_item, so GA4 can join them. */
+const FEATURED_LIST_NAME = "Produits populaires";
+
 export default async function HomePage() {
-  const [{ categories, products }, settings, brandCategories, collectionCards, paymentConfig] =
+  const [{ categories }, settings, brandCategories, collectionCards, paymentConfig] =
     await Promise.all([
       getCatalogData(),
       getStoreSettings(),
@@ -43,15 +53,14 @@ export default async function HomePage() {
       resolveBrandColor(category.slug ?? category.id, category.accentColor),
     ]),
   );
-  const productsById = new Map(products.map((product) => [product.id, product]));
-  const featured = settings.featuredProductIds
-    .map((id) => productsById.get(id))
-    .filter((product): product is (typeof products)[number] => Boolean(product))
-    .filter(
-      (product) =>
-        settings.featuredOutOfStock === "show" ||
-        product.stockStatus !== "out_of_stock",
-    );
+  // Resolved by a targeted query, NOT by looking the ids up inside a paginated
+  // catalogue slice: with a few dozen products × several denominations a
+  // featured variant easily falls outside page 1 and the section silently
+  // shrank to "Aucun produit populaire…".
+  const featured = (await getFeaturedVariantCards(settings.featuredProductIds)).filter(
+    (product) =>
+      settings.featuredOutOfStock === "show" || product.stockStatus !== "out_of_stock",
+  );
 
   return (
     <div className="container-page pb-14 sm:pb-0">
@@ -174,13 +183,16 @@ export default async function HomePage() {
             </div>
           ) : (
             <div className="mt-6 sm:mt-7">
+              <TrackItemList listName={FEATURED_LIST_NAME} products={featured} />
               <FeaturedCarousel>
-                {featured.map((product) => (
+                {featured.map((product, index) => (
                   <ProductCard
                     key={product.id}
                     product={product}
                     accent={accentByCategory.get(product.category)}
                     featured
+                    listName={FEATURED_LIST_NAME}
+                    index={index}
                   />
                 ))}
               </FeaturedCarousel>

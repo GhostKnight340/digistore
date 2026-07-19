@@ -42,7 +42,12 @@ export default function GuideAccordion({
       {items.map((item) => {
         const isOpen = open.has(item.id);
         return (
-          <li key={item.id} className="overflow-hidden rounded-xl border border-border bg-card">
+          <li
+            className={`overflow-hidden rounded-xl border bg-card transition-colors ${
+              isOpen ? "guide-accordion-open" : "border-border"
+            }`}
+            key={item.id}
+          >
             <button
               type="button"
               onClick={() => toggle(item.id)}
@@ -57,7 +62,9 @@ export default function GuideAccordion({
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="h-4 w-4 shrink-0 text-faint transition-transform duration-200"
+                className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+                  isOpen ? "guide-accordion-chevron" : "text-faint"
+                }`}
                 style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
                 aria-hidden
               >

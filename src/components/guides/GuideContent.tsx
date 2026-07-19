@@ -93,7 +93,11 @@ export default function GuideContent({
               <div
                 key={block.id}
                 role="note"
-                className="flex gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4"
+                /* `warning` is not a colour in tailwind.config.ts, so the
+                   previous border-warning/bg-warning classes rendered as
+                   nothing. Amber, explicitly — same treatment as the
+                   structured guide's intro warning. */
+                className="flex gap-3 rounded-xl border border-amber-500/40 border-l-2 border-l-amber-400 bg-amber-500/10 p-4"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -102,7 +106,7 @@ export default function GuideContent({
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="mt-0.5 h-5 w-5 shrink-0 text-warning"
+                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-400"
                   aria-hidden
                 >
                   <path d="M12 9v4" />

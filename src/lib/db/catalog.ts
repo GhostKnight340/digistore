@@ -13,6 +13,10 @@ import {
 import { variantTitle } from "@/lib/pricing/variant-identity";
 import { normalizeCategoryLanding } from "@/lib/categoryLanding";
 import { scoreMatch, normalizeSearch } from "@/lib/search/text";
+import {
+  isVariantAvailable,
+  normalizeStockMode as normalizeStockModeShared,
+} from "@/lib/search/stock";
 import { isCollectionPublic } from "@/lib/collections/schedule";
 import { categoryHref } from "@/lib/categoryUrl";
 import { collectionHref } from "@/lib/collectionUrl";
@@ -58,9 +62,7 @@ const productCatalogInclude = {
 } satisfies Prisma.ProductInclude;
 
 function normalizeStockMode(value: string): StockMode {
-  return value === "force_in_stock" || value === "force_out_of_stock"
-    ? value
-    : "automatic";
+  return normalizeStockModeShared(value);
 }
 
 function isVariantPublic(
@@ -80,13 +82,11 @@ function variantStockStatus(
   variant: ProductWithCategory["variants"][number],
   opts?: StockOpts,
 ): StockStatus {
-  const stockMode = normalizeStockMode(variant.stockMode);
-  if (stockMode === "force_in_stock") return "in_stock";
-  // Inventory OFF: never out-of-stock on quantity or force_out override.
-  if (opts && !isInventoryEnabled(opts)) return "in_stock";
-  if (stockMode === "force_out_of_stock") return "out_of_stock";
-  if (!opts || opts.inventoryMode === "manual") return "in_stock";
-  return variant._count.digitalCodes > 0 ? "in_stock" : "out_of_stock";
+  // Delegates to the shared predicate so the storefront badge, the product-page
+  // buy button, the JSON-LD offer and checkout (promoResolve) never diverge.
+  return isVariantAvailable(variant.stockMode, variant._count.digitalCodes, opts)
+    ? "in_stock"
+    : "out_of_stock";
 }
 
 function toVariantOption(
@@ -616,6 +616,40 @@ export async function getPublicParentCards(
     map.set(row.id, buildParentCard(row, publicVariants, settings));
   }
   return map;
+}
+
+/**
+ * Storefront cards for a list of FEATURED VARIANT ids (`featuredProductIds` in
+ * the store settings), returned in the SAME order as the input. Resolved with a
+ * targeted query rather than by intersecting a paginated catalogue slice — with
+ * a few dozen products × several denominations, a featured variant easily falls
+ * outside page 1 and the homepage section would silently shrink. Hidden /
+ * inactive / out-of-catalogue variants are simply dropped.
+ */
+export async function getFeaturedVariantCards(variantIds: string[]): Promise<Product[]> {
+  const ids = [...new Set(variantIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) return [];
+  const settings = await loadStoreSettings();
+  const rows = await prisma.product.findMany({
+    where: {
+      active: true,
+      categoryRecord: { is: { active: true } },
+      variants: { some: { id: { in: ids }, active: true } },
+    },
+    include: productCatalogInclude,
+  });
+  const wanted = new Set(ids);
+  const byVariantId = new Map<string, Product>();
+  for (const row of rows) {
+    for (const variant of row.variants) {
+      if (!wanted.has(variant.id)) continue;
+      if (!isVariantPublic(row, variant, settings)) continue;
+      byVariantId.set(variant.id, toVariantProduct(row, variant, settings));
+    }
+  }
+  return variantIds
+    .map((id) => byVariantId.get(id))
+    .filter((product): product is Product => Boolean(product));
 }
 
 /**
