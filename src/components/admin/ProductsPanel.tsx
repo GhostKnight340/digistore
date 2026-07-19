@@ -610,9 +610,12 @@ export default function ProductsPanel() {
               <h2 className="text-sm font-bold text-white">Produits</h2>
               <p className="text-xs text-muted">{items.length} produit{items.length !== 1 ? "s" : ""} parent{items.length !== 1 ? "s" : ""}</p>
             </div>
-            <button type="button" onClick={openNew} className="btn-primary py-1 text-xs">
-              + Nouveau
-            </button>
+            <div className="flex items-center gap-2">
+              <ExportMediaButton />
+              <button type="button" onClick={openNew} className="btn-primary py-1 text-xs">
+                + Nouveau
+              </button>
+            </div>
           </div>
 
           {/* Approvisionnement filter (supply summaries are computed server-side). */}
@@ -866,6 +869,67 @@ export default function ProductsPanel() {
 }
 
 // ─── Details tab ─────────────────────────────────────────────────────────────
+
+/**
+ * Downloads every product image as a single .zip ("products media/" folder,
+ * one file per product name). Fetched rather than a plain <a download> so the
+ * button can show a pending state and surface a real error instead of
+ * navigating away to a JSON error body.
+ */
+function ExportMediaButton() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function download() {
+    setBusy(true);
+    setError(null);
+    let objectUrl: string | null = null;
+    try {
+      const res = await fetch("/api/admin/product-media");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? "Export impossible.");
+      }
+      const skipped = Number(res.headers.get("X-Export-Skipped") ?? 0);
+      objectUrl = URL.createObjectURL(await res.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = "products-media.zip";
+      link.click();
+      if (skipped > 0) {
+        setError(`${skipped} image(s) ignorée(s) — non stockées dans la base.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export impossible.");
+    } finally {
+      // Revoke later so the click has taken the blob first.
+      if (objectUrl) {
+        const url = objectUrl;
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      }
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={download}
+        disabled={busy}
+        className="btn-ghost py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+        title="Télécharger toutes les images produits (.zip)"
+      >
+        {busy ? "Préparation…" : "Exporter les médias"}
+      </button>
+      {error && (
+        <span role="alert" className="text-[11px] text-red-400">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function DeleteParentDialog({
   product,
