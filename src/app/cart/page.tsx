@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { useStore } from "@/context/StoreContext";
+import { trackEcommerce, toAnalyticsItem } from "@/lib/analytics";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
 import { useStoreSettings } from "@/context/StoreSettingsContext";
 import { isOrderingEnabled } from "@/lib/storeSettings";
@@ -19,6 +21,20 @@ export default function CartPage() {
   const { getProduct } = useProductCatalog();
   const { settings } = useStoreSettings();
   const orderingEnabled = isOrderingEnabled(settings);
+
+  // GA4 `view_cart`, once per visit to this page (not on every quantity edit).
+  const viewCartSent = useRef(false);
+  useEffect(() => {
+    if (!ready || viewCartSent.current || cart.length === 0) return;
+    viewCartSent.current = true;
+    trackEcommerce("view_cart", {
+      value: cartTotal,
+      items: cart.flatMap((item) => {
+        const product = getProduct(item.productId);
+        return product ? [toAnalyticsItem(product, { quantity: item.quantity })] : [];
+      }),
+    });
+  }, [ready, cart, cartTotal, getProduct]);
 
   if (!ready) {
     return (
@@ -83,7 +99,13 @@ export default function CartPage() {
                       {product.name}
                     </Link>
                     <button
-                      onClick={() => removeFromCart(product.id)}
+                      onClick={() => {
+                        trackEcommerce("remove_from_cart", {
+                          value: product.price * item.quantity,
+                          items: [toAnalyticsItem(product, { quantity: item.quantity })],
+                        });
+                        removeFromCart(product.id);
+                      }}
                       className="text-xs text-muted transition hover:text-red-400"
                     >
                       Retirer

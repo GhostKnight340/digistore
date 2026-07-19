@@ -80,7 +80,9 @@ export default async function RootLayout({
   // Visible only on staging/preview (never on production ghost.ma). Warns
   // testers that data and payments here are throwaway. See src/lib/env.ts.
   const showStagingBanner = isPreviewDeployment();
-  const gaId = process.env.NEXT_PUBLIC_GA_ID || "G-3DS42J47SN";
+  // No fallback measurement id: a missing NEXT_PUBLIC_GA_ID must disable
+  // analytics cleanly, never silently ship data to a baked-in property.
+  const gaId = process.env.NEXT_PUBLIC_GA_ID;
   // Production analytics only: staging/preview page views must not pollute the
   // live GA property.
   const analyticsEnabled = isProductionRuntime() && Boolean(gaId);

@@ -19,6 +19,7 @@ import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
 import { isFazerCardsConfigured } from "@/lib/fazercards/config";
 import { isReloadlyConfigured } from "@/lib/reloadly/config";
 import { runtimeEnvLabel, isProductionRuntime } from "@/lib/env";
+import { withHealthTimeout } from "@/lib/monitoring/healthTimeout";
 import type { HealthResult, HealthStatus } from "./types";
 
 const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -34,6 +35,11 @@ function now(): string {
 function base(key: string, label: string): Pick<HealthResult, "key" | "label" | "checkedAt"> {
   return { key, label, checkedAt: now() };
 }
+
+// The deadline wrapper itself lives in @/lib/monitoring/healthTimeout so it can
+// be tested without pulling in Prisma. Re-exported here because this module is
+// the single entry point callers use for health.
+export { withHealthTimeout } from "@/lib/monitoring/healthTimeout";
 
 /** Database: a trivial round-trip proves connectivity + latency. */
 export async function checkDatabase(): Promise<HealthResult> {
@@ -135,13 +141,75 @@ export async function checkDiscord(): Promise<HealthResult> {
  * local /public/uploads in dev) — no external object store. Health therefore
  * tracks the DB (where prod images live) plus the upload route being present.
  */
-export function checkStorage(): HealthResult {
+export async function checkStorage(): Promise<HealthResult> {
+  const startedAt = Date.now();
+  try {
+    // A real probe, not a claim: count products that actually carry an image.
+    // In production that image data IS the storage, so this exercises it.
+    const withImage = await prisma.product.count({ where: { imageUrl: { not: null } } });
+    return {
+      ...base("storage", "Stockage des images"),
+      status: withImage > 0 ? "healthy" : "warning",
+      message:
+        withImage > 0
+          ? `${withImage} produit(s) avec image — stockage lisible.`
+          : "Aucun produit n’a d’image — stockage vide ou illisible.",
+      responseTimeMs: Date.now() - startedAt,
+    };
+  } catch {
+    return {
+      ...base("storage", "Stockage des images"),
+      status: "unknown",
+      message: "Impossible de vérifier le stockage des images.",
+      responseTimeMs: Date.now() - startedAt,
+    };
+  }
+}
+
+/**
+ * Payments (PayPal): credentials present, and the sandbox/live mode matches the
+ * runtime. `PAYPAL_ENV=sandbox` on production means no real money can be taken;
+ * `live` on staging is the dangerous direction and is flagged at boot too
+ * (src/instrumentation.ts).
+ */
+export function checkPayments(): HealthResult {
+  const mode = process.env.PAYPAL_ENV ?? "sandbox";
+  const configured = Boolean(
+    process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET,
+  );
+  if (!configured) {
+    return {
+      ...base("payments", "Paiements (PayPal)"),
+      status: isProductionRuntime() ? "offline" : "unknown",
+      message: isProductionRuntime()
+        ? "Identifiants PayPal absents — aucun paiement PayPal possible."
+        : "PayPal non configuré sur cet environnement.",
+      responseTimeMs: null,
+      action: "Ajoutez PAYPAL_CLIENT_ID et PAYPAL_CLIENT_SECRET.",
+    };
+  }
+  if (isProductionRuntime() && mode !== "live") {
+    return {
+      ...base("payments", "Paiements (PayPal)"),
+      status: "warning",
+      message: `Configuré en mode « ${mode} » sur la production — paiements non réels.`,
+      responseTimeMs: null,
+      action: "Passez PAYPAL_ENV=live.",
+    };
+  }
+  if (!isProductionRuntime() && mode === "live") {
+    return {
+      ...base("payments", "Paiements (PayPal)"),
+      status: "warning",
+      message: "PAYPAL_ENV=live hors production — de vrais paiements peuvent être capturés.",
+      responseTimeMs: null,
+      action: "Passez PAYPAL_ENV=sandbox sur cet environnement.",
+    };
+  }
   return {
-    ...base("storage", "Stockage des images"),
+    ...base("payments", "Paiements (PayPal)"),
     status: "healthy",
-    message: isProductionRuntime()
-      ? "Images intégrées (base64) — stockées en base."
-      : "Images locales (/public/uploads) en développement.",
+    message: `Identifiants présents, mode « ${mode} ».`,
     responseTimeMs: null,
   };
 }
@@ -175,19 +243,23 @@ export function checkWebsite(): HealthResult {
 }
 
 /**
- * Cron jobs: mirrors vercel.json. We can't read last-run without a tracking
- * table, so this reports "configuré" (schedules known) — honest rather than a
- * fabricated "last ran" time. Only meaningful on Vercel.
+ * Cron jobs: mirrors vercel.json. There is no last-run tracking table, so we
+ * cannot know whether the schedules actually FIRED — a job broken for a week
+ * would look identical. Being configured is not being healthy, so this reports
+ * "unknown" rather than a green light nobody verified.
  */
 export function checkCron(): HealthResult {
   const onVercel = Boolean(process.env.VERCEL);
   return {
     ...base("cron", "Tâches planifiées (cron)"),
-    status: onVercel ? "healthy" : "unknown",
+    status: "unknown",
     message: onVercel
-      ? "3 tâches configurées : dépenses (quotidien), revue mensuelle, crédit Ghost."
+      ? "3 tâches planifiées, mais aucune trace d’exécution — état réel inconnu."
       : "Les tâches cron ne s’exécutent que sur Vercel.",
     responseTimeMs: null,
+    ...(onVercel
+      ? { action: "Consultez les journaux cron Vercel pour confirmer les exécutions." }
+      : {}),
   };
 }
 
@@ -252,10 +324,13 @@ export async function checkSuppliers(): Promise<HealthResult[]> {
  */
 export async function runCoreHealthChecks(): Promise<HealthResult[]> {
   await ensureDatabaseReady();
-  const [database, email, discord] = await Promise.all([
-    checkDatabase(),
-    checkEmail(),
-    checkDiscord(),
+  // Each DB-touching check gets its own deadline, so one hung connection
+  // degrades a single card instead of freezing the whole dashboard render.
+  const [database, email, discord, storage] = await Promise.all([
+    withHealthTimeout("database", "Base de données", checkDatabase),
+    withHealthTimeout("email", "E-mails (Resend)", checkEmail),
+    withHealthTimeout("discord", "Discord", checkDiscord),
+    withHealthTimeout("storage", "Stockage des images", checkStorage),
   ]);
   return [
     database,
@@ -263,7 +338,8 @@ export async function runCoreHealthChecks(): Promise<HealthResult[]> {
     checkWebsite(),
     email,
     discord,
-    checkStorage(),
+    storage,
+    checkPayments(),
     checkCron(),
   ];
 }
