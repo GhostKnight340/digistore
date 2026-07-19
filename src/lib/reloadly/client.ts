@@ -5,7 +5,11 @@
  * client secret or an access token — error paths only ever surface the HTTP
  * status and a server-provided message string.
  *
- * Foundation only: nothing in this file is wired into order fulfillment yet.
+ * Every outbound fetch carries an AbortSignal timeout — without one, undici
+ * waits indefinitely and a hung supplier call would pin an order delivery (and
+ * the admin request behind it) open forever. A timeout surfaces as an
+ * AbortError, which {@link isReloadlyNetworkError} classifies as a network
+ * failure.
  */
 import "server-only";
 import {
@@ -41,7 +45,11 @@ export function isReloadlyNetworkError(error: unknown): boolean {
   if (error instanceof ReloadlyApiError || error instanceof ReloadlyConfigError) {
     return false;
   }
-  if (error instanceof DOMException && error.name === "AbortError") return true;
+  // AbortSignal.timeout() rejects with name "TimeoutError" (NOT "AbortError",
+  // which only covers an explicit controller.abort()) — both must match.
+  if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) {
+    return true;
+  }
   if (error instanceof TypeError && /fetch/i.test(error.message)) return true;
   // undici wraps low-level socket failures (ECONNRESET, ENOTFOUND, ETIMEDOUT…)
   // in `error.cause` with a string `code`.
@@ -81,6 +89,11 @@ const tokenCache = new Map<string, TokenCacheEntry>();
 // races the token's actual cutoff.
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 
+/** Auth + read-only lookups: fail fast, they are cheap and retryable. */
+export const RELOADLY_LOOKUP_TIMEOUT_MS = 10_000;
+/** Order placement: allow longer, the provider fulfils synchronously. */
+export const RELOADLY_ORDER_TIMEOUT_MS = 15_000;
+
 async function fetchAccessToken(audience: string): Promise<TokenCacheEntry> {
   const clientId = getReloadlyClientId();
   const clientSecret = getReloadlyClientSecret();
@@ -99,6 +112,7 @@ async function fetchAccessToken(audience: string): Promise<TokenCacheEntry> {
       grant_type: "client_credentials",
       audience,
     }),
+    signal: AbortSignal.timeout(RELOADLY_LOOKUP_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -141,6 +155,8 @@ type ReloadlyRequestInit = {
    * type instead.
    */
   accept?: string;
+  /** Overrides {@link RELOADLY_LOOKUP_TIMEOUT_MS} (order calls use longer). */
+  timeoutMs?: number;
 };
 
 const GIFT_CARDS_ACCEPT = "application/com.reloadly.giftcards-v1+json";
@@ -175,6 +191,7 @@ export async function reloadlyRequest<T>(
       Accept: init.accept ?? GIFT_CARDS_ACCEPT,
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    signal: AbortSignal.timeout(init.timeoutMs ?? RELOADLY_LOOKUP_TIMEOUT_MS),
   });
 
   if (!response.ok) {

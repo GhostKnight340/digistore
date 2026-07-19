@@ -49,7 +49,11 @@ export function isFazerCardsNetworkError(error: unknown): boolean {
   if (error instanceof FazerCardsApiError || error instanceof FazerCardsConfigError) {
     return false;
   }
-  if (error instanceof DOMException && error.name === "AbortError") return true;
+  // AbortSignal.timeout() rejects with name "TimeoutError" (NOT "AbortError",
+  // which only covers an explicit controller.abort()) — both must match.
+  if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) {
+    return true;
+  }
   if (error instanceof TypeError && /fetch/i.test(error.message)) return true;
   // undici wraps low-level socket failures (ECONNRESET, ENOTFOUND, ETIMEDOUT…)
   // in `error.cause` with a string `code`.
@@ -88,7 +92,14 @@ type FazerCardsRequestInit = {
   query?: Record<string, string | number | undefined>;
   /** Sent as `Idempotency-Key` — REQUIRED on every order-creation call. */
   idempotencyKey?: string;
+  /** Overrides {@link FAZERCARDS_LOOKUP_TIMEOUT_MS} (order calls use longer). */
+  timeoutMs?: number;
 };
+
+/** Read-only lookups (profile, balance, catalog, order status): fail fast. */
+export const FAZERCARDS_LOOKUP_TIMEOUT_MS = 10_000;
+/** Order placement: allow longer before giving up on the response. */
+export const FAZERCARDS_ORDER_TIMEOUT_MS = 15_000;
 
 /** Every successful FazerCards payload carries `ok: true`. */
 type FazerCardsEnvelope = { ok: boolean; error?: string; code?: string };
@@ -121,6 +132,7 @@ export async function fazerCardsRequest<T extends FazerCardsEnvelope>(
       ...(init.idempotencyKey ? { "Idempotency-Key": init.idempotencyKey } : {}),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    signal: AbortSignal.timeout(init.timeoutMs ?? FAZERCARDS_LOOKUP_TIMEOUT_MS),
   });
 
   let data: (FazerCardsEnvelope & Record<string, unknown>) | null = null;

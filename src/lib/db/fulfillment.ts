@@ -24,6 +24,8 @@ import {
   type SupplierSlug,
 } from "@/lib/suppliers/registry";
 import { isSupplierEnabled, recordSupplierLog } from "@/lib/db/supplierManagement";
+import { isSupplierPurchaseUncertain } from "@/lib/suppliers/purchaseOutcome";
+import { sendPurchaseEvent } from "@/lib/analytics/purchase";
 
 const LOW_STOCK_THRESHOLD = 3;
 
@@ -140,6 +142,7 @@ export async function deliverOrder(
               productId: true,
               variantId: true,
               quantity: true,
+              unitPriceMad: true,
               product: { select: { name: true } },
               variant: {
                 select: {
@@ -237,13 +240,27 @@ export async function deliverOrder(
           error: `${provider.name} est désactivé dans Fournisseurs — réactivez-le ou livrez ce code manuellement.`,
         };
       }
+      // Unavailable credentials (or a supplier deliberately disabled outside
+      // production, e.g. FazerCards which has no sandbox) must degrade to
+      // manual fulfilment, not to a provider exception mid-delivery.
+      if (!provider.isConfigured()) {
+        return {
+          ok: false,
+          error: `${provider.name} n’est pas disponible sur cet environnement — livrez ce code manuellement.`,
+        };
+      }
 
       const startedAt = Date.now();
       try {
         const result = await provider.purchase({
-          // Stable across retries: a re-clicked "Livrer" replays the SAME
-          // provider order (Idempotency-Key / customIdentifier) instead of
-          // spending the wallet twice.
+          // Stable across retries, and the ONLY thing tying a retry to the
+          // earlier attempt. How much protection that buys differs per
+          // supplier: FazerCards sends it as a real `Idempotency-Key` header
+          // (server-enforced replay), while Reloadly has no such header — its
+          // `customIdentifier` is only a reference field, so the provider has
+          // to look the transaction up before ordering again. Neither is a
+          // persisted ledger; a purchase whose outcome is unknown surfaces as
+          // SupplierPurchaseUncertainError below rather than being retried.
           idempotencyScope: `${orderId}-${item.id}-${index}`,
           entryParams,
           context: {
@@ -269,6 +286,11 @@ export async function deliverOrder(
           error instanceof Error && error.message
             ? error.message
             : "Erreur fournisseur inattendue.";
+        // An UNCERTAIN failure (timeout / 5xx / unreachable) may already have
+        // been charged. Its message is the reconciliation instruction itself —
+        // do NOT wrap it in "Échec de la commande", which reads as "nothing
+        // happened, click again" and is exactly the double-spend we guard.
+        const uncertain = isSupplierPurchaseUncertain(error);
         void recordSupplierLog({
           slug,
           requestType: "purchase",
@@ -276,9 +298,12 @@ export async function deliverOrder(
           responseTimeMs: Date.now() - startedAt,
           orderId,
           productName: item.product?.name ?? null,
-          errorMessage: message,
+          errorMessage: uncertain ? `[INCERTAIN] ${message}` : message,
         });
-        return { ok: false, error: `Échec de la commande ${provider.name} : ${message}` };
+        return {
+          ok: false,
+          error: uncertain ? message : `Échec de la commande ${provider.name} : ${message}`,
+        };
       }
     }
   }
@@ -420,6 +445,22 @@ export async function deliverOrder(
     }), () => assignments.length);
 
     const reference = await publicOrderReference(order);
+
+    // GA4 `purchase` — fired here, at delivery, because that is the point the
+    // business considers the order genuinely complete. Server-side and keyed on
+    // the order id (GA4's transaction_id), so a customer refreshing the payment
+    // page can never double-count it. Fire-and-forget: never awaited, no-ops
+    // without GA_API_SECRET, and must never delay or fail a delivery.
+    void sendPurchaseEvent({
+      orderId,
+      totalMad: order.totalMad,
+      items: order.items.map((item) => ({
+        item_id: item.variantId ?? item.productId,
+        item_name: item.product.name,
+        price: item.unitPriceMad,
+        quantity: item.quantity,
+      })),
+    });
 
     try {
       await sendTransactionalEmail({

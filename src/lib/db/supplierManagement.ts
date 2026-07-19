@@ -206,10 +206,47 @@ export async function recordSupplierLog(input: {
   }
 }
 
-export async function recordSupplierCheck(slug: SupplierSlug): Promise<void> {
+/**
+ * Records that a health check ran. Pass `outcome` to also persist the result —
+ * the scheduled health job does, so the ops dashboard can distinguish "checked
+ * and healthy" from "checked and failing" without re-probing the API.
+ * Omitting it preserves the original behaviour (timestamp only).
+ */
+export async function recordSupplierCheck(
+  slug: SupplierSlug,
+  outcome?: {
+    ok: boolean;
+    message?: string | null;
+    latencyMs?: number | null;
+    planName?: string | null;
+    planExpiresAt?: Date | null;
+    subscriptionActive?: boolean | null;
+  },
+): Promise<void> {
   try {
     await ensureSupplierRow(slug);
-    await prisma.supplier.update({ where: { id: slug }, data: { lastCheckedAt: new Date() } });
+    const now = new Date();
+    await prisma.supplier.update({
+      where: { id: slug },
+      data: {
+        lastCheckedAt: now,
+        ...(outcome
+          ? {
+              ...(outcome.ok
+                ? { lastSuccessAt: now, lastFailureMessage: null }
+                : { lastFailureAt: now, lastFailureMessage: outcome.message ?? null }),
+              ...(outcome.latencyMs != null ? { lastLatencyMs: outcome.latencyMs } : {}),
+              ...(outcome.planName !== undefined ? { planName: outcome.planName } : {}),
+              ...(outcome.planExpiresAt !== undefined
+                ? { planExpiresAt: outcome.planExpiresAt }
+                : {}),
+              ...(outcome.subscriptionActive !== undefined
+                ? { subscriptionActive: outcome.subscriptionActive }
+                : {}),
+            }
+          : {}),
+      },
+    });
   } catch (error) {
     console.error("[suppliers:check]", error);
   }

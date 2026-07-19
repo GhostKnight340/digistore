@@ -11,6 +11,14 @@
     {
       "path": "/api/cron/ghost-credit",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/supplier-reconcile",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/supplier-health",
+      "schedule": "0 */2 * * *"
     }
   ]
 }

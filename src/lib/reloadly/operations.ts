@@ -1,12 +1,13 @@
 /**
  * Domain-level Reloadly Gift Cards operations. This is the surface other
- * code should import from — nothing here is called by the production order
- * flow yet. Reloadly is a future optional supplier source per product
- * variant, not a replacement for local `DigitalCode` inventory.
+ * code should import from. `placeGiftCardOrder` IS on the live money path:
+ * deliverOrder() → SupplierProvider.purchase() → here. Reloadly is an optional
+ * supplier source per product variant, not a replacement for local
+ * `DigitalCode` inventory.
  */
 import "server-only";
 import { getGiftCardsBaseUrl } from "./config";
-import { reloadlyRequest } from "./client";
+import { reloadlyRequest, RELOADLY_ORDER_TIMEOUT_MS } from "./client";
 
 export type ReloadlyDenominationType = "FIXED" | "RANGE";
 
@@ -319,8 +320,15 @@ export type ReloadlyGiftCardOrderResult = {
 
 /**
  * Places a live/sandbox Reloadly order and spends from the Reloadly wallet.
- * NOT wired into deliverOrder() or any customer flow yet — exported for
- * future use once per-product supplier selection exists.
+ * Called from deliverOrder() via the Reloadly SupplierProvider — this is real
+ * money on the live environment.
+ *
+ * IMPORTANT: `customIdentifier` is a free-form reference field, NOT a
+ * server-enforced idempotency key (unlike FazerCards' `Idempotency-Key`
+ * header, which Reloadly's Gift Cards API does not offer). Reloadly will
+ * happily place a SECOND order for the same customIdentifier. Callers must
+ * therefore check {@link findGiftCardOrderByCustomIdentifier} first and must
+ * never blindly retry a call whose outcome is unknown.
  */
 export async function placeGiftCardOrder(
   input: PlaceGiftCardOrderInput,
@@ -331,8 +339,33 @@ export async function placeGiftCardOrder(
     {
       method: "POST",
       body: input,
+      timeoutMs: RELOADLY_ORDER_TIMEOUT_MS,
     },
   );
+}
+
+/**
+ * Looks up an already-placed transaction by the `customIdentifier` we sent,
+ * via the transaction report endpoint. This is the (only) way to make a
+ * Reloadly purchase effectively idempotent: before placing an order for a
+ * given scope, ask whether that scope already bought something.
+ *
+ * Tolerates both response shapes the report endpoint is known to return: a
+ * bare array, and a Spring-style page object with `content`. Returns null when
+ * nothing matches. Read-only — spends nothing.
+ */
+export async function findGiftCardOrderByCustomIdentifier(
+  customIdentifier: string,
+): Promise<ReloadlyGiftCardOrderResult | null> {
+  const response = await reloadlyRequest<
+    ReloadlyGiftCardOrderResult[] | { content?: ReloadlyGiftCardOrderResult[] }
+  >(getGiftCardsBaseUrl(), "/reports/transactions", {
+    query: { customIdentifier, size: 5 },
+  });
+  const list = Array.isArray(response) ? response : (response?.content ?? []);
+  // Defensive: the endpoint filters server-side, but never reuse a
+  // transaction whose identifier does not match ours exactly.
+  return list.find((tx) => tx?.customIdentifier === customIdentifier) ?? null;
 }
 
 /**

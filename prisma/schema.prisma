@@ -421,8 +421,18 @@ model VariantSupplierMapping {
   supplierProductId     String
   // FazerCards two-level catalog: category/game id. Null for Reloadly.
   supplierCategoryId    String?
-  // FazerCards product family: "gift_card" | "topup" | "game_key". Null for Reloadly.
+  // Provider service family: "gift_card" | "topup" | "game_key" |
+  // "steam_topup" | "steam_gift". Null for Reloadly.
   supplierKind          String?
+  // Structured provider identifiers that do not fit the two columns above —
+  // Steam gifts need {appId, subId, region}, Steam top-ups a currency. Kept as
+  // JSON because the required shape is per-family; anything we need to QUERY
+  // by gets its own column instead. Validated per family by the provider
+  // adapter, never trusted raw. See src/lib/fazercards/mappingParams.ts.
+  supplierParams        Json?
+  // Buyer inputs this offer requires at checkout, copied from the synced
+  // catalog: [{key, label, type, required}]. Null/empty ⇒ nothing to collect.
+  requiredBuyerFields   Json?
   supplierProductName   String?
   // Provider-side region/country (e.g. Reloadly country ISO).
   supplierRegion        String?
@@ -551,6 +561,7 @@ model Order {
 
   items             OrderItem[]
   deliveredCodes    DeliveredCode[]
+  supplierFulfillments SupplierFulfillment[]
   emailLogs         EmailLog[]
   paymentProof      PaymentProof?
   paymentEvents     PaymentEvent[]
@@ -896,10 +907,17 @@ model OrderItem {
   quantity     Int
   unitPriceMad Int
 
+  // Buyer-supplied inputs required by some supplier services (top-up
+  // player_id, Steam login). Captured at checkout per the variant's mapping
+  // requirements and validated again before purchase. Shape: {key: value}.
+  // Never contains payment data.
+  buyerFields  Json?
+
   order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product        Product         @relation(fields: [productId], references: [id])
   variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   deliveredCodes DeliveredCode[]
+  supplierFulfillments SupplierFulfillment[]
 
   @@index([variantId])
 }
@@ -927,6 +945,11 @@ model DeliveredCode {
   // continue to use digitalCode.code / manualCode. The customer delivery page
   // renders these as separate labelled fields instead of one opaque string.
   deliveryPayload       Json?
+  // Ledger slot that produced this delivery, for supplier-sourced codes.
+  // UNIQUE — this is the database-level guarantee that one fulfillment slot
+  // can never deliver twice, however many retries, webhook replays or
+  // concurrent admin clicks race here. Null for local/manual deliveries.
+  supplierFulfillmentId String?
   deliveredAt           DateTime @default(now())
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -935,6 +958,7 @@ model DeliveredCode {
   digitalCode DigitalCode? @relation(fields: [digitalCodeId], references: [id])
 
   @@unique([digitalCodeId])
+  @@unique([supplierFulfillmentId])
   @@index([orderId])
 }
 
@@ -961,10 +985,215 @@ model Supplier {
   balanceUpdatedAt   DateTime?
   // Last catalog/cost sync (set by importer/pricing sync where applicable).
   lastSyncAt         DateTime?
+  // Last catalog sync OUTCOME, so the ops dashboard can distinguish "never
+  // synced" from "sync ran and failed" (lastSyncAt alone cannot).
+  lastSyncOk         Boolean?
+  lastSyncMessage    String?
+  // ── Account/subscription snapshot (refreshed by the health cron) ────────
+  // Providers without a subscription concept (Reloadly) leave these null.
+  // `subscriptionActive = false` is an ops-critical state: the key is valid
+  // but catalog/order calls will 403, so automatic fulfillment must not be
+  // attempted. See src/lib/ops/warnings.ts.
+  planName           String?
+  planExpiresAt      DateTime?
+  subscriptionActive Boolean?
+  // Round-trip latency of the last health check, for the ops dashboard.
+  lastLatencyMs      Int?
+  // ── Balance thresholds (provider currency, decimal strings) ─────────────
+  // Null → fall back to DEFAULT_BALANCE_THRESHOLDS in src/lib/ops/warnings.ts.
+  // `criticalBalance` additionally gates purchases: see assertBalanceHeadroom
+  // in src/lib/suppliers/balanceGuard.ts.
+  warningBalance     String?
+  criticalBalance    String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @default(now()) @updatedAt
 
   logs SupplierLog[]
+}
+
+// ── Supplier fulfillment ledger ────────────────────────────────────────────
+// THE money-path table. Exactly one row per fulfillment slot — a slot being
+// one deliverable unit, keyed (orderItemId, slotIndex). It exists so that a
+// supplier purchase is attempted AT MOST ONCE per slot and delivered to the
+// customer AT MOST ONCE, across retries, webhook replays, concurrent admin
+// clicks and application restarts.
+//
+// Why a table and not just an Idempotency-Key header: the header only protects
+// us for providers that honour it (FazerCards does, Reloadly does not), and
+// only while the provider retains the key. It cannot survive our own process
+// dying between "request sent" and "response stored", which is precisely the
+// window where money is spent and we have no record of it. The row is written
+// BEFORE the request leaves, so a crash always leaves evidence.
+//
+// State machine (see src/lib/suppliers/ledger.ts, which owns all transitions):
+//
+//   pending ──▶ submitted ──▶ processing ──▶ completed ──▶ delivered
+//                   │              │             │
+//                   │              ▼             ▼
+//                   │          uncertain ──▶ reconciling ──┐
+//                   │              ▲                       │
+//                   ▼              │                       ▼
+//              failed_clean ───────┘                   abandoned
+//
+//  - failed_clean : provider definitively refused BEFORE charging (any 4xx).
+//                   Safe to retry, and the ONLY state from which the router
+//                   may fail over to a backup supplier.
+//  - uncertain    : timeout / 5xx / socket error. The provider may have
+//                   charged us. NEVER auto-retried with a new key, NEVER
+//                   failed over. Requires reconciliation.
+//  - delivered    : terminal. Guarded by deliveredAt + the DeliveredCode
+//                   unique index, so double delivery is impossible.
+//  - abandoned    : an admin explicitly declared this attempt dead, with a
+//                   reason recorded in the audit log.
+model SupplierFulfillment {
+  id              String  @id @default(cuid())
+  orderId         String
+  orderItemId     String
+  // 0-based index of the deliverable unit within the order item. With
+  // orderItemId this forms the natural key of a fulfillment slot; quantity 3
+  // means slots 0,1,2.
+  slotIndex       Int
+  // Registry slug — src/lib/suppliers/registry.ts.
+  supplier        String
+  // Provider service family: "gift_card" | "topup" | "game_key" |
+  // "steam_topup" | "steam_gift". Null for providers without families.
+  serviceType     String?
+  // See the state machine above.
+  status          String  @default("pending")
+  // The EXACT string sent as the provider's Idempotency-Key. Globally unique:
+  // the DB — not application logic — is what makes a second concurrent
+  // purchase attempt for the same slot impossible. Never regenerated for the
+  // same logical purchase, including after a timeout.
+  idempotencyKey  String
+  // Provider-side order id once known ("ord-…" for FazerCards). Populated as
+  // soon as ANY response carries it, including a response that later turns
+  // out to be non-terminal — it is the reconciliation handle.
+  providerOrderId String?
+  // Raw provider status string, preserved verbatim for diagnosis. We map it
+  // into `status` but never discard the original.
+  providerStatus  String?
+
+  // Normalized delivery payload: DeliveredFieldDTO[]. Written only once the
+  // provider order is terminal-success. Secrets live here and in
+  // DeliveredCode; both are admin/owner-gated and never logged.
+  deliveryPayload Json?
+  // Trimmed provider response snapshot for audit — sanitised of code/pin/key
+  // values by sanitizeProviderSnapshot(). Never the full raw body.
+  responseSnapshot Json?
+
+  // Expected supplier cost at submission time (provider currency), captured
+  // so margin and balance reconciliation do not depend on a later catalog
+  // sync having the same price.
+  costAmount      Decimal? @db.Decimal(18, 6)
+  costCurrency    String?
+
+  attemptCount    Int      @default(0)
+  // Count of reconciliation passes, to enforce a maximum polling duration and
+  // escalate to manual review instead of polling forever.
+  reconcileCount  Int      @default(0)
+  lastError       String?
+  // Normalized error code from src/lib/suppliers/errors.ts (never raw).
+  lastErrorCode   String?
+  // Correlation id shared with SupplierLog rows for one attempt.
+  correlationId   String?
+
+  submittedAt     DateTime?
+  completedAt     DateTime?
+  // Exactly-once delivery marker. Non-null ⇒ the customer has the goods and
+  // no further delivery may occur for this slot.
+  deliveredAt     DateTime?
+  nextPollAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  // One ledger row per deliverable unit. This is the concurrency guard: two
+  // simultaneous fulfillment runs race on this insert and exactly one wins.
+  @@unique([orderItemId, slotIndex])
+  // Belt and braces — the provider-facing key must be globally unique too.
+  @@unique([idempotencyKey])
+  @@index([status, nextPollAt])
+  @@index([supplier, status])
+  @@index([orderId])
+  @@index([providerOrderId])
+}
+
+// ── Synced supplier catalog ────────────────────────────────────────────────
+// Provider-agnostic mirror of a supplier's sellable offers. Deliberately
+// SEPARATE from Product/ProductVariant: syncing must never touch customer-
+// facing name, artwork, SEO copy, selling price or visibility. An explicit
+// VariantSupplierMapping row is the only thing that links a supplier offer to
+// something Ghost.ma sells.
+model SupplierCatalogItem {
+  id             String   @id @default(cuid())
+  supplier       String
+  // Provider service family — "gift_card" | "topup" | "game_key" |
+  // "steam_topup" | "steam_gift".
+  serviceType    String
+  // Second-level offer id: card_id / offer_id / key_id / appid.
+  externalId     String
+  // First-level container id: category_id / game_id. Empty string for flat
+  // catalogs (Steam), never null, so the unique index stays usable.
+  externalParentId String @default("")
+  parentName     String?
+  name           String
+  // Supplier cost in the supplier's currency. Decimal, never a float —
+  // FazerCards sends decimal strings like "10.5000".
+  priceAmount    Decimal? @db.Decimal(18, 6)
+  priceCurrency  String?
+  // Provider stock where the family reports it (gift cards, game keys). Null
+  // means "this family does not report stock", which is NOT out-of-stock.
+  stock          Int?
+  minQuantity    Int?
+  maxQuantity    Int?
+  platform       String?
+  region         String?
+  // Region restrictions / activation notes, provider-shaped.
+  regionRestriction String?
+  // Buyer-input fields the order endpoint requires (top-ups' player_id, Steam
+  // login). Shape: [{key, label, type, required}].
+  buyerFields    Json?
+  // Provider identifiers that do not fit the columns above, kept verbatim so
+  // ordering never has to re-derive them.
+  providerMeta   Json?
+  // False once a sync no longer sees this offer — rows are retired, never
+  // deleted, so existing mappings can still explain themselves.
+  available      Boolean  @default(true)
+  lastSeenAt     DateTime @default(now())
+  syncedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  @@unique([supplier, serviceType, externalParentId, externalId])
+  @@index([supplier, serviceType, available])
+  @@index([supplier, available, name])
+}
+
+// ── Supplier webhook events ────────────────────────────────────────────────
+// Dedupe + audit ledger for inbound supplier webhooks, mirroring the existing
+// PaymentWebhookEvent pattern. `eventId` is unique so a duplicate delivery is
+// a no-op, and out-of-order deliveries are resolved by re-reading authoritative
+// state from the API rather than trusting payload ordering.
+model SupplierWebhookEvent {
+  id              String   @id @default(cuid())
+  supplier        String
+  // Provider event id — the dedupe key.
+  eventId         String
+  eventType       String
+  providerOrderId String?
+  // Sanitised payload snapshot (delivered secrets stripped).
+  payload         Json?
+  // "received" | "processed" | "ignored" | "invalid_signature" | "error"
+  status          String   @default("received")
+  errorMessage    String?
+  processedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@unique([supplier, eventId])
+  @@index([supplier, status, createdAt])
+  @@index([providerOrderId])
 }
 
 // Per-call operational log for supplier APIs: purchases at delivery time,

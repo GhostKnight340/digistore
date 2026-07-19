@@ -8,9 +8,14 @@ import {
   getReloadlyEnvironment,
   isReloadlyConfigured,
 } from "@/lib/reloadly/config";
-import { describeReloadlyError } from "@/lib/reloadly/client";
+import {
+  describeReloadlyError,
+  isReloadlyNetworkError,
+  ReloadlyApiError,
+} from "@/lib/reloadly/client";
 import {
   buildReloadlyCostInputs,
+  findGiftCardOrderByCustomIdentifier,
   getAccountBalance,
   getGiftCardOrderCards,
   getGiftCardOrderStatus,
@@ -29,6 +34,11 @@ import type {
   SupplierPurchaseResult,
 } from "../registry";
 import { looksLikeUrl, primaryDeliveryValue } from "../deliveryFields";
+import {
+  classifyPurchaseFailure,
+  SupplierPurchaseUncertainError,
+  uncertainPurchaseMessage,
+} from "../purchaseOutcome";
 
 const RELOADLY_SENDER_NAME = "ghost.ma";
 const STATUS_POLL_ATTEMPTS = 3;
@@ -197,9 +207,17 @@ export const reloadlyProvider: SupplierProvider = {
 
   /**
    * Places one Reloadly gift-card order and retrieves its redeem code.
-   * Pre-flights the denomination BEFORE spending from the wallet, then
-   * briefly retries the status check if the order isn't immediately
-   * SUCCESSFUL (a normal order returns SUCCESSFUL synchronously).
+   * Pre-flights the denomination BEFORE spending from the wallet, looks up
+   * any order already placed for this scope (Reloadly has no idempotency
+   * header — see findGiftCardOrderByCustomIdentifier), then briefly retries
+   * the status check if the order isn't immediately SUCCESSFUL (a normal
+   * order returns SUCCESSFUL synchronously).
+   *
+   * Failure modes are NOT equal: a purchase call that timed out or 5xx'd may
+   * still have been processed, and is surfaced as
+   * {@link SupplierPurchaseUncertainError} so the admin reconciles instead of
+   * blindly re-clicking "Livrer". Everything after a successful placement is
+   * safe to retry — the lookup above will find the transaction.
    */
   async purchase(request: SupplierPurchaseRequest): Promise<SupplierPurchaseResult> {
     const params = parseEntryParams(request.entryParams);
@@ -223,15 +241,56 @@ export const reloadlyProvider: SupplierProvider = {
     );
     if (!ok) throw new Error(issues.join(" "));
 
-    const order = await placeGiftCardOrder({
-      productId: params.reloadlyProductId,
-      countryCode: params.reloadlyCountryCode,
-      quantity: 1,
-      unitPrice: request.context.faceValue,
-      customIdentifier: request.idempotencyScope,
-      senderName: RELOADLY_SENDER_NAME,
-      recipientEmail: request.context.customerEmail,
-    });
+    // Poor-man's idempotency. Reloadly has no Idempotency-Key header and its
+    // `customIdentifier` is only a reference field, so the ONLY way to avoid
+    // buying twice for the same slot is to ask first whether this scope
+    // already produced a transaction. If the lookup itself fails we abort
+    // WITHOUT ordering: nothing has been spent yet, so this is a clean,
+    // safely-retryable failure.
+    let order: Awaited<ReturnType<typeof placeGiftCardOrder>>;
+    let existing: Awaited<ReturnType<typeof findGiftCardOrderByCustomIdentifier>>;
+    try {
+      existing = await findGiftCardOrderByCustomIdentifier(request.idempotencyScope);
+    } catch (error) {
+      throw new Error(
+        "Impossible de vérifier auprès de Reloadly si cette commande a déjà été passée " +
+          `(${describeReloadlyError("order-lookup", error)}) — aucune commande n’a été envoyée, réessayez.`,
+      );
+    }
+
+    if (existing) {
+      // Same slot, already bought: reuse it instead of spending again.
+      order = existing;
+    } else {
+      try {
+        order = await placeGiftCardOrder({
+          productId: params.reloadlyProductId,
+          countryCode: params.reloadlyCountryCode,
+          quantity: 1,
+          unitPrice: request.context.faceValue,
+          customIdentifier: request.idempotencyScope,
+          senderName: RELOADLY_SENDER_NAME,
+          recipientEmail: request.context.customerEmail,
+        });
+      } catch (error) {
+        const certainty = classifyPurchaseFailure({
+          isNetworkError: isReloadlyNetworkError(error),
+          status: error instanceof ReloadlyApiError ? error.status : null,
+        });
+        if (certainty === "uncertain") {
+          throw new SupplierPurchaseUncertainError(
+            uncertainPurchaseMessage({
+              supplierName: "Reloadly",
+              reconciliationRef: request.idempotencyScope,
+              detail: describeReloadlyError("purchase", error),
+            }),
+            request.idempotencyScope,
+          );
+        }
+        // Definitively rejected before any spend — normal retryable failure.
+        throw new Error(describeReloadlyError("purchase", error));
+      }
+    }
 
     let status = order.status;
     for (

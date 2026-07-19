@@ -5,6 +5,7 @@
  */
 import "server-only";
 import { isFazerCardsConfigured } from "@/lib/fazercards/config";
+import { isPreviewDeployment } from "@/lib/env";
 import { describeFazerCardsError } from "@/lib/fazercards/client";
 import {
   getBalance,
@@ -32,6 +33,32 @@ const STATUS_POLL_DELAY_MS = 3000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Availability gate for FazerCards — deliberately STRICTER than "is a key set".
+ *
+ * FazerCards has no sandbox: any configured key is a live key and any order
+ * spends real USD from the shared wallet. A warning at boot is not a guard, so
+ * staging/preview deployments report the supplier as unconfigured and can
+ * therefore never reach a purchase, whatever env vars leaked into them.
+ *
+ * Reporting "unconfigured" (rather than throwing) is what makes this degrade
+ * gracefully: eligibility resolves to `supplier_unconfigured`, the variant
+ * falls back to manual fulfilment, and the admin UI shows the usual
+ * credentials-missing state instead of an error.
+ */
+function isFazerCardsAvailable(): boolean {
+  if (isPreviewDeployment()) return false;
+  return isFazerCardsConfigured();
+}
+
+/** Why FazerCards is unavailable, in admin-facing French. */
+function unavailableMessage(): string {
+  if (isPreviewDeployment()) {
+    return "FazerCards est désactivé hors production : aucun sandbox n’existe, chaque commande dépense de l’argent réel. Livrez manuellement sur cet environnement.";
+  }
+  return "FazerCards n’est pas configuré (FAZERCARDS_API_KEY manquant).";
 }
 
 type FazerCardsEntryParams = {
@@ -124,22 +151,22 @@ export const fazercardsProvider: SupplierProvider = {
   supportsBalance: true,
 
   environment() {
-    // FazerCards has no sandbox — a configured key is always live.
-    return isFazerCardsConfigured() ? "live" : null;
+    // FazerCards has no sandbox — an available key is always live.
+    return isFazerCardsAvailable() ? "live" : null;
   },
 
   isConfigured() {
-    return isFazerCardsConfigured();
+    return isFazerCardsAvailable();
   },
 
   /** Read-only: profile (auth + plan/permissions) + balance. Never orders. */
   async testConnection() {
     const startedAt = Date.now();
     const details: { label: string; value: string }[] = [];
-    if (!isFazerCardsConfigured()) {
+    if (!isFazerCardsAvailable()) {
       return {
         ok: false,
-        message: "FazerCards n’est pas configuré (FAZERCARDS_API_KEY manquant).",
+        message: unavailableMessage(),
         responseTimeMs: 0,
         details,
       };
@@ -188,8 +215,8 @@ export const fazercardsProvider: SupplierProvider = {
    * failure with an explicit message rather than a false "ok".
    */
   async validateMapping(input) {
-    if (!isFazerCardsConfigured()) {
-      return { ok: false, message: "FazerCards n’est pas configuré (FAZERCARDS_API_KEY manquant)." };
+    if (!isFazerCardsAvailable()) {
+      return { ok: false, message: unavailableMessage() };
     }
     if (!input.supplierCategoryId?.trim()) {
       return { ok: false, message: "Category/Game ID FazerCards manquant sur le mapping." };
@@ -258,6 +285,10 @@ export const fazercardsProvider: SupplierProvider = {
    * Idempotency-Key replays the same provider order.
    */
   async purchase(request: SupplierPurchaseRequest): Promise<SupplierPurchaseResult> {
+    // Last line of defence: never spend real money from a preview/staging
+    // deploy, even if something bypassed the eligibility checks.
+    if (!isFazerCardsAvailable()) throw new Error(unavailableMessage());
+
     const params = parseEntryParams(request.entryParams);
     const idempotencyKey = `ghost-${request.idempotencyScope}`;
 
