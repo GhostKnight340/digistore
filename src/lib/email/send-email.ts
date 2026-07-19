@@ -12,7 +12,7 @@ import {
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveFooterPaymentBadges } from "@/lib/footerConfig";
 import { notifyEmailFailure } from "@/lib/discord/notify";
-import { isPreviewDeployment, isProductionRuntime } from "@/lib/env";
+import { isProductionRuntime } from "@/lib/env";
 
 type EmailMetadata = Record<string, string | number | boolean | null | undefined>;
 
@@ -91,11 +91,6 @@ function recipientIsAllowlisted(to: string): boolean {
  */
 function shouldSendRealEmail(to: string): boolean {
   if (isProductionRuntime()) return true;
-  // ⚠️ TEMPORARY — real customer-flow testing on staging. This bypasses the test
-  // allowlist so staging sends real email to ANY recipient, exactly like prod.
-  // REVERT THIS: delete the line below to restore the allowlist gate so staging
-  // can never mail real customers again.
-  if (isPreviewDeployment()) return true;
   if (process.env.ENABLE_REAL_EMAILS !== "true") return false;
   return recipientIsAllowlisted(to);
 }
@@ -205,6 +200,12 @@ export async function sendTransactionalEmail(
   const settings = await getStoreSettings();
   const replyTo = process.env.SUPPORT_EMAIL || settings.footer.contactEmail;
 
+  // Auth e-mails carry live secrets in their rendered body — the 6-digit
+  // checkout code, the ?token= reset URL. Keep the log row (delivery status,
+  // audit, rate-limit forensics all depend on it) but never persist the
+  // secret-bearing content: a leaked EmailLog must not be a login.
+  const secretBearing = AUTH_TEMPLATE_KEYS.has(input.templateKey);
+
   const log = await prisma.emailLog.create({
     data: {
       orderId: input.orderId ?? null,
@@ -213,9 +214,9 @@ export async function sendTransactionalEmail(
       templateKey: input.templateKey,
       recipient: input.to,
       subject: rendered.subject,
-      body: rendered.text,
-      text: rendered.text,
-      html: rendered.html,
+      body: secretBearing ? "" : rendered.text,
+      text: secretBearing ? "" : rendered.text,
+      html: secretBearing ? "" : rendered.html,
       provider: "resend",
       status: shouldSendRealEmail(input.to) ? "pending" : "simulated",
       manuallyEdited: Boolean(input.manuallyEdited),

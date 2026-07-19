@@ -1,5 +1,8 @@
 import "server-only";
 
+import { isInventoryEnabled } from "@/lib/storeSettings";
+
+import { getStoreSettings } from "./catalog";
 import { prisma } from "./prisma";
 
 /**
@@ -23,17 +26,48 @@ export interface ResolvedCartLine {
 }
 
 /**
- * Resolve raw checkout items into priced, category-tagged lines. Only active
- * products/variants in active categories are returned (unknown/inactive ids are
- * dropped, exactly like createOrder). Quantities < 1 are dropped.
+ * Resolve raw checkout items into priced, category-tagged lines. Only active,
+ * *purchasable* products/variants in active categories are returned (unknown,
+ * inactive and out-of-stock ids are dropped). Quantities < 1 are dropped.
+ *
+ * Availability is re-checked here rather than trusted from the storefront: the
+ * cart lives in client-side localStorage, so both the ids and the quantities are
+ * attacker-controlled, and a variant can sell out between add-to-cart and
+ * checkout. createOrder refuses the whole order when a line fails to resolve,
+ * which turns a dropped line into the correct "plus disponible" error.
  */
 export async function resolveCartLines(
   items: { productId: string; quantity: number }[],
 ): Promise<ResolvedCartLine[]> {
   const ids = items.map((i) => i.productId);
+  const settings = await getStoreSettings();
+  const inventoryOn = isInventoryEnabled(settings);
+  const countUnusedCodes = inventoryOn && settings.inventoryMode !== "manual";
+
+  /**
+   * Mirrors variantStockStatus() in catalog.ts, which drives the storefront
+   * badge — the two must agree or a variant shown as available would be
+   * refused at checkout (and vice versa).
+   */
+  const isVariantPurchasable = (stockMode: string, unusedCodes: number) => {
+    if (stockMode === "force_in_stock") return true;
+    if (!inventoryOn) return true;
+    if (stockMode === "force_out_of_stock") return false;
+    if (!countUnusedCodes) return true;
+    return unusedCodes > 0;
+  };
+
   const [products, variants] = await Promise.all([
     prisma.product.findMany({
-      where: { slug: { in: ids }, active: true, categoryRecord: { is: { active: true } } },
+      where: {
+        slug: { in: ids },
+        active: true,
+        categoryRecord: { is: { active: true } },
+        // A product that has purchasable denominations is only sellable *via*
+        // one of them — its own priceMad is a "from" price. Without this, a
+        // hand-edited cart could buy a 1000 DH variant at the parent price.
+        variants: { none: { active: true } },
+      },
       select: { id: true, slug: true, name: true, priceMad: true, category: true },
     }),
     prisma.productVariant.findMany({
@@ -47,7 +81,9 @@ export async function resolveCartLines(
         priceMad: true,
         name: true,
         productId: true,
+        stockMode: true,
         product: { select: { name: true, category: true } },
+        _count: { select: { digitalCodes: { where: { status: "unused" } } } },
       },
     }),
   ]);
@@ -63,6 +99,7 @@ export async function resolveCartLines(
     });
   }
   for (const variant of variants) {
+    if (!isVariantPurchasable(variant.stockMode, variant._count.digitalCodes)) continue;
     byKey.set(variant.id, {
       productId: variant.productId,
       variantId: variant.id,

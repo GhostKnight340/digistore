@@ -3,7 +3,15 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { formatDH } from "@/lib/format";
-import { orderStatusLabel, canCustomerCancel } from "@/lib/orderStatus";
+import {
+  canCustomerCancel,
+  isPendingPayment,
+  isRefunded as isRefundedStatus,
+  isTerminalStatus,
+  paymentPageBadge,
+  paymentPageHeadline,
+  paymentPageInstruction,
+} from "@/lib/orderStatus";
 import {
   getPaymentPageDataAction,
   submitPaymentAction,
@@ -45,6 +53,16 @@ const TYPE_LABEL: Record<PaymentMethodType, string> = {
   custom: "Autre",
 };
 
+/** "12 mars 2026 à 14:05" — customer-facing delivery timestamp. */
+const formatDeliveredAt = (iso: string) =>
+  new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+
 const madWhole = (n: number) => new Intl.NumberFormat("en-US").format(n);
 const madExact = (n: number) =>
   new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -74,8 +92,8 @@ export default function PaymentPage({ params }: { params: Promise<{ id: string }
   const status = data?.order.status;
   // Poll every non-terminal state. Rejected / payment_issue orders still change
   // (customer resubmits, admin confirms) — a customer parked on that screen must
-  // see the update without a manual refresh. Only delivered/cancelled are final.
-  const shouldPoll = ready && status !== "delivered" && status !== "cancelled";
+  // see the update without a manual refresh. delivered/cancelled/refunded are final.
+  const shouldPoll = ready && !isTerminalStatus(status ?? "");
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -128,7 +146,14 @@ function PaymentExperience({
 
   const publicOrderNumber = getPublicOrderLabel(order);
   const whatsapp = config.support.whatsappNumber.replace(/\s/g, "");
+  // totalMad is already NET of the promo discount and any Ghost Credit spent,
+  // so the summary rebuilds the gross line-item subtotal and shows each
+  // deduction — otherwise the lines never add up to the displayed total.
   const total = order.totalMad;
+  const itemsSubtotal = order.items.reduce(
+    (sum, item) => sum + item.unitPriceMad * item.quantity,
+    0,
+  );
 
   // Customer-visible methods (already active + visible + not archived).
   const methods = config.methods;
@@ -158,12 +183,16 @@ function PaymentExperience({
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const status = order.status;
-  const isPending = status === "pending_payment";
+  // Legacy rows may still carry "pending" / "awaiting_payment": the shared
+  // helper keeps this in step with canCustomerCancel, so an order that can be
+  // cancelled always renders its payment module too.
+  const isPending = isPendingPayment(status);
   const isSubmitted = status === "payment_submitted";
   const isConfirmed = status === "payment_confirmed";
   const isDelivered = status === "delivered";
   const isRejected = status === "rejected" || status === "payment_issue";
   const isCancelled = status === "cancelled";
+  const isRefunded = isRefundedStatus(status);
   // Pre-launch: an unpaid order can't be paid while ordering is disabled. The
   // server also strips config.methods, so the payment modules render nothing —
   // we replace them with the "orders unavailable" notice.
@@ -272,29 +301,17 @@ function PaymentExperience({
     }
   }
 
-  // Header status badge — amber while pending, blue once submitted.
-  const submitted = isSubmitted || isConfirmed || isDelivered;
-  const badge = isCancelled
-    ? { label: "Annulée", color: "#E8A6A6", bg: "rgba(224,92,92,0.12)", bd: "rgba(224,92,92,0.28)", dot: "#E05C5C" }
-    : submitted
-      ? { label: isPending ? "En attente" : orderStatusLabel(status), color: "#8DB4FF", bg: "rgba(62,123,250,0.12)", bd: "rgba(62,123,250,0.28)", dot: "#3E7BFA" }
-      : isRejected
-        ? { label: orderStatusLabel(status), color: "#E8A6A6", bg: "rgba(224,92,92,0.12)", bd: "rgba(224,92,92,0.28)", dot: "#E05C5C" }
-        : { label: "En attente de paiement", color: "#F0C466", bg: "rgba(232,168,56,0.12)", bd: "rgba(232,168,56,0.26)", dot: "#E8A838" };
+  // Header status badge + copy. Every status resolves through the shared
+  // helpers, so a status the page has no module for (refunded, a legacy
+  // pre-payment row) can never fall through to the amber "pay now" chip.
+  const badge = paymentPageBadge(status);
 
   const headerInstruction = purchaseBlocked
     ? "Les achats sont momentanément suspendus. Aucun paiement n’est requis pour le moment."
-    : isCancelled
-    ? "Cette commande a été annulée. Aucun paiement n’est requis."
-    : isRejected
-      ? "Nous n’avons pas pu valider votre paiement. Consultez le détail ci-dessous."
-      : isConfirmed || isDelivered
-        ? "Votre paiement a été confirmé. Votre commande est en cours de préparation."
-        : isSubmitted
-          ? "Votre justificatif est en cours de vérification."
-          : activeMethod?.type === "bank"
-            ? `Effectuez un virement de ${formatDH(total)} vers le compte ci-dessous, puis ajoutez votre justificatif.`
-            : "Réglez le montant ci-dessous pour valider votre commande.";
+    : (paymentPageInstruction(status) ??
+      (activeMethod?.type === "bank"
+        ? `Effectuez un virement de ${formatDH(total)} vers le compte ci-dessous, puis ajoutez votre justificatif.`
+        : "Réglez le montant ci-dessous pour valider votre commande."));
 
   const product = order.items[0] ? getProduct(order.items[0].productId) : undefined;
 
@@ -312,13 +329,7 @@ function PaymentExperience({
               {badge.label}
             </span>
             <h1 className="mt-3 text-[26px] font-semibold leading-tight tracking-[-0.025em] text-white min-[900px]:text-[29px]">
-              {purchaseBlocked
-                ? "Commandes en pause"
-                : isCancelled
-                ? "Commande annulée"
-                : isRejected
-                  ? "Vérifions votre paiement"
-                  : "Finalisez votre paiement"}
+              {purchaseBlocked ? "Commandes en pause" : paymentPageHeadline(status)}
             </h1>
             <p className="mt-1.5 max-w-[440px] text-sm leading-relaxed text-[#9A9FAB]">
               {headerInstruction}
@@ -538,6 +549,15 @@ function PaymentExperience({
             {/* Cancelled */}
             {isCancelled && <TerminalCancelled whatsapp={whatsapp} orderReference={publicOrderNumber} />}
 
+            {/* Refunded */}
+            {isRefunded && (
+              <TerminalRefunded
+                total={total}
+                whatsapp={whatsapp}
+                orderReference={publicOrderNumber}
+              />
+            )}
+
             {error && (
               <div className="rounded-xl border border-[rgba(224,92,92,0.3)] bg-[rgba(224,92,92,0.08)] px-4 py-3 text-sm text-[#E8A6A6]">
                 {error}
@@ -591,10 +611,13 @@ function PaymentExperience({
                           <div className="truncate text-[13.5px] font-semibold text-white">
                             {item.name}
                           </div>
+                          {/* Never the raw productId: for a variant purchase it
+                              is an internal cuid, meaningless to the customer. */}
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-[#7A808C]">
-                            <span className="truncate font-mono">{item.productId}</span>
                             {p?.region && <RegionBadge code={p.region} variant="chip" size="micro" />}
-                            <span className="shrink-0">· Qté {item.quantity}</span>
+                            <span className="shrink-0">
+                              {p?.region ? "· " : ""}Qté {item.quantity}
+                            </span>
                           </div>
                         </div>
                         <span className="shrink-0 font-mono text-[13px] text-white">
@@ -606,8 +629,24 @@ function PaymentExperience({
 
                   <div className="flex justify-between pt-[13px] text-[13px]">
                     <span className="text-[#9A9FAB]">Sous-total</span>
-                    <span className="font-mono text-white">{formatDH(total)}</span>
+                    <span className="font-mono text-white">{formatDH(itemsSubtotal)}</span>
                   </div>
+                  {order.discountMad > 0 && (
+                    <div className="flex justify-between pt-[9px] text-[13px]">
+                      <span className="text-[#8FE0B4]">Réduction</span>
+                      <span className="font-mono text-[#8FE0B4]">
+                        -{formatDH(order.discountMad)}
+                      </span>
+                    </div>
+                  )}
+                  {order.ghostCreditAppliedMad > 0 && (
+                    <div className="flex justify-between pt-[9px] text-[13px]">
+                      <span className="text-[#9FB8FF]">Crédit Ghost utilisé</span>
+                      <span className="font-mono text-[#9FB8FF]">
+                        -{formatDH(order.ghostCreditAppliedMad)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-b border-white/[0.06] pb-[13px] pt-[9px] text-[13px]">
                     <span className="text-[#9A9FAB]">Livraison</span>
                     <span className="font-medium text-[#5BC98C]">Numérique · gratuit</span>
@@ -631,12 +670,12 @@ function PaymentExperience({
             </div>
 
             {/* Optional Discord DM delivery (additive; never blocks payment). */}
-            {!isCancelled && !isRejected && !isDelivered && (
+            {!isCancelled && !isRefunded && !isRejected && !isDelivered && (
               <OrderDiscordDelivery orderId={order.id} orderPathSegment={order.publicOrderPathSegment} />
             )}
 
             {/* After your payment */}
-            {!purchaseBlocked && (
+            {!purchaseBlocked && !isTerminalStatus(status) && (
               <div className="rounded-2xl border border-white/[0.07] bg-[#0F1015] px-[18px] py-4">
                 <div className="mb-2.5 flex items-center gap-2">
                   <ClockIcon className="h-4 w-4 text-[#9FB8FF]" />
@@ -1669,6 +1708,51 @@ function TerminalCancelled({
   );
 }
 
+function TerminalRefunded({
+  total,
+  whatsapp,
+  orderReference,
+}: {
+  total: number;
+  whatsapp: string;
+  orderReference: string;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[rgba(155,92,224,0.28)] bg-[#0F1015]">
+      <div className="p-[26px] text-center">
+        <span className="mb-4 inline-flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[rgba(155,92,224,0.36)] bg-[rgba(155,92,224,0.14)]">
+          <RefundIcon className="h-7 w-7 text-[#C9A6F0]" />
+        </span>
+        <h2 className="text-[19px] font-semibold text-white">Commande remboursée</h2>
+        <p className="mx-auto mt-1.5 max-w-[380px] text-[13.5px] leading-relaxed text-[#9A9FAB]">
+          Votre commande {orderReference} a été remboursée pour un montant de{" "}
+          <strong className="text-white">{formatDH(total)}</strong>. Aucun paiement n’est requis.
+          Selon votre banque, le remboursement peut mettre quelques jours ouvrés à apparaître sur
+          votre compte.
+        </p>
+      </div>
+      <div className="flex flex-col gap-3 px-[22px] pb-[22px] min-[520px]:flex-row">
+        <Link
+          href="/products"
+          className="flex h-[46px] flex-1 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-[13.5px] font-semibold text-white"
+        >
+          Parcourir le catalogue
+        </Link>
+        <a
+          href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(
+            `Bonjour, j'ai une question concernant le remboursement de ma commande ${orderReference}`,
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-[46px] flex-1 items-center justify-center rounded-xl border border-white/[0.12] bg-transparent text-[13.5px] font-semibold text-[#C4C9D4] hover:bg-white/[0.04]"
+        >
+          Contacter le support
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // ─── Delivered ──────────────────────────────────────────────────────────────
 
 function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
@@ -1758,11 +1842,20 @@ function DeliveredCodeCard({
   index?: number;
 }) {
   const fields = delivered.fields;
+  const deliveredAt = delivered.deliveredAt ? (
+    <p className="text-[11.5px] text-[#646A77]">Livré le {formatDeliveredAt(delivered.deliveredAt)}</p>
+  ) : null;
   if (!fields || fields.length === 0) {
-    return <CopyCode code={delivered.code} index={index} />;
+    return (
+      <div className="space-y-1.5">
+        <CopyCode code={delivered.code} index={index} />
+        {deliveredAt}
+      </div>
+    );
   }
   return (
     <div className="space-y-3">
+      {deliveredAt}
       {fields.map((field, i) => {
         const hasSecret = Boolean(field.code || field.pin);
         return (
@@ -2053,6 +2146,14 @@ function AlertCircleIcon({ className }: IconProps) {
       <circle cx="12" cy="12" r="10" />
       <line x1="12" y1="8" x2="12" y2="12" />
       <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+function RefundIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)} strokeWidth={2}>
+      <polyline points="9 14 4 9 9 4" />
+      <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
     </svg>
   );
 }

@@ -76,16 +76,32 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await handlePaypalEvent(eventType, resource);
+    const ghostOrderId = await handlePaypalEvent(eventType, resource);
+    // Complete the audit trail: the ledger row is written before processing
+    // (to win the dedupe race), so the Ghost order it resolved to is only
+    // known now. Without this the model is a dedupe ledger, not the audit
+    // trail its indexed orderId implies.
+    if (ghostOrderId) {
+      await prisma.paymentWebhookEvent
+        .update({ where: { eventId }, data: { orderId: ghostOrderId } })
+        .catch(() => {
+          // Audit metadata only — never fail an already-applied payment on it.
+        });
+    }
   } catch (error) {
-    // Still ack with 200 — the event id is already recorded, so retrying
-    // would just replay the same failure. The error is visible in logs for
-    // manual reconciliation.
+    // Release the dedupe row so PayPal's retry can actually re-run this event.
+    // Acking 200 here would record the event as seen forever and silently
+    // leave the order unconfirmed — recoverable only by reading logs.
+    await prisma.paymentWebhookEvent.delete({ where: { eventId } }).catch(() => {
+      // If the release fails the event stays deduped; the 500 below plus this
+      // log is the only signal, so keep both.
+    });
     console.error(
-      "[paypal:webhook] handler error",
+      "[paypal:webhook] handler error — released for retry",
       eventType,
       error instanceof Error ? error.message : "unknown error",
     );
+    return NextResponse.json({ error: "Handler failed." }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
@@ -95,40 +111,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function handlePaypalEvent(eventType: string, resource: Record<string, unknown>): Promise<void> {
+/** Returns the Ghost order id the event applied to, for the audit trail. */
+async function handlePaypalEvent(
+  eventType: string,
+  resource: Record<string, unknown>,
+): Promise<string | null> {
   switch (eventType) {
     case "PAYMENT.CAPTURE.COMPLETED":
     case "PAYMENT.CAPTURE.DENIED": {
       const paypalOrderId = extractRelatedOrderId(resource);
-      if (!paypalOrderId) return;
+      if (!paypalOrderId) return null;
       const ghostOrderId = await findGhostOrderIdByPaypalOrderId(paypalOrderId);
-      if (!ghostOrderId) return;
+      if (!ghostOrderId) return null;
       // Never trust the webhook payload's status alone — re-fetch the order
       // from PayPal before changing anything.
       const trusted = await getPayPalOrder(paypalOrderId);
       await applyVerifiedPaypalOrder(ghostOrderId, trusted);
-      return;
+      return ghostOrderId;
     }
     case "CHECKOUT.ORDER.APPROVED": {
       // Informational only — Ghost captures on the browser's approve
       // callback (or a later COMPLETED webhook); approval alone never marks
       // an order paid.
-      return;
+      return null;
     }
+    // Refund paths resolve the order internally and report via ActionResult
+    // rather than returning an id, so the ledger's orderId stays null here.
     case "PAYMENT.CAPTURE.REVERSED": {
       const captureId = typeof resource.id === "string" ? resource.id : null;
-      if (!captureId) return;
+      if (!captureId) return null;
       await reconcileRefundedCapture(captureId);
-      return;
+      return null;
     }
     case "PAYMENT.CAPTURE.REFUNDED": {
       const captureId = extractCaptureIdFromRefundResource(resource);
-      if (!captureId) return;
+      if (!captureId) return null;
       await reconcileRefundedCapture(captureId);
-      return;
+      return null;
     }
     default:
-      return;
+      return null;
   }
 }
 

@@ -1,18 +1,22 @@
 /**
  * Absolute site origin for canonical URLs, Open Graph, sitemap and robots.
- * Reads NEXT_PUBLIC_SITE_URL (then SITE_URL / APP_URL), trailing slash stripped,
- * falling back to the production origin. Mirrors the resolver pattern in
- * src/lib/auth.ts. Safe on both server and client.
+ * Delegates to `appBaseUrl()` (src/lib/orderNumber.ts) so canonical/OG origins
+ * and the origins we put in e-mails can never disagree — in particular so a
+ * staging deployment self-references instead of pointing at production.
+ * Falls back to the production origin when nothing is configured, since a
+ * canonical URL must exist even where appBaseUrl() would rather throw.
+ * Safe on both server and client.
  */
+import { appBaseUrl } from "@/lib/orderNumber";
+
 const FALLBACK = "https://ghost.ma";
 
 export function getSiteUrl(): string {
-  const configured =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.SITE_URL ||
-    process.env.APP_URL ||
-    FALLBACK;
-  return configured.replace(/\/+$/, "");
+  try {
+    return appBaseUrl().replace(/\/+$/, "");
+  } catch {
+    return FALLBACK;
+  }
 }
 
 /** Build an absolute URL from a site-relative path. */

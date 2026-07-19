@@ -21,8 +21,25 @@ import {
   type AuthActionResult,
 } from "@/lib/auth";
 import { notifyAccountCreated } from "@/lib/discord/notify";
+import { POLICIES, clientIp, consume, dim } from "@/lib/rateLimit";
+import { currentGaClientId, sendServerEvent } from "@/lib/analytics/purchase";
 
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+/**
+ * GA4 `login` / `sign_up`. These happen inside server actions, where there is
+ * no gtag to call, so they go out over the Measurement Protocol tied to the
+ * visitor's own `_ga` cookie. Fire-and-forget and silently disabled unless
+ * GA_API_SECRET is set in production — auth must never wait on analytics, and
+ * only the auth METHOD travels, never the e-mail or customer id.
+ */
+function trackAuthEvent(name: "login" | "sign_up", method: string) {
+  void (async () => {
+    try {
+      await sendServerEvent(name, { method }, await currentGaClientId());
+    } catch {
+      // Analytics must never break authentication.
+    }
+  })();
+}
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -39,16 +56,24 @@ function isValidOptionalPhone(value: string) {
   return digits.length >= 9 && digits.length <= 15;
 }
 
-function checkLoginRateLimit(email: string) {
-  const now = Date.now();
-  const key = email.toLowerCase();
-  const bucket = loginAttempts.get(key);
-  if (!bucket || bucket.resetAt < now) {
-    loginAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
-    return true;
-  }
-  bucket.count += 1;
-  return bucket.count <= 8;
+/**
+ * The auth actions below are the e-mail-sending / credential-testing surface, so
+ * they all run through the shared limiter in @/lib/rateLimit on BOTH the source
+ * IP and the target e-mail. Keying on e-mail alone (as the previous local Map
+ * did) let one attacker spread an attack across many addresses for free; keying
+ * on IP alone would punish shared office and mobile-carrier addresses.
+ *
+ * The limiter's store is per serverless instance, so on Vercel these budgets
+ * bound a single instance rather than the whole deployment — see the LIMITATION
+ * note in src/lib/rateLimitCore.ts. They meaningfully raise the cost of casual
+ * abuse; they are not a durable guarantee.
+ */
+async function checkLoginRateLimit(email: string) {
+  const { allowed } = consume([
+    dim("login:email", email.toLowerCase(), POLICIES.loginEmail),
+    dim("login:ip", await clientIp(), POLICIES.loginIp),
+  ]);
+  return allowed;
 }
 
 export async function registerCustomerAction(input: {
@@ -64,6 +89,12 @@ export async function registerCustomerAction(input: {
     const name = input.name.trim();
     const email = normalizeEmail(input.email);
     if (!name || !isEmail(email)) return { ok: false, error: "Veuillez vérifier vos informations." };
+    // Registration sends a verification e-mail, so it burns Resend quota and can
+    // be pointed at arbitrary addresses. Keyed on IP only: the e-mail dimension
+    // would be useless here (every attempt uses a fresh address by definition).
+    if (!consume([dim("register:ip", await clientIp(), POLICIES.registerIp)]).allowed) {
+      return { ok: false, error: "Trop de tentatives. Réessayez plus tard." };
+    }
     if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
     if (input.password !== input.confirmPassword) {
       return { ok: false, error: "Les mots de passe ne correspondent pas." };
@@ -133,6 +164,7 @@ export async function registerCustomerAction(input: {
       console.error("[auth:register:notify_error]", { customerId: customer.id, error });
     }
 
+    trackAuthEvent("sign_up", "password");
     revalidatePath("/account");
     return {
       ok: true,
@@ -166,7 +198,7 @@ export async function loginCustomerAction(input: {
 }): Promise<AuthActionResult> {
   await ensureDatabaseReady();
   const email = normalizeEmail(input.email);
-  if (!checkLoginRateLimit(email)) {
+  if (!(await checkLoginRateLimit(email))) {
     return { ok: false, error: "Connexion momentanément indisponible. Réessayez plus tard." };
   }
   const customer = await prisma.customer.findUnique({ where: { email } });
@@ -179,6 +211,7 @@ export async function loginCustomerAction(input: {
     data: { lastLoginAt: new Date() },
   });
   await setCustomerSession(customer.id, input.remember);
+  trackAuthEvent("login", "password");
   revalidatePath("/account");
   revalidatePath("/account/security");
   return { ok: true, redirectTo: "/account/orders" };
@@ -193,9 +226,18 @@ export async function logoutCustomerAction(): Promise<AuthActionResult> {
 export async function requestPasswordResetAction(emailInput: string): Promise<AuthActionResult> {
   await ensureDatabaseReady();
   const email = normalizeEmail(emailInput);
-  const customer = isEmail(email)
-    ? await prisma.customer.findUnique({ where: { email } })
-    : null;
+  // Tight budget: a reset request is a rare, deliberate act, and each one mails
+  // an attacker-chosen address. When the budget is exhausted we skip the send
+  // but return the SAME generic response as always — the message must stay
+  // independent of whether the account exists, and of whether we were throttled.
+  const withinBudget = consume([
+    dim("password-reset:email", email, POLICIES.passwordResetEmail),
+    dim("password-reset:ip", await clientIp(), POLICIES.passwordResetIp),
+  ]).allowed;
+  const customer =
+    withinBudget && isEmail(email)
+      ? await prisma.customer.findUnique({ where: { email } })
+      : null;
   if (customer?.passwordHash) {
     await sendPasswordResetEmail(customer);
   }
@@ -250,6 +292,16 @@ export async function resendVerificationAction(): Promise<AuthActionResult> {
     const customer = await getCurrentCustomer();
     if (!customer) return { ok: false, error: "Veuillez vous connecter." };
     if (customer.emailVerified) return { ok: true, message: "Votre e-mail est déjà vérifié." };
+
+    // Session-gated, so this is quota burn rather than open e-mail bombing — but
+    // one account can still drive unlimited sends to its own address.
+    const withinBudget = consume([
+      dim("resend-verification:email", customer.email.toLowerCase(), POLICIES.resendVerificationEmail),
+      dim("resend-verification:ip", await clientIp(), POLICIES.resendVerificationIp),
+    ]).allowed;
+    if (!withinBudget) {
+      return { ok: false, error: "Trop de demandes. Réessayez dans un moment." };
+    }
 
     const result = await sendVerificationEmail(customer);
     if (!result.ok) {

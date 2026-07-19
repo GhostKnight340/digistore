@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/context/StoreContext";
@@ -15,7 +15,7 @@ import { paymentMethodDisplay } from "@/lib/paymentDisplay";
 import { announcedPaymentMethods } from "@/lib/paymentMethod";
 import type { PaymentConfigDTO, PromoPreviewDTO } from "@/lib/dto";
 import { getRegion } from "@/lib/regions";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent, trackEcommerce, toAnalyticsItem } from "@/lib/analytics";
 
 const REGION_FLAGS: Record<string, string> = {
   MA: "🇲🇦",
@@ -91,6 +91,24 @@ export default function CheckoutClient({
   const creditAppliedMad = useCredit ? Math.max(0, Math.min(requestedCredit, maxCreditApplicable)) : 0;
 
   const totalToPay = Math.max(0, cartTotal - promoDiscountMad - creditAppliedMad);
+
+  /** GA4 `items` for this cart. Product data only — never the customer. */
+  const analyticsItems = useMemo(
+    () =>
+      cart.flatMap((item) => {
+        const product = getProduct(item.productId);
+        return product ? [toAnalyticsItem(product, { quantity: item.quantity })] : [];
+      }),
+    [cart, getProduct],
+  );
+
+  // GA4 `begin_checkout`, once per visit to this page.
+  const beginCheckoutSent = useRef(false);
+  useEffect(() => {
+    if (!ready || beginCheckoutSent.current || cart.length === 0) return;
+    beginCheckoutSent.current = true;
+    trackEcommerce("begin_checkout", { value: cartTotal, items: analyticsItems });
+  }, [ready, cart.length, cartTotal, analyticsItems]);
 
   async function handleApplyPromo() {
     const code = promoInput.trim();
@@ -288,6 +306,17 @@ export default function CheckoutClient({
         setError(order && "error" in order ? order.error : "Une erreur est survenue. Veuillez réessayer.");
         return;
       }
+
+      // GA4 `add_payment_info`: the order exists and the customer is being sent
+      // into the payment flow. The specific bank/wallet is chosen later on the
+      // payment page, so `payment_type` reports what was offered here, not a
+      // per-customer choice. No order number, token or contact detail is sent.
+      trackEcommerce("add_payment_info", {
+        value: totalToPay,
+        items: analyticsItems,
+        payment_type:
+          paymentOptions.length === 1 ? paymentOptions[0].method.type : "multiple",
+      });
 
       clearCart();
       // Route via the per-order secret token: it authorizes the payment page and

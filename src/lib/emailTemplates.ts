@@ -17,6 +17,7 @@ export type EmailTemplateKey =
   | "payment_rejected"
   | "payment_confirmed"
   | "order_delivered"
+  | "order_cancelled"
   | "refund_update"
   | "support_received"
   | "support_reply"
@@ -167,6 +168,11 @@ const REVIEW_TEMPLATE_META: Partial<
     motifLabel: "Motif du refus",
     ctaText: "Consultez le détail du paiement ici :",
     ctaUrlVar: "payment_url",
+  },
+  order_cancelled: {
+    motifLabel: "Motif de l’annulation",
+    ctaText: "Consultez votre commande ici :",
+    ctaUrlVar: "order_url",
   },
   refund_update: {
     motifLabel: "Motif du remboursement",
@@ -323,6 +329,12 @@ function brandedEmailHtml(
       title: subject,
       intro: text,
       ctaLabel: "Suivre ma commande",
+      ctaUrl: orderUrl,
+    },
+    order_cancelled: {
+      title: subject,
+      intro: text,
+      ctaLabel: "Voir ma commande",
       ctaUrl: orderUrl,
     },
     order_delivered: {
@@ -589,6 +601,7 @@ export const EMAIL_TEMPLATE_LABELS: Record<EmailTemplateKey, string> = {
   payment_rejected: "Paiement refusé",
   payment_confirmed: "Paiement confirmé",
   order_delivered: "Commande livrée",
+  order_cancelled: "Commande annulée",
   refund_update: "Mise à jour du remboursement",
   support_received: "Support — demande reçue",
   support_reply: "Support — réponse envoyée",
@@ -663,6 +676,12 @@ export const EMAIL_TEMPLATE_VARIABLES: Record<EmailTemplateKey, TemplateVariable
     { key: "payment_url", sample: "https://ghost.ma/payment/example" },
     { key: "order_url", sample: "https://ghost.ma/order/example" },
     { key: "reason", sample: "Justificatif illisible" },
+  ],
+  order_cancelled: [
+    { key: "customer_name", sample: "Amine" },
+    { key: "order_number", sample: "#000128" },
+    { key: "order_url", sample: "https://ghost.ma/order/example" },
+    { key: "reason", sample: "Annulée à votre demande" },
   ],
   payment_confirmed: [
     { key: "customer_name", sample: "Amine" },

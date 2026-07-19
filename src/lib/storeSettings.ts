@@ -309,7 +309,7 @@ export const defaultStoreSettings: StoreSettings = {
   statItems: [
     { id: "delivery", value: "24/7", label: "Livraison digitale", enabled: true },
     { id: "local-payment", value: "DH", label: "Paiement local", enabled: true },
-    { id: "official-codes", value: "100%", label: "Codes officiels", enabled: true },
+    { id: "official-codes", value: "100%", label: "Sources vérifiées", enabled: true },
   ],
   whyGhost: defaultWhyGhost,
   reviews: defaultReviews,
@@ -373,6 +373,15 @@ export const defaultStoreSettings: StoreSettings = {
       // Body only — shell adds greeting, optional Motif block and "Voir le
       // paiement" CTA. Used for admin "mark issue" and PayPal capture denials.
       body: "Un problème a été détecté avec le paiement de votre commande {{order_number}}. Vérifiez les informations sur la page de paiement ou contactez notre support.",
+    },
+    order_cancelled: {
+      subject: "Commande {{order_number}} annulée",
+      // Body only — the shell adds the greeting once, an optional Motif block
+      // and the "Voir ma commande" CTA. No payment was taken at this stage, so
+      // the copy must not imply a refund is coming.
+      body:
+        "Votre commande {{order_number}} a bien été annulée. Aucun paiement n'a été prélevé. " +
+        "Vous pouvez repasser commande à tout moment.",
     },
     payment_rejected: {
       subject: "Paiement refusé pour {{order_number}}",

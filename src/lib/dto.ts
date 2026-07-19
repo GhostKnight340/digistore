@@ -63,6 +63,8 @@ export interface DeliveredCodeDTO {
    * single code (e.g. Reloadly). Absent for plain local/manual single codes.
    */
   fields?: DeliveredFieldDTO[];
+  /** When this unit was delivered, ISO — absent on legacy rows. */
+  deliveredAt?: string;
 }
 
 export interface PaymentEventDTO {
@@ -83,7 +85,12 @@ export interface CustomerOrderDTO {
   customerName: string;
   customerEmail: string;
   paymentMethod: string;
+  /** Amount actually due — already net of discountMad + ghostCreditAppliedMad. */
   totalMad: number;
+  /** Promo discount deducted from the line-item subtotal. */
+  discountMad: number;
+  /** Ghost Credit spent on this order, also deducted from the subtotal. */
+  ghostCreditAppliedMad: number;
   createdAt: string;
   items: OrderItemDTO[];
   deliveredCodes: DeliveredCodeDTO[];

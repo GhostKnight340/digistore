@@ -175,6 +175,30 @@ export function validatePaymentMethod(method: {
   return { complete: Object.keys(fieldErrors).length === 0, fieldErrors };
 }
 
+/**
+ * Should a customer be offered this method at checkout? Active + visible +
+ * not archived, AND actually complete: an active bank account whose RIB the
+ * admin forgot renders a "virez le montant vers le compte ci-dessous" card with
+ * no account in it. PayPal additionally needs live credentials, which only the
+ * server knows — hence the `paypalConfigured` flag. Pure so it can be tested;
+ * the DB layer (src/lib/db/paymentMethods.ts) supplies the rows.
+ */
+export function isCustomerVisibleMethod(
+  method: {
+    type: PaymentMethodType;
+    name: string;
+    details: PaymentMethodDetails;
+    status: string;
+    visible: boolean;
+    archivedAt: Date | string | null;
+  },
+  opts: { paypalConfigured: boolean },
+): boolean {
+  if (!(method.status === "active" && method.visible && !method.archivedAt)) return false;
+  if (method.type === "paypal") return opts.paypalConfigured;
+  return validatePaymentMethod(method).complete;
+}
+
 export const PAYMENT_METHOD_TYPES: {
   type: PaymentMethodType;
   label: string;

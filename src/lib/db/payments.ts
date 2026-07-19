@@ -20,6 +20,21 @@ import {
 } from "@/lib/discord/notify";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
 
+/**
+ * A deliberate, customer-safe French failure raised inside a payment
+ * transaction (status raced, proof already submitted…). Only these messages are
+ * surfaced to the customer — every other exception (Prisma pool timeouts,
+ * connection errors) is logged server-side and replaced by a fixed string, so a
+ * raw driver message can never land in the customer's error box. Mirrors
+ * PromoApplicationError in src/lib/db/orders.ts.
+ */
+class PaymentActionError extends Error {}
+
+/** Customer-facing message for a caught exception: safe text only. */
+function customerError(error: unknown, fallback: string): string {
+  return error instanceof PaymentActionError ? error.message : fallback;
+}
+
 const ALLOWED_PROOF_TYPES = [
   "image/png",
   "image/jpeg",
@@ -70,7 +85,9 @@ export async function submitPayment(
         data: { status: "payment_submitted" },
       });
       if (updated.count !== 1) {
-        throw new Error("Le paiement a déjà été soumis ou le statut de la commande a changé.");
+        throw new PaymentActionError(
+          "Le paiement a déjà été soumis ou le statut de la commande a changé.",
+        );
       }
 
       if (proof) {
@@ -137,7 +154,7 @@ export async function submitPayment(
     console.error("[submitPayment]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Soumission impossible.",
+      error: customerError(error, "Soumission impossible."),
     };
   }
 }
@@ -171,7 +188,7 @@ export async function changeOrderPaymentMethod(
         data: { paymentMethod: methodId },
       });
       if (updated.count !== 1) {
-        throw new Error("Le statut de la commande a changé entre-temps.");
+        throw new PaymentActionError("Le statut de la commande a changé entre-temps.");
       }
       await tx.paymentEvent.create({
         data: {
@@ -186,7 +203,7 @@ export async function changeOrderPaymentMethod(
     console.error("[changeOrderPaymentMethod]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Modification impossible.",
+      error: customerError(error, "Modification impossible."),
     };
   }
 }
@@ -257,6 +274,28 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
     await applyPromoLifecycleForStatus(orderId, "cancelled");
 
     const reference = await publicOrderReference(order);
+
+    // Tell the customer. Previously cancellation only wrote a PaymentEvent and
+    // pinged Discord, so the customer got no confirmation at all. Non-fatal:
+    // the cancellation itself has already committed.
+    try {
+      await sendTransactionalEmail({
+        to: order.customerEmail,
+        orderId,
+        customerId: order.customerId,
+        templateKey: "order_cancelled",
+        type: "order_cancelled",
+        variables: {
+          customer_name: order.customerName,
+          order_number: reference.number,
+          order_url: absoluteAppUrl(`/order/${orderId}`),
+          reason: "Annulée à votre demande",
+        },
+      });
+    } catch (emailError) {
+      console.error("[email:order_cancelled]", emailError);
+    }
+
     void notifyPaymentStatusChange({
       order,
       publicOrderNumber: reference.number,
@@ -271,7 +310,7 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
     console.error("[cancelOrder]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Annulation impossible.",
+      error: customerError(error, "Annulation impossible."),
     };
   }
 }
@@ -347,7 +386,7 @@ async function setPaymentStatus(
         data: { status: toStatus },
       });
       if (updated.count !== 1) {
-        throw new Error("Le statut de la commande a changé entre-temps.");
+        throw new PaymentActionError("Le statut de la commande a changé entre-temps.");
       }
       await tx.paymentEvent.create({
         data: {
@@ -406,7 +445,7 @@ async function setPaymentStatus(
     console.error("[setPaymentStatus]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Mise à jour impossible.",
+      error: customerError(error, "Mise à jour impossible."),
     };
   }
 }
@@ -527,7 +566,7 @@ export async function applyPaymentStatusWithEmail(
         data: { status: toStatus },
       });
       if (updated.count !== 1) {
-        throw new Error("Le statut de la commande a changé entre-temps.");
+        throw new PaymentActionError("Le statut de la commande a changé entre-temps.");
       }
       await tx.paymentEvent.create({
         data: {
@@ -588,7 +627,7 @@ export async function applyPaymentStatusWithEmail(
     console.error("[applyPaymentStatusWithEmail]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Mise à jour impossible.",
+      error: customerError(error, "Mise à jour impossible."),
     };
   }
 }
@@ -704,7 +743,7 @@ async function transitionPaypalStatus(
     console.error("[transitionPaypalStatus]", error);
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Mise à jour impossible.",
+      error: customerError(error, "Mise à jour impossible."),
     };
   }
 

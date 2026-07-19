@@ -110,9 +110,9 @@ export const defaultWhyGhost: WhyGhostItemSetting[] = [
   {
     id: "official",
     icon: "official",
-    title: "Produits 100 % officiels",
+    title: "Produits de sources vérifiées",
     description:
-      "Cartes cadeaux, licences et abonnements provenant de sources officielles. Jamais de codes revendus ou douteux.",
+      "Cartes cadeaux, licences et abonnements achetés auprès de fournisseurs agréés. Chaque code est vérifié avant livraison.",
     enabled: true,
   },
   {

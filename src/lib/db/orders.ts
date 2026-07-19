@@ -22,6 +22,7 @@ import {
 import { getAdminPaymentMethods } from "./paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import { variantTitle } from "@/lib/pricing/variant-identity";
+import { customerVisibleEventNote } from "@/lib/orderStatus";
 import type { OrderStatus } from "@/lib/types";
 import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOrderDTO, AdminOrderDTO, AdminOrderSummaryDTO, DeliveredFieldDTO, PaymentMethodDTO } from "@/lib/dto";
 
@@ -241,6 +242,8 @@ function buildCustomerDTO(
     customerEmail: identity ? data.customerEmail : "",
     paymentMethod: data.paymentMethod,
     totalMad: data.totalMad,
+    discountMad: data.discountMad,
+    ghostCreditAppliedMad: data.ghostCreditAppliedMad,
     createdAt: iso(data.createdAt),
     items: data.items.map((item) => ({
       id: item.id,
@@ -263,6 +266,7 @@ function buildCustomerDTO(
             orderItemId: delivered.orderItemId,
             code: delivered.digitalCode?.code ?? delivered.manualCode ?? "",
             ...(fields ? { fields } : {}),
+            ...(delivered.deliveredAt ? { deliveredAt: iso(delivered.deliveredAt) } : {}),
           };
         })
       : [],
@@ -272,7 +276,8 @@ function buildCustomerDTO(
       type: event.type,
       fromStatus: event.fromStatus,
       toStatus: event.toStatus,
-      note: event.note,
+      // Internal admin free-text — same gate as the identity fields above.
+      note: customerVisibleEventNote(event.note, identity),
       createdAt: iso(event.createdAt),
     })),
     paymentProvider: data.paymentProvider,
@@ -293,6 +298,8 @@ function loadOrder(id: string) {
       customerEmail: true,
       paymentMethod: true,
       totalMad: true,
+      discountMad: true,
+      ghostCreditAppliedMad: true,
       createdAt: true,
       deliveryToken: true,
       paymentProvider: true,
@@ -342,6 +349,7 @@ function loadOrder(id: string) {
           orderItemId: true,
           manualCode: true,
           deliveryPayload: true,
+          deliveredAt: true,
           product: { select: { slug: true } },
           digitalCode: { select: { code: true } },
         },
