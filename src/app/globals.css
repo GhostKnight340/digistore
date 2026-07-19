@@ -530,6 +530,223 @@ body {
   }
 }
 
+/*
+ * Guide article theming. One --guide-accent (+ --guide-accent-2) set by
+ * src/lib/guides/platformAccent.ts on the article root drives every tint below,
+ * via color-mix — the same approach as .cathero above. Scoped to .guide-article
+ * so no other page can pick these up. Semantic colours (green/amber/red) are
+ * deliberately NOT accent-aware: they carry meaning, not identity.
+ */
+.guide-article {
+  --guide-accent: #3e7bfa;
+  --guide-accent-2: #5e92ff;
+  position: relative;
+}
+
+/* Ambient wash behind the hero — the page's only large tinted area, kept low
+   enough that the near-black canvas still reads as the background. */
+.guide-article::before {
+  content: "";
+  position: absolute;
+  inset: -80px 0 auto 0;
+  height: 520px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      620px 300px at 12% 0%,
+      color-mix(in srgb, var(--guide-accent) 11%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      420px 220px at 78% 6%,
+      color-mix(in srgb, var(--guide-accent-2) 7%, transparent),
+      transparent 72%
+    );
+}
+
+.guide-article > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Platform icon tile: gradient fill + a glow that reads as product identity. */
+.guide-platform-tile {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--guide-accent) 22%, transparent),
+    color-mix(in srgb, var(--guide-accent-2) 10%, transparent)
+  );
+  border-color: color-mix(in srgb, var(--guide-accent) 38%, transparent);
+  color: color-mix(in srgb, var(--guide-accent) 88%, white);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--guide-accent) 12%, transparent),
+    0 10px 34px color-mix(in srgb, var(--guide-accent) 22%, transparent);
+}
+
+/* Same idea at section scale — the glow would be noise on a 36px tile. */
+.guide-section-tile {
+  background: color-mix(in srgb, var(--guide-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--guide-accent) 26%, transparent);
+  color: color-mix(in srgb, var(--guide-accent) 82%, white);
+}
+
+/* Platform name above the H1. */
+.guide-platform-label {
+  color: color-mix(in srgb, var(--guide-accent) 78%, white);
+}
+
+/* Section eyebrow rule — a short accent line before a section label. */
+.guide-eyebrow::before {
+  content: "";
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--guide-accent), transparent);
+}
+
+.guide-eyebrow-text {
+  color: color-mix(in srgb, var(--guide-accent) 72%, white);
+}
+
+/* Cards that should read as "belonging to this platform" — the requirements
+   card and the sidebar TOC. A hairline tint, not a coloured card. */
+.guide-accent-card {
+  border-color: color-mix(in srgb, var(--guide-accent) 22%, #1d1f27);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--guide-accent) 5%, transparent),
+    transparent 55%
+  );
+}
+
+/* Step cards: a thin platform-coloured rail down the left edge whose strength
+   progresses with --step-progress (0 → 1) so the list reads as a sequence. */
+.guide-step {
+  --step-progress: 0;
+  border-color: color-mix(in srgb, var(--guide-accent) 12%, #1d1f27);
+}
+
+.guide-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  border-radius: 2px;
+  background: color-mix(
+    in srgb,
+    var(--guide-accent) calc(28% + var(--step-progress) * 52%),
+    transparent
+  );
+}
+
+/* Numbered badge, deepening through the sequence. */
+.guide-step-badge {
+  background: color-mix(
+    in srgb,
+    var(--guide-accent) calc(12% + var(--step-progress) * 16%),
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--guide-accent) calc(30% + var(--step-progress) * 30%),
+    transparent
+  );
+  color: color-mix(in srgb, var(--guide-accent) 85%, white);
+}
+
+/* Final step reads as "done" — semantic green overrides the platform accent. */
+.guide-step-final {
+  border-color: rgba(16, 185, 129, 0.28);
+}
+.guide-step-final::before {
+  background: rgba(16, 185, 129, 0.55);
+}
+.guide-step-final .guide-step-badge {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+
+/* Connector between step cards on desktop, so the sequence reads vertically. */
+@media (min-width: 640px) {
+  .guide-step-link {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--guide-accent) 34%, transparent),
+      color-mix(in srgb, var(--guide-accent) 10%, transparent)
+    );
+  }
+}
+
+/* Open accordion rows carry a faint platform tint so an expanded answer is
+   distinguishable from the closed rows around it. */
+.guide-accordion-open {
+  border-color: color-mix(in srgb, var(--guide-accent) 26%, #1d1f27);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--guide-accent) 6%, transparent),
+    transparent 60%
+  );
+}
+.guide-accordion-chevron {
+  color: color-mix(in srgb, var(--guide-accent) 80%, white);
+}
+
+/* Sidebar TOC: accent marker + selected state. */
+.guide-toc-link[aria-current="location"] {
+  border-color: var(--guide-accent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--guide-accent) 12%, transparent),
+    transparent
+  );
+}
+
+.guide-toc-link[aria-current="location"] .guide-toc-icon {
+  color: color-mix(in srgb, var(--guide-accent) 85%, white);
+}
+
+/*
+ * Action hierarchy in the hero. The buttons themselves are shared components
+ * (GuideCopyLink / ShareButton / GuidePrintButton) used on other pages, so the
+ * guide re-weights them from the outside instead of forking them.
+ */
+
+/* Secondary: dark surface, platform-tinted edge. */
+.guide-action-secondary .btn-ghost {
+  border-color: color-mix(in srgb, var(--guide-accent) 32%, #2c2f3a);
+  color: color-mix(in srgb, var(--guide-accent) 26%, #f3f4f7);
+}
+.guide-action-secondary .btn-ghost:hover {
+  border-color: color-mix(in srgb, var(--guide-accent) 55%, #2c2f3a);
+  background-color: color-mix(in srgb, var(--guide-accent) 9%, transparent);
+}
+
+/* Tertiary: quiet text actions — no border until hovered. */
+.guide-actions-quiet .btn-ghost {
+  border-color: transparent;
+  background-color: transparent;
+  color: #9a9fab;
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+  font-weight: 500;
+  box-shadow: none;
+}
+.guide-actions-quiet .btn-ghost:hover {
+  background-color: #171922;
+  color: #f3f4f7;
+}
+
+@media print {
+  .guide-article::before {
+    display: none;
+  }
+}
+
 /* Thin custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
