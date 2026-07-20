@@ -107,6 +107,8 @@ interface GrantParams {
   earnedAt?: Date;
   promoCodeId?: string | null;
   orderId?: string | null;
+  /** Links this grant to the Admin Email Composer send that produced it. */
+  emailSendId?: string | null;
   rewardType?: PromoRewardType | null;
   eligibleSubtotalMad?: number | null;
   configuredPercent?: number | null;
@@ -155,6 +157,7 @@ export async function grantCreditTx(tx: Tx, params: GrantParams): Promise<Ledger
         resetsExpiration: resets,
         promoCodeId: params.promoCodeId ?? null,
         orderId: params.orderId ?? null,
+        emailSendId: params.emailSendId ?? null,
         rewardType: params.rewardType ?? null,
         eligibleSubtotalMad: params.eligibleSubtotalMad ?? null,
         configuredPercent: params.configuredPercent ?? null,

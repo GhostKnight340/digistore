@@ -32,7 +32,7 @@ export type RenderedEmailTemplate = {
   html: string;
 };
 
-function escapeHtml(value: string) {
+export function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -45,7 +45,7 @@ function variableString(variables: Variables, key: string) {
   return String(variables[key] ?? "");
 }
 
-function brandHeaderHtml() {
+export function brandHeaderHtml() {
   // Light-background lockup: the monochrome black mark + a black "ghost" / blue
   // ".ma" wordmark, baked into one transparent PNG. It must be an image (not
   // HTML text) so Gmail dark mode can't recolor the wordmark — plain text made
@@ -58,7 +58,7 @@ function brandHeaderHtml() {
     </a>`;
 }
 
-function brandedButton(label: string, href: string) {
+export function brandedButton(label: string, href: string) {
   if (!href) return "";
   const safeHref = escapeHtml(href);
   return `
@@ -73,7 +73,7 @@ function brandedButton(label: string, href: string) {
     </table>`;
 }
 
-function emailFooterHtml(
+export function emailFooterHtml(
   settings: StoreSettings,
   supportEmail: string,
   currentYear: string,

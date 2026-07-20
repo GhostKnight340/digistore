@@ -162,6 +162,111 @@ export async function renderTransactionalEmail(
   };
 }
 
+type SendRenderedInput = {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  customerId?: string | null;
+  orderId?: string | null;
+  /** Free-form log type, e.g. "admin_composer" / "admin_composer_test". */
+  type: string;
+  /** Composer template preset key, stored for history filtering. */
+  templateKey?: string | null;
+  metadata?: EmailMetadata;
+};
+
+/**
+ * Send an ALREADY-RENDERED email (subject/html/text produced upstream) reusing
+ * the exact same provider, gating and EmailLog audit path as the transactional
+ * emails. Used by the Admin Email Composer, whose modular HTML is rendered by
+ * renderComposedEmail — the SAME renderer the preview uses, so the inbox mail
+ * matches the preview. Off-production this simulates + logs like every other
+ * send. Never used for secret-bearing auth mail.
+ */
+export async function sendRenderedEmail(input: SendRenderedInput): Promise<EmailSendResult> {
+  await ensureDatabaseReady();
+
+  if (isPlaceholderRecipient(input.to)) {
+    const log = await prisma.emailLog.create({
+      data: {
+        orderId: input.orderId ?? null,
+        customerId: input.customerId ?? null,
+        type: input.type,
+        templateKey: input.templateKey ?? null,
+        recipient: input.to,
+        subject: input.subject,
+        body: "",
+        text: "",
+        html: "",
+        provider: "resend",
+        status: "simulated",
+        errorMessage: "Skipped: internal placeholder recipient.",
+        metadata: metadataToJson(input.metadata),
+      },
+    });
+    return { ok: true, status: "simulated", logId: log.id };
+  }
+
+  const settings = await getStoreSettings();
+  const replyTo = process.env.SUPPORT_EMAIL || settings.footer.contactEmail;
+
+  const log = await prisma.emailLog.create({
+    data: {
+      orderId: input.orderId ?? null,
+      customerId: input.customerId ?? null,
+      type: input.type,
+      templateKey: input.templateKey ?? null,
+      recipient: input.to,
+      subject: input.subject,
+      body: input.text,
+      text: input.text,
+      html: input.html,
+      provider: "resend",
+      status: shouldSendRealEmail(input.to) ? "pending" : "simulated",
+      metadata: metadataToJson(input.metadata),
+    },
+  });
+
+  if (!shouldSendRealEmail(input.to)) {
+    return { ok: true, status: "simulated", logId: log.id };
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    const error = "RESEND_API_KEY is not configured.";
+    await prisma.emailLog.update({ where: { id: log.id }, data: { status: "failed", errorMessage: error } });
+    return { ok: false, status: "failed", logId: log.id, error };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error: resendError } = await resend.emails.send({
+      from: fromAddress(),
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      replyTo,
+    });
+    if (resendError || !data?.id) {
+      const error =
+        resendError?.message || resendError?.name || "Resend did not return a message id.";
+      await prisma.emailLog.update({ where: { id: log.id }, data: { status: "failed", errorMessage: error } });
+      return { ok: false, status: "failed", logId: log.id, error };
+    }
+    await prisma.emailLog.update({
+      where: { id: log.id },
+      data: { status: "sent", providerMessageId: data.id, errorMessage: null },
+    });
+    return { ok: true, status: "sent", logId: log.id, providerMessageId: data.id };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Resend send failed.";
+    await prisma.emailLog.update({ where: { id: log.id }, data: { status: "failed", errorMessage: message } });
+    return { ok: false, status: "failed", logId: log.id, error: message };
+  }
+}
+
 export async function sendTransactionalEmail(
   input: SendEmailInput,
 ): Promise<EmailSendResult> {

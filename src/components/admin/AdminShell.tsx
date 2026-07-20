@@ -45,6 +45,8 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   suppliers: "/admin/suppliers",
   // Operations is the standalone operational control center.
   operations: "/admin/operations",
+  // Admin Email Composer (compose + history) is its own management area.
+  emails: "/admin/emails/compose",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
@@ -263,6 +265,16 @@ const NAV: NavGroup[] = [
             <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
             <line x1="8" y1="9" x2="16" y2="9" />
             <line x1="8" y1="13" x2="13" y2="13" />
+          </>,
+        ),
+      },
+      {
+        id: "emails",
+        label: "Envoyer un e-mail",
+        icon: icon(
+          <>
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="m3 7 9 6 9-6" />
           </>,
         ),
       },
