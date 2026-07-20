@@ -31,7 +31,12 @@ export type AuditAction =
   | "wallet.adjusted"
   | "wallet.frozen"
   | "wallet.unfrozen"
-  | "wallet.reconciled";
+  | "wallet.reconciled"
+  | "email.draft_saved"
+  | "email.test_sent"
+  | "email.sent"
+  | "email.credit_granted"
+  | "email.retried";
 
 export interface WriteAuditInput {
   adminId: string;

@@ -634,6 +634,14 @@ model Customer {
   preferredLanguage  String?
   marketingConsent   Boolean   @default(false)
 
+  // Granular admin capability grants for admins (role == "ADMIN"). The empty
+  // default is DELIBERATE and backward-compatible: an ADMIN with NO explicit
+  // permissions keeps full access (legacy behavior), while a restricted admin
+  // is granted an explicit subset (e.g. ["EMAIL_VIEW","EMAIL_COMPOSE"]) so they
+  // can compose e-mails but never activate real Ghost Credit grants. Ignored for
+  // non-admin roles. Enforced server-side only (see src/lib/admin/permissions.ts).
+  adminPermissions   String[]  @default([])
+
   // Discord OAuth identity (login/linking source of truth). Separate from the
   // DM fields below: being OAuth-linked does NOT mean the bot can DM this user.
   discordId         String? @unique
@@ -697,6 +705,7 @@ model Customer {
   adminNotes             CustomerNote[]
   adminAuditLogs         AdminAuditLog[]
   feedbackSubmissions    FeedbackSubmission[]
+  adminEmailRecipients   AdminEmailRecipient[]
 
   @@index([updatedAt])
   @@index([emailVerified])
@@ -1837,6 +1846,10 @@ model GhostCreditTransaction {
 
   promoCodeId          String?
   orderId              String?
+  // Set when this credit row was granted by the Admin Email Composer, linking the
+  // ledger entry to the send that produced it (so a grant and its e-mail never
+  // drift apart, and history can show the exact ledger row per recipient).
+  emailSendId          String?
   rewardType           String?
   eligibleSubtotalMad  Int?
   configuredPercent    Decimal? @db.Decimal(6, 3)
@@ -1865,11 +1878,13 @@ model GhostCreditTransaction {
   promoCode PromoCode?         @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   order     Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
   milestone SpendingMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  emailSend AdminEmailSend?    @relation(fields: [emailSendId], references: [id], onDelete: SetNull)
 
   @@index([customerId, status])
   @@index([orderId])
   @@index([promoCodeId])
   @@index([milestoneId])
+  @@index([emailSendId])
 }
 
 // Configurable, cumulative account-level spending milestone: "spend X total →
@@ -1933,6 +1948,102 @@ model SpendingMilestoneGrant {
   @@index([customerId, status])
   @@index([milestoneId])
   @@index([orderId])
+}
+
+// ── Admin Email Composer ────────────────────────────────────────────────────
+
+// One admin-composed e-mail operation: a draft, a test, or a real send. The
+// modular content is stored as a typed, validated JSON structure (never
+// uncontrolled HTML) so it can be safely re-edited and re-rendered later by the
+// SAME production renderer that produced the sent mail. Counters are denormalized
+// summaries; the AdminEmailRecipient rows are the authoritative per-recipient
+// record. Append-only in spirit: a draft is updated in place, but once sent the
+// rendered snapshot per recipient is frozen for audit.
+model AdminEmailSend {
+  id               String   @id @default(cuid())
+  // status: "draft" | "processing" | "partial" | "sent" | "failed"
+  status           String   @default("draft")
+  // recipientMode: "existing" (customer database) | "manual" (typed addresses)
+  recipientMode    String   @default("existing")
+  // Composer template preset key (see src/lib/email/composerTemplates.ts).
+  templateKey      String   @default("custom")
+  subject          String   @default("")
+  preheader        String   @default("")
+  eyebrow          String   @default("")
+  title            String   @default("")
+  // Typed module array (validated by src/lib/email/composerModules.ts). Never
+  // raw customer-facing HTML — each module is a discriminated, schema-checked
+  // record rendered server-side.
+  modules          Json     @default("[]")
+  // Whether this operation was a test send (never grants credit / financial
+  // effects). A real send has isTest = false.
+  isTest           Boolean  @default(false)
+  testRecipient    String?
+  // Denormalized summaries (authoritative rows live in recipients).
+  recipientCount   Int      @default(0)
+  sentCount        Int      @default(0)
+  failedCount      Int      @default(0)
+  // Total Ghost Credit actually granted across all recipients (whole MAD).
+  creditGrantedMad Int      @default(0)
+
+  createdByAdminId   String
+  createdByAdminName String
+  // Safe request metadata (IP / user-agent hash) when available. Never secrets.
+  requestMeta        Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  sentAt    DateTime?
+
+  recipients AdminEmailRecipient[]
+  creditTxns GhostCreditTransaction[]
+
+  @@index([status, createdAt])
+  @@index([createdByAdminId, createdAt])
+  @@index([isTest])
+}
+
+// One resolved recipient of an AdminEmailSend, with its own frozen render + a
+// per-recipient delivery result. `customerId` is set only for an existing
+// account (null for a manually typed address, which can never receive account
+// credit). The credit link + idempotency guarantee that retrying a failed send
+// never grants Ghost Credit twice.
+model AdminEmailRecipient {
+  id     String @id @default(cuid())
+  sendId String
+  // Set only when this recipient maps to a real customer account.
+  customerId String?
+  email      String
+  name       String @default("")
+  // status: "pending" | "sent" | "failed" | "skipped"
+  status     String @default("pending")
+
+  // Frozen render for this recipient (durable audit snapshot). Empty until first
+  // render/send. Never contains secrets (admin composer mail carries none).
+  renderedSubject String @default("")
+  renderedHtml    String @default("")
+  renderedText    String @default("")
+
+  providerMessageId String?
+  errorMessage      String?
+  emailLogId        String?
+
+  // Ghost Credit intended/granted for THIS recipient (whole MAD). `creditStatus`:
+  // "none" | "granted" | "blocked_no_account" | "display_only" | "failed".
+  creditAmountMad     Int     @default(0)
+  creditStatus        String  @default("none")
+  creditTransactionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  send     AdminEmailSend @relation(fields: [sendId], references: [id], onDelete: Cascade)
+  customer Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // A recipient e-mail is unique within a send (dedupe + retry idempotency).
+  @@unique([sendId, email])
+  @@index([sendId, status])
+  @@index([customerId])
 }
 
 // ── Operations: scheduled jobs, alert cooldowns ─────────────────────────────
