@@ -620,7 +620,11 @@ export function AccountAccessSection({
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
           {mode === "guest"
             ? "Commandez sans compte, ou créez-en un pour suivre vos commandes et retrouver vos codes."
-            : "Créez votre compte pour sécuriser votre commande, suivre son avancement et recevoir votre code numérique."}
+            : mode === "login"
+              ? // Login has its own copy: telling someone to CREATE an account on
+                // the tab that exists because they already have one is contradictory.
+                "Connectez-vous pour retrouver vos commandes et votre crédit Ghost, puis finalisez votre paiement."
+              : "Créez votre compte pour sécuriser votre commande, suivre son avancement et recevoir votre code numérique."}
         </p>
       </div>
 
