@@ -8,7 +8,7 @@ import {
   sendTransactionalEmail,
 } from "@/lib/email/send-email";
 import { absoluteAppUrl } from "@/lib/orderNumber";
-import { publicOrderReference } from "@/lib/db/orders";
+import { publicOrderReference, resolveAuthorizedOrderId } from "@/lib/db/orders";
 import { getStoreSettings } from "@/lib/db/catalog";
 import { getAdminPaymentMethods, getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
@@ -28,10 +28,14 @@ const ALLOWED_PROOF_TYPES = [
 ];
 
 export async function submitPayment(
-  orderId: string,
+  ref: string,
   proof?: { fileName: string; mimeType: string; dataBase64: string },
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
+  // Authorize by unguessable token or logged-in ownership before touching the
+  // order — never trust a raw id/number supplied by the caller.
+  const orderId = await resolveAuthorizedOrderId(ref);
+  if (!orderId) return { ok: false, error: "Commande introuvable." };
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Commande introuvable." };
   // A customer may (re)send a justificatif from the initial pending state, or
@@ -149,10 +153,12 @@ export async function submitPayment(
  * archived). Records a `method_change` payment event for the order timeline.
  */
 export async function changeOrderPaymentMethod(
-  orderId: string,
+  ref: string,
   methodId: string,
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
+  const orderId = await resolveAuthorizedOrderId(ref);
+  if (!orderId) return { ok: false, error: "Commande introuvable." };
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Commande introuvable." };
   if (order.status !== "pending_payment") {
@@ -202,8 +208,10 @@ export async function changeOrderPaymentMethod(
  * cancelled order succeeds without side effects. Never deletes the order, its
  * payment proof, or any payment-event history.
  */
-export async function cancelOrder(orderId: string): Promise<ActionResult> {
+export async function cancelOrder(ref: string): Promise<ActionResult> {
   await ensureDatabaseReady();
+  const orderId = await resolveAuthorizedOrderId(ref);
+  if (!orderId) return { ok: false, error: "Commande introuvable." };
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return { ok: false, error: "Commande introuvable." };
 

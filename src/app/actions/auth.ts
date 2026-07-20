@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
 import {
@@ -22,7 +23,37 @@ import {
 } from "@/lib/auth";
 import { notifyAccountCreated } from "@/lib/discord/notify";
 
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+// In-memory fixed-window rate limiter shared by every auth flow. Keyed by an
+// arbitrary bucket string (e.g. "login:email", "reset:ip:1.2.3.4"). This is a
+// single-instance guard: it caps abuse from one process, which is enough to
+// stop a script hammering a route; a multi-instance deployment would move this
+// to a shared store (Redis) but the call sites stay the same.
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function hitRateLimit(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const bucket = rateBuckets.get(key);
+  if (!bucket || bucket.resetAt < now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= max;
+}
+
+/** Best-effort client IP from proxy headers, for IP-scoped rate limiting.
+ *  "unknown" collapses all header-less callers into one shared bucket, which is
+ *  the safe (more-restrictive) direction. */
+async function clientIp(): Promise<string> {
+  try {
+    const h = await headers();
+    const forwarded = h.get("x-forwarded-for");
+    if (forwarded) return forwarded.split(",")[0].trim() || "unknown";
+    return h.get("x-real-ip")?.trim() || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -40,15 +71,7 @@ function isValidOptionalPhone(value: string) {
 }
 
 function checkLoginRateLimit(email: string) {
-  const now = Date.now();
-  const key = email.toLowerCase();
-  const bucket = loginAttempts.get(key);
-  if (!bucket || bucket.resetAt < now) {
-    loginAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
-    return true;
-  }
-  bucket.count += 1;
-  return bucket.count <= 8;
+  return hitRateLimit(`login:${email.toLowerCase()}`, 8, 15 * 60 * 1000);
 }
 
 export async function registerCustomerAction(input: {
@@ -64,6 +87,15 @@ export async function registerCustomerAction(input: {
     const name = input.name.trim();
     const email = normalizeEmail(input.email);
     if (!name || !isEmail(email)) return { ok: false, error: "Veuillez vérifier vos informations." };
+    // Registration sends a verification email (provider cost). Cap per IP and
+    // per address so it can't be scripted into a mail-bomb / cost pump.
+    const ip = await clientIp();
+    if (
+      !hitRateLimit(`register:ip:${ip}`, 10, 60 * 60 * 1000) ||
+      !hitRateLimit(`register:email:${email}`, 3, 60 * 60 * 1000)
+    ) {
+      return { ok: false, error: "Trop de tentatives. Veuillez réessayer plus tard." };
+    }
     if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
     if (input.password !== input.confirmPassword) {
       return { ok: false, error: "Les mots de passe ne correspondent pas." };
@@ -193,16 +225,29 @@ export async function logoutCustomerAction(): Promise<AuthActionResult> {
 export async function requestPasswordResetAction(emailInput: string): Promise<AuthActionResult> {
   await ensureDatabaseReady();
   const email = normalizeEmail(emailInput);
+  // Neutral response regardless of outcome — never reveals whether an account
+  // exists, nor whether a send was throttled.
+  const neutral: AuthActionResult = {
+    ok: true,
+    message: "Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.",
+  };
+  // Reset sends a provider email; cap per IP and per address so it can't be used
+  // to mail-bomb a victim or run up the email bill. On limit, silently skip the
+  // send and still return the neutral message.
+  const ip = await clientIp();
+  if (
+    !hitRateLimit(`reset:ip:${ip}`, 10, 15 * 60 * 1000) ||
+    !hitRateLimit(`reset:email:${email}`, 3, 15 * 60 * 1000)
+  ) {
+    return neutral;
+  }
   const customer = isEmail(email)
     ? await prisma.customer.findUnique({ where: { email } })
     : null;
   if (customer?.passwordHash) {
     await sendPasswordResetEmail(customer);
   }
-  return {
-    ok: true,
-    message: "Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.",
-  };
+  return neutral;
 }
 
 export async function resetPasswordAction(input: {
@@ -250,6 +295,11 @@ export async function resendVerificationAction(): Promise<AuthActionResult> {
     const customer = await getCurrentCustomer();
     if (!customer) return { ok: false, error: "Veuillez vous connecter." };
     if (customer.emailVerified) return { ok: true, message: "Votre e-mail est déjà vérifié." };
+    // Even behind auth, cap resends so the button can't be scripted to spam the
+    // customer's own inbox / the email provider.
+    if (!hitRateLimit(`resend_verify:${customer.id}`, 5, 15 * 60 * 1000)) {
+      return { ok: false, error: "Trop de demandes. Veuillez réessayer dans quelques minutes." };
+    }
 
     const result = await sendVerificationEmail(customer);
     if (!result.ok) {

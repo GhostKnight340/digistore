@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomBytes } from "crypto";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { isOrderingCurrentlyEnabled } from "./ordering";
 import { resolveCartLines } from "./promoResolve";
@@ -24,7 +25,21 @@ import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOr
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
-type PublicOrderIdentity = { id: string; createdAt: Date | string };
+type PublicOrderIdentity = {
+  id: string;
+  createdAt: Date | string;
+  // Unguessable per-order secret. When present it is the customer-facing URL
+  // segment (see publicOrderReference); the sequential public number stays a
+  // human-readable display label only.
+  deliveryToken?: string | null;
+};
+
+/** Random, URL-safe per-order access token. Generated at order creation so
+ *  every customer-facing order URL is unguessable rather than an enumerable
+ *  sequential number. See getCustomerOrder / resolveAuthorizedOrderId. */
+function newOrderToken() {
+  return randomBytes(24).toString("base64url");
+}
 
 const REVENUE_ORDER_STATUSES = ["payment_confirmed", "delivered", "fulfilled"];
 
@@ -261,8 +276,13 @@ export async function publicOrderSequence(order: PublicOrderIdentity): Promise<n
 export async function publicOrderReference(order: PublicOrderIdentity) {
   const sequence = await publicOrderSequence(order);
   return {
+    // Human-readable display label (enumerable — never an access key).
     number: formatPublicOrderNumber(sequence),
-    pathSegment: formatPublicOrderPathSegment(sequence),
+    // Customer-facing URL segment: the unguessable token when the order has one,
+    // falling back to the sequential segment only for legacy pre-token orders
+    // (reachable via that segment solely by the logged-in owner — see
+    // getCustomerOrder).
+    pathSegment: order.deliveryToken ?? formatPublicOrderPathSegment(sequence),
   };
 }
 
@@ -380,13 +400,18 @@ export async function getCustomerOrder(
     }
   }
 
-  // 2) Public order number / internal id path — codes only for the logged-in owner.
+  // 2) Public order number / internal id path — reserved for the logged-in
+  // owner. The public order number is sequential and enumerable, so serving an
+  // order (its PII, items, amount, and internal id) to a non-owner who guesses
+  // the number is an IDOR: guests must use the unguessable token above instead.
   if (!data) {
     const internalId = await resolveOrderReference(idOrToken);
     if (!internalId) return null;
-    data = await loadOrder(internalId);
-    if (!data) return null;
-    authorizedForCodes = await isOrderOwner(data);
+    const candidate = await loadOrder(internalId);
+    if (!candidate) return null;
+    if (!(await isOrderOwner(candidate))) return null;
+    data = candidate;
+    authorizedForCodes = true;
   }
   if (!data) return null;
 
@@ -395,7 +420,7 @@ export async function getCustomerOrder(
 }
 
 /** True when the current session customer owns the given order. */
-async function isOrderOwner(order: {
+export async function isOrderOwner(order: {
   customerId: string | null;
   customerEmail: string;
 }): Promise<boolean> {
@@ -403,6 +428,41 @@ async function isOrderOwner(order: {
   if (!customer) return false;
   if (order.customerId && order.customerId === customer.id) return true;
   return order.customerEmail.toLowerCase() === customer.email.toLowerCase();
+}
+
+/**
+ * Resolves a customer-supplied order reference (unguessable delivery token,
+ * internal id, or public order number) to an internal order id ONLY when the
+ * caller is authorized to act on it: possession of the token, or logged-in
+ * ownership of the order. Returns null when the reference is unknown or the
+ * caller is not authorized. This is the write-side counterpart to
+ * getCustomerOrder's read authorization — every customer order mutation
+ * (cancel, change method, submit proof) resolves through it so a stranger can't
+ * act on an order by supplying its enumerable public number.
+ */
+export async function resolveAuthorizedOrderId(
+  idOrToken: string,
+): Promise<string | null> {
+  await ensureDatabaseReady();
+  const token = idOrToken.trim();
+  if (!token) return null;
+
+  // Token possession is itself the authorization (works for guests).
+  const byToken = await prisma.order.findUnique({
+    where: { deliveryToken: token },
+    select: { id: true },
+  });
+  if (byToken) return byToken.id;
+
+  // Otherwise the caller must be the logged-in owner of the resolved order.
+  const internalId = await resolveOrderReference(idOrToken);
+  if (!internalId) return null;
+  const order = await prisma.order.findUnique({
+    where: { id: internalId },
+    select: { customerId: true, customerEmail: true },
+  });
+  if (!order) return null;
+  return (await isOrderOwner(order)) ? internalId : null;
 }
 
 export async function getOrderSummaries(
@@ -1009,6 +1069,9 @@ export async function createOrder(
           customerEmail,
           paymentMethod: input.paymentMethod ?? "",
           status: "pending_payment",
+          // Unguessable access token from the start, so the customer-facing
+          // /payment URL is never an enumerable sequential number.
+          deliveryToken: newOrderToken(),
           totalMad: subtotalMad,
           items: {
             create: resolvedLines.map((item) => ({
