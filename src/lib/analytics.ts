@@ -73,9 +73,28 @@ export function trackEcommerce(
   });
 }
 
+/**
+ * Debug mode. Inlined at build time from NEXT_PUBLIC_ANALYTICS_DEBUG, and only
+ * ever honoured outside production (see shouldLogAnalyticsToConsole) — it makes
+ * events INSPECTABLE, it never makes them sendable.
+ */
+const ANALYTICS_DEBUG = process.env.NEXT_PUBLIC_ANALYTICS_DEBUG === "true";
+
 export function trackEvent(action: string, params: GtagParams = {}): void {
   if (typeof window === "undefined") return;
+
+  // Local inspection. Deliberately BEFORE the gtag check: in development gtag is
+  // never present (consent gates it, and analytics is production-only), so
+  // logging afterwards would print nothing — which is exactly when a developer
+  // needs to see the payload. Never logs in production.
+  if (ANALYTICS_DEBUG && process.env.NODE_ENV !== "production") {
+    console.info(`[analytics] ${action}`, params);
+  }
+
   const gtag = (window as unknown as { gtag?: GtagFn }).gtag;
+  // Absent until AnalyticsConsentProvider injects it, which happens only after
+  // the visitor grants consent — so this single check is also the consent gate
+  // for every call site, and no caller needs to know about consent at all.
   if (typeof gtag !== "function") return;
   try {
     gtag("event", action, params);

@@ -254,7 +254,7 @@ model Guide {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @default(now()) @updatedAt
 
-  category Category?    @relation(fields: [categoryId], references: [id])
+  category Category?      @relation(fields: [categoryId], references: [id])
   products GuideProduct[]
 
   @@index([published, sortOrder])
@@ -510,6 +510,21 @@ model Order {
   // only so the schema matches reality; not wired into any query.
   orderNumber           Int      @unique @default(autoincrement())
 
+  // Set the first time the GA4 server-side `purchase` event is sent for this
+  // order, and used as the guard that stops it being sent twice.
+  //
+  // Deduplication previously relied on two emergent properties: GA4 collapsing
+  // on `transaction_id`, and the delivery transition being atomic. Both hold
+  // today, but neither is a guarantee this codebase owns — a change to the
+  // fulfilment path, a manual re-delivery, or a GA4 configuration change could
+  // silently double-count revenue. A conditional update on this column makes
+  // exactly-once OUR invariant, enforced by the database.
+  //
+  // Nullable with no default so every existing order is untouched: historical
+  // orders read as "not sent", which is correct — they predate the marker and
+  // must not be re-sent, which the delivered-status guard already prevents.
+  analyticsPurchaseSentAt DateTime?
+
   // Unguessable secret embedded in the "Voir ma livraison" email link. The
   // public order number is a sequential, enumerable value, so it is NOT
   // sufficient to reveal delivered codes; possession of this token (or being
@@ -559,17 +574,17 @@ model Order {
   discordDeliverySentAt        DateTime?
   discordDeliveryError         String?
 
-  items             OrderItem[]
-  deliveredCodes    DeliveredCode[]
+  items                OrderItem[]
+  deliveredCodes       DeliveredCode[]
   supplierFulfillments SupplierFulfillment[]
-  emailLogs         EmailLog[]
-  paymentProof      PaymentProof?
-  paymentEvents     PaymentEvent[]
-  customer          Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  promoRedemption   PromoRedemption?
-  promotionSnapshot OrderPromotionSnapshot?
-  ghostCreditTxns   GhostCreditTransaction[]
-  milestoneGrants   SpendingMilestoneGrant[]
+  emailLogs            EmailLog[]
+  paymentProof         PaymentProof?
+  paymentEvents        PaymentEvent[]
+  customer             Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  promoRedemption      PromoRedemption?
+  promotionSnapshot    OrderPromotionSnapshot?
+  ghostCreditTxns      GhostCreditTransaction[]
+  milestoneGrants      SpendingMilestoneGrant[]
 
   @@index([status])
   @@index([customerEmail])
@@ -911,12 +926,12 @@ model OrderItem {
   // player_id, Steam login). Captured at checkout per the variant's mapping
   // requirements and validated again before purchase. Shape: {key: value}.
   // Never contains payment data.
-  buyerFields  Json?
+  buyerFields Json?
 
-  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product        Product         @relation(fields: [productId], references: [id])
-  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  deliveredCodes DeliveredCode[]
+  order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product              Product               @relation(fields: [productId], references: [id])
+  variant              ProductVariant?       @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  deliveredCodes       DeliveredCode[]
   supplierFulfillments SupplierFulfillment[]
 
   @@index([variantId])
@@ -1076,7 +1091,7 @@ model SupplierFulfillment {
   // Normalized delivery payload: DeliveredFieldDTO[]. Written only once the
   // provider order is terminal-success. Secrets live here and in
   // DeliveredCode; both are admin/owner-gated and never logged.
-  deliveryPayload Json?
+  deliveryPayload  Json?
   // Trimmed provider response snapshot for audit — sanitised of code/pin/key
   // values by sanitizeProviderSnapshot(). Never the full raw body.
   responseSnapshot Json?
@@ -1084,27 +1099,27 @@ model SupplierFulfillment {
   // Expected supplier cost at submission time (provider currency), captured
   // so margin and balance reconciliation do not depend on a later catalog
   // sync having the same price.
-  costAmount      Decimal? @db.Decimal(18, 6)
-  costCurrency    String?
+  costAmount   Decimal? @db.Decimal(18, 6)
+  costCurrency String?
 
-  attemptCount    Int      @default(0)
+  attemptCount   Int     @default(0)
   // Count of reconciliation passes, to enforce a maximum polling duration and
   // escalate to manual review instead of polling forever.
-  reconcileCount  Int      @default(0)
-  lastError       String?
+  reconcileCount Int     @default(0)
+  lastError      String?
   // Normalized error code from src/lib/suppliers/errors.ts (never raw).
-  lastErrorCode   String?
+  lastErrorCode  String?
   // Correlation id shared with SupplierLog rows for one attempt.
-  correlationId   String?
+  correlationId  String?
 
-  submittedAt     DateTime?
-  completedAt     DateTime?
+  submittedAt DateTime?
+  completedAt DateTime?
   // Exactly-once delivery marker. Non-null ⇒ the customer has the goods and
   // no further delivery may occur for this slot.
-  deliveredAt     DateTime?
-  nextPollAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now()) @updatedAt
+  deliveredAt DateTime?
+  nextPollAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
 
   order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
@@ -1127,44 +1142,44 @@ model SupplierFulfillment {
 // VariantSupplierMapping row is the only thing that links a supplier offer to
 // something Ghost.ma sells.
 model SupplierCatalogItem {
-  id             String   @id @default(cuid())
-  supplier       String
+  id                String   @id @default(cuid())
+  supplier          String
   // Provider service family — "gift_card" | "topup" | "game_key" |
   // "steam_topup" | "steam_gift".
-  serviceType    String
+  serviceType       String
   // Second-level offer id: card_id / offer_id / key_id / appid.
-  externalId     String
+  externalId        String
   // First-level container id: category_id / game_id. Empty string for flat
   // catalogs (Steam), never null, so the unique index stays usable.
-  externalParentId String @default("")
-  parentName     String?
-  name           String
+  externalParentId  String   @default("")
+  parentName        String?
+  name              String
   // Supplier cost in the supplier's currency. Decimal, never a float —
   // FazerCards sends decimal strings like "10.5000".
-  priceAmount    Decimal? @db.Decimal(18, 6)
-  priceCurrency  String?
+  priceAmount       Decimal? @db.Decimal(18, 6)
+  priceCurrency     String?
   // Provider stock where the family reports it (gift cards, game keys). Null
   // means "this family does not report stock", which is NOT out-of-stock.
-  stock          Int?
-  minQuantity    Int?
-  maxQuantity    Int?
-  platform       String?
-  region         String?
+  stock             Int?
+  minQuantity       Int?
+  maxQuantity       Int?
+  platform          String?
+  region            String?
   // Region restrictions / activation notes, provider-shaped.
   regionRestriction String?
   // Buyer-input fields the order endpoint requires (top-ups' player_id, Steam
   // login). Shape: [{key, label, type, required}].
-  buyerFields    Json?
+  buyerFields       Json?
   // Provider identifiers that do not fit the columns above, kept verbatim so
   // ordering never has to re-derive them.
-  providerMeta   Json?
+  providerMeta      Json?
   // False once a sync no longer sees this offer — rows are retired, never
   // deleted, so existing mappings can still explain themselves.
-  available      Boolean  @default(true)
-  lastSeenAt     DateTime @default(now())
-  syncedAt       DateTime @default(now())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @default(now()) @updatedAt
+  available         Boolean  @default(true)
+  lastSeenAt        DateTime @default(now())
+  syncedAt          DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
 
   @@unique([supplier, serviceType, externalParentId, externalId])
   @@index([supplier, serviceType, available])
@@ -1177,7 +1192,7 @@ model SupplierCatalogItem {
 // a no-op, and out-of-order deliveries are resolved by re-reading authoritative
 // state from the API rather than trusting payload ordering.
 model SupplierWebhookEvent {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   supplier        String
   // Provider event id — the dedupe key.
   eventId         String
@@ -1186,10 +1201,10 @@ model SupplierWebhookEvent {
   // Sanitised payload snapshot (delivered secrets stripped).
   payload         Json?
   // "received" | "processed" | "ignored" | "invalid_signature" | "error"
-  status          String   @default("received")
+  status          String    @default("received")
   errorMessage    String?
   processedAt     DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@unique([supplier, eventId])
   @@index([supplier, status, createdAt])
@@ -1918,6 +1933,74 @@ model SpendingMilestoneGrant {
   @@index([customerId, status])
   @@index([milestoneId])
   @@index([orderId])
+}
+
+// ── Operations: scheduled jobs, alert cooldowns ─────────────────────────────
+
+// Execution state for each scheduled job (the Vercel crons in vercel.json).
+//
+// Why this exists: `checkCron` in src/lib/ops/health.ts could only report
+// "unknown" — "aucune trace d'exécution" — because nothing recorded whether a
+// cron had ever actually run. A job that 500s on every invocation, or that
+// Vercel silently stopped scheduling, was undetectable. Being *configured* is
+// not being *healthy*.
+//
+// ONE ROW PER JOB, upserted on each run — not one row per execution. That keeps
+// the table permanently bounded (five rows today) with no retention job to run
+// and no growth to monitor, at the cost of history. History belongs in the
+// Vercel logs; what the dashboard needs is the current state.
+model ScheduledJobRun {
+  id  String @id @default(cuid())
+  // The cron path without the prefix, e.g. "supplier-reconcile". Unique: this
+  // is the upsert key.
+  job String @unique
+
+  startedAt           DateTime
+  // Set only on success, so "healthy" can never be inferred from an attempt.
+  // A job that has started 100 times and never succeeded still reads as failing.
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  // status: "running" | "success" | "failure"
+  status              String
+  durationMs          Int?
+  // Safe error CATEGORY or message — never a payload, token, or customer datum.
+  lastError           String?
+  // Consecutive failures since the last success. Drives alert escalation without
+  // needing to query history.
+  consecutiveFailures Int       @default(0)
+  updatedAt           DateTime  @default(now()) @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+// Durable cooldown/dedup state for operational alerts.
+//
+// Replaces the in-memory Map in src/lib/discord/supplierAlerts.ts, which is
+// per-process: on serverless, a recycled or scaled-out instance starts with an
+// empty map, so a persistently failing integration re-alerts on every cold
+// start. The comment there calls this out as a deliberate "loud beats lost"
+// trade-off; a row makes the cooldown actually hold without losing anything.
+//
+// Bounded by the number of distinct alert keys (~13 × suppliers), so like
+// ScheduledJobRun it needs no retention job.
+model AlertCooldown {
+  id  String @id @default(cuid())
+  // Dedupe identity, e.g. "reloadly:balance_low" or "order_stuck:payment_confirmed".
+  key String @unique
+
+  // severity: "critical" | "warning" | "info"
+  severity         String
+  lastFiredAt      DateTime
+  // Total times this alert has fired, including suppressed attempts (below), so
+  // an alert that is constantly retriggering is visible even while cooled down.
+  firedCount       Int       @default(0)
+  suppressedCount  Int       @default(0)
+  // Last time an attempt was suppressed by the cooldown — lets the dashboard
+  // show "still failing, muted until X" rather than implying it recovered.
+  lastSuppressedAt DateTime?
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  @@index([severity, lastFiredAt])
 }
 
 // Append-only admin/audit timeline for a promo code (mirrors PaymentEvent).

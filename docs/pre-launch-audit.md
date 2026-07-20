@@ -27,6 +27,12 @@ rebuild; they need one focused, staging-tested change and a Vercel env-var
 scoping pass. The rest of the platform is in genuinely good shape — payments,
 wallet, promo, auth hashing/sessions, and money math are well built.
 
+> **Correction (2026-07-19).** C-SEC-1 and C-SEC-2 below were re-verified against
+> the code during the launch-readiness audit and are **both fixed**. The counts in
+> the table were accurate when written and are left as a historical record; the
+> live blocker count is **1 Critical** (C-ENV-1, which needs Vercel dashboard work,
+> not code). See `docs/launch-readiness-audit.md`.
+
 | Severity | Open | Fixed this pass |
 |---|---|---|
 | Critical | 3 | 2 |
@@ -36,19 +42,24 @@ wallet, promo, auth hashing/sessions, and money math are well built.
 
 ### Critical blockers (must clear before launch)
 
-1. **IDOR on order actions (C-SEC-1).** `submitPaymentAction`, `cancelOrderAction`,
-   `changePaymentMethodAction` (`src/app/actions/payments.ts`) and their DB
-   functions (`src/lib/db/payments.ts`) accept an `orderId` with **no ownership
-   check**. Combined with the enumerable public order number, an attacker can
-   cancel, switch the payment method of, or upload a "proof" to any pending
-   order. **Open — needs a capability-token fix (see below); deferred from this
-   pass because it touches the live guest checkout→payment flow and must be
-   staging-tested.**
-2. **Order PII enumeration (C-SEC-2).** `getCustomerOrder` /
-   `getPaymentPageDataAction` return `customerName`, `customerEmail`, and the
-   internal cuid to anyone who resolves an order by its **sequential** public
-   number (`resolveOrderReference` uses `skip: sequence-1`). Delivered codes are
-   correctly gated, but name/email/id are not. **Open — same fix as C-SEC-1.**
+1. ~~**IDOR on order actions (C-SEC-1).**~~ **FIXED** — verified 2026-07-19 during
+   the launch-readiness audit. `authorizeOrderAccess` (`src/lib/db/orders.ts:536`)
+   now resolves and authorizes every state-changing reference, and is applied to
+   `submitPaymentAction`, `changePaymentMethodAction` and `cancelOrderAction`
+   (`src/app/actions/payments.ts:76,116,124`) plus both PayPal actions
+   (`src/app/actions/paypal.ts:28,50`). The enumerable public order number alone
+   never authorizes an action — only the secret `deliveryToken`, the unguessable
+   internal cuid, or being the logged-in owner.
+2. ~~**Order PII enumeration (C-SEC-2).**~~ **FIXED** — verified 2026-07-19. The
+   `authorizedForIdentity` gate in `buildCustomerDTO` (`src/lib/db/orders.ts:212`)
+   withholds `customerName`, `customerEmail` and the internal id whenever an order
+   was resolved *only* via the sequential public number by a non-owner
+   (`getCustomerOrder`, `orders.ts:518-521`). Delivered codes were already gated.
+
+   **Residual (lesser) issue, not the original C-SEC-2:** a sequential public
+   order number still confirms that an order *exists* and exposes its status,
+   amount and item names. That is an existence oracle rather than a PII leak, and
+   is tracked as Stage 1 work in `docs/launch-readiness-audit.md`.
 3. **Staging env vars can transact for real (C-ENV-1).** The pulled preview env
    shows `RELOADLY_ENV="live"` and `ENABLE_REAL_EMAILS="true"` on a non-production
    deployment. Code guards were added (email allowlist, robots noindex, GA gating,

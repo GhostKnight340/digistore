@@ -18,7 +18,18 @@ export default function SupportPill() {
   const pathname = usePathname();
   // Hidden on the support flow and across the admin area. Client-side so it
   // stays correct across soft navigations (see Navbar for the rationale).
-  if (pathname.startsWith("/support") || pathname.startsWith("/admin")) return null;
+  //
+  // Also hidden on /checkout and /payment: both end in a `fixed inset-x-0
+  // bottom-0` CTA bar at z-30, and this pill is z-40, so on a phone it sits
+  // directly on top of the right end of the primary conversion button. Same
+  // exclusion list as FeedbackButton, which already got this right.
+  const hidden =
+    pathname.startsWith("/support") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/checkout") ||
+    pathname.startsWith("/payment");
+
+  if (hidden) return null;
 
   return (
     <>

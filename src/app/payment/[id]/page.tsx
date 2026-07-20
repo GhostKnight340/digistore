@@ -124,6 +124,7 @@ export default function PaymentPage({ params }: { params: Promise<{ id: string }
       refresh={refresh}
       error={error}
       setError={setError}
+      selfSegment={id}
     />
   );
 }
@@ -135,11 +136,19 @@ function PaymentExperience({
   refresh,
   error,
   setError,
+  selfSegment,
 }: {
   data: PaymentPageDataDTO;
   refresh: () => void;
   error: string;
   setError: (e: string) => void;
+  /**
+   * The route reference the customer arrived with — a secret delivery token for
+   * anyone who followed their order e-mail, or a public order number for a
+   * legacy link. Every self-link on this page reuses it so the customer never
+   * loses the capability they came in with.
+   */
+  selfSegment: string;
 }) {
   const { order, config, orderingEnabled } = data;
   const { getProduct } = useProductCatalog();
@@ -514,11 +523,16 @@ function PaymentExperience({
             )}
 
             {/* Awaiting verification */}
-            {isSubmitted && <AwaitingCard order={order} onTrack={() => refresh()} />}
+            {isSubmitted && <AwaitingCard order={order} onTrack={() => refresh()} selfSegment={selfSegment} />}
 
             {/* Confirmed */}
             {isConfirmed && (
-              <TerminalConfirmed order={order} total={total} publicOrderNumber={publicOrderNumber} />
+              <TerminalConfirmed
+                order={order}
+                total={total}
+                publicOrderNumber={publicOrderNumber}
+                selfSegment={selfSegment}
+              />
             )}
 
             {/* Rejected / issue — allow re-uploading a justificatif in-app */}
@@ -544,7 +558,7 @@ function PaymentExperience({
             )}
 
             {/* Delivered */}
-            {isDelivered && <DeliveredSection order={order} />}
+            {isDelivered && <DeliveredSection order={order} selfSegment={selfSegment} />}
 
             {/* Cancelled */}
             {isCancelled && <TerminalCancelled whatsapp={whatsapp} orderReference={publicOrderNumber} />}
@@ -671,7 +685,7 @@ function PaymentExperience({
 
             {/* Optional Discord DM delivery (additive; never blocks payment). */}
             {!isCancelled && !isRefunded && !isRejected && !isDelivered && (
-              <OrderDiscordDelivery orderId={order.id} orderPathSegment={order.publicOrderPathSegment} />
+              <OrderDiscordDelivery orderId={order.id} orderPathSegment={selfSegment} />
             )}
 
             {/* After your payment */}
@@ -1475,7 +1489,21 @@ function SubmitButton({
 
 // ─── Awaiting verification ──────────────────────────────────────────────────
 
-function AwaitingCard({ order, onTrack }: { order: CustomerOrderDTO; onTrack: () => void }) {
+function AwaitingCard({
+  order,
+  onTrack,
+  selfSegment,
+}: {
+  order: CustomerOrderDTO;
+  onTrack: () => void;
+  /**
+   * The reference the customer actually arrived with (secret delivery token, or
+   * a public number for a legacy link). Self-links MUST reuse it: linking to the
+   * enumerable public segment instead silently downgrades a token-bearing guest
+   * to the weaker view, which once delivered costs them access to their own codes.
+   */
+  selfSegment: string;
+}) {
   return (
     <div className="overflow-hidden rounded-2xl border border-[rgba(62,123,250,0.22)] bg-[#0F1015]">
       <div className="border-b border-white/[0.06] px-[26px] py-7 text-center">
@@ -1517,7 +1545,7 @@ function AwaitingCard({ order, onTrack }: { order: CustomerOrderDTO; onTrack: ()
           Inutile de renvoyer un justificatif. Suivez l’avancement depuis cette page à tout moment.
         </div>
         <Link
-          href={`/order/${order.publicOrderPathSegment}`}
+          href={`/order/${selfSegment}`}
           onClick={onTrack}
           className="mt-3.5 flex h-11 w-full items-center justify-center rounded-[11px] border border-white/10 bg-[#12141B] text-[13.5px] font-medium text-[#C4C9D4] hover:bg-[#171b26]"
         >
@@ -1588,6 +1616,7 @@ function TimelineStep({
 // ─── Terminal states ────────────────────────────────────────────────────────
 
 function TerminalConfirmed({
+  selfSegment,
   order,
   total,
   publicOrderNumber,
@@ -1595,6 +1624,8 @@ function TerminalConfirmed({
   order: CustomerOrderDTO;
   total: number;
   publicOrderNumber: string;
+  /** See AwaitingCard — self-links must preserve the arrival capability. */
+  selfSegment: string;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-[rgba(91,201,140,0.28)] bg-[#0F1015]">
@@ -1610,7 +1641,7 @@ function TerminalConfirmed({
       </div>
       <div className="px-[22px] pb-[22px]">
         <Link
-          href={`/order/${order.publicOrderPathSegment}`}
+          href={`/order/${selfSegment}`}
           className="flex h-[46px] w-full items-center justify-center rounded-xl bg-[linear-gradient(145deg,#3E7BFA,#2B5FD9)] text-sm font-semibold text-white"
         >
           Voir ma commande
@@ -1755,7 +1786,7 @@ function TerminalRefunded({
 
 // ─── Delivered ──────────────────────────────────────────────────────────────
 
-function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
+function DeliveredSection({ order, selfSegment }: { order: CustomerOrderDTO; selfSegment: string }) {
   const { getProduct } = useProductCatalog();
   return (
     <div className="space-y-5">
@@ -1770,7 +1801,7 @@ function DeliveredSection({ order }: { order: CustomerOrderDTO }) {
         </p>
       </div>
 
-      <DeliveredOrderDiscord orderId={order.id} orderPathSegment={order.publicOrderPathSegment} />
+      <DeliveredOrderDiscord orderId={order.id} orderPathSegment={selfSegment} />
 
       {order.items.map((item) => {
         const product = getProduct(item.productId);

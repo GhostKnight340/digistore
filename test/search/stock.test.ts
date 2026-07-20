@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isVariantAvailable, normalizeStockMode } from "../../src/lib/search/stock";
+import {
+  hasSufficientStock,
+  isVariantAvailable,
+  normalizeStockMode,
+} from "../../src/lib/search/stock";
 
 /**
  * The storefront availability rule and the checkout rule
@@ -54,4 +58,64 @@ test("unknown stock modes normalize to automatic", () => {
   assert.equal(normalizeStockMode("force_out_of_stock"), "force_out_of_stock");
   // …and therefore behave quantity-driven, not permanently available.
   assert.equal(isVariantAvailable("something_else", 0, AUTO), false);
+});
+
+/**
+ * Quantity-aware availability — the oversell fix.
+ *
+ * The bug this closes: availability was a boolean, so a variant holding ONE
+ * unused code accepted an order for 100. The order was created, the customer was
+ * asked to pay, and 99 of the codes did not exist.
+ */
+
+test("stock must cover the requested quantity, not merely be non-zero", () => {
+  // The exact oversell case: 1 code in stock, 100 requested.
+  assert.equal(hasSufficientStock("automatic", 1, 100, AUTO), false);
+  assert.equal(hasSufficientStock("automatic", 1, 1, AUTO), true);
+  // Boundaries either side of "exactly enough".
+  assert.equal(hasSufficientStock("automatic", 5, 5, AUTO), true);
+  assert.equal(hasSufficientStock("automatic", 5, 6, AUTO), false);
+});
+
+test("hasSufficientStock at quantity 1 is exactly isVariantAvailable", () => {
+  // The invariant that keeps the badge and checkout from drifting apart: the
+  // quantity-aware check may only be STRICTER, never differently-shaped.
+  const settings = [AUTO, { inventoryEnabled: false }, { inventoryEnabled: true, inventoryMode: "manual" }, undefined];
+  const modes = ["automatic", "force_in_stock", "force_out_of_stock", "something_else"];
+
+  for (const s of settings) {
+    for (const mode of modes) {
+      for (const codes of [0, 1, 99]) {
+        assert.equal(
+          hasSufficientStock(mode, codes, 1, s),
+          isVariantAvailable(mode, codes, s),
+          `diverged for mode=${mode} codes=${codes} settings=${JSON.stringify(s)}`,
+        );
+      }
+    }
+  }
+});
+
+test("the overrides keep their meaning regardless of quantity", () => {
+  // force_in_stock is an explicit "sell it anyway" — quantity must not undo it.
+  assert.equal(hasSufficientStock("force_in_stock", 0, 1000, AUTO), true);
+  // force_out_of_stock refuses even a single unit.
+  assert.equal(hasSufficientStock("force_out_of_stock", 999, 1, AUTO), false);
+});
+
+test("inventory disabled skips the quantity check entirely", () => {
+  // With the inventory system off there is no count to validate against, so
+  // checkout must not invent an inventory-specific refusal.
+  assert.equal(hasSufficientStock("automatic", 0, 100, { inventoryEnabled: false }), true);
+});
+
+test("manual inventory mode ignores quantity as well as the count", () => {
+  const manual = { inventoryEnabled: true, inventoryMode: "manual" };
+  assert.equal(hasSufficientStock("automatic", 0, 50, manual), true);
+});
+
+test("a non-positive quantity is never fulfillable", () => {
+  // Callers drop these earlier; the predicate must still not answer "yes".
+  assert.equal(hasSufficientStock("automatic", 10, 0, AUTO), false);
+  assert.equal(hasSufficientStock("automatic", 10, -5, AUTO), false);
 });

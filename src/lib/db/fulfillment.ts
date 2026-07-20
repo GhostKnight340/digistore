@@ -447,20 +447,39 @@ export async function deliverOrder(
     const reference = await publicOrderReference(order);
 
     // GA4 `purchase` — fired here, at delivery, because that is the point the
-    // business considers the order genuinely complete. Server-side and keyed on
-    // the order id (GA4's transaction_id), so a customer refreshing the payment
-    // page can never double-count it. Fire-and-forget: never awaited, no-ops
-    // without GA_API_SECRET, and must never delay or fail a delivery.
-    void sendPurchaseEvent({
-      orderId,
-      totalMad: order.totalMad,
-      items: order.items.map((item) => ({
-        item_id: item.variantId ?? item.productId,
-        item_name: item.product.name,
-        price: item.unitPriceMad,
-        quantity: item.quantity,
-      })),
+    // business considers the order genuinely complete. Fire-and-forget: never
+    // awaited, no-ops without GA_API_SECRET, and must never delay or fail a
+    // delivery.
+    //
+    // Exactly-once is enforced by the DATABASE, not by GA4. The conditional
+    // update below succeeds for exactly one caller: whoever flips
+    // analyticsPurchaseSentAt from NULL wins the right to send. Previously this
+    // relied on GA4 collapsing on transaction_id plus the atomic status
+    // transition above — both true today, but neither owned by this codebase, so
+    // a manual re-delivery or a GA4 config change could silently double-count
+    // revenue. Claiming the marker first (rather than after sending) means a
+    // crash mid-send loses one event rather than risking a duplicate: for
+    // revenue reporting, under-counting is the safer failure.
+    const claimed = await prisma.order.updateMany({
+      where: { id: orderId, analyticsPurchaseSentAt: null },
+      data: { analyticsPurchaseSentAt: new Date() },
     });
+    if (claimed.count === 1) {
+      void sendPurchaseEvent({
+        orderId,
+        totalMad: order.totalMad,
+        items: order.items.map((item) => ({
+          // Must match the browser events' item_id or GA4 will not join the
+          // funnel. toAnalyticsItem uses the catalogue product id; a variant
+          // order sends the variant id here, which is a known divergence
+          // tracked in docs/launch-readiness-audit.md.
+          item_id: item.variantId ?? item.productId,
+          item_name: item.product.name,
+          price: item.unitPriceMad,
+          quantity: item.quantity,
+        })),
+      });
+    }
 
     try {
       await sendTransactionalEmail({

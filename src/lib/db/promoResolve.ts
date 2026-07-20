@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isInventoryEnabled } from "@/lib/storeSettings";
+import { hasSufficientStock } from "@/lib/search/stock";
 
 import { getStoreSettings } from "./catalog";
 import { prisma } from "./prisma";
@@ -41,20 +41,16 @@ export async function resolveCartLines(
 ): Promise<ResolvedCartLine[]> {
   const ids = items.map((i) => i.productId);
   const settings = await getStoreSettings();
-  const inventoryOn = isInventoryEnabled(settings);
-  const countUnusedCodes = inventoryOn && settings.inventoryMode !== "manual";
-
   /**
-   * Mirrors variantStockStatus() in catalog.ts, which drives the storefront
-   * badge — the two must agree or a variant shown as available would be
-   * refused at checkout (and vice versa).
+   * Inventory-relevant slice of the store settings, passed to the SHARED
+   * predicate in lib/search/stock.ts — the same one driving the storefront
+   * badge. Reusing it (rather than re-deriving the rules here, as this module
+   * used to) is what guarantees a variant shown as available is not refused at
+   * checkout, and vice versa.
    */
-  const isVariantPurchasable = (stockMode: string, unusedCodes: number) => {
-    if (stockMode === "force_in_stock") return true;
-    if (!inventoryOn) return true;
-    if (stockMode === "force_out_of_stock") return false;
-    if (!countUnusedCodes) return true;
-    return unusedCodes > 0;
+  const stockSettings = {
+    inventoryEnabled: settings.inventoryEnabled,
+    inventoryMode: settings.inventoryMode,
   };
 
   const [products, variants] = await Promise.all([
@@ -88,7 +84,19 @@ export async function resolveCartLines(
     }),
   ]);
 
-  const byKey = new Map<string, Omit<ResolvedCartLine, "lineKey" | "quantity">>();
+  /**
+   * Resolved catalogue data plus the stock inputs needed to answer availability
+   * once the requested QUANTITY is known. Parent-level (variant-less) products
+   * carry no stock inputs: the storefront computes no stock status for them
+   * either (see catalog.ts — parent cards derive theirs from variants), so
+   * gating them here would refuse a purchase the storefront advertised. Their
+   * fulfilment is effectively manual. Tracked in docs/launch-readiness-audit.md.
+   */
+  type Resolved = Omit<ResolvedCartLine, "lineKey" | "quantity"> & {
+    stock: { stockMode: string; unusedCodes: number } | null;
+  };
+
+  const byKey = new Map<string, Resolved>();
   for (const product of products) {
     byKey.set(product.slug, {
       productId: product.id,
@@ -96,24 +104,51 @@ export async function resolveCartLines(
       categoryId: product.category,
       unitPriceMad: product.priceMad,
       name: product.name,
+      stock: null,
     });
   }
   for (const variant of variants) {
-    if (!isVariantPurchasable(variant.stockMode, variant._count.digitalCodes)) continue;
     byKey.set(variant.id, {
       productId: variant.productId,
       variantId: variant.id,
       categoryId: variant.product.category,
       unitPriceMad: variant.priceMad,
       name: `${variant.product.name} - ${variant.name}`,
+      stock: { stockMode: variant.stockMode, unusedCodes: variant._count.digitalCodes },
     });
+  }
+
+  /**
+   * Total units requested per catalogue key. A cart normally merges duplicate
+   * lines client-side, but the cart is attacker-controlled localStorage: two
+   * lines of 1 must not each pass a "1 in stock" check independently.
+   */
+  const requestedByKey = new Map<string, number>();
+  for (const item of items) {
+    if (item.quantity < 1) continue;
+    requestedByKey.set(item.productId, (requestedByKey.get(item.productId) ?? 0) + item.quantity);
   }
 
   const lines: ResolvedCartLine[] = [];
   for (const item of items) {
     const resolved = byKey.get(item.productId);
     if (!resolved || item.quantity < 1) continue;
-    lines.push({ lineKey: item.productId, quantity: item.quantity, ...resolved });
+    // Availability is checked against the TOTAL requested for this key, not this
+    // one line. Dropping the line makes createOrder refuse the whole order with
+    // the correct "plus disponible" message rather than silently short-shipping.
+    if (
+      resolved.stock &&
+      !hasSufficientStock(
+        resolved.stock.stockMode,
+        resolved.stock.unusedCodes,
+        requestedByKey.get(item.productId) ?? item.quantity,
+        stockSettings,
+      )
+    ) {
+      continue;
+    }
+    const { stock: _stock, ...line } = resolved;
+    lines.push({ lineKey: item.productId, quantity: item.quantity, ...line });
   }
   return lines;
 }

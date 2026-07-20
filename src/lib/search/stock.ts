@@ -44,3 +44,40 @@ export function isVariantAvailable(
   if (!settings || settings.inventoryMode === "manual") return true;
   return unusedCodes > 0;
 }
+
+/**
+ * Can `quantity` units of this variant actually be fulfilled?
+ *
+ * `isVariantAvailable` answers "is this sellable at all?" — the question a
+ * storefront badge asks, where quantity is not yet known. Checkout needs the
+ * stronger question, because a variant holding ONE unused code answered "yes" to
+ * the badge and was then accepted for an order of 100: the customer paid for 99
+ * codes that do not exist.
+ *
+ * Every branch is deliberately identical to `isVariantAvailable` except the
+ * final quantity comparison, so the two can never diverge on *whether* stock is
+ * counted — only on how much is required. The invariant
+ * `hasSufficientStock(m, u, 1, s) === isVariantAvailable(m, u, s)` holds for all
+ * inputs and is asserted in the tests.
+ *
+ * Note this is a validation check, not a reservation: it narrows the race window
+ * but two simultaneous orders can still both pass. Closing that properly needs a
+ * reservation at order creation — see docs/launch-readiness-audit.md.
+ */
+export function hasSufficientStock(
+  stockMode: string,
+  unusedCodes: number,
+  quantity: number,
+  settings?: StockSettings,
+): boolean {
+  const mode = normalizeStockMode(stockMode);
+  if (mode === "force_in_stock") return true;
+  if (settings && !isInventoryEnabled({ inventoryEnabled: settings.inventoryEnabled ?? true }))
+    return true;
+  if (mode === "force_out_of_stock") return false;
+  if (!settings || settings.inventoryMode === "manual") return true;
+  // A non-positive request can never be fulfilled; callers drop those earlier,
+  // but the predicate must not answer "yes" to a quantity of 0.
+  if (quantity < 1) return false;
+  return unusedCodes >= quantity;
+}

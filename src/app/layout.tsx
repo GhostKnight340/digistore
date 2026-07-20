@@ -12,6 +12,7 @@ import { getWishlistSlugs } from "@/lib/db/wishlist";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SupportPill from "@/components/support/SupportPill";
+import AnalyticsConsentProvider from "@/components/analytics/AnalyticsConsent";
 import FeedbackButton from "@/components/feedback/FeedbackButton";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
@@ -84,34 +85,26 @@ export default async function RootLayout({
   // analytics cleanly, never silently ship data to a baked-in property.
   const gaId = process.env.NEXT_PUBLIC_GA_ID;
   // Production analytics only: staging/preview page views must not pollute the
-  // live GA property.
-  const analyticsEnabled = isProductionRuntime() && Boolean(gaId);
+  // live GA property. Loading is now ALSO gated on the visitor's consent, which
+  // is a client-side decision — see AnalyticsConsentProvider. These flags are
+  // just the server-known half of the gate.
+  const analyticsIsProduction = isProductionRuntime();
+  // Kill switch. Absent means enabled, so existing deployments keep working;
+  // set it to "false" to disable every provider without unsetting ids.
+  const analyticsGloballyEnabled = process.env.NEXT_PUBLIC_ANALYTICS_ENABLED !== "false";
+  const analyticsDebug = process.env.NEXT_PUBLIC_ANALYTICS_DEBUG === "true";
   const showOrdersBanner = Boolean(
     settings && !isOrderingEnabled(settings) && !showMaintenance && !ordersBannerSuppressed,
   );
 
   return (
     <html lang="fr">
-      <head>
-        {analyticsEnabled ? (
-          <>
-            <script
-              async
-              src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
-            />
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${gaId}');
-            `,
-              }}
-            />
-          </>
-        ) : null}
-      </head>
+      {/*
+        No analytics <script> here any more. gtag is injected client-side by
+        AnalyticsConsentProvider, and only after the visitor grants consent —
+        keeping it here would load it for everyone before they could choose.
+      */}
+      <head />
       <body className="min-h-screen font-sans antialiased">
         {showStagingBanner ? (
           <div
@@ -121,6 +114,12 @@ export default async function RootLayout({
             {runtimeEnvLabel().toUpperCase()} — données et paiements de test
           </div>
         ) : null}
+        <AnalyticsConsentProvider
+          gaId={gaId ?? null}
+          isProduction={analyticsIsProduction}
+          globallyEnabled={analyticsGloballyEnabled}
+          debug={analyticsDebug}
+        >
         <StoreSettingsProvider initialSettings={settings}>
           <ProductCatalogProvider
             categories={catalog.categories}
@@ -204,6 +203,7 @@ export default async function RootLayout({
             </StoreProvider>
           </ProductCatalogProvider>
         </StoreSettingsProvider>
+        </AnalyticsConsentProvider>
         <SpeedInsights />
       </body>
     </html>

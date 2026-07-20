@@ -86,6 +86,40 @@ function parseEntryParams(raw: Record<string, unknown>): FazerCardsEntryParams {
 }
 
 /**
+ * Describes an unrecognized supplier payload by STRUCTURE alone — key names and
+ * value types, never values. This is what makes the "unrecognized payload" log
+ * safe to write: the payload's own values are the delivered gift-card codes.
+ *
+ * Arrays collapse to `name:[n×type]` so a 50-code response stays one short line.
+ * Depth is capped so a pathological response cannot produce an unbounded string.
+ * Exported for tests — the guarantee "no value ever appears in the output" is
+ * the point, so it is asserted directly.
+ */
+export function describePayloadShape(value: unknown, depth = 0): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    if (depth >= 3) return "[…]";
+    if (value.length === 0) return "[]";
+    return `[${value.length}×${describePayloadShape(value[0], depth + 1)}]`;
+  }
+  if (typeof value === "object") {
+    if (depth >= 3) return "{…}";
+    const keys = Object.keys(value as Record<string, unknown>);
+    if (keys.length === 0) return "{}";
+    const inner = keys
+      .slice(0, 20)
+      .map(
+        (key) =>
+          `${key}:${describePayloadShape((value as Record<string, unknown>)[key], depth + 1)}`,
+      )
+      .join(",");
+    return `{${inner}${keys.length > 20 ? ",…" : ""}}`;
+  }
+  // Scalars report their type only. `string` never carries its contents.
+  return typeof value;
+}
+
+/**
  * Extracts delivered codes from a completed FazerCards order. The public spec
  * leaves the order object untyped and shows no completed example, so this
  * scans the common shapes tolerantly (arrays named codes/cards/keys/items of
@@ -344,8 +378,15 @@ export const fazercardsProvider: SupplierProvider = {
     const fields = normalizeFazerCardsOrderPayload(order);
     const primary = primaryDeliveryValue(fields);
     if (fields.length === 0 || !primary) {
-      // Codes ARE the payload — error-level log for one-off diagnosis only.
-      console.error("[fazercards:unrecognized-order-payload]", JSON.stringify(order).slice(0, 2000));
+      // Codes ARE the payload, so the payload itself must never be logged: Vercel
+      // logs are retained and readable by anyone with project access, and nothing
+      // scrubs a plain console write. What we actually need in order to teach the
+      // normalizer a new response shape is the SHAPE — which keys came back and of
+      // what type — never the values. See docs/launch-readiness-audit.md §4.
+      console.error(
+        "[fazercards:unrecognized-order-payload]",
+        `orderId=${order.id} shape=${describePayloadShape(order)}`,
+      );
       throw new Error(
         `Commande FazerCards ${order.id} terminée mais aucun code reconnu dans la réponse. ` +
           "Récupérez le code dans le tableau de bord FazerCards et livrez-le manuellement.",

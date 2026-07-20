@@ -1,5 +1,7 @@
 "use client";
 
+import { useAnalyticsConsent } from "@/components/analytics/AnalyticsConsent";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
@@ -106,13 +108,36 @@ export default function Footer() {
             © {new Date().getFullYear()} {settings.branding.siteName}. Tous
             droits réservés.
           </span>
-          <span className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            Français - DH
+          <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+            {/* Required companion to the consent banner: a visitor who accepted
+                or refused must be able to change their mind at any time. Renders
+                nothing when analytics could never run anyway. */}
+            <ConsentPreferencesLink />
+            <span className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+              Français - DH
+            </span>
           </span>
         </div>
       </div>
     </footer>
+  );
+}
+
+/** Re-opens the analytics consent choice. Hidden when there is nothing to consent to. */
+function ConsentPreferencesLink() {
+  const { consent, hydrated, openPreferences } = useAnalyticsConsent();
+  // Before hydration we do not know whether a choice exists; showing the link
+  // only once decided keeps the footer stable and avoids a flash.
+  if (!hydrated || !consent) return null;
+  return (
+    <button
+      type="button"
+      onClick={openPreferences}
+      className="min-h-[44px] text-[13px] text-muted underline underline-offset-2 transition hover:text-white"
+    >
+      Cookies et mesure d’audience
+    </button>
   );
 }
 

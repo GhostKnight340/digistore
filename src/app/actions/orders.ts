@@ -2,11 +2,13 @@
 
 import {
   createOrder,
+  emailHasRegisteredAccount,
   getCustomerOrder,
   getOrderSummaries,
   findOrderByEmailAndId,
 } from "@/lib/db/orders";
 import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
+import { getCheckoutSessionId, hasVerifiedProof } from "@/lib/checkout/emailVerification";
 import { getCurrentCustomer } from "@/lib/auth";
 import { customerOrderRedirectPath } from "@/lib/orderNumber";
 import { POLICIES, clientIp, consume, dim } from "@/lib/rateLimit";
@@ -31,7 +33,9 @@ export async function createOrderAction(input: {
       publicOrderPathSegment: string;
       accessToken: string | null;
     }
-  | { error: string }
+  // Customer-safe French message. `accountExists` additionally tells the client
+  // to surface a "Se connecter" path rather than a bare error.
+  | { error: string; accountExists?: boolean }
   | null
 > {
   // Global pre-launch guard: never create an order while ordering is disabled.
@@ -39,17 +43,70 @@ export async function createOrderAction(input: {
   // through (see createOrder in src/lib/db/orders.ts).
   if (!(await isOrderingCurrentlyEnabled())) return null;
 
-  // Account required: anonymous guest checkout is removed. Only an authenticated,
-  // email-verified customer may create an order through this path. New customers
-  // register + verify inline and use registerAndCreateOrderAction instead. This
-  // is the server-side backstop — the disabled button is never the only guard.
   const customer = await getCurrentCustomer();
-  if (!customer) {
-    return { error: "Veuillez créer un compte ou vous connecter pour continuer." };
+
+  // Rate limited on BOTH dimensions because guest checkout makes this reachable
+  // without a session: the IP budget bounds a single abusive source, the e-mail
+  // budget bounds someone rotating IPs against one address. A tripped limit
+  // returns the same generic French message as any other failure.
+  const { allowed } = consume([
+    dim("order-create:ip", await clientIp(), POLICIES.orderCreateIp),
+    dim(
+      "order-create:email",
+      (customer?.email ?? input.customerEmail).trim().toLowerCase(),
+      POLICIES.orderCreateEmail,
+    ),
+  ]);
+  if (!allowed) {
+    return { error: "Trop de tentatives. Patientez quelques minutes puis réessayez." };
   }
-  if (!customer.emailVerified) {
+
+  // ── Authenticated customer ────────────────────────────────────────────────
+  if (customer) {
+    if (!customer.emailVerified) {
+      return { error: "Vérifiez votre adresse e-mail pour continuer vers le paiement." };
+    }
+    return createOrder(input);
+  }
+
+  // ── Guest checkout ────────────────────────────────────────────────────────
+  // Guests are supported deliberately: forcing account creation to buy a gift
+  // card costs real orders. What a guest still must prove is CONTROL OF THE
+  // E-MAIL, because the order — and the token that later reveals the delivered
+  // codes — is delivered there, and because createOrder attaches the order to
+  // whatever Customer row holds that address. Without this check, anyone could
+  // place orders against a stranger's e-mail. The proof is the same six-digit
+  // code flow the register path already uses; it is NOT consumed here, so a
+  // guest can place a second order, and a retry of this one, without
+  // re-verifying.
+  const guestName = input.customerName.trim();
+  const guestEmail = input.customerEmail.trim().toLowerCase();
+  if (guestName.length < 2) {
+    return { error: "Veuillez saisir votre nom complet." };
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
+    return { error: "Veuillez saisir une adresse e-mail valide." };
+  }
+
+  const sessionId = await getCheckoutSessionId();
+  if (!sessionId || !(await hasVerifiedProof(guestEmail, sessionId))) {
     return { error: "Vérifiez votre adresse e-mail pour continuer vers le paiement." };
   }
+
+  // An address that already has a real (password or OAuth) account belongs to a
+  // customer who should sign in: it keeps the order in their history, their
+  // Ghost Credit spendable, and avoids a second half-populated profile. This is
+  // a routing hint, not an access decision — the caller renders a "Se connecter"
+  // link. It only ever fires for an address the caller has just PROVEN they
+  // control, so it discloses nothing to a stranger.
+  if (await emailHasRegisteredAccount(guestEmail)) {
+    return {
+      error:
+        "Un compte existe déjà avec cette adresse. Connectez-vous pour finaliser votre commande.",
+      accountExists: true,
+    };
+  }
+
   return createOrder(input);
 }
 

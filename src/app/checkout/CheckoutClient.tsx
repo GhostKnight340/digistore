@@ -16,6 +16,7 @@ import { announcedPaymentMethods } from "@/lib/paymentMethod";
 import type { PaymentConfigDTO, PromoPreviewDTO } from "@/lib/dto";
 import { getRegion } from "@/lib/regions";
 import { trackEvent, trackEcommerce, toAnalyticsItem } from "@/lib/analytics";
+import { classifyCheckoutError } from "@/lib/checkout/errorReporting";
 
 const REGION_FLAGS: Record<string, string> = {
   MA: "🇲🇦",
@@ -67,6 +68,9 @@ export default function CheckoutClient({
   const [editingPhone, setEditingPhone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Set when the server reports that this e-mail already has a real account, so
+  // the guest is offered "Se connecter" instead of a dead-end error.
+  const [accountExists, setAccountExists] = useState(false);
   const [regionConfirmed, setRegionConfirmed] = useState(false);
   // Inline account state reported by AccountAccessSection (not-logged-in flow).
   const [accountGate, setAccountGate] = useState<AccountGateState | null>(null);
@@ -304,6 +308,15 @@ export default function CheckoutClient({
         // Server-side validation/promo failures carry a customer-safe French
         // message (e.g. promo race, item no longer available) — show it.
         setError(order && "error" in order ? order.error : "Une erreur est survenue. Veuillez réessayer.");
+        // An existing account for this address: surface the "Se connecter" path
+        // rather than leaving the customer stuck on an error.
+        setAccountExists(Boolean(order && "accountExists" in order && order.accountExists));
+        // GA4 `checkout_error`. A REASON CODE only — never the server message,
+        // which can name a product, and never anything about the customer.
+        trackEvent("checkout_error", {
+          reason: order && "error" in order ? classifyCheckoutError(order.error) : "unknown",
+          step: "create_order",
+        });
         return;
       }
 
@@ -531,6 +544,7 @@ export default function CheckoutClient({
             regionConfirmed={regionConfirmed}
             setRegionConfirmed={setRegionConfirmed}
             error={error}
+            accountExists={accountExists}
             canPlace={canPlace}
             ctaLabel={ctaLabel}
             ctaHelp={ctaHelp}
@@ -583,7 +597,14 @@ export default function CheckoutClient({
           )}
 
           {error && (
-            <p className="mt-3.5 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
+            <div role="alert" className="mt-3.5 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+              <p>{error}</p>
+              {accountExists && (
+                <Link href="/login?next=/checkout" className="mt-1.5 inline-block font-semibold underline">
+                  Se connecter
+                </Link>
+              )}
+            </div>
           )}
 
           <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-canvas via-canvas/95 to-transparent px-4 pb-[max(env(safe-area-inset-bottom),14px)] pt-3">
@@ -651,6 +672,7 @@ function SummaryCard({
   regionConfirmed,
   setRegionConfirmed,
   error,
+  accountExists,
   canPlace,
   ctaLabel,
   ctaHelp,
@@ -669,6 +691,8 @@ function SummaryCard({
   regionConfirmed: boolean;
   setRegionConfirmed: (v: boolean) => void;
   error: string;
+  /** Server said this e-mail already has an account — offer "Se connecter". */
+  accountExists: boolean;
   canPlace: boolean;
   ctaLabel: string;
   ctaHelp: string;
@@ -769,7 +793,14 @@ function SummaryCard({
         )}
 
         {error && (
-          <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
+          <div role="alert" className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            <p>{error}</p>
+            {accountExists && (
+              <Link href="/login?next=/checkout" className="mt-1.5 inline-block font-semibold underline">
+                Se connecter
+              </Link>
+            )}
+          </div>
         )}
 
         <button

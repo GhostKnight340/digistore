@@ -36,6 +36,16 @@ export const POLICIES = {
   orderLookupIp: { limit: 10, windowMs: 10 * MIN },
   orderLookupEmail: { limit: 5, windowMs: 10 * MIN },
 
+  /**
+   * Order creation. Guest checkout means this is reachable without a session,
+   * and each accepted call writes an Order + items + a payment event and sends a
+   * transactional e-mail on Resend's quota. Generous enough that a customer
+   * retrying by hand — or legitimately buying twice — never trips it; the
+   * duplicate-order guard handles honest double-taps before they reach here.
+   */
+  orderCreateIp: { limit: 12, windowMs: 10 * MIN },
+  orderCreateEmail: { limit: 6, windowMs: 10 * MIN },
+
   /** Preserves the historic 8-per-15-min email budget, adds an IP dimension. */
   loginEmail: { limit: 8, windowMs: 15 * MIN },
   /** Looser than the e-mail budget: offices and mobile carriers share an IP. */

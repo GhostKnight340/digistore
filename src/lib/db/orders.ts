@@ -4,6 +4,12 @@ import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { consumeVerifiedProofTx } from "@/lib/checkout/emailVerification";
+import {
+  IDEMPOTENCY_WINDOW_MS,
+  findDuplicateOrder,
+  isIdempotencyEligible,
+  orderSignature,
+} from "@/lib/checkout/idempotency";
 import { isOrderingCurrentlyEnabled } from "./ordering";
 import { resolveCartLines } from "./promoResolve";
 import { reservePromoInTx } from "./promoCodes";
@@ -19,7 +25,7 @@ import {
   formatPublicOrderPathSegment,
   parsePublicOrderNumber,
 } from "@/lib/orderNumber";
-import { getAdminPaymentMethods } from "./paymentMethods";
+import { getAdminPaymentMethods, getPublicPaymentMethods } from "./paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
 import { variantTitle } from "@/lib/pricing/variant-identity";
 import { customerVisibleEventNote } from "@/lib/orderStatus";
@@ -518,6 +524,19 @@ export async function getCustomerOrder(
     // another customer's name/email or the internal id (IDOR fix).
     const viaInternalId = internalId === decodeURIComponent(idOrToken.trim());
     authorizedForIdentity = authorizedForCodes || viaInternalId;
+
+    // The public order number is sequential, so it is a guessable reference to
+    // SOMEBODY's order. Identity and codes were already withheld from it, but
+    // returning the rest still confirmed the order exists and disclosed its
+    // status, amount and item names — an enumeration oracle: walk the numbers,
+    // learn what the shop sells, to whom, and for how much.
+    //
+    // So a bare public number now authorizes nothing at all. Returning null is
+    // indistinguishable from "no such order", which is the point. Legitimate
+    // holders are unaffected: they arrive by delivery token (every order minted
+    // since creation has one), as the logged-in owner, or via /find-order, which
+    // proves the e-mail and then redirects to the token.
+    if (!authorizedForCodes && !viaInternalId) return null;
   }
   if (!data) return null;
 
@@ -558,6 +577,24 @@ export async function authorizeOrderAccess(reference: string): Promise<string | 
   });
   if (!order) return null;
   return (await isOrderOwner(order)) ? internalId : null;
+}
+
+/**
+ * True when this e-mail already has a REAL account — one with a credential the
+ * customer could sign in with. A bare Customer row with no credential is a guest
+ * shell created by a past guest order, not an account, and must not block a
+ * further guest checkout.
+ *
+ * The credential set is deliberately identical to the one `createVerifiedAccount`
+ * uses to refuse duplicates; the two must not drift, or checkout and registration
+ * would disagree about whether an account exists.
+ */
+export async function emailHasRegisteredAccount(email: string): Promise<boolean> {
+  const customer = await prisma.customer.findUnique({
+    where: { email: email.trim().toLowerCase() },
+    select: { passwordHash: true, googleId: true, discordId: true },
+  });
+  return Boolean(customer?.passwordHash || customer?.googleId || customer?.discordId);
 }
 
 /** True when the current session customer owns the given order. */
@@ -1178,6 +1215,33 @@ export async function createOrder(
   }
   if (resolvedLines.length === 0) return { error: "Votre panier est vide." };
 
+  // Never create an order nobody can pay for. Payment methods are admin-managed
+  // and can be archived, hidden or deactivated mid-checkout — and PayPal drops
+  // out of the usable set the moment its credentials go missing. Re-read the
+  // live usable set here rather than trusting the list the page rendered with,
+  // so an order is only created when at least one way to pay it still exists.
+  const usableMethods = await getPublicPaymentMethods();
+  if (usableMethods.methods.length === 0) {
+    return {
+      error:
+        "Aucun moyen de paiement n'est disponible pour le moment. Réessayez dans quelques minutes.",
+    };
+  }
+  // When a specific method was requested, it must still be one of the usable
+  // ones — otherwise the order would open onto payment instructions the customer
+  // can no longer act on.
+  if (input.paymentMethod) {
+    const stillUsable = usableMethods.methods.some(
+      (method) => method.id === input.paymentMethod || method.type === input.paymentMethod,
+    );
+    if (!stillUsable) {
+      return {
+        error:
+          "Ce moyen de paiement n'est plus disponible. Choisissez-en un autre pour continuer.",
+      };
+    }
+  }
+
   const subtotalMad = resolvedLines.reduce(
     (sum, item) => sum + item.unitPriceMad * item.quantity,
     0,
@@ -1190,6 +1254,44 @@ export async function createOrder(
     const customerPhone = normalizeOptionalPhone(input.customerPhone);
     if (customerPhone === undefined) {
       return { error: "Numéro de téléphone invalide." };
+    }
+
+    // ── Duplicate-order guard ────────────────────────────────────────────────
+    // A double-tap, a retry after a timeout, or a resubmit after the server
+    // committed but the response never arrived would each previously create a
+    // second real order with its own payment link. If this exact basket is
+    // already sitting unpaid for this customer, hand back THAT order instead of
+    // creating another. Nothing is mutated, so this is safe to repeat.
+    const signature = orderSignature(resolvedLines);
+    if (isIdempotencyEligible(input)) {
+      const recent = await prisma.order.findMany({
+        where: {
+          customerEmail,
+          status: "pending_payment",
+          createdAt: { gte: new Date(Date.now() - IDEMPOTENCY_WINDOW_MS) },
+        },
+        select: {
+          id: true,
+          status: true,
+          totalMad: true,
+          discountMad: true,
+          ghostCreditAppliedMad: true,
+          createdAt: true,
+          deliveryToken: true,
+          items: { select: { productId: true, variantId: true, quantity: true } },
+        },
+      });
+      const duplicate = findDuplicateOrder(recent, { signature, subtotalMad });
+      if (duplicate) {
+        const existing = recent.find((order) => order.id === duplicate.id)!;
+        const reference = await publicOrderReference(existing);
+        return {
+          id: existing.id,
+          publicOrderNumber: reference.number,
+          publicOrderPathSegment: reference.pathSegment,
+          accessToken: existing.deliveryToken,
+        };
+      }
     }
     const result = await prisma.$transaction(async (tx) => {
       const customer = sessionCustomer
