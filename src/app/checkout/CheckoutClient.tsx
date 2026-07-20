@@ -17,6 +17,7 @@ import type { PaymentConfigDTO, PromoPreviewDTO } from "@/lib/dto";
 import { getRegion } from "@/lib/regions";
 import { trackEvent, trackEcommerce, toAnalyticsItem } from "@/lib/analytics";
 import { classifyCheckoutError } from "@/lib/checkout/errorReporting";
+import { resolveCheckoutGate } from "@/lib/checkout/gate";
 
 const REGION_FLAGS: Record<string, string> = {
   MA: "🇲🇦",
@@ -198,13 +199,15 @@ export default function CheckoutClient({
   // view) — merely filling and verifying the register form is not enough. So
   // while not logged in the order can never be placed; the CTA stays disabled
   // until a real account exists.
-  const accountReady = isLoggedIn ? accountVerified : false;
-  const accountIncomplete: string | null = isLoggedIn
-    ? accountVerified
-      ? null
-      : "Vérifiez votre adresse e-mail pour continuer vers le paiement."
-    : accountGate?.incompleteReason ??
-      "Créez votre compte pour continuer vers le paiement.";
+  // Identity step. The rule lives in lib/checkout/gate so it can be unit-tested
+  // — it was previously inline here and silently blocked every guest.
+  const { accountReady, isGuest: isGuestCheckout, accountIncomplete } = resolveCheckoutGate({
+    isLoggedIn,
+    accountVerified,
+    mode: accountGate?.mode ?? null,
+    gateReady: Boolean(accountGate?.ready),
+    gateIncompleteReason: accountGate?.incompleteReason ?? null,
+  });
 
   const canPlace = accountReady && phoneValid && (!needsRegion || regionConfirmed);
   // Ordered so the CTA surfaces the first blocking step: account → phone → region.
@@ -218,7 +221,11 @@ export default function CheckoutClient({
   const ctaLabel = canPlace
     ? "Passer au paiement"
     : accountIncomplete
-      ? "Compte requis"
+      // "Compte requis" is wrong for a guest — they are not being asked for an
+      // account, only for the details needed to fulfil the order.
+      ? isGuestCheckout
+        ? "Complétez vos informations"
+        : "Compte requis"
       : !phoneValid
         ? "Ajoutez votre téléphone"
         : "Confirmez la région";
@@ -263,14 +270,14 @@ export default function CheckoutClient({
     e.preventDefault();
     setError("");
 
-    // A new customer must create their account first ("Créer mon compte"), which
-    // logs them in and refreshes into the authenticated checkout. The order is
-    // never placed from the not-logged-in state — the CTA stays disabled until a
-    // real account exists, and this guard also covers a keyboard Enter-submit.
-    if (!isLoggedIn) {
+    // Not logged in: allowed only on the GUEST path, and only once the guest's
+    // own details are complete. A half-filled register form must never place an
+    // order. This also covers a keyboard Enter-submit that bypasses the disabled
+    // button. Every condition here is re-checked server-side in createOrderAction.
+    if (!isLoggedIn && !(isGuestCheckout && accountGate?.ready)) {
       setError(
         accountGate?.incompleteReason ??
-          "Créez votre compte pour continuer vers le paiement.",
+          "Créez votre compte ou commandez sans compte pour continuer.",
       );
       return;
     }
@@ -287,16 +294,23 @@ export default function CheckoutClient({
     const items = cart.map((i) => ({ productId: i.productId, quantity: i.quantity }));
 
     // ── Authenticated customer. Verification is enforced server-side too. ──
-    if (!accountVerified) {
+    if (isLoggedIn && !accountVerified) {
       setError("Vérifiez votre adresse e-mail pour continuer vers le paiement.");
       return;
     }
 
+    // A guest's name and e-mail come from the guest form; a logged-in customer's
+    // come from their account and are read-only here. The server ignores both
+    // for authenticated callers and re-reads the session, so these can never
+    // overwrite account data.
+    const orderName = isLoggedIn ? fullName.trim() : accountGate?.values.name.trim() ?? "";
+    const orderEmail = isLoggedIn ? email.trim() : accountGate?.values.email.trim() ?? "";
+
     setSubmitting(true);
     try {
       const order = await createOrderAction({
-        customerName: fullName.trim(),
-        customerEmail: email.trim(),
+        customerName: orderName,
+        customerEmail: orderEmail,
         customerPhone: `+212 ${phoneLocal.trim()}`,
         items,
         promoCode: promo ? promo.code : undefined,

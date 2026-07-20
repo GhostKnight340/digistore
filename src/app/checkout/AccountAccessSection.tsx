@@ -22,7 +22,14 @@ export type AccountValues = {
 };
 
 export type AccountGateState = {
-  mode: "register" | "login";
+  /**
+   * "guest" places the order without creating an account. The server still
+   * requires a verified e-mail (see createOrderAction): the order, and the token
+   * that later reveals the delivered codes, are sent there, and createOrder
+   * attaches the order to whatever Customer row holds that address — so without
+   * proof of control, anyone could order against a stranger's e-mail.
+   */
+  mode: "register" | "login" | "guest";
   values: AccountValues;
   emailVerified: boolean;
   /** All register fields valid AND email verified — safe to place the order. */
@@ -481,7 +488,7 @@ export function AccountAccessSection({
   phone?: string;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"register" | "login">("register");
+  const [mode, setMode] = useState<"register" | "login" | "guest">("register");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
@@ -498,17 +505,29 @@ export function AccountAccessSection({
   const nameValid = name.trim().length >= 2;
   const emailValid = EMAIL_RE.test(email.trim());
 
+  /**
+   * What still blocks this customer, in the order they should fix it.
+   *
+   * Guest checkout asks for the MINIMUM needed to fulfil the order — a name to
+   * address them by and a verified e-mail to deliver to. No password, no
+   * confirmation field, no account terms: none of it is required to send someone
+   * a gift-card code, and every extra field costs orders.
+   */
   const incompleteReason = useMemo(() => {
     if (!nameValid) return "Ajoutez votre nom complet.";
     if (!emailValid) return "Saisissez une adresse e-mail valide.";
     if (!emailVerified) return "Vérifiez votre adresse e-mail pour continuer vers le paiement.";
+    if (mode === "guest") return null;
     if (!pwdValid) return "Choisissez un mot de passe valide.";
     if (!confirmMatches) return "Confirmez votre mot de passe.";
     if (!acceptTerms) return "Acceptez les conditions générales.";
     return null;
-  }, [nameValid, emailValid, emailVerified, pwdValid, confirmMatches, acceptTerms]);
+  }, [mode, nameValid, emailValid, emailVerified, pwdValid, confirmMatches, acceptTerms]);
 
-  const ready = mode === "register" && incompleteReason === null;
+  // Guests are ready to ORDER as soon as their details check out; registering
+  // customers must additionally click "Créer mon compte", which logs them in and
+  // re-renders checkout in the authenticated state.
+  const ready = (mode === "register" || mode === "guest") && incompleteReason === null;
 
   // Report state upward whenever anything changes.
   const onChangeRef = useRef(onChange);
@@ -519,7 +538,8 @@ export function AccountAccessSection({
       values: { name: name.trim(), email: email.trim(), password, confirmPassword, acceptTerms },
       emailVerified,
       ready,
-      incompleteReason: mode === "register" ? incompleteReason : "Connectez-vous pour continuer.",
+      incompleteReason:
+        mode === "login" ? "Connectez-vous pour continuer." : incompleteReason,
     });
   }, [mode, name, email, password, confirmPassword, acceptTerms, emailVerified, ready, incompleteReason]);
 
@@ -568,28 +588,99 @@ export function AccountAccessSection({
       <div className="border-b border-white/[0.06] px-[18px] py-[18px] sm:px-[22px]">
         <h2 className="text-base font-semibold text-white">Vos informations</h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-          Créez votre compte pour sécuriser votre commande, suivre son avancement et recevoir votre
-          code numérique.
+          {mode === "guest"
+            ? "Commandez sans compte, ou créez-en un pour suivre vos commandes et retrouver vos codes."
+            : "Créez votre compte pour sécuriser votre commande, suivre son avancement et recevoir votre code numérique."}
         </p>
       </div>
 
       <div className="px-[18px] py-5 sm:px-[22px]">
-        <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl border border-white/[0.07] bg-[#0B0C10] p-1">
-          {(["register", "login"] as const).map((item) => (
+        {/*
+          Three equally-weighted choices. Guest is listed first and styled
+          identically to the others: burying it, or making it visibly secondary,
+          would be a dark pattern — the point of offering it is that a customer
+          who does not want an account can see that immediately.
+        */}
+        <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-[#0B0C10] p-1">
+          {(["guest", "register", "login"] as const).map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => setMode(item)}
-              className={`rounded-lg py-2 text-[13.5px] font-semibold transition ${
+              aria-pressed={mode === item}
+              className={`min-h-[44px] rounded-lg px-1 py-2 text-[12.5px] font-semibold transition sm:text-[13.5px] ${
                 mode === item ? "bg-accent text-white" : "text-muted hover:text-white"
               }`}
             >
-              {item === "register" ? "Créer un compte" : "Se connecter"}
+              {item === "guest"
+                ? "Sans compte"
+                : item === "register"
+                  ? "Créer un compte"
+                  : "Se connecter"}
             </button>
           ))}
         </div>
 
-        {mode === "login" ? (
+        {mode === "guest" ? (
+          <div className="grid gap-4">
+            <p className="text-[13px] leading-relaxed text-muted">
+              Commandez sans créer de compte. Nous avons seulement besoin de votre nom et
+              d’une adresse e-mail vérifiée : c’est là que nous enverrons votre commande et
+              votre code.
+            </p>
+
+            <div>
+              <label htmlFor="guest-name" className="mb-1.5 block text-sm font-medium text-white">
+                Nom complet
+              </label>
+              <input
+                id="guest-name"
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Votre nom et prénom"
+                autoComplete="name"
+              />
+            </div>
+
+            <EmailVerifyBlock
+              email={email}
+              onEmailChange={setEmail}
+              name={name}
+              verified={emailVerified}
+              onVerifiedChange={setEmailVerified}
+              // An address that already has an account should sign in: it keeps
+              // the order in their history and their Ghost Credit spendable.
+              onAccountExists={() => setMode("login")}
+            />
+
+            {phoneField}
+
+            <p className="text-[12px] leading-relaxed text-faint">
+              En passant commande, vous acceptez les{" "}
+              <Link href="/conditions" className="text-accent hover:text-accent-hover">
+                conditions générales
+              </Link>{" "}
+              et l’
+              <Link href="/privacy" className="text-accent hover:text-accent-hover">
+                avis de confidentialité
+              </Link>
+              .
+            </p>
+
+            {/* No button here: the main checkout CTA places the order. Adding a
+                second primary action would make guests think there is another
+                step, which is exactly the friction guest checkout removes. */}
+            {!ready && incompleteReason && (
+              <p className="text-center text-[12px] text-faint">{incompleteReason}</p>
+            )}
+
+            <p className="rounded-lg border border-white/[0.07] bg-[#0B0C10] px-3 py-2.5 text-[12px] leading-relaxed text-muted">
+              Vous pourrez créer un compte plus tard avec cette même adresse pour retrouver
+              vos commandes.
+            </p>
+          </div>
+        ) : mode === "login" ? (
           <>
             <p className="mb-4 text-[13px] text-muted">
               Vous avez déjà un compte ? Se connecter — votre panier et votre sélection sont
