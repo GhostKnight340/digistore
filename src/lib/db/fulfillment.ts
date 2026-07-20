@@ -131,6 +131,7 @@ export async function deliverOrder(
           customerEmail: true,
           totalMad: true,
           paymentMethod: true,
+          deliveryToken: true,
           discordMessageId: true,
           discordThreadId: true,
           createdAt: true,
@@ -224,10 +225,11 @@ export async function deliverOrder(
     }
   }
 
-  // Unguessable secret for the delivery-page link. Generated once here, at
-  // delivery, and embedded in the "Voir ma livraison" email link (never the
-  // enumerable public order number). See getCustomerOrder() authorization.
-  const deliveryToken = randomBytes(24).toString("base64url");
+  // Unguessable secret for the delivery-page link, embedded in the "Voir ma
+  // livraison" email link (never the enumerable public order number). New orders
+  // already carry a token from creation — reuse it so the link stays stable;
+  // only legacy pre-token orders mint one here. See getCustomerOrder().
+  const deliveryToken = order.deliveryToken ?? randomBytes(24).toString("base64url");
 
   try {
     const consumedByVariant = new Map<

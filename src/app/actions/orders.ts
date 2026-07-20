@@ -54,13 +54,13 @@ export async function findOrderAction(
 ): Promise<{ found: boolean; id?: string; redirectTo?: string }> {
   const order = await findOrderByEmailAndId(orderNumber.trim(), email.trim().toLowerCase());
   if (!order) return { found: false };
-  // Delivered orders: route via the secret delivery token so codes are revealed
-  // (the email match already authenticated the guest). Falls back to the public
-  // path segment for non-delivered orders or legacy rows without a token.
-  const segment =
-    order.status === "delivered" && order.deliveryToken
-      ? order.deliveryToken
-      : order.publicOrderPathSegment;
+  // Route via the unguessable delivery token whenever the order has one (the
+  // email match already authenticated the guest): it both reveals delivered
+  // codes and, for still-unpaid orders, is the only segment a guest can use to
+  // reach the payment page now that the enumerable public number no longer
+  // authorizes access. Falls back to the public segment only for legacy rows
+  // without a token (reachable by the logged-in owner).
+  const segment = order.deliveryToken ?? order.publicOrderPathSegment;
   return {
     found: true,
     id: order.id,
