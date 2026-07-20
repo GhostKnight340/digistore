@@ -511,6 +511,25 @@ export function AccountAccessSection({
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  /**
+   * Explains an AUTOMATIC switch to the login tab.
+   *
+   * This has to live on the parent. EmailVerifyBlock already rendered its own
+   * "un compte existe déjà" notice, but the same event switches `mode`, which
+   * unmounts EmailVerifyBlock — so the message was destroyed in the same tick it
+   * was set and the customer just saw the form silently change under them. Same
+   * problem applied to `createError` on the register path.
+   */
+  const [switchNotice, setSwitchNotice] = useState<string | null>(null);
+
+  const ACCOUNT_EXISTS_NOTICE =
+    "Un compte existe déjà avec cette adresse. Connectez-vous pour finaliser votre commande.";
+
+  /** Switch to login and SAY WHY. Never switch silently. */
+  const switchToLogin = useCallback((reason: string) => {
+    setSwitchNotice(reason);
+    setMode("login");
+  }, []);
 
   const pwdLongEnough = password.length >= 8;
   const pwdLetterDigit = /[A-Za-z]/.test(password) && /[0-9]/.test(password);
@@ -580,10 +599,7 @@ export function AccountAccessSection({
       if (!res.ok) {
         setCreating(false);
         if (res.accountExists) {
-          setCreateError(
-            "Un compte existe déjà pour cette adresse. Connectez-vous pour continuer.",
-          );
-          setMode("login");
+          switchToLogin(ACCOUNT_EXISTS_NOTICE);
           return;
         }
         setCreateError(res.error ?? "Une erreur est survenue. Veuillez réessayer.");
@@ -620,7 +636,10 @@ export function AccountAccessSection({
             <button
               key={item}
               type="button"
-              onClick={() => setMode(item)}
+              onClick={() => {
+                setSwitchNotice(null);
+                setMode(item);
+              }}
               aria-pressed={mode === item}
               className={`min-h-[44px] rounded-lg px-1 py-2 text-[12.5px] font-semibold transition sm:text-[13.5px] ${
                 mode === item ? "bg-accent text-white" : "text-muted hover:text-white"
@@ -665,7 +684,7 @@ export function AccountAccessSection({
               onVerifiedChange={setEmailVerified}
               // An address that already has an account should sign in: it keeps
               // the order in their history and their Ghost Credit spendable.
-              onAccountExists={() => setMode("login")}
+              onAccountExists={() => switchToLogin(ACCOUNT_EXISTS_NOTICE)}
             />
 
             {phoneField}
@@ -696,6 +715,22 @@ export function AccountAccessSection({
           </div>
         ) : mode === "login" ? (
           <>
+            {switchNotice && (
+              // role="status" so a screen reader announces the change too — an
+              // unannounced form swap is disorienting either way.
+              <div
+                role="status"
+                className="mb-4 rounded-[11px] border border-accent/[0.22] bg-accent/[0.07] px-3.5 py-3 text-[13px] leading-relaxed text-[#9FB8FF]"
+              >
+                <p>{switchNotice}</p>
+                <Link
+                  href="/forgot-password"
+                  className="mt-1 inline-block underline underline-offset-2 hover:text-white"
+                >
+                  Mot de passe oublié ?
+                </Link>
+              </div>
+            )}
             <p className="mb-4 text-[13px] text-muted">
               Vous avez déjà un compte ? Se connecter — votre panier et votre sélection sont
               conservés.
@@ -723,7 +758,7 @@ export function AccountAccessSection({
               name={name}
               verified={emailVerified}
               onVerifiedChange={setEmailVerified}
-              onAccountExists={() => setMode("login")}
+              onAccountExists={() => switchToLogin(ACCOUNT_EXISTS_NOTICE)}
             />
 
             {phoneField}
