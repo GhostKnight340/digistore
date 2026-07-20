@@ -16,6 +16,7 @@
  */
 import "server-only";
 import { ensureDatabaseReady, prisma } from "@/lib/db/prisma";
+import { CRON_JOBS, getJobRuns, isJobOverdue } from "./jobRuns";
 import { isFazerCardsConfigured } from "@/lib/fazercards/config";
 import { isReloadlyConfigured } from "@/lib/reloadly/config";
 import { runtimeEnvLabel, isProductionRuntime } from "@/lib/env";
@@ -243,23 +244,71 @@ export function checkWebsite(): HealthResult {
 }
 
 /**
- * Cron jobs: mirrors vercel.json. There is no last-run tracking table, so we
- * cannot know whether the schedules actually FIRED — a job broken for a week
- * would look identical. Being configured is not being healthy, so this reports
- * "unknown" rather than a green light nobody verified.
+ * Cron jobs, from RECORDED EXECUTIONS.
+ *
+ * This used to return a flat "unknown" with the honest note that no last-run
+ * tracking existed, so a job broken for a week looked identical to a healthy
+ * one. The ScheduledJobRun table now records every run (see lib/ops/jobRuns),
+ * so this can answer the real question.
+ *
+ * The honesty property is kept: a job that has never recorded a success is
+ * reported as "unknown", never as healthy. Being configured is still not being
+ * healthy — but now, having actually run recently is.
  */
-export function checkCron(): HealthResult {
+export async function checkCron(): Promise<HealthResult> {
   const onVercel = Boolean(process.env.VERCEL);
+  if (!onVercel) {
+    return {
+      ...base("cron", "Tâches planifiées (cron)"),
+      status: "unknown",
+      message: "Les tâches cron ne s’exécutent que sur Vercel.",
+      responseTimeMs: null,
+    };
+  }
+
+  const runs = await getJobRuns();
+  const byJob = new Map(runs.map((run) => [run.job, run]));
+  const total = CRON_JOBS.length;
+
+  const neverRan = CRON_JOBS.filter((job) => !byJob.get(job)?.lastSuccessAt);
+  const failing = CRON_JOBS.filter((job) => (byJob.get(job)?.consecutiveFailures ?? 0) > 0);
+  const overdue = CRON_JOBS.filter((job) => {
+    const run = byJob.get(job);
+    return run?.lastSuccessAt ? isJobOverdue(job, run.lastSuccessAt) : false;
+  });
+
+  if (failing.length > 0) {
+    return {
+      ...base("cron", "Tâches planifiées (cron)"),
+      status: "offline",
+      message: `${failing.length}/${total} tâche(s) en échec : ${failing.join(", ")}.`,
+      responseTimeMs: null,
+      action: "Ouvrez les journaux Vercel de la tâche concernée pour la cause exacte.",
+    };
+  }
+  if (overdue.length > 0) {
+    return {
+      ...base("cron", "Tâches planifiées (cron)"),
+      status: "warning",
+      message: `${overdue.length}/${total} tâche(s) en retard : ${overdue.join(", ")}.`,
+      responseTimeMs: null,
+      action: "Vérifiez que les tâches planifiées sont toujours actives sur Vercel.",
+    };
+  }
+  if (neverRan.length > 0) {
+    return {
+      ...base("cron", "Tâches planifiées (cron)"),
+      status: "unknown",
+      message: `${neverRan.length}/${total} tâche(s) sans exécution enregistrée : ${neverRan.join(", ")}.`,
+      responseTimeMs: null,
+      action: "Normal juste après un déploiement ; à revoir après un cycle complet.",
+    };
+  }
   return {
     ...base("cron", "Tâches planifiées (cron)"),
-    status: "unknown",
-    message: onVercel
-      ? "3 tâches planifiées, mais aucune trace d’exécution — état réel inconnu."
-      : "Les tâches cron ne s’exécutent que sur Vercel.",
+    status: "healthy",
+    message: `${total} tâches planifiées, toutes exécutées récemment.`,
     responseTimeMs: null,
-    ...(onVercel
-      ? { action: "Consultez les journaux cron Vercel pour confirmer les exécutions." }
-      : {}),
   };
 }
 
@@ -326,11 +375,14 @@ export async function runCoreHealthChecks(): Promise<HealthResult[]> {
   await ensureDatabaseReady();
   // Each DB-touching check gets its own deadline, so one hung connection
   // degrades a single card instead of freezing the whole dashboard render.
-  const [database, email, discord, storage] = await Promise.all([
+  const [database, email, discord, storage, cron] = await Promise.all([
     withHealthTimeout("database", "Base de données", checkDatabase),
     withHealthTimeout("email", "E-mails (Resend)", checkEmail),
     withHealthTimeout("discord", "Discord", checkDiscord),
     withHealthTimeout("storage", "Stockage des images", checkStorage),
+    // checkCron now reads recorded executions from the database, so it needs the
+    // same deadline treatment as every other DB-touching check.
+    withHealthTimeout("cron", "Tâches planifiées (cron)", checkCron),
   ]);
   return [
     database,
@@ -340,6 +392,6 @@ export async function runCoreHealthChecks(): Promise<HealthResult[]> {
     discord,
     storage,
     checkPayments(),
-    checkCron(),
+    cron,
   ];
 }

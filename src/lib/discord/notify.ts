@@ -551,21 +551,55 @@ export function notifySystemAlert(input: SystemAlertNotification): Promise<void>
   );
 }
 
-export function notifyEmailFailure(input: {
+/**
+ * Alerts on a failed transactional e-mail.
+ *
+ * Two problems fixed here:
+ *
+ *  1. **The recipient's e-mail address was forwarded into Discord.** That is
+ *     customer PII crossing a boundary the Sentry scrubber would have redacted,
+ *     into a channel with a different access model and an indefinite retention.
+ *     The address adds nothing an admin can act on that the order reference does
+ *     not — so only a masked form is sent, enough to correlate with a support
+ *     conversation without publishing the address.
+ *
+ *  2. **There was no cooldown.** A Resend outage produced one Discord message
+ *     per attempted send, which is precisely how a channel gets muted right when
+ *     it matters. Deduplicated per template.
+ */
+export async function notifyEmailFailure(input: {
   templateKey: string;
   recipient: string;
   error: string;
   orderId?: string | null;
 }): Promise<void> {
+  const { claimAlertSlot } = await import("@/lib/ops/alertCooldown");
+  const slot = await claimAlertSlot(
+    `email_failed:${input.templateKey}`,
+    "warning",
+    15 * 60_000,
+  );
+  if (!slot.shouldSend) return;
+
   return notifySystemAlert({
     scope: "email delivery",
     message: `Failed to send "${input.templateKey}" email.`,
     context: {
-      recipient: input.recipient,
+      recipient: maskEmail(input.recipient),
       orderId: input.orderId ?? undefined,
       error: input.error,
+      ...(slot.suppressedSinceLastSend > 0
+        ? { repeats_suppressed: slot.suppressedSinceLastSend }
+        : {}),
     },
   });
+}
+
+/** `alice@example.com` → `a•••@example.com`. Enough to correlate, not to contact. */
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "[redacted]";
+  return `${local.slice(0, 1)}•••@${domain}`;
 }
 
 // ---------------------------------------------------------------------------

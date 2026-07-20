@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { handleCronRequest } from "@/lib/ops/cronRoute";
 import { runMonthlyReview } from "@/lib/expenses/monthlyReviewJob";
 
 /**
@@ -21,23 +21,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 async function handle(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ ok: false, error: "CRON_SECRET not configured." }, { status: 503 });
-  }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
-  }
-  try {
-    const result = await runMonthlyReview();
-    return NextResponse.json({ ok: true, ...result });
-  } catch (error) {
-    console.error("[cron:expense-review]", error instanceof Error ? error.message : error);
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "error" },
-      { status: 500 },
-    );
-  }
+  return handleCronRequest("expense-review", request, () => runMonthlyReview());
 }
 
 export const GET = handle;

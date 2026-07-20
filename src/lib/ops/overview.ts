@@ -7,6 +7,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { orderStatusLabel } from "@/lib/orderStatus";
+import { CRON_JOBS, getJobRuns, isJobOverdue, type CronJob } from "./jobRuns";
 import type {
   OpsKpiSnapshotDTO,
   OpsPipelineStageDTO,
@@ -164,22 +165,67 @@ export async function getRecentOrdersForOps(limit = 7): Promise<OpsRecentOrderDT
  * Background jobs strip — the REAL scheduled work, not invented supplier syncs.
  * Vercel crons from vercel.json + the outbound email queue health.
  */
+const JOB_LABEL: Record<CronJob, string> = {
+  expenses: "Cron dépenses",
+  "expense-review": "Cron revue mensuelle",
+  "ghost-credit": "Cron crédit Ghost",
+  "supplier-reconcile": "Cron réconciliation fournisseurs",
+  "supplier-health": "Cron santé fournisseurs",
+  "stuck-orders": "Cron commandes bloquées",
+};
+
 export async function getJobsStatus(): Promise<OpsJobDTO[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const emailFailed = await prisma.emailLog.count({
-    where: { status: "failed", createdAt: { gte: since } },
-  });
+  const [emailFailed, runs] = await Promise.all([
+    prisma.emailLog.count({ where: { status: "failed", createdAt: { gte: since } } }),
+    getJobRuns(),
+  ]);
+  const byJob = new Map(runs.map((run) => [run.job, run]));
   const onVercel = Boolean(process.env.VERCEL);
-  const cronStatus: OpsHealthStatus = onVercel ? "healthy" : "unknown";
-  return [
-    { name: "Cron dépenses", detail: onVercel ? "quotidien · 09:00" : "hors Vercel", status: cronStatus },
-    { name: "Cron crédit Ghost", detail: onVercel ? "quotidien · 08:00" : "hors Vercel", status: cronStatus },
-    {
-      name: "File e-mails",
-      detail: emailFailed > 0 ? `${emailFailed} échec(s) 24 h` : "0 échec",
-      status: emailFailed > 0 ? "warning" : "healthy",
-    },
-  ];
+
+  // Every cron in vercel.json, reported from RECORDED EXECUTIONS rather than
+  // from the mere fact of running on Vercel. The previous implementation
+  // returned "healthy" whenever process.env.VERCEL was set — a green light
+  // nobody earned, and one that directly contradicted checkCron in the same
+  // dashboard. It also listed only 2 of the 5 jobs, silently omitting the
+  // 10-minute supplier reconciliation that resolves money-at-stake fulfilment.
+  const jobs: OpsJobDTO[] = CRON_JOBS.map((job) => {
+    const run = byJob.get(job);
+    const label = JOB_LABEL[job];
+
+    if (!run || !run.lastSuccessAt) {
+      return {
+        name: label,
+        detail: onVercel ? "aucune exécution enregistrée" : "hors Vercel",
+        // Never run is NOT healthy, and it is not an error either — we simply
+        // have no evidence. Say so.
+        status: "unknown" as OpsHealthStatus,
+      };
+    }
+
+    const overdue = isJobOverdue(job, run.lastSuccessAt);
+    const failing = run.consecutiveFailures > 0;
+    const ageHours = Math.floor((Date.now() - run.lastSuccessAt.getTime()) / 3_600_000);
+    const detail = failing
+      ? `${run.consecutiveFailures} échec(s) consécutif(s)`
+      : overdue
+        ? `dernier succès il y a ${ageHours} h — en retard`
+        : `dernier succès il y a ${ageHours} h`;
+
+    return {
+      name: label,
+      detail,
+      status: (failing || overdue ? "warning" : "healthy") as OpsHealthStatus,
+    };
+  });
+
+  jobs.push({
+    name: "File e-mails",
+    detail: emailFailed > 0 ? `${emailFailed} échec(s) 24 h` : "0 échec",
+    status: emailFailed > 0 ? "warning" : "healthy",
+  });
+
+  return jobs;
 }
 
 /**

@@ -26,3 +26,9 @@ prisma/dev.db-journal
 
 # graphify code graph (local build artifact)
 graphify-out/
+
+# Database backups: encrypted, but they contain every customer record.
+# Never commit one, even encrypted.
+backups/
+*.sql.gz.enc
+*.sql.gz

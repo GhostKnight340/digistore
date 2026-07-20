@@ -19,73 +19,19 @@
  * use it too.
  */
 
-/** Redacted values are replaced with this, so their absence is visible. */
-export const REDACTED = "[redacted]";
-
-/**
- * Field names whose VALUES must never reach Sentry. Matched case-insensitively
- * against the whole key, anywhere in the event tree.
- */
-const SENSITIVE_KEY = new RegExp(
-  [
-    "password",
-    "passwd",
-    "secret",
-    "token",
-    "authorization",
-    "cookie",
-    "session",
-    "api[-_]?key",
-    "client[-_]?secret",
-    "credential",
-    // Delivered gift-card material. Listed specifically rather than as a bare
-    // "code" so ordinary `code` / `statusCode` error fields stay debuggable.
-    "(gift|card|digital|activation|redemption|delivery|voucher|promo)[-_]?code",
-    "codes",
-    "card[-_]?number",
-    "pin",
-    "voucher",
-    "serial",
-    // Payment proof uploads (base64 image blobs) and payment identifiers.
-    "proof",
-    "receipt",
-    "attachment",
-    "dataurl",
-    "data_uri",
-    // Customer contact details.
-    "email",
-    "phone",
-    "address",
-  ].join("|"),
-  "i",
-);
-
-/** Any inline data: URI is a payment proof or an image blob — never send it. */
-const DATA_URI = /^data:[^;,]*;base64,/i;
-
-function scrubValue(key: string, value: unknown, depth: number): unknown {
-  if (SENSITIVE_KEY.test(key)) return REDACTED;
-  if (typeof value === "string") return DATA_URI.test(value) ? REDACTED : value;
-  return scrubTree(value, depth + 1);
-}
-
-/** Recursively redacts sensitive keys. Depth-capped so a cycle can't hang us. */
-function scrubTree(node: unknown, depth = 0): unknown {
-  if (depth > 8 || node === null || typeof node !== "object") return node;
-  if (Array.isArray(node)) return node.map((entry) => scrubTree(entry, depth + 1));
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    out[key] = scrubValue(key, value, depth);
-  }
-  return out;
-}
+// The redaction rules live in ./sanitize so that Sentry, the structured logger
+// and the Discord alert layer all share ONE implementation. Re-exported here
+// because callers and tests have imported them from this module since before
+// the split.
+export { REDACTED, SENSITIVE_KEY, sanitizeTree, safeErrorInfo } from "./sanitize";
+import { REDACTED, SENSITIVE_KEY, sanitizeTree } from "./sanitize";
 
 /**
  * `beforeSend` / `beforeSendTransaction` body. Exported (and pure) so the
  * redaction rules can be tested without a live Sentry client.
  */
 export function scrubEvent<T extends object>(event: T): T {
-  const scrubbed = scrubTree(event) as T & Record<string, unknown>;
+  const scrubbed = sanitizeTree(event) as T & Record<string, unknown>;
   // The whole Cookie / Authorization header, not just recognised sub-keys.
   const request = scrubbed.request as Record<string, unknown> | undefined;
   if (request) {
