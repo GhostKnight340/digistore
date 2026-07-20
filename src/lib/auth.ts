@@ -348,8 +348,9 @@ export async function getCurrentCustomer(): Promise<AuthCustomer | null> {
     return null;
   }
   // A disabled account is treated as logged-out server-side (blocks login/
-  // purchases) without deleting any data.
-  if (customer.status === "disabled") return null;
+  // purchases) without deleting any data. A "deleted" (anonymized) account has
+  // its credentials scrubbed and must never authenticate either.
+  if (customer.status === "disabled" || customer.status === "deleted") return null;
   // Admin session revocation: reject cookies issued before the anchor.
   if (!isSessionActive(session.iat, customer.sessionsValidAfter)) return null;
   return {

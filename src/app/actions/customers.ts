@@ -14,6 +14,7 @@ import {
   getCustomerSecurityTab,
   getCustomerSupportTab,
   setCustomerStatus,
+  anonymizeCustomer,
   revokeCustomerSessions,
   updateCustomerProfile,
   startCustomerEmailChange,
@@ -160,6 +161,16 @@ export async function revokeCustomerSessionsAction(input: {
 }): Promise<ActionResult> {
   const actor = await admin();
   const result = await revokeCustomerSessions({ ...input, actor });
+  if (result.ok) revalidateCustomer(input.customerId);
+  return result;
+}
+
+export async function anonymizeCustomerAction(input: {
+  customerId: string;
+  reason: string;
+}): Promise<ActionResult> {
+  const actor = await admin();
+  const result = await anonymizeCustomer({ ...input, actor });
   if (result.ok) revalidateCustomer(input.customerId);
   return result;
 }

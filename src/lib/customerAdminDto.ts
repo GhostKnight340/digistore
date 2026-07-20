@@ -4,7 +4,7 @@
  * Sensitive values are masked at the DB layer before they reach these DTOs.
  */
 
-export const CUSTOMER_STATUSES = ["active", "disabled", "review", "fraud_hold"] as const;
+export const CUSTOMER_STATUSES = ["active", "disabled", "review", "fraud_hold", "deleted"] as const;
 export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
 
 export type CustomerListSort =

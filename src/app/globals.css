@@ -747,14 +747,29 @@ body {
   }
 }
 
-/* Thin custom scrollbar */
+/* Thin custom scrollbar — overlay style: slim, transparent track, and the
+   thumb stays faint until the scroll area is hovered so it reads as unobtrusive. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+:hover > *,
+*:hover {
+  scrollbar-color: #2c2f3a transparent;
+}
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2c2f3a;
+  background: transparent;
   border-radius: 9999px;
+}
+:hover::-webkit-scrollbar-thumb {
+  background: #2c2f3a;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3a3e4d;

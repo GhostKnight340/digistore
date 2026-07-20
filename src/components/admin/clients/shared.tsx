@@ -34,6 +34,7 @@ const STATUS_META: Record<CustomerStatus, { label: string; className: string }> 
   disabled: { label: "Désactivé", className: "border-red-500/40 text-red-400" },
   review: { label: "En revue", className: "border-amber-500/40 text-amber-400" },
   fraud_hold: { label: "Blocage fraude", className: "border-red-500/50 text-red-300" },
+  deleted: { label: "Supprimé", className: "border-zinc-500/40 text-zinc-400" },
 };
 
 /**

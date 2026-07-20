@@ -49,7 +49,13 @@ export default function AdminShellRoute({
       counts={navCounts}
       admin={admin}
     >
-      {children}
+      {/* Standalone routes need their own scroll region: the shell's content
+          slot is overflow:hidden (the dashboard supplies this wrapper itself). */}
+      <div style={{ height: "100%", overflowY: "auto" }}>
+        <div className="admin-panel-pad" style={{ padding: "26px 28px" }}>
+          {children}
+        </div>
+      </div>
     </AdminShell>
   );
 }

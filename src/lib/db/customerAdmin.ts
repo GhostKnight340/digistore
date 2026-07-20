@@ -701,6 +701,87 @@ export async function setCustomerStatus(input: {
   return { ok: true };
 }
 
+// GDPR-style account deletion. Personal data is scrubbed and credentials are
+// destroyed (the account can no longer authenticate — see getCurrentCustomer,
+// which rejects a customer with no password/Google/Discord credential), but
+// orders, payments, and the Ghost Credit ledger are preserved for accounting.
+// The freed email lets the person re-register from scratch.
+export async function anonymizeCustomer(input: {
+  customerId: string;
+  reason: string;
+  actor: Actor;
+}): Promise<Result> {
+  await ensureDatabaseReady();
+  const reason = input.reason.trim();
+  if (!reason) return { ok: false, error: "Un motif est obligatoire." };
+  const target = await prisma.customer.findUnique({
+    where: { id: input.customerId },
+    select: { id: true, status: true, role: true },
+  });
+  if (!target) return { ok: false, error: "Client introuvable." };
+  if (target.role === "ADMIN") {
+    return { ok: false, error: "Impossible de supprimer un compte administrateur." };
+  }
+  if (target.status === "deleted") {
+    return { ok: false, error: "Ce compte est déjà supprimé." };
+  }
+
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    // Drop any outstanding auth tokens so a stale reset/verification link can't
+    // resurrect a credential on the scrubbed account.
+    await tx.authToken.deleteMany({ where: { customerId: input.customerId } });
+    await tx.customer.update({
+      where: { id: input.customerId },
+      data: {
+        name: "Client supprimé",
+        firstName: null,
+        lastName: null,
+        // Unique-but-inert placeholder; frees the real address for re-signup.
+        email: `deleted-${input.customerId}@deleted.ghost.ma`,
+        phone: null,
+        image: null,
+        birthday: null,
+        // Destroy every login credential.
+        passwordHash: null,
+        googleId: null,
+        discordId: null,
+        authProvider: null,
+        emailVerified: false,
+        emailVerifiedAt: null,
+        marketingConsent: false,
+        // Scrub Discord identity + DM linkage.
+        discordUsername: null,
+        discordGlobalName: null,
+        discordAvatar: null,
+        discordDmUserId: null,
+        discordDmUsername: null,
+        discordDmDisplayName: null,
+        discordDmAvatar: null,
+        discordDmActivated: false,
+        discordDmActivatedAt: null,
+        status: "deleted",
+        statusReason: reason,
+        statusUpdatedAt: now,
+        // Force-logout any live session.
+        sessionsValidAfter: now,
+      },
+    });
+    await writeAuditLog(
+      {
+        adminId: input.actor.id,
+        adminName: input.actor.name,
+        customerId: input.customerId,
+        action: "customer.anonymized",
+        reason,
+        metadata: { from: target.status },
+      },
+      tx,
+    );
+  });
+  return { ok: true };
+}
+
 export async function revokeCustomerSessions(input: {
   customerId: string;
   reason: string;

@@ -18,6 +18,7 @@ export type AuditAction =
   | "customer.status_changed"
   | "customer.disabled"
   | "customer.enabled"
+  | "customer.anonymized"
   | "customer.sessions_revoked"
   | "customer.verification_resent"
   | "customer.password_reset_sent"

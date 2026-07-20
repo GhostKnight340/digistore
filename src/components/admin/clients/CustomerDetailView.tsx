@@ -23,6 +23,7 @@ import {
   getCustomerActivityAction,
   getCustomerNotesAction,
   setCustomerStatusAction,
+  anonymizeCustomerAction,
   revokeCustomerSessionsAction,
   resendVerificationAction,
   sendPasswordResetAction,
@@ -126,45 +127,83 @@ export default function CustomerDetailView({
             <p className="mt-1 text-xs text-amber-400">Motif : {identity.statusReason}</p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {identity.status === "disabled" ? (
-            <button
-              type="button"
-              className="btn-ghost text-sm"
-              onClick={() =>
-                setPending({
-                  title: "Réactiver le compte",
-                  description: "Le client pourra de nouveau se connecter et acheter.",
-                  requireReason: true,
-                  run: (v) =>
-                    setCustomerStatusAction({ customerId, status: "active", reason: v.reason }),
-                })
-              }
-            >
-              Réactiver
-            </button>
-          ) : (
+        {identity.status === "deleted" ? (
+          <p className="text-xs text-faint">Compte supprimé — données personnelles anonymisées.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {identity.status === "disabled" ? (
+              <button
+                type="button"
+                className="btn-ghost text-sm"
+                onClick={() =>
+                  setPending({
+                    title: "Réactiver le compte",
+                    description: "Le client pourra de nouveau se connecter et acheter.",
+                    requireReason: true,
+                    run: (v) =>
+                      setCustomerStatusAction({ customerId, status: "active", reason: v.reason }),
+                  })
+                }
+              >
+                Réactiver
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-ghost text-sm text-red-400"
+                onClick={() =>
+                  setPending({
+                    title: "Désactiver le compte",
+                    description:
+                      "Bloque la connexion et les achats. Les commandes et l'historique sont conservés. Les sessions actives sont révoquées.",
+                    tone: "danger",
+                    confirmLabel: "Désactiver",
+                    requireReason: true,
+                    run: (v) =>
+                      setCustomerStatusAction({ customerId, status: "disabled", reason: v.reason }),
+                  })
+                }
+              >
+                Désactiver
+              </button>
+            )}
+            <StatusMenu customerId={customerId} current={identity.status} onPick={setPending} />
             <button
               type="button"
               className="btn-ghost text-sm text-red-400"
               onClick={() =>
                 setPending({
-                  title: "Désactiver le compte",
+                  title: "Supprimer le compte (anonymiser)",
                   description:
-                    "Bloque la connexion et les achats. Les commandes et l'historique sont conservés. Les sessions actives sont révoquées.",
+                    "Efface définitivement les données personnelles (nom, e-mail, téléphone, identités Google/Discord) et détruit les identifiants de connexion. Les commandes, paiements et le registre Ghost Credit sont conservés pour la comptabilité. Action irréversible.",
                   tone: "danger",
-                  confirmLabel: "Désactiver",
+                  confirmLabel: "Supprimer définitivement",
                   requireReason: true,
-                  run: (v) =>
-                    setCustomerStatusAction({ customerId, status: "disabled", reason: v.reason }),
+                  fields: [
+                    {
+                      key: "confirmEmail",
+                      label: `Tapez l'e-mail du client (${identity.email}) pour confirmer`,
+                      type: "email",
+                      required: true,
+                      placeholder: identity.email,
+                    },
+                  ],
+                  run: (v) => {
+                    if (
+                      v.fields.confirmEmail?.trim().toLowerCase() !==
+                      identity.email.toLowerCase()
+                    ) {
+                      return Promise.resolve({ ok: false, error: "L'e-mail ne correspond pas." });
+                    }
+                    return anonymizeCustomerAction({ customerId, reason: v.reason });
+                  },
                 })
               }
             >
-              Désactiver
+              Supprimer
             </button>
-          )}
-          <StatusMenu customerId={customerId} current={identity.status} onPick={setPending} />
-        </div>
+          </div>
+        )}
       </header>
 
       {/* Tabs */}

@@ -109,6 +109,7 @@ export default function ClientsListView({
               ["disabled", "Désactivé"],
               ["review", "En revue"],
               ["fraud_hold", "Blocage fraude"],
+              ["deleted", "Supprimé"],
             ]}
           />
           <FilterSelect
