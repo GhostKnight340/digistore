@@ -4,6 +4,11 @@ import { notFound } from "next/navigation";
 import GuideContent from "@/components/guides/GuideContent";
 import GuideIcon from "@/components/guides/GuideIcon";
 import GuideCard from "@/components/guides/GuideCard";
+import GuideMetaStrip from "@/components/guides/GuideMetaStrip";
+import GuideToc from "@/components/guides/GuideToc";
+import GuideReadingProgress from "@/components/guides/GuideReadingProgress";
+import GuideHelpful from "@/components/guides/GuideHelpful";
+import GuidePrintButton from "@/components/guides/GuidePrintButton";
 import CategoryFaq from "@/components/category/CategoryFaq";
 import NavigatorTip from "@/components/category/NavigatorTip";
 import ProductCard from "@/components/ProductCard";
@@ -12,6 +17,7 @@ import { getGuideBySlug } from "@/lib/db/guides";
 import { getPublicParentCards } from "@/lib/db/catalog";
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { guideHref } from "@/lib/guide";
+import { buildToc, countSteps, estimateReadingMinutes } from "@/lib/guideMeta";
 import { absoluteUrl } from "@/lib/siteUrl";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +83,9 @@ export default async function GuidePage({
 
   const canonical = guideHref(guide.slug);
   const updatedLabel = DATE_FMT.format(new Date(guide.updatedAt));
+  const steps = countSteps(guide.content);
+  const minutes = estimateReadingMinutes(guide.content);
+  const toc = buildToc(guide.content);
 
   const breadcrumbLd = {
     "@context": "https://schema.org",
@@ -113,6 +122,7 @@ export default async function GuidePage({
 
   return (
     <div className="container-page pt-6 pb-20 sm:py-10">
+      <GuideReadingProgress />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
@@ -142,7 +152,8 @@ export default async function GuidePage({
         </ol>
       </nav>
 
-      <article className="mx-auto mt-6 max-w-3xl">
+      <div className="mx-auto mt-6 grid max-w-5xl grid-cols-1 gap-x-10 lg:grid-cols-[minmax(0,1fr)_216px]">
+        <article className="min-w-0 max-w-3xl">
         <header>
           <div className="flex flex-wrap items-center gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border bg-surface2 text-accent">
@@ -160,13 +171,19 @@ export default async function GuidePage({
           {guide.summary ? (
             <p className="mt-3 text-base leading-relaxed text-muted">{guide.summary}</p>
           ) : null}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-faint">Mis à jour le {updatedLabel}</p>
+          <GuideMetaStrip
+            minutes={minutes}
+            steps={steps}
+            platform=""
+            updatedLabel={updatedLabel}
+          />
+          <div className="mt-4 flex flex-wrap items-center gap-2 print:hidden">
             <ShareButton
               url={canonical}
               title={guide.title}
               text={guide.summary || undefined}
             />
+            <GuidePrintButton slug={guide.slug} />
           </div>
         </header>
 
@@ -203,8 +220,10 @@ export default async function GuidePage({
           />
         )}
 
+        <GuideHelpful slug={guide.slug} />
+
         {guide.relatedProducts.length > 0 && (
-          <section className="mt-12">
+          <section className="mt-12 print:hidden">
             <h2 className="text-2xl font-semibold tracking-tight text-white">
               Produits associés
             </h2>
@@ -217,7 +236,7 @@ export default async function GuidePage({
         )}
 
         {guide.relatedGuides.length > 0 && (
-          <section className="mt-12">
+          <section className="mt-12 print:hidden">
             <h2 className="text-2xl font-semibold tracking-tight text-white">
               Guides associés
             </h2>
@@ -229,7 +248,7 @@ export default async function GuidePage({
           </section>
         )}
 
-        <section className="mt-12 rounded-2xl border border-border bg-card p-6 text-center">
+        <section className="mt-12 rounded-2xl border border-border bg-card p-6 text-center print:hidden">
           <h2 className="text-lg font-semibold text-white">Besoin d&apos;aide ?</h2>
           <p className="mt-1 text-sm text-muted">
             Notre support répond à vos questions avant et après l&apos;achat.
@@ -238,7 +257,10 @@ export default async function GuidePage({
             Contacter le support
           </Link>
         </section>
-      </article>
+        </article>
+
+        <GuideToc items={toc} slug={guide.slug} />
+      </div>
     </div>
   );
 }
