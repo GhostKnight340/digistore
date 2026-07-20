@@ -488,7 +488,21 @@ export function AccountAccessSection({
   phone?: string;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"register" | "login" | "guest">("register");
+  /**
+   * Guest is the DEFAULT.
+   *
+   * With "register" as the default, every customer met a password form first and
+   * guest checkout was a tab most would never notice — which gave away most of
+   * the reason for building it. Defaulting to guest means the shortest path to a
+   * completed order is the one that opens by default, and creating an account is
+   * one tap away rather than the toll gate.
+   *
+   * The trade-off is fewer accounts created at checkout. It is deliberate: an
+   * account is worth more when someone chooses it, and a guest can still create
+   * one later with the same address (the guest Customer row is upgraded in
+   * place — see createVerifiedAccount).
+   */
+  const [mode, setMode] = useState<"register" | "login" | "guest">("guest");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
