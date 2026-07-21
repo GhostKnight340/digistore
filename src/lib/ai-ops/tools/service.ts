@@ -24,6 +24,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
+import { formatPublicOrderNumber } from "@/lib/orderNumber";
 import { getAiOpsSettings, getModuleConfig } from "../store";
 import { evaluateStaticGate } from "../gate";
 import { validateToolInput } from "./schemas";
@@ -137,6 +138,17 @@ function sinceDays(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * A createdAt filter for the window `[now - periodDays, now - untilDays)`.
+ * `untilDays` = 0 means "up to now" (no upper bound), preserving the original
+ * lookback behavior; a positive `untilDays` bounds the window in the past so a
+ * caller can ask for e.g. yesterday or last month.
+ */
+function dayRange(periodDays: number, untilDays = 0): { gte: Date; lt?: Date } {
+  const gte = sinceDays(periodDays);
+  return untilDays > 0 ? { gte, lt: sinceDays(untilDays) } : { gte };
+}
+
 async function runTool(tool: ToolName, input: unknown): Promise<unknown> {
   switch (tool) {
     case "getSalesSummary":
@@ -168,16 +180,17 @@ async function runTool(tool: ToolName, input: unknown): Promise<unknown> {
   }
 }
 
-async function getSalesSummary({ periodDays }: PeriodInput) {
-  const since = sinceDays(periodDays);
+async function getSalesSummary({ periodDays, untilDays }: PeriodInput) {
+  const createdAt = dayRange(periodDays, untilDays);
   const delivered = await prisma.order.aggregate({
     _count: { _all: true },
     _sum: { totalMad: true },
-    where: { status: "delivered", createdAt: { gte: since } },
+    where: { status: "delivered", createdAt },
   });
-  const allOrders = await prisma.order.count({ where: { createdAt: { gte: since } } });
+  const allOrders = await prisma.order.count({ where: { createdAt } });
   return {
     periodDays,
+    untilDays,
     ordersTotal: allOrders,
     ordersDelivered: delivered._count._all,
     revenueMad: delivered._sum.totalMad ?? 0,
@@ -193,7 +206,20 @@ async function getPendingOrders({ limit }: LimitInput) {
     // No customer name/email/phone — pending queue is an aggregate operational view.
     select: { id: true, status: true, totalMad: true, paymentMethod: true, createdAt: true },
   });
-  return { count: orders.length, orders };
+  // The public order number is the creation-rank (count of earlier orders + 1),
+  // same as the admin/customer surfaces (see src/lib/auth.ts). We expose only
+  // that human number, never the internal cuid, so answers match the dashboard.
+  const withNumbers = await Promise.all(
+    orders.map(async ({ id, createdAt, ...rest }) => {
+      const earlier = await prisma.order.count({
+        where: {
+          OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: id } }],
+        },
+      });
+      return { orderNumber: formatPublicOrderNumber(earlier + 1), createdAt, ...rest };
+    }),
+  );
+  return { count: withNumbers.length, orders: withNumbers };
 }
 
 async function getOrderDetails({ orderId }: OrderIdInput) {
@@ -216,12 +242,12 @@ async function getOrderDetails({ orderId }: OrderIdInput) {
   return { found: true, order };
 }
 
-async function getPaymentSummary({ periodDays }: PeriodInput) {
-  const since = sinceDays(periodDays);
+async function getPaymentSummary({ periodDays, untilDays }: PeriodInput) {
+  const createdAt = dayRange(periodDays, untilDays);
   const [byStatus, byMethod] = await Promise.all([
     prisma.order.groupBy({
       by: ["status"],
-      where: { createdAt: { gte: since } },
+      where: { createdAt },
       _count: { _all: true },
       _sum: { totalMad: true },
     }),
@@ -229,13 +255,14 @@ async function getPaymentSummary({ periodDays }: PeriodInput) {
     // an aggregate, no per-customer data.
     prisma.order.groupBy({
       by: ["paymentMethod"],
-      where: { createdAt: { gte: since } },
+      where: { createdAt },
       _count: { _all: true },
       _sum: { totalMad: true },
     }),
   ]);
   return {
     periodDays,
+    untilDays,
     byStatus: byStatus.map((g) => ({
       status: g.status,
       count: g._count._all,
@@ -359,11 +386,10 @@ async function getSupplierApiHealth() {
   return { suppliers };
 }
 
-async function getTopSellingProducts({ periodDays, limit }: PeriodLimitInput) {
-  const since = sinceDays(periodDays);
+async function getTopSellingProducts({ periodDays, untilDays, limit }: PeriodLimitInput) {
   const grouped = await prisma.orderItem.groupBy({
     by: ["productId"],
-    where: { order: { status: "delivered", createdAt: { gte: since } } },
+    where: { order: { status: "delivered", createdAt: dayRange(periodDays, untilDays) } },
     _sum: { quantity: true, unitPriceMad: true },
     orderBy: { _sum: { quantity: "desc" } },
     take: limit,

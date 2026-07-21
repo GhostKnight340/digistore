@@ -19,6 +19,17 @@ test("period is clamped into [1,365] with a sane default", () => {
   assert.equal(zero.ok && (zero.value as { periodDays: number }).periodDays, 1);
 });
 
+test("untilDays is clamped and kept strictly below periodDays (valid window)", () => {
+  const ok1 = validateToolInput("getSalesSummary", { periodDays: 2, untilDays: 1 });
+  assert.deepEqual(ok1.ok && ok1.value, { periodDays: 2, untilDays: 1 });
+  // untilDays cannot reach/exceed periodDays — clamp to periodDays-1.
+  const clamped = validateToolInput("getSalesSummary", { periodDays: 5, untilDays: 9 });
+  assert.equal(clamped.ok && (clamped.value as { untilDays: number }).untilDays, 4);
+  // Defaults to 0 (a plain lookback window) when omitted.
+  const dflt = validateToolInput("getSalesSummary", { periodDays: 7 });
+  assert.equal(dflt.ok && (dflt.value as { untilDays: number }).untilDays, 0);
+});
+
 test("limit is clamped and coerced from strings", () => {
   const r = validateToolInput("getPendingOrders", { limit: "5" });
   assert.equal(r.ok && (r.value as { limit: number }).limit, 5);

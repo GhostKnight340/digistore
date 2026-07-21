@@ -47,12 +47,15 @@ function validId(value: unknown): value is string {
 
 export interface PeriodInput {
   periodDays: number;
+  /** Upper bound of the window, in days ago (0 = now). Enables past ranges. */
+  untilDays: number;
 }
 export interface LimitInput {
   limit: number;
 }
 export interface PeriodLimitInput {
   periodDays: number;
+  untilDays: number;
   limit: number;
 }
 export interface OrderIdInput {
@@ -75,8 +78,16 @@ export interface ProductPerfInput {
 
 // ─── Validators, keyed by tool name ──────────────────────────────────────────
 
+/** Clamp an optional upper bound so the window is always valid: 0 ≤ untilDays < periodDays. */
+function clampUntil(input: Record<string, unknown>, periodDays: number): number {
+  const until = clampedInt(input.untilDays, 0, 364, 0);
+  return Math.min(until, periodDays - 1);
+}
+
 function period(input: unknown): ValidationResult<PeriodInput> {
-  return ok({ periodDays: clampedInt(asObject(input).periodDays, 1, 365, 7) });
+  const o = asObject(input);
+  const periodDays = clampedInt(o.periodDays, 1, 365, 7);
+  return ok({ periodDays, untilDays: clampUntil(o, periodDays) });
 }
 
 function limit(input: unknown): ValidationResult<LimitInput> {
@@ -85,8 +96,10 @@ function limit(input: unknown): ValidationResult<LimitInput> {
 
 function periodLimit(input: unknown): ValidationResult<PeriodLimitInput> {
   const o = asObject(input);
+  const periodDays = clampedInt(o.periodDays, 1, 365, 30);
   return ok({
-    periodDays: clampedInt(o.periodDays, 1, 365, 30),
+    periodDays,
+    untilDays: clampUntil(o, periodDays),
     limit: clampedInt(o.limit, 1, 50, 10),
   });
 }

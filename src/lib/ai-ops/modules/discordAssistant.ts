@@ -21,9 +21,29 @@ import "server-only";
 import { callTool } from "../tools/service";
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
 import { buildSystemPrompt, SNAPSHOT_TOOLS } from "../discord/assistantPrompt";
+import { questionWindow, type TimeWindow } from "../discord/timeframe";
 import type { ConversationTurn } from "../discord/conversation";
+import type { ToolName } from "../types";
 
 export const DISCORD_ASSISTANT_MODULE = "discord_assistant" as const;
+
+/** Safe, clamped input for a snapshot tool. Time-scoped tools get the window. */
+function toolInput(tool: ToolName, window: TimeWindow): unknown {
+  const period = { periodDays: window.periodDays, untilDays: window.untilDays };
+  switch (tool) {
+    case "getSalesSummary":
+    case "getPaymentSummary":
+      return period;
+    case "getTopSellingProducts":
+      return { ...period, limit: 10 };
+    case "getPendingOrders":
+      return { limit: 20 };
+    case "getRecentOperationalEvents":
+      return { limit: 15 };
+    default:
+      return {};
+  }
+}
 
 export interface AssistantAnswer {
   ok: true;
@@ -50,15 +70,18 @@ export interface AnswerInput {
  * (permissions are also re-checked inside `callTool`); a failed/denied tool is
  * recorded as unavailable rather than aborting the whole answer.
  */
-async function gatherSnapshot(ctx: ModuleRunContext): Promise<Record<string, unknown>> {
+async function gatherSnapshot(
+  ctx: ModuleRunContext,
+  window: TimeWindow,
+): Promise<Record<string, unknown>> {
   const granted = new Set<string>(ctx.config.grantedTools);
   const snapshot: Record<string, unknown> = {};
-  for (const { tool, input, label } of SNAPSHOT_TOOLS) {
+  for (const { tool, label } of SNAPSHOT_TOOLS) {
     if (!granted.has(tool)) continue; // respect the permission model
     const result = await callTool({
       module: DISCORD_ASSISTANT_MODULE,
       tool,
-      input,
+      input: toolInput(tool, window),
       executionId: ctx.executionId,
     });
     snapshot[label] = result.ok ? result.data : { unavailable: true, reason: result.status };
@@ -68,7 +91,9 @@ async function gatherSnapshot(ctx: ModuleRunContext): Promise<Record<string, unk
 
 /** The module body handed to the runner (guardrails wrap this). */
 async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise<ModuleRunOutput> {
-  const businessData = await gatherSnapshot(ctx);
+  // The timeframe comes from THIS question (follow-ups can change the period).
+  const window = questionWindow(input.question);
+  const businessData = await gatherSnapshot(ctx, window);
   const completion = await ctx.client.complete({
     model: ctx.model,
     system: buildSystemPrompt(ctx.config.instructions),
@@ -76,7 +101,7 @@ async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise
       question: input.question,
       conversation: input.history ?? [],
       businessData,
-      dataScope: "today",
+      dataScope: window.label,
     },
     timeoutMs: 30_000,
   });
