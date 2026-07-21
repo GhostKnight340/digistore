@@ -12,6 +12,7 @@
  */
 
 import { isToolName, type ToolName } from "../types";
+import { isDatePreset, type DateRangeInput } from "../dateRange";
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -71,9 +72,13 @@ export interface SupplierInput {
   supplier: string | null;
   limit: number;
 }
-export interface ProductPerfInput {
-  productId: string | null;
-  periodDays: number;
+/** A validated date-range request (preset or custom), resolved at execution. */
+export interface RangeInput {
+  range: DateRangeInput;
+}
+export interface RangeLimitInput {
+  range: DateRangeInput;
+  limit: number;
 }
 
 // ─── Validators, keyed by tool name ──────────────────────────────────────────
@@ -134,29 +139,69 @@ function supplier(input: unknown): ValidationResult<SupplierInput> {
   return ok({ supplier: sup, limit: clampedInt(o.limit, 1, 100, 25) });
 }
 
-function productPerf(input: unknown): ValidationResult<ProductPerfInput> {
-  const o = asObject(input);
-  let pid: string | null = null;
-  if (o.productId !== undefined && o.productId !== null) {
-    if (!validId(o.productId)) return err("productId must be a valid id.");
-    pid = o.productId;
+/**
+ * Validate a `range` input's SHAPE only — a known preset, or a custom
+ * {start,end} pair of YYYY-MM-DD strings. Timezone-aware resolution and bound
+ * checks happen at execution (service.ts), where the business timezone is known.
+ * Defaults to "today" when omitted. Never accepts arbitrary fields.
+ */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+function rangeOf(o: Record<string, unknown>): ValidationResult<DateRangeInput> {
+  const r = o.range;
+  if (r && typeof r === "object" && !Array.isArray(r)) {
+    const ro = r as Record<string, unknown>;
+    if (typeof ro.preset === "string") {
+      if (!isDatePreset(ro.preset)) return err(`Unknown date preset: ${ro.preset}`);
+      return ok({ preset: ro.preset });
+    }
+    if (ro.start !== undefined || ro.end !== undefined) {
+      if (
+        typeof ro.start !== "string" ||
+        typeof ro.end !== "string" ||
+        !ISO_DATE.test(ro.start) ||
+        !ISO_DATE.test(ro.end)
+      ) {
+        return err("Custom range needs start and end as YYYY-MM-DD.");
+      }
+      return ok({ start: ro.start, end: ro.end });
+    }
   }
-  return ok({ productId: pid, periodDays: clampedInt(o.periodDays, 1, 365, 30) });
+  return ok({ preset: "today" });
+}
+
+function rangeInput(input: unknown): ValidationResult<RangeInput> {
+  const res = rangeOf(asObject(input));
+  return res.ok ? ok({ range: res.value }) : res;
+}
+
+function rangeLimit(input: unknown): ValidationResult<RangeLimitInput> {
+  const o = asObject(input);
+  const res = rangeOf(o);
+  if (!res.ok) return res;
+  return ok({ range: res.value, limit: clampedInt(o.limit, 1, 50, 10) });
+}
+
+/** Tools that take no input (current-state snapshots). */
+function noInput(input: unknown): ValidationResult<Record<string, never>> {
+  return ok(asObject(input) && {});
 }
 
 /** The validator table. Every ToolName MUST have an entry. */
 export const TOOL_VALIDATORS: Record<ToolName, (input: unknown) => ValidationResult<unknown>> = {
-  getSalesSummary: period,
+  getSalesSummary: rangeInput,
+  getOrderSummary: rangeInput,
   getPendingOrders: limit,
   getOrderDetails: orderId,
-  getPaymentSummary: period,
-  getFulfillmentPerformance: period,
+  getPaymentSummary: rangeInput,
+  getFulfillmentPerformance: rangeInput,
+  getCustomerMetrics: rangeInput,
+  getOperationalIssues: noInput,
   getCustomerHistory: customerId,
   getSupportConversation: supportRef,
   getSupplierProductCosts: supplier,
-  getSupplierApiHealth: (input) => ok(asObject(input) && {}),
+  getSupplierApiHealth: noInput,
   getTopSellingProducts: periodLimit,
-  getProductPerformance: productPerf,
+  getProductPerformance: rangeLimit,
   getRecentOperationalEvents: limit,
 };
 

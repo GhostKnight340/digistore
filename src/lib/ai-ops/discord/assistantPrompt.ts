@@ -15,9 +15,10 @@ import type { ToolName } from "../types";
  */
 export const SNAPSHOT_TOOLS: { tool: ToolName; label: string; timeScoped: boolean }[] = [
   { tool: "getSalesSummary", label: "sales", timeScoped: true },
-  { tool: "getPendingOrders", label: "pendingOrders", timeScoped: false },
+  { tool: "getOrderSummary", label: "orders", timeScoped: true },
   { tool: "getPaymentSummary", label: "payments", timeScoped: true },
-  { tool: "getTopSellingProducts", label: "topProducts", timeScoped: true },
+  { tool: "getProductPerformance", label: "topProducts", timeScoped: true },
+  { tool: "getOperationalIssues", label: "operationalIssues", timeScoped: false },
   { tool: "getRecentOperationalEvents", label: "operationalEvents", timeScoped: false },
 ];
 

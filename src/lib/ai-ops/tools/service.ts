@@ -33,16 +33,20 @@ import { consumeToolBudget } from "../rateLimit";
 import { redactForAiContext } from "../redaction";
 import { logToolCall } from "../executions";
 import { isModuleKey, isToolName, type ModuleKey, type ToolName } from "../types";
+import { resolveDateRange, type DateRangeInput } from "../dateRange";
 import type {
   CustomerIdInput,
   LimitInput,
   OrderIdInput,
-  PeriodInput,
   PeriodLimitInput,
-  ProductPerfInput,
+  RangeInput,
+  RangeLimitInput,
   SupplierInput,
   SupportRefInput,
 } from "./schemas";
+
+/** Thrown by a tool when its (already shape-valid) input can't be resolved. */
+class ToolInputError extends Error {}
 
 export interface ToolCallContext {
   module: string;
@@ -109,7 +113,7 @@ export async function callTool(ctx: ToolCallContext): Promise<ToolResult> {
 
   // 6. Execute + 7. Redact. The gate guarantees `tool` is a valid ToolName.
   try {
-    const raw = await runTool(tool as ToolName, validation.value);
+    const raw = await runTool(tool as ToolName, validation.value, settings.timezone);
     const data = settings.redactSensitive ? redactForAiContext(raw) : raw;
     await logToolCall({
       module,
@@ -119,16 +123,20 @@ export async function callTool(ctx: ToolCallContext): Promise<ToolResult> {
       executionId: ctx.executionId,
     });
     return { ok: true, data };
-  } catch {
+  } catch (error) {
+    // A bad (but shape-valid) date range is caller error, not a query failure.
+    const invalid = error instanceof ToolInputError;
     await logToolCall({
       module,
       tool,
-      status: "error",
-      reason: "query_failed",
+      status: invalid ? "invalid_input" : "error",
+      reason: invalid ? "invalid_input" : "query_failed",
       durationMs: Date.now() - startedAt,
       executionId: ctx.executionId,
     });
-    return { ok: false, status: "error", error: "Tool execution failed." };
+    return invalid
+      ? { ok: false, status: "invalid_input", error: error.message }
+      : { ok: false, status: "error", error: "Tool execution failed." };
   }
 }
 
@@ -138,29 +146,37 @@ function sinceDays(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
-/**
- * A createdAt filter for the window `[now - periodDays, now - untilDays)`.
- * `untilDays` = 0 means "up to now" (no upper bound), preserving the original
- * lookback behavior; a positive `untilDays` bounds the window in the past so a
- * caller can ask for e.g. yesterday or last month.
- */
+/** Legacy lookback filter for the tools other modules still use (periodDays). */
 function dayRange(periodDays: number, untilDays = 0): { gte: Date; lt?: Date } {
   const gte = sinceDays(periodDays);
   return untilDays > 0 ? { gte, lt: sinceDays(untilDays) } : { gte };
 }
 
-async function runTool(tool: ToolName, input: unknown): Promise<unknown> {
+/** Resolve a validated date-range input to a `{ gte, lt }` filter + a label. */
+function resolvedRange(range: DateRangeInput, timeZone: string) {
+  const res = resolveDateRange(range, { timeZone });
+  if (!res.ok) throw new ToolInputError(res.error);
+  return { where: { gte: res.range.start, lt: res.range.end }, label: res.range.label };
+}
+
+async function runTool(tool: ToolName, input: unknown, timeZone: string): Promise<unknown> {
   switch (tool) {
     case "getSalesSummary":
-      return getSalesSummary(input as PeriodInput);
+      return getSalesSummary(input as RangeInput, timeZone);
+    case "getOrderSummary":
+      return getOrderSummary(input as RangeInput, timeZone);
     case "getPendingOrders":
       return getPendingOrders(input as LimitInput);
     case "getOrderDetails":
       return getOrderDetails(input as OrderIdInput);
     case "getPaymentSummary":
-      return getPaymentSummary(input as PeriodInput);
+      return getPaymentSummary(input as RangeInput, timeZone);
     case "getFulfillmentPerformance":
-      return getFulfillmentPerformance(input as PeriodInput);
+      return getFulfillmentPerformance(input as RangeInput, timeZone);
+    case "getCustomerMetrics":
+      return getCustomerMetrics(input as RangeInput, timeZone);
+    case "getOperationalIssues":
+      return getOperationalIssues();
     case "getCustomerHistory":
       return getCustomerHistory(input as CustomerIdInput);
     case "getSupportConversation":
@@ -172,7 +188,7 @@ async function runTool(tool: ToolName, input: unknown): Promise<unknown> {
     case "getTopSellingProducts":
       return getTopSellingProducts(input as PeriodLimitInput);
     case "getProductPerformance":
-      return getProductPerformance(input as ProductPerfInput);
+      return getProductPerformance(input as RangeLimitInput, timeZone);
     case "getRecentOperationalEvents":
       return getRecentOperationalEvents(input as LimitInput);
     default:
@@ -180,8 +196,8 @@ async function runTool(tool: ToolName, input: unknown): Promise<unknown> {
   }
 }
 
-async function getSalesSummary({ periodDays, untilDays }: PeriodInput) {
-  const createdAt = dayRange(periodDays, untilDays);
+async function getSalesSummary({ range }: RangeInput, timeZone: string) {
+  const { where: createdAt, label } = resolvedRange(range, timeZone);
   const delivered = await prisma.order.aggregate({
     _count: { _all: true },
     _sum: { totalMad: true },
@@ -189,13 +205,33 @@ async function getSalesSummary({ periodDays, untilDays }: PeriodInput) {
   });
   const allOrders = await prisma.order.count({ where: { createdAt } });
   return {
-    periodDays,
-    untilDays,
+    range: label,
     ordersTotal: allOrders,
     ordersDelivered: delivered._count._all,
     revenueMad: delivered._sum.totalMad ?? 0,
     currency: "MAD",
   };
+}
+
+/** Order counts + value grouped by status over the range (incl. pending). */
+async function getOrderSummary({ range }: RangeInput, timeZone: string) {
+  const { where: createdAt, label } = resolvedRange(range, timeZone);
+  const grouped = await prisma.order.groupBy({
+    by: ["status"],
+    where: { createdAt },
+    _count: { _all: true },
+    _sum: { totalMad: true },
+  });
+  const byStatus = grouped.map((g) => ({
+    status: g.status,
+    count: g._count._all,
+    totalMad: g._sum.totalMad ?? 0,
+  }));
+  const total = byStatus.reduce((n, g) => n + g.count, 0);
+  const pending = byStatus
+    .filter((g) => PENDING_ORDER_STATUSES.includes(g.status))
+    .reduce((n, g) => n + g.count, 0);
+  return { range: label, total, pending, byStatus };
 }
 
 async function getPendingOrders({ limit }: LimitInput) {
@@ -242,8 +278,8 @@ async function getOrderDetails({ orderId }: OrderIdInput) {
   return { found: true, order };
 }
 
-async function getPaymentSummary({ periodDays, untilDays }: PeriodInput) {
-  const createdAt = dayRange(periodDays, untilDays);
+async function getPaymentSummary({ range }: RangeInput, timeZone: string) {
+  const { where: createdAt, label } = resolvedRange(range, timeZone);
   const [byStatus, byMethod] = await Promise.all([
     prisma.order.groupBy({
       by: ["status"],
@@ -261,8 +297,7 @@ async function getPaymentSummary({ periodDays, untilDays }: PeriodInput) {
     }),
   ]);
   return {
-    periodDays,
-    untilDays,
+    range: label,
     byStatus: byStatus.map((g) => ({
       status: g.status,
       count: g._count._all,
@@ -276,18 +311,70 @@ async function getPaymentSummary({ periodDays, untilDays }: PeriodInput) {
   };
 }
 
-async function getFulfillmentPerformance({ periodDays }: PeriodInput) {
-  const since = sinceDays(periodDays);
+async function getFulfillmentPerformance({ range }: RangeInput, timeZone: string) {
+  const { where: createdAt, label } = resolvedRange(range, timeZone);
   const grouped = await prisma.supplierFulfillment.groupBy({
     by: ["status"],
-    where: { createdAt: { gte: since } },
+    where: { createdAt },
     _count: { _all: true },
   });
   const total = grouped.reduce((sum, g) => sum + g._count._all, 0);
+  const failed = grouped
+    .filter((g) => g.status === "failed" || g.status === "error")
+    .reduce((n, g) => n + g._count._all, 0);
   return {
-    periodDays,
+    range: label,
     total,
+    failed,
     byStatus: grouped.map((g) => ({ status: g.status, count: g._count._all })),
+  };
+}
+
+/** New/ordering-customer counts over the range (aggregate — no PII). */
+async function getCustomerMetrics({ range }: RangeInput, timeZone: string) {
+  const { where: createdAt, label } = resolvedRange(range, timeZone);
+  const [newCustomers, orderingRows] = await Promise.all([
+    prisma.customer.count({ where: { createdAt } }),
+    prisma.order.findMany({
+      where: { createdAt, customerId: { not: null } },
+      distinct: ["customerId"],
+      select: { customerId: true },
+    }),
+  ]);
+  const ordersInRange = await prisma.order.count({ where: { createdAt } });
+  return {
+    range: label,
+    newCustomers,
+    orderingCustomers: orderingRows.length,
+    ordersInRange,
+  };
+}
+
+/** Current operational issues needing attention — a now-snapshot (no range). */
+async function getOperationalIssues() {
+  const recentFailWindow = { gte: sinceDays(7) };
+  const [paymentIssues, pendingOrders, failedFulfillments, suppliers] = await Promise.all([
+    prisma.order.count({ where: { status: "payment_issue" } }),
+    prisma.order.count({ where: { status: { in: PENDING_ORDER_STATUSES } } }),
+    prisma.supplierFulfillment.count({
+      where: { status: { in: ["failed", "error"] }, createdAt: recentFailWindow },
+    }),
+    prisma.supplier.findMany({
+      where: { enabled: true },
+      select: { id: true, lastSuccessAt: true, lastFailureAt: true },
+    }),
+  ]);
+  const unhealthySuppliers = suppliers
+    .filter(
+      (s) => s.lastFailureAt && (!s.lastSuccessAt || s.lastFailureAt > s.lastSuccessAt),
+    )
+    .map((s) => s.id);
+  return {
+    asOf: "now",
+    paymentIssues,
+    pendingOrders,
+    failedFulfillmentsLast7d: failedFulfillments,
+    unhealthySuppliers,
   };
 }
 
@@ -410,25 +497,28 @@ async function getTopSellingProducts({ periodDays, untilDays, limit }: PeriodLim
   };
 }
 
-async function getProductPerformance({ productId, periodDays }: ProductPerfInput) {
-  const since = sinceDays(periodDays);
-  const where = {
-    order: { status: "delivered", createdAt: { gte: since } },
-    ...(productId ? { productId } : {}),
-  };
+/** Top products by units sold (delivered) over the range — "what sold best". */
+async function getProductPerformance({ range, limit }: RangeLimitInput, timeZone: string) {
+  const { where: createdAt, label } = resolvedRange(range, timeZone);
   const grouped = await prisma.orderItem.groupBy({
     by: ["productId"],
-    where,
+    where: { order: { status: "delivered", createdAt } },
     _sum: { quantity: true },
     _count: { _all: true },
     orderBy: { _sum: { quantity: "desc" } },
-    take: 25,
+    take: limit,
   });
+  const products = await prisma.product.findMany({
+    where: { id: { in: grouped.map((g) => g.productId) } },
+    select: { id: true, name: true, category: true },
+  });
+  const meta = new Map(products.map((p) => [p.id, p]));
   return {
-    periodDays,
-    productId: productId ?? null,
-    items: grouped.map((g) => ({
+    range: label,
+    products: grouped.map((g) => ({
       productId: g.productId,
+      name: meta.get(g.productId)?.name ?? null,
+      category: meta.get(g.productId)?.category ?? null,
       unitsSold: g._sum.quantity ?? 0,
       orderLines: g._count._all,
     })),

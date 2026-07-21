@@ -21,23 +21,27 @@ import "server-only";
 import { callTool } from "../tools/service";
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
 import { buildSystemPrompt, SNAPSHOT_TOOLS } from "../discord/assistantPrompt";
-import { questionWindow, type TimeWindow } from "../discord/timeframe";
 import type { ConversationTurn } from "../discord/conversation";
 import type { ToolName } from "../types";
 
 export const DISCORD_ASSISTANT_MODULE = "discord_assistant" as const;
 
-/** Safe, clamped input for a snapshot tool. Time-scoped tools get the window. */
-function toolInput(tool: ToolName, window: TimeWindow): unknown {
-  const period = { periodDays: window.periodDays, untilDays: window.untilDays };
+/**
+ * Safe input for a snapshot tool. Interim: the fixed "today" snapshot uses the
+ * date-range tools scoped to today; the tool-calling loop (next phase) lets the
+ * model pick the range per question.
+ */
+function toolInput(tool: ToolName): unknown {
+  const range = { range: { preset: "today" as const } };
   switch (tool) {
     case "getSalesSummary":
+    case "getOrderSummary":
     case "getPaymentSummary":
-      return period;
-    case "getTopSellingProducts":
-      return { ...period, limit: 10 };
-    case "getPendingOrders":
-      return { limit: 20 };
+    case "getFulfillmentPerformance":
+    case "getCustomerMetrics":
+      return range;
+    case "getProductPerformance":
+      return { ...range, limit: 10 };
     case "getRecentOperationalEvents":
       return { limit: 15 };
     default:
@@ -70,10 +74,7 @@ export interface AnswerInput {
  * (permissions are also re-checked inside `callTool`); a failed/denied tool is
  * recorded as unavailable rather than aborting the whole answer.
  */
-async function gatherSnapshot(
-  ctx: ModuleRunContext,
-  window: TimeWindow,
-): Promise<Record<string, unknown>> {
+async function gatherSnapshot(ctx: ModuleRunContext): Promise<Record<string, unknown>> {
   const granted = new Set<string>(ctx.config.grantedTools);
   const snapshot: Record<string, unknown> = {};
   for (const { tool, label } of SNAPSHOT_TOOLS) {
@@ -81,7 +82,7 @@ async function gatherSnapshot(
     const result = await callTool({
       module: DISCORD_ASSISTANT_MODULE,
       tool,
-      input: toolInput(tool, window),
+      input: toolInput(tool),
       executionId: ctx.executionId,
     });
     snapshot[label] = result.ok ? result.data : { unavailable: true, reason: result.status };
@@ -91,9 +92,7 @@ async function gatherSnapshot(
 
 /** The module body handed to the runner (guardrails wrap this). */
 async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise<ModuleRunOutput> {
-  // The timeframe comes from THIS question (follow-ups can change the period).
-  const window = questionWindow(input.question);
-  const businessData = await gatherSnapshot(ctx, window);
+  const businessData = await gatherSnapshot(ctx);
   const completion = await ctx.client.complete({
     model: ctx.model,
     system: buildSystemPrompt(ctx.config.instructions),
@@ -101,7 +100,7 @@ async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise
       question: input.question,
       conversation: input.history ?? [],
       businessData,
-      dataScope: window.label,
+      dataScope: "today",
     },
     timeoutMs: 30_000,
   });

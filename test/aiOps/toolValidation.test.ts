@@ -10,24 +10,42 @@ test("unknown tool is rejected", () => {
   assert.equal(r.ok, false);
 });
 
-test("period is clamped into [1,365] with a sane default", () => {
-  const dflt = validateToolInput("getSalesSummary", {});
-  assert.equal(dflt.ok && (dflt.value as { periodDays: number }).periodDays, 7);
-  const huge = validateToolInput("getSalesSummary", { periodDays: 100000 });
+// The legacy periodDays lookback still backs getTopSellingProducts (other modules).
+test("periodDays is clamped into [1,365] with a sane default", () => {
+  const dflt = validateToolInput("getTopSellingProducts", {});
+  assert.equal(dflt.ok && (dflt.value as { periodDays: number }).periodDays, 30);
+  const huge = validateToolInput("getTopSellingProducts", { periodDays: 100000 });
   assert.equal(huge.ok && (huge.value as { periodDays: number }).periodDays, 365);
-  const zero = validateToolInput("getSalesSummary", { periodDays: 0 });
+  const zero = validateToolInput("getTopSellingProducts", { periodDays: 0 });
   assert.equal(zero.ok && (zero.value as { periodDays: number }).periodDays, 1);
 });
 
-test("untilDays is clamped and kept strictly below periodDays (valid window)", () => {
-  const ok1 = validateToolInput("getSalesSummary", { periodDays: 2, untilDays: 1 });
-  assert.deepEqual(ok1.ok && ok1.value, { periodDays: 2, untilDays: 1 });
-  // untilDays cannot reach/exceed periodDays — clamp to periodDays-1.
-  const clamped = validateToolInput("getSalesSummary", { periodDays: 5, untilDays: 9 });
+test("untilDays is clamped strictly below periodDays (valid window)", () => {
+  const ok1 = validateToolInput("getTopSellingProducts", { periodDays: 2, untilDays: 1 });
+  assert.equal(ok1.ok && (ok1.value as { untilDays: number }).untilDays, 1);
+  const clamped = validateToolInput("getTopSellingProducts", { periodDays: 5, untilDays: 9 });
   assert.equal(clamped.ok && (clamped.value as { untilDays: number }).untilDays, 4);
-  // Defaults to 0 (a plain lookback window) when omitted.
-  const dflt = validateToolInput("getSalesSummary", { periodDays: 7 });
-  assert.equal(dflt.ok && (dflt.value as { untilDays: number }).untilDays, 0);
+});
+
+// The CEO tools take a validated date-range input.
+test("range input: preset, custom shape, default-today, and rejections", () => {
+  const preset = validateToolInput("getSalesSummary", { range: { preset: "yesterday" } });
+  assert.deepEqual(preset.ok && preset.value, { range: { preset: "yesterday" } });
+  const custom = validateToolInput("getPaymentSummary", { range: { start: "2026-07-01", end: "2026-07-15" } });
+  assert.deepEqual(custom.ok && custom.value, { range: { start: "2026-07-01", end: "2026-07-15" } });
+  const dflt = validateToolInput("getSalesSummary", {});
+  assert.deepEqual(dflt.ok && dflt.value, { range: { preset: "today" } });
+  assert.equal(validateToolInput("getSalesSummary", { range: { preset: "next_year" } }).ok, false);
+  assert.equal(validateToolInput("getSalesSummary", { range: { start: "07/01", end: "nope" } }).ok, false);
+});
+
+test("getProductPerformance takes a range plus a clamped limit", () => {
+  const r = validateToolInput("getProductPerformance", { range: { preset: "last_week" }, limit: 999 });
+  assert.deepEqual(r.ok && r.value, { range: { preset: "last_week" }, limit: 50 });
+});
+
+test("getOperationalIssues accepts no input", () => {
+  assert.equal(validateToolInput("getOperationalIssues", { foo: 1 }).ok, true);
 });
 
 test("limit is clamped and coerced from strings", () => {

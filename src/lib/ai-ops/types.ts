@@ -51,10 +51,13 @@ export function isExecutionMode(value: string): value is ExecutionMode {
 
 export const TOOL_NAMES = [
   "getSalesSummary",
+  "getOrderSummary",
   "getPendingOrders",
   "getOrderDetails",
   "getPaymentSummary",
   "getFulfillmentPerformance",
+  "getCustomerMetrics",
+  "getOperationalIssues",
   "getCustomerHistory",
   "getSupportConversation",
   "getSupplierProductCosts",
@@ -155,13 +158,17 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
     defaultMode: "READ_ONLY",
     defaultSchedule: null,
     scheduled: false,
+    // The CEO tool set: narrow, date-range-aware, read-only business tools the
+    // model may select from (spec §1).
     defaultTools: [
       "getSalesSummary",
-      "getPendingOrders",
+      "getOrderSummary",
       "getPaymentSummary",
       "getProductPerformance",
-      "getTopSellingProducts",
+      "getOperationalIssues",
       "getRecentOperationalEvents",
+      "getCustomerMetrics",
+      "getFulfillmentPerformance",
     ],
   },
   support_assistant: {
