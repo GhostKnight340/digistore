@@ -47,6 +47,8 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   operations: "/admin/operations",
   // Admin Email Composer (compose + history) is its own management area.
   emails: "/admin/emails/compose",
+  // AI Operations is the standalone control center for the AI modules.
+  "ai-operations": "/admin/ai-operations",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
@@ -312,6 +314,24 @@ const NAV: NavGroup[] = [
           <>
             <line x1="12" y1="1" x2="12" y2="23" />
             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    heading: "AI Operations",
+    items: [
+      {
+        id: "ai-operations",
+        // Intentionally English — the AI Operations control center is kept in
+        // English (like Provider API) by owner convention.
+        label: "AI Operations",
+        icon: icon(
+          <>
+            <path d="M12 2a2 2 0 0 1 2 2v1a7 7 0 0 1 4 6v3l1.5 3H4.5L6 14v-3a7 7 0 0 1 4-6V4a2 2 0 0 1 2-2z" />
+            <circle cx="9" cy="11" r="1" />
+            <circle cx="15" cy="11" r="1" />
           </>,
         ),
       },

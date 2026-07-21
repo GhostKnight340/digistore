@@ -640,7 +640,7 @@ model Customer {
   // is granted an explicit subset (e.g. ["EMAIL_VIEW","EMAIL_COMPOSE"]) so they
   // can compose e-mails but never activate real Ghost Credit grants. Ignored for
   // non-admin roles. Enforced server-side only (see src/lib/admin/permissions.ts).
-  adminPermissions   String[]  @default([])
+  adminPermissions String[] @default([])
 
   // Discord OAuth identity (login/linking source of truth). Separate from the
   // DM fields below: being OAuth-linked does NOT mean the bot can DM this user.
@@ -1960,39 +1960,39 @@ model SpendingMilestoneGrant {
 // record. Append-only in spirit: a draft is updated in place, but once sent the
 // rendered snapshot per recipient is frozen for audit.
 model AdminEmailSend {
-  id               String   @id @default(cuid())
+  id               String  @id @default(cuid())
   // status: "draft" | "processing" | "partial" | "sent" | "failed"
-  status           String   @default("draft")
+  status           String  @default("draft")
   // recipientMode: "existing" (customer database) | "manual" (typed addresses)
-  recipientMode    String   @default("existing")
+  recipientMode    String  @default("existing")
   // Composer template preset key (see src/lib/email/composerTemplates.ts).
-  templateKey      String   @default("custom")
-  subject          String   @default("")
-  preheader        String   @default("")
-  eyebrow          String   @default("")
-  title            String   @default("")
+  templateKey      String  @default("custom")
+  subject          String  @default("")
+  preheader        String  @default("")
+  eyebrow          String  @default("")
+  title            String  @default("")
   // Typed module array (validated by src/lib/email/composerModules.ts). Never
   // raw customer-facing HTML — each module is a discriminated, schema-checked
   // record rendered server-side.
-  modules          Json     @default("[]")
+  modules          Json    @default("[]")
   // Whether this operation was a test send (never grants credit / financial
   // effects). A real send has isTest = false.
-  isTest           Boolean  @default(false)
+  isTest           Boolean @default(false)
   testRecipient    String?
   // Denormalized summaries (authoritative rows live in recipients).
-  recipientCount   Int      @default(0)
-  sentCount        Int      @default(0)
-  failedCount      Int      @default(0)
+  recipientCount   Int     @default(0)
+  sentCount        Int     @default(0)
+  failedCount      Int     @default(0)
   // Total Ghost Credit actually granted across all recipients (whole MAD).
-  creditGrantedMad Int      @default(0)
+  creditGrantedMad Int     @default(0)
 
   createdByAdminId   String
   createdByAdminName String
   // Safe request metadata (IP / user-agent hash) when available. Never secrets.
   requestMeta        Json?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
   sentAt    DateTime?
 
   recipients AdminEmailRecipient[]
@@ -2009,14 +2009,14 @@ model AdminEmailSend {
 // credit). The credit link + idempotency guarantee that retrying a failed send
 // never grants Ghost Credit twice.
 model AdminEmailRecipient {
-  id     String @id @default(cuid())
-  sendId String
+  id         String  @id @default(cuid())
+  sendId     String
   // Set only when this recipient maps to a real customer account.
   customerId String?
   email      String
-  name       String @default("")
+  name       String  @default("")
   // status: "pending" | "sent" | "failed" | "skipped"
-  status     String @default("pending")
+  status     String  @default("pending")
 
   // Frozen render for this recipient (durable audit snapshot). Empty until first
   // render/send. Never contains secrets (admin composer mail carries none).
@@ -2128,4 +2128,318 @@ model PromoCodeEvent {
   promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
 
   @@index([promoCodeId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Operations — shared foundation for the controlled AI modules.
+//
+// This is the reusable substrate for the seven planned AI modules (Discord
+// Business Assistant, Support Assistant, Daily Reports, Supplier Intelligence,
+// Meta Ads Intelligence, Business Intelligence, Marketing Assistant). It is
+// deliberately additive and never stores provider secrets — API keys live in
+// environment variables (see src/lib/ai-ops/config.ts), exactly like the
+// Discord bot token and CRON_SECRET.
+//
+// Conventions match the rest of this schema: no Prisma enums (status fields are
+// plain String with the allowed set enumerated in an inline comment and mirrored
+// by the TypeScript unions in src/lib/ai-ops/types.ts), cuid() ids, and
+// createdAt/updatedAt with now() defaults.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Global AI Operations configuration. Singleton: exactly one row, id "default"
+// (mirrors StoreSetting's singleton pattern). Never holds a provider secret —
+// only the non-sensitive knobs an admin sets in the panel.
+model AiOpsSettings {
+  id String @id @default("default")
+
+  // Master kill switch for the whole subsystem. When false, no module runs and
+  // no tool executes, regardless of per-module state.
+  globalEnabled Boolean @default(false)
+
+  // IANA timezone used for schedules and report timestamps.
+  timezone       String @default("Africa/Casablanca")
+  // Language for internal reports/summaries (ISO 639-1), e.g. "fr" | "en" | "ar".
+  reportLanguage String @default("fr")
+
+  // Default provider + model for modules that do not override them.
+  // defaultProvider: "mock" | "disabled" | "anthropic" | "openai"
+  defaultProvider String @default("mock")
+  defaultModel    String @default("claude-haiku-4-5")
+
+  // Budget guardrails, in USD. Estimated spend is compared against these.
+  monthlyBudgetUsd    Decimal @default(0) @db.Decimal(10, 2)
+  warningThresholdUsd Decimal @default(0) @db.Decimal(10, 2)
+  hardLimitUsd        Decimal @default(0) @db.Decimal(10, 2)
+
+  // Discord routing defaults (channel IDs). Purpose→channel overrides live in
+  // AiDiscordChannelMapping; these are the fallbacks.
+  discordGuildId           String?
+  defaultReportChannelId   String?
+  defaultAlertChannelId    String?
+  defaultApprovalChannelId String?
+
+  // How long AI logs (executions, tool calls, usage) are retained, in days.
+  logRetentionDays Int     @default(90)
+  // When true, sensitive values are redacted from any context handed to a model.
+  redactSensitive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+// Per-module configuration. One row per module key (see MODULE_KEYS in
+// src/lib/ai-ops/types.ts). Seeded with the defaults required by the spec.
+model AiModuleConfig {
+  id     String @id @default(cuid())
+  // module: "discord_assistant" | "support_assistant" | "daily_reports"
+  //       | "supplier_intelligence" | "meta_ads_intelligence"
+  //       | "business_intelligence" | "marketing_assistant"
+  module String @unique
+
+  enabled       Boolean @default(false)
+  // executionMode: "READ_ONLY" | "DRAFT_ONLY" | "APPROVAL_REQUIRED" | "AUTONOMOUS"
+  executionMode String
+
+  // Optional per-module overrides of the global provider/model/channel.
+  providerOverride String?
+  modelOverride    String?
+  discordChannelId String?
+
+  // Cron expression when the module runs on a schedule; null for on-demand ones.
+  schedule String?
+
+  // Per-day safety caps. Enforced before an execution starts.
+  maxExecutionsPerDay Int     @default(24)
+  maxDailyCostUsd     Decimal @default(1) @db.Decimal(10, 2)
+
+  // Notify the alerts channel when an execution fails.
+  notifyOnFailure Boolean @default(true)
+
+  // Prompt / instruction configuration handed to the provider as the system
+  // instruction. Kept as text; never contains secrets.
+  instructions String @default("")
+
+  // Last-execution metadata (denormalized for the dashboard; the full history
+  // lives in AiExecution).
+  lastRunAt     DateTime?
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  lastStatus    String?
+  lastError     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  permissions AiModulePermission[]
+
+  @@index([enabled])
+}
+
+// The permission grant that lets a module call a specific safe business tool.
+// A module may ONLY call tools it has an explicit grant for — there is no
+// "AI admin" wildcard. (Enforced in src/lib/ai-ops/permissions.ts.)
+model AiModulePermission {
+  id     String @id @default(cuid())
+  module String
+  // The tool name, e.g. "getSalesSummary" (see TOOL_NAMES in types.ts).
+  tool   String
+
+  createdAt DateTime @default(now())
+
+  config AiModuleConfig @relation(fields: [module], references: [module], onDelete: Cascade)
+
+  @@unique([module, tool])
+  @@index([module])
+}
+
+// Reusable scheduler row for the automated modules. One row per job key.
+// Distinct from ScheduledJobRun (which tracks the fixed Vercel infra crons):
+// these are admin-configurable AI jobs with enable/disable, run-now, timezone
+// awareness, retry limits, and a cross-deployment execution LOCK so two
+// serverless invocations cannot run the same job at once.
+model AiScheduledJob {
+  id     String  @id @default(cuid())
+  // Job key, e.g. "daily_reports". Usually 1:1 with a module.
+  key    String  @unique
+  // The owning module (informational; a job may fan out to one module).
+  module String?
+
+  enabled  Boolean @default(true)
+  // Cron expression, interpreted in AiOpsSettings.timezone.
+  schedule String?
+
+  // Retry policy: how many times a failed run may be retried before giving up.
+  maxRetries Int @default(2)
+
+  // Idempotency: the key of the most recent run that has been claimed/completed.
+  // A run whose computed idempotency key equals this is a duplicate and is
+  // skipped (protects against double scheduled execution across deployments).
+  lastIdempotencyKey String?
+
+  // Execution lock. lockedAt is set when a run is claimed and cleared when it
+  // finishes; lockExpiresAt bounds a crashed run so the lock cannot wedge
+  // forever. lockedBy identifies the claiming invocation.
+  lockedAt      DateTime?
+  lockExpiresAt DateTime?
+  lockedBy      String?
+
+  // Last-run / failure tracking (mirrors ScheduledJobRun's fields).
+  lastRunAt           DateTime?
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  // status: "idle" | "running" | "success" | "failure"
+  status              String    @default("idle")
+  lastError           String?
+  consecutiveFailures Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([enabled, status])
+}
+
+// One record per module execution (scheduled or interactive). The audit spine
+// for "what did the AI do and did it work".
+model AiExecution {
+  id            String @id @default(cuid())
+  module        String
+  // trigger: "schedule" | "manual" | "discord" | "webhook"
+  trigger       String
+  // executionMode in effect for this run (see AiModuleConfig.executionMode).
+  executionMode String
+  // status: "running" | "success" | "failure" | "skipped"
+  status        String @default("running")
+
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  durationMs     Int?
+  // Idempotency key for this execution; unique so a retried trigger cannot
+  // double-run the same logical execution.
+  idempotencyKey String?   @unique
+
+  // Provider/model actually used, and the estimated usage/cost for the run.
+  provider           String?
+  model              String?
+  estimatedTokensIn  Int?
+  estimatedTokensOut Int?
+  estimatedCostUsd   Decimal? @db.Decimal(12, 6)
+
+  // Safe, non-sensitive summary/error. Never a payload, token, or customer datum.
+  summary String?
+  error   String?
+
+  // Who triggered it, when manual/Discord.
+  triggeredBy String?
+
+  createdAt DateTime @default(now())
+
+  toolCalls AiToolCallLog[]
+
+  @@index([module, createdAt])
+  @@index([status, createdAt])
+}
+
+// One record per safe-business-tool invocation. Records which tool was called,
+// by which module, in which execution, and whether it succeeded. Never stores
+// the (potentially sensitive) tool result — only safe metadata.
+model AiToolCallLog {
+  id          String  @id @default(cuid())
+  executionId String?
+  module      String
+  tool        String
+  // status: "success" | "denied" | "invalid_input" | "rate_limited" | "error"
+  status      String
+  // Safe reason/category on failure (never the raw error body).
+  reason      String?
+  durationMs  Int?
+
+  createdAt DateTime @default(now())
+
+  execution AiExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+
+  @@index([module, createdAt])
+  @@index([tool, createdAt])
+  @@index([status, createdAt])
+}
+
+// Reusable approval queue. Future AI actions (e.g. a drafted support reply)
+// create a PENDING item and wait; an admin approves/rejects from the panel or
+// (later) a Discord button. No email/customer message is ever sent from here in
+// this foundation.
+model AiApproval {
+  id         String @id @default(cuid())
+  module     String
+  // actionType, e.g. "support_reply" | "marketing_draft". Free-form label.
+  actionType String
+
+  // Human-readable one-line summary shown in the queue.
+  summary         String
+  // The full proposed content (e.g. the drafted reply body).
+  proposedContent String
+  // Optional edited content an approver substituted before approving.
+  editedContent   String?
+
+  // Reference to the relevant domain entity (e.g. an order or ticket id) —
+  // stored as an opaque type+id pair, no FK so the queue stays module-agnostic.
+  entityType String?
+  entityId   String?
+
+  // riskLevel: "low" | "medium" | "high"
+  riskLevel String @default("low")
+  // status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "EXECUTING"
+  //       | "COMPLETED" | "FAILED" | "CANCELLED"
+  status    String @default("PENDING")
+
+  expiresAt DateTime?
+
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectionReason String?
+
+  // Safe summary of the execution outcome once an approved action runs.
+  executionResult String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([module, status])
+  @@index([status, createdAt])
+}
+
+// AI usage + cost accounting. One row per provider call (or per execution),
+// used for the budget guardrails and the "estimated AI usage/cost" dashboard
+// tiles. Estimates only — no billing authority.
+model AiUsageRecord {
+  id          String  @id @default(cuid())
+  module      String
+  executionId String?
+  provider    String
+  model       String
+
+  tokensIn  Int     @default(0)
+  tokensOut Int     @default(0)
+  // Estimated cost in USD for this call.
+  costUsd   Decimal @default(0) @db.Decimal(12, 6)
+
+  createdAt DateTime @default(now())
+
+  @@index([module, createdAt])
+  @@index([createdAt])
+}
+
+// Purpose→Discord-channel mapping selected by an admin from EXISTING channels.
+// We store the channel ID (stable) and a cached channel name for display; the
+// setup never creates channels. Multiple purposes may map to the same channel.
+model AiDiscordChannelMapping {
+  id          String  @id @default(cuid())
+  // purpose: "assistant" | "support_approval" | "daily_reports" | "alerts"
+  //        | "supplier_reports" | "marketing_drafts"
+  purpose     String  @unique
+  channelId   String
+  // Cached channel name for the admin UI; refreshed via the connection test.
+  channelName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }
