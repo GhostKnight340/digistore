@@ -35,6 +35,8 @@ const TOOL_LOOP_LIMITS: ToolLoopLimits = {
   maxCallsPerTool: 3,
   maxTotalCalls: 8,
   timeoutMs: 30_000,
+  maxRetries: 2,
+  backoffMs: 500,
 };
 
 export interface AssistantAnswer {

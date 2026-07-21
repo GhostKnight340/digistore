@@ -24,6 +24,7 @@ import {
 } from "@/lib/ai-ops/store";
 import { setChannelMapping } from "@/lib/ai-ops/discordChannels";
 import { testDiscordConnection, type ConnectionTestResult } from "@/lib/ai-ops/discordChannels";
+import { testAiProvider, type ProviderTestResult } from "@/lib/ai-ops/providerHealth";
 import { transitionApproval } from "@/lib/ai-ops/approvalStore";
 import { setJobEnabled } from "@/lib/ai-ops/jobStore";
 import { runModule } from "@/lib/ai-ops/runner";
@@ -154,6 +155,12 @@ export async function setChannelMappingAction(
 export async function testDiscordConnectionAction(): Promise<ConnectionTestResult> {
   await requireAdminCustomer();
   return testDiscordConnection();
+}
+
+/** Live-test the configured AI provider + model (one tiny completion). */
+export async function testAiProviderAction(): Promise<ProviderTestResult> {
+  await requireAdminCustomer();
+  return testAiProvider();
 }
 
 // ─── Approvals ───────────────────────────────────────────────────────────────

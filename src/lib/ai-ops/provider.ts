@@ -27,10 +27,12 @@ import { estimateCostUsd, estimateTokens } from "./usage";
 import { isAiProvider, type AiProvider } from "./types";
 import {
   OPENROUTER_URL,
+  backoffDelayMs,
   buildOpenRouterBody,
   isRetryableStatus,
   mapOpenRouterStatus,
   parseOpenRouterResponse,
+  parseRetryAfterMs,
 } from "./providers/openrouterCore";
 
 export interface AiToolDefinition {
@@ -103,6 +105,7 @@ export interface AiCompletionResult {
 export type AiErrorCode =
   | "provider_disabled"
   | "not_configured"
+  | "insufficient_credit"
   | "timeout"
   | "rate_limited"
   | "invalid_response"
@@ -193,6 +196,10 @@ class OpenRouterProvider implements AiProviderClient {
   constructor(private readonly apiKey: string) {}
 
   async complete(request: AiCompletionRequest): Promise<AiCompletionResult> {
+    // Validate a model is configured — never silently pick a (paid) default here.
+    if (!request.model || !request.model.trim()) {
+      throw new AiProviderError("not_configured", "No AI model is configured.");
+    }
     const body = buildOpenRouterBody(request);
     const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const maxRetries = Math.max(0, request.retry?.maxRetries ?? 0);
@@ -215,8 +222,11 @@ class OpenRouterProvider implements AiProviderClient {
         });
 
         if (!response.ok) {
+          // Retry only transient statuses (429/5xx), never auth/invalid/credit.
           if (isRetryableStatus(response.status) && attempt < maxRetries) {
-            await sleep(backoffMs * (attempt + 1));
+            // Honor the server's Retry-After when present; else exponential backoff.
+            const retryAfter = parseRetryAfterMs(response.headers.get("retry-after"));
+            await sleep(retryAfter ?? backoffDelayMs(attempt, backoffMs));
             continue;
           }
           // Body is drained but never surfaced — an OpenRouter error body can
@@ -240,8 +250,10 @@ class OpenRouterProvider implements AiProviderClient {
       } catch (error) {
         if (error instanceof AiProviderError) throw error;
         const aborted = error instanceof Error && error.name === "AbortError";
+        // A timeout (abort) is not retried here — the caller's timeout already
+        // bounds the wait; only transient network errors get a bounded retry.
         if (!aborted && attempt < maxRetries) {
-          await sleep(backoffMs * (attempt + 1));
+          await sleep(backoffDelayMs(attempt, backoffMs));
           continue;
         }
         throw new AiProviderError(

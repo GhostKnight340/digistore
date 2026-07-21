@@ -21,6 +21,9 @@ export interface ToolLoopLimits {
   maxCallsPerTool: number;
   maxTotalCalls: number;
   timeoutMs: number;
+  /** Bounded retries for transient provider errors (429/5xx). */
+  maxRetries: number;
+  backoffMs: number;
 }
 
 /** Result of executing a granted tool (mirrors the safe tool layer's shape). */
@@ -86,6 +89,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopResult>
       messages,
       tools,
       timeoutMs: limits.timeoutMs,
+      retry: { maxRetries: limits.maxRetries, backoffMs: limits.backoffMs },
     });
     usage.tokensIn += completion.usage.tokensIn;
     usage.tokensOut += completion.usage.tokensOut;
@@ -133,6 +137,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopResult>
       },
     ],
     timeoutMs: limits.timeoutMs,
+    retry: { maxRetries: limits.maxRetries, backoffMs: limits.backoffMs },
   });
   usage.tokensIn += final.usage.tokensIn;
   usage.tokensOut += final.usage.tokensOut;

@@ -8,7 +8,14 @@ import type { AiCompletionResult, AiProviderClient } from "../../src/lib/ai-ops/
 import type { ToolName } from "../../src/lib/ai-ops/types";
 
 const GRANTS: ToolName[] = ["getSalesSummary", "getOrderSummary"];
-const LIMITS = { maxRounds: 3, maxCallsPerTool: 2, maxTotalCalls: 4, timeoutMs: 1000 };
+const LIMITS = {
+  maxRounds: 3,
+  maxCallsPerTool: 2,
+  maxTotalCalls: 4,
+  timeoutMs: 1000,
+  maxRetries: 0,
+  backoffMs: 100,
+};
 
 const usage = { tokensIn: 1, tokensOut: 1, estimatedCostUsd: 0 };
 function textResult(text: string): AiCompletionResult {

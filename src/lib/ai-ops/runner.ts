@@ -22,7 +22,7 @@ import {
   startExecution,
 } from "./executions";
 import { evaluateBudget } from "./budget";
-import { resolveProvider, type AiProviderClient } from "./provider";
+import { AiProviderError, resolveProvider, type AiProviderClient } from "./provider";
 import { isModuleKey, type ExecutionTrigger, type ModuleKey } from "./types";
 
 /**
@@ -144,11 +144,14 @@ export async function runModule(input: RunModuleInput): Promise<RunModuleResult>
       costUsd: output.usage.costUsd,
     };
   } catch (error) {
+    // Surface the provider's normalized error category (never the key/message
+    // body) so the caller can show a useful, specific reply.
+    const reason = error instanceof AiProviderError ? `provider_${error.code}` : "run_failed";
     await finishExecution(executionId, module, startedAtMs, {
       status: "failure",
       error: error instanceof Error ? error.message : "run_failed",
     });
-    return { ok: false, reason: "run_failed" };
+    return { ok: false, reason };
   }
 }
 

@@ -36,6 +36,7 @@ import {
 } from "discord.js";
 import { routeAssistantMessage } from "../src/lib/ai-ops/discord/assistantRouting";
 import { ConversationStore } from "../src/lib/ai-ops/discord/conversation";
+import { assistantErrorReply } from "../src/lib/ai-ops/discord/replyMessages";
 
 const DISCORD_MAX_MESSAGE = 2000;
 
@@ -68,6 +69,7 @@ type AssistantStatus = "ok" | "unauthorized" | "wrong_channel" | "bad_request" |
 interface AssistantResponse {
   status: AssistantStatus;
   answer?: string;
+  reason?: string;
 }
 
 async function callAssistant(payload: {
@@ -97,8 +99,8 @@ async function callAssistant(payload: {
       console.error(`[assistant-worker] endpoint returned ${response.status}`);
       return { status: "error" };
     }
-    const data = (await response.json()) as { status?: AssistantStatus; answer?: string };
-    return { status: data.status ?? "error", answer: data.answer };
+    const data = (await response.json()) as { status?: AssistantStatus; answer?: string; reason?: string };
+    return { status: data.status ?? "error", answer: data.answer, reason: data.reason };
   } catch (error) {
     console.error("[assistant-worker] request failed:", error instanceof Error ? error.message : error);
     return { status: "error" };
@@ -157,7 +159,8 @@ async function handleMessage(message: Message): Promise<void> {
     return;
   }
   if (result.status !== "ok" || !result.answer) {
-    await safeReply(message, result.status === "error" ? REPLIES.error : REPLIES.unavailable);
+    // Map the coarse reason (provider category / guardrail) to a useful line.
+    await safeReply(message, assistantErrorReply(result.reason));
     return;
   }
 

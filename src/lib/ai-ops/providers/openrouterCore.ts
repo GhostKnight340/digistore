@@ -192,6 +192,7 @@ export function parseOpenRouterResponse(
 /** Maps an HTTP status to a stable, non-identifying AiErrorCode. Pure. */
 export function mapOpenRouterStatus(status: number): AiErrorCode {
   if (status === 401 || status === 403) return "not_configured";
+  if (status === 402) return "insufficient_credit";
   if (status === 408 || status === 504) return "timeout";
   if (status === 429) return "rate_limited";
   if (status >= 500) return "unknown";
@@ -199,7 +200,32 @@ export function mapOpenRouterStatus(status: number): AiErrorCode {
   return "unknown";
 }
 
-/** Whether an HTTP status is worth retrying (transient). Pure. */
+/**
+ * Whether an HTTP status is worth retrying (transient) — 429 and 5xx (bar 501).
+ * Auth (401/403), invalid request (400/422), and insufficient credit (402) are
+ * NEVER retried: retrying can't fix them and just wastes calls/cost.
+ */
 export function isRetryableStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status !== 501);
+}
+
+/**
+ * Parse a `Retry-After` header (delta-seconds OR an HTTP date) to a wait in ms.
+ * Returns null when absent/unparseable. Pure — `now` injected for tests.
+ */
+export function parseRetryAfterMs(headerValue: string | null, now = Date.now()): number | null {
+  if (!headerValue) return null;
+  const trimmed = headerValue.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const secs = Number(trimmed);
+    return Number.isFinite(secs) ? Math.max(0, secs * 1000) : null;
+  }
+  const dateMs = Date.parse(trimmed);
+  return Number.isFinite(dateMs) ? Math.max(0, dateMs - now) : null;
+}
+
+/** Bounded exponential backoff: base·2^attempt, capped. Pure, no jitter. */
+export function backoffDelayMs(attempt: number, baseMs = 500, capMs = 8000): number {
+  const delay = baseMs * 2 ** Math.max(0, attempt);
+  return Math.min(capMs, Math.max(0, delay));
 }

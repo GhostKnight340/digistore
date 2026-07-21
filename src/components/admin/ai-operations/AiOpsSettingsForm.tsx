@@ -15,6 +15,7 @@ import {
   saveAiOpsSettingsAction,
   setChannelMappingAction,
   testDiscordConnectionAction,
+  testAiProviderAction,
 } from "@/app/actions/aiOperations";
 
 const PURPOSE_LABEL: Record<string, string> = {
@@ -40,6 +41,7 @@ export default function AiOpsSettingsForm({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [providerTest, setProviderTest] = useState<string | null>(null);
 
   const set = <K extends keyof AiOpsSettingsDTO>(key: K, value: AiOpsSettingsDTO[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -71,6 +73,18 @@ export default function AiOpsSettingsForm({
     });
   };
 
+  const testProvider = () => {
+    setProviderTest("Test du provider en cours…");
+    startTransition(async () => {
+      const res = await testAiProviderAction();
+      setProviderTest(
+        res.ok
+          ? `OK · provider ${res.provider} · modèle ${res.model} · ${res.latencyMs} ms${res.provider !== res.configuredProvider ? ` (réglé sur ${res.configuredProvider}${res.configured ? "" : ", clé manquante"})` : ""}`
+          : `Échec (${res.error}) · provider ${res.provider} · modèle ${res.model}`,
+      );
+    });
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <OpsCard title="Réglages globaux">
@@ -92,6 +106,14 @@ export default function AiOpsSettingsForm({
           </Field>
           <Field label="Modèle par défaut">
             <input className="ai-input" value={form.defaultModel} onChange={(e) => set("defaultModel", e.target.value)} />
+          </Field>
+          <Field label="Santé du provider">
+            <div className="flex flex-col gap-1">
+              <button type="button" onClick={testProvider} disabled={pending} className="btn-ghost text-xs self-start">
+                Tester le provider
+              </button>
+              {providerTest && <span className="text-xs text-muted">{providerTest}</span>}
+            </div>
           </Field>
           <Field label="Budget mensuel (USD)">
             <input type="number" min={0} step="0.01" className="ai-input" value={form.monthlyBudgetUsd} onChange={(e) => set("monthlyBudgetUsd", Number(e.target.value))} />
