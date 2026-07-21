@@ -19,8 +19,12 @@ test("default execution modes match the spec exactly", () => {
   assert.equal(MODULE_DEFINITIONS.marketing_assistant.defaultMode, "DRAFT_ONLY");
 });
 
-test("only the autonomous/intelligence modules are scheduled", () => {
-  assert.equal(MODULE_DEFINITIONS.daily_reports.scheduled, true);
+test("the intelligence modules use the base scheduler; daily_reports has its own", () => {
+  // daily_reports is scheduled per-report via AiReportSchedule (reportDispatch),
+  // not the single base AiScheduledJob — so scheduled:false here on purpose.
+  assert.equal(MODULE_DEFINITIONS.daily_reports.scheduled, false);
+  assert.equal(MODULE_DEFINITIONS.supplier_intelligence.scheduled, true);
+  assert.equal(MODULE_DEFINITIONS.business_intelligence.scheduled, true);
   assert.equal(MODULE_DEFINITIONS.discord_assistant.scheduled, false);
   assert.equal(MODULE_DEFINITIONS.support_assistant.scheduled, false);
 });

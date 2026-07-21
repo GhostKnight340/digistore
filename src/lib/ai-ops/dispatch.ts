@@ -52,6 +52,13 @@ export async function dispatchDueAiJobs(runnerId: string, now = new Date()): Pro
   let skipped = 0;
 
   for (const job of due) {
+    // daily_reports is scheduled per-report by reportDispatch, never the base
+    // scheduler — skip any legacy AiScheduledJob row for it so it never
+    // double-runs the placeholder.
+    if (job.key === "daily_reports" || job.module === "daily_reports") {
+      skipped += 1;
+      continue;
+    }
     // Claim the lock — only one invocation wins; a lost claim means someone else
     // is already running it, so we skip.
     const token = await claimJobLock(job.key, runnerId, now);

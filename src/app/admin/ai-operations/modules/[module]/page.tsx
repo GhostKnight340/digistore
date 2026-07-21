@@ -24,6 +24,14 @@ export default async function AiModulePage({
         <a href="/admin/ai-operations" className="text-xs text-faint hover:text-white">← AI Operations</a>
         <h1 className="mt-1 text-lg font-semibold text-white">{config.label}</h1>
         <p className="text-xs text-muted">{config.description}</p>
+        {module === "daily_reports" && (
+          <a
+            href="/admin/ai-operations/reports"
+            className="mt-2 inline-block text-xs text-blue-300 hover:text-blue-200"
+          >
+            → Configure the four reports (schedules, channels, run now, preview)
+          </a>
+        )}
       </div>
       <AiModuleConfigForm config={config} />
     </AdminShellRoute>

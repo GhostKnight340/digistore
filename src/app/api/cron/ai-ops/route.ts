@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { handleCronRequest } from "@/lib/ops/cronRoute";
 import { dispatchDueAiJobs } from "@/lib/ai-ops/dispatch";
+import { dispatchDueReports } from "@/lib/ai-ops/reports/reportDispatch";
 
 /**
  * AI Operations scheduled-job dispatcher (Vercel Cron — see vercel.json,
@@ -20,7 +21,15 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 async function handle(request: Request) {
-  return handleCronRequest("ai-ops", request, () => dispatchDueAiJobs(`cron-${randomUUID()}`));
+  return handleCronRequest("ai-ops", request, async () => {
+    const runnerId = `cron-${randomUUID()}`;
+    // Base scheduled modules + the four executive reports share this pass.
+    const [jobs, reports] = await Promise.all([
+      dispatchDueAiJobs(runnerId),
+      dispatchDueReports(runnerId),
+    ]);
+    return { ...jobs, reports };
+  });
 }
 
 export async function GET(request: Request) {

@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { getDiscordDmWorkerSecret } from "@/lib/discord/config";
 import { authorizeDiscordAdmin } from "@/lib/ai-ops/discord/assistantAuth";
 import { answerBusinessQuestion } from "@/lib/ai-ops/modules/discordAssistant";
+import { generateReport } from "@/lib/ai-ops/modules/dailyReports";
+import { parseReportCommand } from "@/lib/ai-ops/reports/reportCommand";
+import { reportLabel } from "@/lib/ai-ops/reports/reportTypes";
 import { listChannelMappings } from "@/lib/ai-ops/discordChannels";
 import {
   loadConversation,
@@ -159,6 +162,33 @@ export async function POST(request: Request) {
   }
   if (claim.state === "duplicate_processing") {
     return NextResponse.json({ status: "duplicate" });
+  }
+
+  // "@Ghost CEO morning/daily/weekly/monthly report" → generate that report on
+  // demand and post it to its configured channel, replying with the rendered
+  // text so the admin sees it immediately. Rate-limited + idempotent like a
+  // question (it is also a paid model run).
+  const reportType = parseReportCommand(question);
+  if (reportType) {
+    try {
+      const report = await generateReport({
+        reportType,
+        trigger: "discord",
+        deliver: true,
+        triggeredBy: discordUserId,
+      });
+      if (!report.ok) {
+        if (canClaim) await failIdempotency(idemKey, report.reason ?? "report_failed");
+        return NextResponse.json({ status: "error", reason: report.reason });
+      }
+      const answer = report.text || `${reportLabel(reportType)} generated.`;
+      if (canClaim) await completeIdempotency(idemKey, answer);
+      return NextResponse.json({ status: "ok", answer });
+    } catch (error) {
+      if (canClaim) await failIdempotency(idemKey, "server_error");
+      console.error("[discord:assistant:report]", error instanceof Error ? error.message : error);
+      return NextResponse.json({ error: "server_error" }, { status: 500 });
+    }
   }
 
   try {

@@ -18,6 +18,7 @@ import "server-only";
 
 import {
   fallbackProvider,
+  getAnthropicApiKey,
   getOpenRouterApiKey,
   getOpenRouterReferer,
   getOpenRouterTitle,
@@ -34,6 +35,14 @@ import {
   parseOpenRouterResponse,
   parseRetryAfterMs,
 } from "./providers/openrouterCore";
+import {
+  ANTHROPIC_URL,
+  ANTHROPIC_VERSION,
+  buildAnthropicBody,
+  isRetryableStatus as isRetryableAnthropicStatus,
+  mapAnthropicStatus,
+  parseAnthropicResponse,
+} from "./providers/anthropicCore";
 
 export interface AiToolDefinition {
   name: string;
@@ -79,6 +88,8 @@ export interface AiCompletionRequest {
   tools?: AiToolDefinition[];
   /** Ask the provider for structured JSON output matching this schema. */
   responseSchema?: Record<string, unknown>;
+  /** Optional ceiling on generated tokens (maps to the provider's max_tokens). */
+  maxTokens?: number;
   timeoutMs?: number;
   retry?: AiRetryPolicy;
 }
@@ -268,6 +279,80 @@ class OpenRouterProvider implements AiProviderClient {
 }
 
 /**
+ * Real Anthropic adapter (Messages API, `x-api-key` auth). The pure request/
+ * response/error logic lives in providers/anthropicCore.ts; this class is only
+ * the network edge: auth header, timeout via AbortController, and a BOUNDED
+ * retry (opt-in through the request's retry policy — no automatic fallback to a
+ * different, more expensive model).
+ *
+ * Never leaks the key: the `x-api-key` header is built here and never logged.
+ */
+class AnthropicProvider implements AiProviderClient {
+  readonly provider: AiProvider = "anthropic";
+  constructor(private readonly apiKey: string) {}
+
+  async complete(request: AiCompletionRequest): Promise<AiCompletionResult> {
+    const body = buildAnthropicBody(request);
+    const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxRetries = Math.max(0, request.retry?.maxRetries ?? 0);
+    const backoffMs = request.retry?.backoffMs ?? 500;
+
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(ANTHROPIC_URL, {
+          method: "POST",
+          headers: {
+            "x-api-key": this.apiKey,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          if (isRetryableAnthropicStatus(response.status) && attempt < maxRetries) {
+            await sleep(backoffMs * (attempt + 1));
+            continue;
+          }
+          // Body is drained but never surfaced — an error body can echo the
+          // request/system prompt; only the status maps to a code.
+          throw new AiProviderError(
+            mapAnthropicStatus(response.status),
+            `Anthropic request failed (${response.status}).`,
+          );
+        }
+
+        const json = await response.json();
+        const parsed = parseAnthropicResponse(request, json);
+        return {
+          provider: this.provider,
+          model: parsed.model,
+          text: parsed.text,
+          structured: parsed.structured,
+          usage: parsed.usage,
+        };
+      } catch (error) {
+        if (error instanceof AiProviderError) throw error;
+        const aborted = error instanceof Error && error.name === "AbortError";
+        if (!aborted && attempt < maxRetries) {
+          await sleep(backoffMs * (attempt + 1));
+          continue;
+        }
+        throw new AiProviderError(
+          aborted ? "timeout" : "unknown",
+          aborted ? "Anthropic request timed out." : "Anthropic request error.",
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
+}
+
+/**
  * Resolves the concrete client for a requested provider. Unknown or
  * unconfigured providers degrade to the mock (never to an expensive real
  * model). "disabled" is honored as an explicit hard stop.
@@ -277,15 +362,21 @@ export function resolveProvider(requested: string): AiProviderClient {
   if (provider === "disabled") return new DisabledProvider();
   if (provider === "mock") return new MockProvider();
 
-  // OpenRouter is the wired real provider. If its key is present, use it;
+  // OpenRouter is a wired real provider. If its key is present, use it;
   // otherwise degrade to mock (never to another, more expensive provider).
   if (provider === "openrouter") {
     const key = getOpenRouterApiKey();
     return key ? new OpenRouterProvider(key) : new MockProvider();
   }
 
-  // Anthropic/OpenAI direct SDK adapters are not wired yet — degrade to mock
-  // rather than silently failing over to an expensive path.
+  // Anthropic direct (own Console API key). Key present → use it; else mock.
+  if (provider === "anthropic") {
+    const key = getAnthropicApiKey();
+    return key ? new AnthropicProvider(key) : new MockProvider();
+  }
+
+  // OpenAI direct SDK adapter is not wired yet — degrade to mock rather than
+  // silently failing over to an expensive path.
   if (!isProviderConfigured(provider)) return new MockProvider();
   return new MockProvider();
 }

@@ -190,11 +190,13 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
   daily_reports: {
     key: "daily_reports",
     label: "Daily Operational Reports",
-    description: "Posts a daily operational summary to the reports channel.",
+    description: "Executive morning / evening / weekly / monthly reports posted to Discord.",
     defaultMode: "AUTONOMOUS",
-    // 07:00 in the configured timezone.
-    defaultSchedule: "0 7 * * *",
-    scheduled: true,
+    // Scheduling is per-report (AiReportSchedule), NOT a single base AiScheduledJob:
+    // the four reports have independent crons, so daily_reports is dispatched by
+    // reportDispatch, not the base scheduler. Hence scheduled:false here.
+    defaultSchedule: null,
+    scheduled: false,
     defaultTools: [
       "getSalesSummary",
       "getPendingOrders",

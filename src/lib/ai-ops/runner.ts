@@ -36,6 +36,8 @@ export interface ModuleRunContext {
   settings: AiOpsSettingsDTO;
   provider: string;
   model: string;
+  /** Optional per-run token ceiling forwarded to the provider (see maxTokens). */
+  maxTokens: number | null;
   executionId: string | null;
   client: AiProviderClient;
 }
@@ -56,6 +58,10 @@ export interface RunModuleInput {
   trigger: ExecutionTrigger;
   triggeredBy?: string | null;
   idempotencyKey?: string | null;
+  /** Per-run model override (takes precedence over the module/global model). */
+  modelOverride?: string | null;
+  /** Per-run token ceiling exposed to the body via ctx.maxTokens. */
+  maxTokens?: number | null;
   /** The module's real logic. Omitted → the foundation placeholder run. */
   body?: ModuleBody;
 }
@@ -104,7 +110,8 @@ export async function runModule(input: RunModuleInput): Promise<RunModuleResult>
   if (!budget.allowed) return { ok: false, reason: budget.reason ?? "budget_blocked" };
 
   const provider = config.providerOverride ?? settings.defaultProvider;
-  const model = config.modelOverride ?? settings.defaultModel;
+  const model = input.modelOverride ?? config.modelOverride ?? settings.defaultModel;
+  const maxTokens = input.maxTokens ?? null;
   const startedAtMs = Date.now();
   const executionId = await startExecution({
     module,
@@ -118,7 +125,7 @@ export async function runModule(input: RunModuleInput): Promise<RunModuleResult>
 
   try {
     const client = resolveProvider(provider);
-    const runCtx: ModuleRunContext = { module, config, settings, provider, model, executionId, client };
+    const runCtx: ModuleRunContext = { module, config, settings, provider, model, maxTokens, executionId, client };
     const output = input.body ? await input.body(runCtx) : await placeholderRun(runCtx);
     await recordUsage({
       module,

@@ -241,6 +241,21 @@ export async function setJobEnabledAction(key: string, enabled: boolean): Promis
 export async function runModuleNowAction(module: string): Promise<ActionResult> {
   const admin = await requireAdminCustomer();
   if (!isModuleKey(module)) return { ok: false, error: "Unknown module." };
+  // daily_reports isn't a single placeholder run — "Run now" from the overview
+  // generates and posts the Morning Brief (the four reports are configured
+  // individually on /admin/ai-operations/reports).
+  if (module === "daily_reports") {
+    const { generateReport } = await import("@/lib/ai-ops/modules/dailyReports");
+    const report = await generateReport({
+      reportType: "morning",
+      trigger: "manual",
+      deliver: true,
+      triggeredBy: admin.name,
+    });
+    if (!report.ok) return { ok: false, error: `Run blocked: ${report.reason}` };
+    revalidateAiOps();
+    return { ok: true };
+  }
   const result = await runModule({ module, trigger: "manual", triggeredBy: admin.name });
   if (!result.ok) return { ok: false, error: `Run blocked: ${result.reason}` };
   revalidateAiOps();

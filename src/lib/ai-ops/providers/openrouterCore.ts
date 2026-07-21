@@ -75,6 +75,8 @@ export interface OpenRouterRequestBody {
     json_schema: { name: string; strict: boolean; schema: Record<string, unknown> };
   };
   tools?: { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }[];
+  /** Optional ceiling on generated tokens. */
+  max_tokens?: number;
   /** Ask OpenRouter to include real cost/usage accounting in the response. */
   usage: { include: true };
 }
@@ -105,6 +107,9 @@ export function buildOpenRouterBody(request: AiCompletionRequest): OpenRouterReq
     messages,
     usage: { include: true },
   };
+  if (typeof request.maxTokens === "number" && request.maxTokens > 0) {
+    body.max_tokens = Math.trunc(request.maxTokens);
+  }
   if (request.responseSchema) {
     body.response_format = {
       type: "json_schema",

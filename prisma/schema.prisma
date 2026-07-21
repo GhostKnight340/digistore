@@ -2167,9 +2167,13 @@ model AiOpsSettings {
   defaultModel    String @default("claude-haiku-4-5")
 
   // Budget guardrails, in USD. Estimated spend is compared against these.
-  monthlyBudgetUsd    Decimal @default(0) @db.Decimal(10, 2)
-  warningThresholdUsd Decimal @default(0) @db.Decimal(10, 2)
-  hardLimitUsd        Decimal @default(0) @db.Decimal(10, 2)
+  // Sensible non-zero defaults so a fresh install is capped by construction
+  // (0 still means "no limit"; an admin can raise/lower these in Réglages).
+  // warning ≤ monthlyBudget ≤ hardLimit; monthlyBudget is the binding ceiling,
+  // hardLimit a backstop. See src/lib/ai-ops/budget.ts.
+  monthlyBudgetUsd    Decimal @default(25) @db.Decimal(10, 2)
+  warningThresholdUsd Decimal @default(15) @db.Decimal(10, 2)
+  hardLimitUsd        Decimal @default(30) @db.Decimal(10, 2)
 
   // Discord routing defaults (channel IDs). Purpose→channel overrides live in
   // AiDiscordChannelMapping; these are the fallbacks.
@@ -2534,4 +2538,55 @@ model AiIdempotencyKey {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
+}
+
+// One row per executive report type (morning / evening / weekly / monthly),
+// all belonging to the single `daily_reports` module. Holds BOTH the admin
+// configuration (enabled, schedule, channel/model/token overrides) AND the
+// scheduler state (idempotency + cross-deployment lock + last-run tracking),
+// specializing the AiScheduledJob pattern for the 4 independently-configurable
+// reports. Report types are the union in src/lib/ai-ops/reports/reportTypes.ts.
+model AiReportSchedule {
+  id String @id @default(cuid())
+  // reportType: "morning" | "evening" | "weekly" | "monthly"
+  reportType String @unique
+
+  enabled Boolean @default(false)
+  // Cron expression, interpreted in `timezone` (or AiOpsSettings.timezone).
+  schedule String
+  // Optional IANA timezone override for THIS report; null → global timezone.
+  timezone String?
+
+  // Optional per-report overrides of the module/global channel, model, and the
+  // provider token ceiling for the narrative completion.
+  discordChannelId String?
+  modelOverride    String?
+  maxTokens        Int?
+
+  // How many times a failed run may be retried before giving up.
+  maxRetries Int @default(1)
+
+  // Idempotency: the key of the most recent claimed/completed firing. A run
+  // whose computed key equals this is a duplicate and is skipped.
+  lastIdempotencyKey String?
+
+  // Execution lock (same contract as AiScheduledJob): set on claim, cleared on
+  // release; lockExpiresAt bounds a crashed run; lockedBy names the claimant.
+  lockedAt      DateTime?
+  lockExpiresAt DateTime?
+  lockedBy      String?
+
+  // Last-run / failure tracking.
+  lastRunAt           DateTime?
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  // status: "idle" | "running" | "success" | "failure"
+  status              String    @default("idle")
+  lastError           String?
+  consecutiveFailures Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([enabled])
 }
