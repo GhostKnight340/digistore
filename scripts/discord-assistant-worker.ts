@@ -59,7 +59,14 @@ const BOT_TOKEN = requireEnv("DISCORD_BOT_TOKEN");
 const WORKER_SECRET = requireEnv("DISCORD_DM_WORKER_SECRET");
 const API_BASE_URL = requireEnv("INTERNAL_API_BASE_URL").replace(/\/$/, "");
 
-type AssistantStatus = "ok" | "unauthorized" | "wrong_channel" | "bad_request" | "error";
+type AssistantStatus =
+  | "ok"
+  | "unauthorized"
+  | "wrong_channel"
+  | "bad_request"
+  | "rate_limited"
+  | "duplicate"
+  | "error";
 
 interface AssistantResponse {
   status: AssistantStatus;
@@ -74,6 +81,7 @@ async function callAssistant(payload: {
   guildId: string | null;
   channelId: string | null;
   threadId: string | null;
+  messageId: string;
 }): Promise<AssistantResponse> {
   const rawBody = JSON.stringify(payload);
   const timestamp = String(Date.now());
@@ -149,12 +157,14 @@ async function handleMessage(message: Message): Promise<void> {
     guildId: message.guildId,
     channelId,
     threadId,
+    messageId: message.id,
   });
   console.log(
     `[assistant-worker] ${routed.command ?? "question"} → ${result.status} (${Date.now() - started}ms, guild=${message.guildId})`,
   );
 
-  if (result.status === "wrong_channel") return; // silent: not the assistant channel
+  // A redelivered/duplicate message was already handled — stay silent.
+  if (result.status === "duplicate" || result.status === "wrong_channel") return;
   if (result.status === "unauthorized") {
     await safeReply(message, REPLIES.unauthorized);
     return;

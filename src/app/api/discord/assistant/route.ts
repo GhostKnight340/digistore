@@ -11,6 +11,15 @@ import {
 } from "@/lib/ai-ops/discord/conversationStore";
 import type { ConversationIdentity } from "@/lib/ai-ops/discord/conversationBuffer";
 import { HELP_REPLY, RESET_REPLY } from "@/lib/ai-ops/discord/replyMessages";
+import { getAiOpsSettings } from "@/lib/ai-ops/store";
+import { consumeRateLimit } from "@/lib/ai-ops/rateLimitStore";
+import {
+  claimIdempotency,
+  completeIdempotency,
+  failIdempotency,
+} from "@/lib/ai-ops/idempotencyStore";
+
+const IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
 
 /**
  * Internal endpoint called ONLY by the standalone Discord assistant worker after
@@ -42,6 +51,8 @@ interface AssistantRequest {
   guildId?: string | null;
   channelId?: string | null;
   threadId?: string | null;
+  /** Discord message id — the idempotency key (spec §5). */
+  messageId?: string | null;
 }
 
 /**
@@ -124,6 +135,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "ok", answer: RESET_REPLY, kind: "reset" });
   }
 
+  // Cross-instance rate limit (spec §4) — per user/guild/module/provider/global.
+  const settings = await getAiOpsSettings();
+  const rate = await consumeRateLimit({
+    userId: discordUserId,
+    guildId: identity.guildId,
+    module: "discord_assistant",
+    provider: settings.defaultProvider,
+  });
+  if (!rate.allowed) {
+    return NextResponse.json({ status: "rate_limited", reason: `rate_${rate.exceeded}` });
+  }
+
+  // Idempotency + execution lock keyed on the Discord message id (spec §5).
+  const canClaim = Boolean(payload.messageId);
+  const idemKey = `discord_assistant:msg:${payload.messageId ?? ""}`;
+  const claim = canClaim
+    ? await claimIdempotency(idemKey, IDEMPOTENCY_TTL_MS)
+    : ({ state: "claimed" } as const);
+  if (claim.state === "duplicate_done") {
+    return NextResponse.json({ status: "ok", answer: claim.result ?? "" });
+  }
+  if (claim.state === "duplicate_processing") {
+    return NextResponse.json({ status: "duplicate" });
+  }
+
   try {
     const loaded = await loadConversation(identity);
     const result = await answerBusinessQuestion({
@@ -133,12 +169,15 @@ export async function POST(request: Request) {
     });
     if (!result.ok) {
       // Coarse reason only; the worker maps it to a short user-facing line.
+      if (canClaim) await failIdempotency(idemKey, result.reason);
       return NextResponse.json({ status: "error", reason: result.reason });
     }
     // Persist the turn so context survives worker restarts / other instances.
     await appendTurn(identity, question, result.answer);
+    if (canClaim) await completeIdempotency(idemKey, result.answer);
     return NextResponse.json({ status: "ok", answer: result.answer });
   } catch (error) {
+    if (canClaim) await failIdempotency(idemKey, "server_error");
     console.error("[discord:assistant:endpoint]", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "server_error" }, { status: 500 });
   }

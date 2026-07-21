@@ -2489,3 +2489,35 @@ model AiConversationMessage {
 
   @@index([conversationId, createdAt])
 }
+
+// Cross-instance rate limiting (spec §4). A fixed-window counter per dimension —
+// `bucket` = "{dimension}:{value}:{windowIndex}" — incremented atomically via an
+// upsert, so limits hold across serverless instances (unlike the in-process
+// limiter). Dimensions: Discord user, guild, module, provider, and global.
+// Expired rows are swept opportunistically.
+model AiRateCounter {
+  id        String   @id @default(cuid())
+  bucket    String   @unique
+  count     Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// Idempotency + execution locking for Discord messages (spec §5). The Discord
+// message id claims a unique `key`: the first request inserts it ("processing"),
+// concurrent/duplicate deliveries see it and skip (no double reply, provider
+// call, or log). The completed answer is cached so a retry returns it verbatim.
+model AiIdempotencyKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  // status: "processing" | "done" | "failed"
+  status    String   @default("processing")
+  result    String?
+  reason    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}

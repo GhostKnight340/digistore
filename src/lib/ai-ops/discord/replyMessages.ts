@@ -10,6 +10,10 @@
 const GENERIC = "⚠️ Something went wrong answering that. Please try again shortly.";
 
 export function assistantErrorReply(reason?: string | null): string {
+  // Cross-instance rate limit (rate_user / rate_guild / rate_global / …).
+  if (reason && reason.startsWith("rate_")) {
+    return "⏳ You're sending questions faster than I can keep up. Please wait a moment and try again.";
+  }
   switch (reason) {
     case "provider_insufficient_credit":
       return "⚠️ The AI provider is out of credit. Ask an admin to top it up.";
