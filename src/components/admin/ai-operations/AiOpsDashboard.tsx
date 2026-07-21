@@ -64,6 +64,9 @@ export default function AiOpsDashboard({ initial }: { initial: AiOpsSnapshot }) 
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link href={`${BASE}/conversations`} className="btn-ghost text-sm">
+            Conversations
+          </Link>
           <Link href={`${BASE}/settings`} className="btn-ghost text-sm">
             Réglages
           </Link>
