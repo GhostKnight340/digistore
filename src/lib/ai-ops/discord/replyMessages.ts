@@ -12,13 +12,13 @@ const GENERIC = "⚠️ Something went wrong answering that. Please try again sh
 export function assistantErrorReply(reason?: string | null): string {
   // Cross-instance rate limit (rate_user / rate_guild / rate_global / …).
   if (reason && reason.startsWith("rate_")) {
-    return "⏳ You're sending questions faster than I can keep up. Please wait a moment and try again.";
+    return "⏳ You're sending questions faster than I can keep up. Please wait a bit and try again.";
   }
   switch (reason) {
     case "provider_insufficient_credit":
       return "⚠️ The AI provider is out of credit. Ask an admin to top it up.";
     case "provider_rate_limited":
-      return "⏳ The AI provider is rate-limited right now. Please try again in a moment.";
+      return "⏳ The AI provider's free-tier limit is reached right now. Please try again later (it resets daily).";
     case "provider_timeout":
       return "⚠️ That took too long to answer. Try a simpler question or retry.";
     case "provider_not_configured":

@@ -2187,9 +2187,9 @@ model AiOpsSettings {
   // code change. Conversation memory:
   conversationTtlMinutes   Int @default(30)
   conversationMessageLimit Int @default(10)
-  // Tool-calling loop bounds:
-  maxToolRounds            Int @default(4)
-  maxToolCallsPerExecution Int @default(8)
+  // Tool-calling loop bounds (kept lean to stretch free-tier request quotas):
+  maxToolRounds            Int @default(3)
+  maxToolCallsPerExecution Int @default(5)
   // Provider reliability:
   providerTimeoutMs        Int @default(30000)
   providerMaxRetries       Int @default(2)
