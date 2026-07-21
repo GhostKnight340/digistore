@@ -48,3 +48,12 @@ test("a continuation message without a mention still routes to CEO", () => {
   const r = routeAssistantMessage("and what about yesterday?");
   assert.deepEqual(r, { department: "ceo", question: "and what about yesterday?" });
 });
+
+test("'reset' and 'help' are recognized as commands", () => {
+  assert.equal(routeAssistantMessage(`${MENTION} CEO reset`)?.command, "reset");
+  assert.equal(routeAssistantMessage(`${MENTION} reset`)?.command, "reset");
+  assert.equal(routeAssistantMessage(`${MENTION} CEO help`)?.command, "help");
+  assert.equal(routeAssistantMessage(`${MENTION} aide`)?.command, "help");
+  // A normal question carries no command.
+  assert.equal(routeAssistantMessage(`${MENTION} CEO how are sales?`)?.command, undefined);
+});

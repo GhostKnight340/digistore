@@ -27,9 +27,13 @@ export const KNOWN_DEPARTMENTS = [
 
 export type Department = (typeof KNOWN_DEPARTMENTS)[number];
 
+export type AssistantCommand = "reset" | "help";
+
 export interface Routed {
   department: Department;
   question: string;
+  /** A recognized command word ("reset"/"help") when the message is just that. */
+  command?: AssistantCommand;
 }
 
 /**
@@ -59,9 +63,17 @@ export function routeAssistantMessage(rawContent: string): Routed | null {
     // Explicit department keyword.
     if (firstWord !== "ceo") return null; // other departments: ignored for now
     if (!remainder) return null; // "@Ghost CEO" with no question
-    return { department: "ceo", question: remainder };
+    return withCommand("ceo", remainder);
   }
 
   // No department keyword → default to CEO, whole text is the question.
-  return { department: "ceo", question: rest };
+  return withCommand("ceo", rest);
+}
+
+/** Attach a recognized command ("reset"/"help") when the text is exactly that. */
+function withCommand(department: Department, question: string): Routed {
+  const word = question.trim().toLowerCase();
+  if (word === "reset") return { department, question, command: "reset" };
+  if (word === "help" || word === "aide") return { department, question, command: "help" };
+  return { department, question };
 }

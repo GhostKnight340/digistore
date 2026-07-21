@@ -25,6 +25,11 @@ import {
 import { setChannelMapping } from "@/lib/ai-ops/discordChannels";
 import { testDiscordConnection, type ConnectionTestResult } from "@/lib/ai-ops/discordChannels";
 import { testAiProvider, type ProviderTestResult } from "@/lib/ai-ops/providerHealth";
+import {
+  listConversationMetadata,
+  clearConversationByKey,
+  type ConversationMetadata,
+} from "@/lib/ai-ops/discord/conversationStore";
 import { transitionApproval } from "@/lib/ai-ops/approvalStore";
 import { setJobEnabled } from "@/lib/ai-ops/jobStore";
 import { runModule } from "@/lib/ai-ops/runner";
@@ -161,6 +166,21 @@ export async function testDiscordConnectionAction(): Promise<ConnectionTestResul
 export async function testAiProviderAction(): Promise<ProviderTestResult> {
   await requireAdminCustomer();
   return testAiProvider();
+}
+
+/** Inspect recent conversation memory — metadata only, never message content. */
+export async function listConversationsAction(): Promise<ConversationMetadata[]> {
+  await requireAdminCustomer();
+  return listConversationMetadata();
+}
+
+/** Clear one conversation by its identity key (no content is exposed). */
+export async function clearConversationAction(key: string): Promise<ActionResult> {
+  await requireAdminCustomer();
+  if (typeof key !== "string" || !key) return { ok: false, error: "Missing conversation key." };
+  const cleared = await clearConversationByKey(key);
+  revalidateAiOps();
+  return cleared ? { ok: true } : { ok: false, error: "Conversation introuvable." };
 }
 
 // ─── Approvals ───────────────────────────────────────────────────────────────

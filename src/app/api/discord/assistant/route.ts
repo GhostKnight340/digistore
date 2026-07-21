@@ -4,7 +4,13 @@ import { getDiscordDmWorkerSecret } from "@/lib/discord/config";
 import { authorizeDiscordAdmin } from "@/lib/ai-ops/discord/assistantAuth";
 import { answerBusinessQuestion } from "@/lib/ai-ops/modules/discordAssistant";
 import { listChannelMappings } from "@/lib/ai-ops/discordChannels";
-import type { ConversationTurn } from "@/lib/ai-ops/discord/conversation";
+import {
+  loadConversation,
+  appendTurn,
+  resetConversation,
+} from "@/lib/ai-ops/discord/conversationStore";
+import type { ConversationIdentity } from "@/lib/ai-ops/discord/conversationBuffer";
+import { HELP_REPLY, RESET_REPLY } from "@/lib/ai-ops/discord/replyMessages";
 
 /**
  * Internal endpoint called ONLY by the standalone Discord assistant worker after
@@ -32,22 +38,23 @@ function safeEqualHex(a: string, b: string): boolean {
 interface AssistantRequest {
   discordUserId?: string;
   question?: string;
-  history?: ConversationTurn[];
+  command?: "reset" | "help";
+  guildId?: string | null;
   channelId?: string | null;
-  parentId?: string | null;
+  threadId?: string | null;
 }
 
 /**
- * If an "assistant" channel is configured, the message must be in it (or in a
- * thread whose parent is it). No mapping configured → allow anywhere (the
+ * If an "assistant" channel is configured, the message must be in it (threads
+ * carry their parent channel id). No mapping configured → allow anywhere (the
  * mention + admin gates still apply).
  */
-async function channelAllowed(channelId?: string | null, parentId?: string | null): Promise<boolean> {
+async function channelAllowed(channelId?: string | null): Promise<boolean> {
   try {
     const mappings = await listChannelMappings();
     const assistant = mappings.find((m) => m.purpose === "assistant");
     if (!assistant) return true;
-    return channelId === assistant.channelId || parentId === assistant.channelId;
+    return channelId === assistant.channelId;
   } catch {
     // A lookup failure should not silently open the assistant everywhere.
     return false;
@@ -95,20 +102,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "unauthorized" });
   }
 
-  if (!(await channelAllowed(payload.channelId, payload.parentId))) {
+  if (!(await channelAllowed(payload.channelId))) {
     return NextResponse.json({ status: "wrong_channel" });
   }
 
+  // Conversation identity — scopes memory to this guild/channel/thread/user.
+  const identity: ConversationIdentity = {
+    guildId: payload.guildId ?? "-",
+    channelId: payload.channelId ?? "-",
+    threadId: payload.threadId ?? null,
+    discordUserId,
+    module: "discord_assistant",
+  };
+
+  // Commands (no model run, no cost).
+  if (payload.command === "help") {
+    return NextResponse.json({ status: "ok", answer: HELP_REPLY, kind: "help" });
+  }
+  if (payload.command === "reset") {
+    await resetConversation(identity);
+    return NextResponse.json({ status: "ok", answer: RESET_REPLY, kind: "reset" });
+  }
+
   try {
+    const loaded = await loadConversation(identity);
     const result = await answerBusinessQuestion({
       question,
-      history: Array.isArray(payload.history) ? payload.history : [],
+      history: loaded.history,
       discordUserId,
     });
     if (!result.ok) {
       // Coarse reason only; the worker maps it to a short user-facing line.
       return NextResponse.json({ status: "error", reason: result.reason });
     }
+    // Persist the turn so context survives worker restarts / other instances.
+    await appendTurn(identity, question, result.answer);
     return NextResponse.json({ status: "ok", answer: result.answer });
   } catch (error) {
     console.error("[discord:assistant:endpoint]", error instanceof Error ? error.message : error);

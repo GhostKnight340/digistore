@@ -22,7 +22,7 @@ import { callTool } from "../tools/service";
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
 import { buildSystemPrompt } from "../discord/assistantPrompt";
 import { runToolLoop, type ToolLoopLimits } from "../toolLoop";
-import type { ConversationTurn } from "../discord/conversation";
+import type { ConvTurn } from "../discord/conversationBuffer";
 
 export const DISCORD_ASSISTANT_MODULE = "discord_assistant" as const;
 
@@ -54,7 +54,7 @@ export type AssistantResult = AssistantAnswer | AssistantFailure;
 export interface AnswerInput {
   question: string;
   /** Prior turns in this Discord thread (already scoped to one thread/user). */
-  history?: ConversationTurn[];
+  history?: ConvTurn[];
   /** Discord user id for audit (stored as the execution's triggeredBy). */
   discordUserId?: string | null;
 }

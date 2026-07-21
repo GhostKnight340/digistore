@@ -2443,3 +2443,49 @@ model AiDiscordChannelMapping {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 }
+
+// Durable short-term conversation memory for the Discord assistants (spec §3).
+// One row per (guild, channel, thread, user, module) — the `key` encodes that
+// tuple and is unique, so context NEVER mixes across users, channels, threads,
+// or departments. Only the minimum is kept: recent turns (AiConversationMessage),
+// a short rolling summary of older turns, and the active date range. Redaction is
+// applied before anything is written. Expired rows are pruned on access.
+model AiConversation {
+  id             String  @id @default(cuid())
+  // Deterministic identity: `${guildId}:${channelId}:${threadId ?? "-"}:${userId}:${module}`.
+  key            String  @unique
+  guildId        String
+  channelId      String
+  threadId       String?
+  discordUserId  String
+  // Department/module (e.g. "discord_assistant" — the CEO assistant).
+  module         String
+  // Short generated digest of turns dropped past the message cap (never secrets).
+  summary        String?
+  // The date range the conversation is currently anchored on (a label).
+  activeRange    String?
+  lastActivityAt DateTime @default(now())
+  expiresAt      DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  messages AiConversationMessage[]
+
+  @@index([expiresAt])
+  @@index([discordUserId, module])
+}
+
+// One retained message within a conversation. Redacted before storage.
+model AiConversationMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  // role: "user" | "assistant"
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}

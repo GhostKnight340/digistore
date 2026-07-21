@@ -38,3 +38,23 @@ export function assistantErrorReply(reason?: string | null): string {
 
 /** The reply shown when the model returns an empty answer. */
 export const EMPTY_ANSWER_REPLY = "🤔 I couldn't produce an answer for that. Try rephrasing.";
+
+/** `help` command — a brief guide to what the CEO assistant can answer. */
+export const HELP_REPLY = [
+  "**Ghost.ma CEO Assistant** — ask about your business in plain English or French.",
+  "",
+  "I can cover:",
+  "• **Sales & revenue** — “How are sales today?”, “Show this month's revenue.”",
+  "• **Orders** — “How many pending orders?”, “How many completed today?”",
+  "• **Payments** — “What payment methods were used this week?”",
+  "• **Products** — “What sold best last week?”",
+  "• **Customers** — “How many new customers this month?”",
+  "• **Operations** — “What issues need my attention?”, “What changed over the past 7 days?”",
+  "",
+  "I understand periods like *today, yesterday, this week, last month, or July 1–15*, and comparisons (*today vs yesterday*).",
+  "",
+  "Commands: `@Ghost CEO reset` clears our conversation · `@Ghost CEO help` shows this.",
+].join("\n");
+
+/** `reset` command confirmation. */
+export const RESET_REPLY = "🧹 Conversation cleared. We're starting fresh.";

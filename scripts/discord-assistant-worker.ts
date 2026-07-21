@@ -30,12 +30,9 @@ import {
   Events,
   GatewayIntentBits,
   Partials,
-  ThreadAutoArchiveDuration,
   type Message,
-  type SendableChannels,
 } from "discord.js";
 import { routeAssistantMessage } from "../src/lib/ai-ops/discord/assistantRouting";
-import { ConversationStore } from "../src/lib/ai-ops/discord/conversation";
 import { assistantErrorReply } from "../src/lib/ai-ops/discord/replyMessages";
 
 const DISCORD_MAX_MESSAGE = 2000;
@@ -62,8 +59,6 @@ const BOT_TOKEN = requireEnv("DISCORD_BOT_TOKEN");
 const WORKER_SECRET = requireEnv("DISCORD_DM_WORKER_SECRET");
 const API_BASE_URL = requireEnv("INTERNAL_API_BASE_URL").replace(/\/$/, "");
 
-const conversations = new ConversationStore();
-
 type AssistantStatus = "ok" | "unauthorized" | "wrong_channel" | "bad_request" | "error";
 
 interface AssistantResponse {
@@ -75,9 +70,10 @@ interface AssistantResponse {
 async function callAssistant(payload: {
   discordUserId: string;
   question: string;
-  history: { role: "user" | "assistant"; content: string }[];
+  command?: "reset" | "help";
+  guildId: string | null;
   channelId: string | null;
-  parentId: string | null;
+  threadId: string | null;
 }): Promise<AssistantResponse> {
   const rawBody = JSON.stringify(payload);
   const timestamp = String(Date.now());
@@ -107,33 +103,37 @@ async function callAssistant(payload: {
   }
 }
 
-/** Post text to a channel/thread, chunked to Discord's 2000-char limit. */
-async function sendChunked(channel: SendableChannels, text: string): Promise<void> {
+/** Reply to a message, chunked to Discord's 2000-char limit. Stateless. */
+async function replyChunked(message: Message, text: string): Promise<void> {
   const body = text.length > 0 ? text : REPLIES.error;
+  const chunks: string[] = [];
   for (let i = 0; i < body.length; i += DISCORD_MAX_MESSAGE) {
-    await channel.send(body.slice(i, i + DISCORD_MAX_MESSAGE));
+    chunks.push(body.slice(i, i + DISCORD_MAX_MESSAGE));
+  }
+  try {
+    for (let i = 0; i < chunks.length; i++) {
+      if (i === 0) await message.reply(chunks[i]);
+      else if (message.channel.isSendable()) await message.channel.send(chunks[i]);
+    }
+  } catch (error) {
+    console.error("[assistant-worker] failed to post answer:", error instanceof Error ? error.message : error);
   }
 }
 
 async function handleMessage(message: Message): Promise<void> {
-  // Guild messages only; ignore bots (including self) and empty content.
+  // Guild messages only; ignore bots (including self). The bot must be mentioned
+  // — conversation memory is durable (DB), so no thread bookkeeping is needed.
   if (message.author.bot || !message.guildId) return;
   const botUser = message.client.user;
-  if (!botUser) return;
-
-  const inThread = message.channel.isThread();
-  const threadId = message.channelId;
-  const isKnownThread = inThread && conversations.has(threadId);
-
-  // In a thread we already own, treat every message as a continuation. Elsewhere
-  // the bot must be explicitly mentioned.
-  if (!isKnownThread && !message.mentions.has(botUser)) return;
+  if (!botUser || !message.mentions.has(botUser)) return;
 
   const routed = routeAssistantMessage(message.content);
   if (!routed) return; // not a CEO question (empty, or another department)
 
-  const parentId = inThread ? message.channel.parentId ?? null : null;
-  const history = isKnownThread ? conversations.history(threadId) : [];
+  // Conversation identity: keyed on the thread when inside one, else the channel.
+  const inThread = message.channel.isThread();
+  const channelId = inThread ? message.channel.parentId ?? message.channelId : message.channelId;
+  const threadId = inThread ? message.channelId : null;
 
   try {
     if ("sendTyping" in message.channel) await message.channel.sendTyping();
@@ -145,12 +145,13 @@ async function handleMessage(message: Message): Promise<void> {
   const result = await callAssistant({
     discordUserId: message.author.id,
     question: routed.question,
-    history,
-    channelId: message.channelId,
-    parentId,
+    command: routed.command,
+    guildId: message.guildId,
+    channelId,
+    threadId,
   });
   console.log(
-    `[assistant-worker] question → ${result.status} (${Date.now() - started}ms, guild=${message.guildId})`,
+    `[assistant-worker] ${routed.command ?? "question"} → ${result.status} (${Date.now() - started}ms, guild=${message.guildId})`,
   );
 
   if (result.status === "wrong_channel") return; // silent: not the assistant channel
@@ -159,28 +160,10 @@ async function handleMessage(message: Message): Promise<void> {
     return;
   }
   if (result.status !== "ok" || !result.answer) {
-    // Map the coarse reason (provider category / guardrail) to a useful line.
     await safeReply(message, assistantErrorReply(result.reason));
     return;
   }
-
-  // Success: answer in a thread so follow-ups have a stable conversation home.
-  try {
-    const thread = inThread
-      ? message.channel
-      : await message.startThread({
-          name: `CEO · ${routed.question.slice(0, 80)}`,
-          autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-        });
-    if (thread.isSendable()) {
-      await sendChunked(thread, result.answer);
-      conversations.append(thread.id, { role: "user", content: routed.question });
-      conversations.append(thread.id, { role: "assistant", content: result.answer });
-    }
-  } catch (error) {
-    console.error("[assistant-worker] failed to post answer:", error instanceof Error ? error.message : error);
-    await safeReply(message, REPLIES.error);
-  }
+  await replyChunked(message, result.answer);
 }
 
 async function safeReply(message: Message, text: string): Promise<void> {
