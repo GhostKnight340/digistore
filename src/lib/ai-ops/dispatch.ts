@@ -16,8 +16,11 @@ import "server-only";
 import { log } from "@/lib/ops/log";
 import { dueJobs, claimJobLock, releaseJobLock } from "./jobStore";
 import { runModule } from "./runner";
+import { bodyForModule } from "./moduleBodies";
 import { expireStaleApprovals } from "./approvalStore";
 import { scheduledIdempotencyKey } from "./scheduler";
+import { parseCron, zonedParts, cronMatchesHour } from "./cron";
+import { getAiOpsSettings } from "./store";
 import { MODULE_DEFINITIONS, isModuleKey } from "./types";
 
 /** Chooses the idempotency time-bucket for a job from its module's cadence. */
@@ -48,6 +51,8 @@ export async function dispatchDueAiJobs(runnerId: string, now = new Date()): Pro
     scheduledIdempotencyKey(jobKey, bucketForJob(jobKey), at);
 
   const due = await dueJobs(idempotencyKeyFor, now);
+  // Timezone for cron matching — schedules are interpreted in the configured zone.
+  const timeZone = (await getAiOpsSettings().catch(() => null))?.timezone ?? "Africa/Casablanca";
   let ran = 0;
   let skipped = 0;
 
@@ -56,6 +61,15 @@ export async function dispatchDueAiJobs(runnerId: string, now = new Date()): Pro
     // scheduler — skip any legacy AiScheduledJob row for it so it never
     // double-runs the placeholder.
     if (job.key === "daily_reports" || job.module === "daily_reports") {
+      skipped += 1;
+      continue;
+    }
+    // Time-of-day gate: the module's cron must fire this hour in the configured
+    // timezone. `dueJobs` only guarantees "once per bucket"; this makes e.g.
+    // "0 */6 * * *" run every 6h (not hourly) and "0 8 * * *" run at 08:00.
+    const schedule = job.module && isModuleKey(job.module) ? MODULE_DEFINITIONS[job.module].defaultSchedule : null;
+    const cron = schedule ? parseCron(schedule) : null;
+    if (cron && !cronMatchesHour(cron, zonedParts(now, timeZone))) {
       skipped += 1;
       continue;
     }
@@ -68,7 +82,12 @@ export async function dispatchDueAiJobs(runnerId: string, now = new Date()): Pro
     }
     try {
       const result = job.module
-        ? await runModule({ module: job.module, trigger: "schedule", idempotencyKey: job.idempotencyKey })
+        ? await runModule({
+            module: job.module,
+            trigger: "schedule",
+            idempotencyKey: job.idempotencyKey,
+            body: bodyForModule(job.module),
+          })
         : { ok: false as const, reason: "no_module" };
       await releaseJobLock(job.key, {
         success: result.ok,

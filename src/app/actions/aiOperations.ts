@@ -256,7 +256,10 @@ export async function runModuleNowAction(module: string): Promise<ActionResult> 
     revalidateAiOps();
     return { ok: true };
   }
-  const result = await runModule({ module, trigger: "manual", triggeredBy: admin.name });
+  // Other modules run their real body when one is registered (e.g. Supplier
+  // Intelligence); modules without a body still exercise the placeholder path.
+  const { bodyForModule } = await import("@/lib/ai-ops/moduleBodies");
+  const result = await runModule({ module, trigger: "manual", triggeredBy: admin.name, body: bodyForModule(module) });
   if (!result.ok) return { ok: false, error: `Run blocked: ${result.reason}` };
   revalidateAiOps();
   return { ok: true };

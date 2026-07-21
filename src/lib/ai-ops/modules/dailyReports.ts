@@ -24,6 +24,7 @@ import { buildReportPayload, buildReportText } from "../reports/format";
 import { deliverReport, notifyReportFailure } from "../reports/discord";
 import { reportDefinition, reportLabel, type ReportType } from "../reports/reportTypes";
 import { DAILY_REPORTS_MODULE } from "../reports/module";
+import { coerceNarrative } from "../narrative";
 import type { ExecutionTrigger } from "../types";
 
 export { DAILY_REPORTS_MODULE };
@@ -50,50 +51,6 @@ export interface GenerateReportResult {
   /** The rendered markdown (for previews and the on-demand reply). */
   text?: string;
   delivered?: boolean;
-}
-
-/**
- * Coerces the provider's structured output into a narrative. When the provider
- * did not return usable prose (e.g. the mock provider, or a parse miss), falls
- * back to a deterministic, number-free narrative so the report is still useful
- * and never crashes — the figures themselves are always printed by the formatter.
- */
-function toNarrative(raw: string, metrics: ReportMetrics): ReportNarrative {
-  const s = extractJsonObject(raw);
-  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-  const arr = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean).slice(0, 4) : [];
-
-  const summary = s ? str(s.summary) : "";
-  if (summary) {
-    return {
-      summary,
-      recommendations: arr(s!.recommendations),
-      trends: str(s!.trends),
-      topPriorities: arr(s!.topPriorities),
-    };
-  }
-  return fallbackNarrative(metrics);
-}
-
-/**
- * Leniently extracts the first JSON object from a completion. Free/small models
- * often wrap JSON in prose or code fences, so we scan for a balanced `{…}` block
- * rather than trusting a strict `response_format` (which many free models on
- * OpenRouter reject outright). Returns null when nothing parseable is found.
- */
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  const t = (text ?? "").trim();
-  if (!t) return null;
-  const start = t.indexOf("{");
-  const end = t.lastIndexOf("}");
-  if (start === -1 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(t.slice(start, end + 1));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
 }
 
 /** A deterministic narrative built from the figures — no invented numbers. */
@@ -138,7 +95,7 @@ async function reportBody(input: GenerateReportInput, ctx: ModuleRunContext): Pr
       maxTokens: ctx.maxTokens ?? undefined,
       timeoutMs: 30_000,
     });
-    narrative = toNarrative(completion.text, metrics);
+    narrative = coerceNarrative(completion.text, fallbackNarrative(metrics));
     provider = completion.provider;
     model = completion.model;
     usage = {

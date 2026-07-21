@@ -15,6 +15,7 @@
  */
 
 import type { ToolName } from "../types";
+import type { DatePreset } from "../dateRange";
 
 export const REPORT_TYPES = ["morning", "evening", "weekly", "monthly"] as const;
 
@@ -31,6 +32,13 @@ export function isReportType(value: string): value is ReportType {
  * Discord assistant scopes time — and are labelled honestly in the report.
  */
 export interface ReportWindow {
+  /**
+   * Date-range preset for the range-based safe tools (getSalesSummary,
+   * getPaymentSummary, getFulfillmentPerformance) — timezone-aware, calendar
+   * aligned. These tools take `{ range: { preset } }`.
+   */
+  preset: DatePreset;
+  /** periodDays/untilDays for the period-based tool getTopSellingProducts. */
   periodDays: number;
   untilDays: number;
   /** Human label stated in the report so a figure is never mis-attributed. */
@@ -59,7 +67,7 @@ export const REPORT_DEFINITIONS: Record<ReportType, ReportDefinition> = {
     title: "Morning Brief",
     description: "Executive brief every morning: yesterday's numbers + today's priorities.",
     defaultSchedule: "0 8 * * *", // 08:00 local
-    window: { periodDays: 2, untilDays: 1, label: "yesterday" },
+    window: { preset: "yesterday", periodDays: 2, untilDays: 1, label: "yesterday" },
     tools: [
       "getSalesSummary",
       "getPendingOrders",
@@ -75,7 +83,7 @@ export const REPORT_DEFINITIONS: Record<ReportType, ReportDefinition> = {
     title: "End of Day Report",
     description: "Wrap-up every evening: today's revenue, orders, and incidents.",
     defaultSchedule: "0 22 * * *", // 22:00 local
-    window: { periodDays: 1, untilDays: 0, label: "today" },
+    window: { preset: "today", periodDays: 1, untilDays: 0, label: "today" },
     tools: [
       "getSalesSummary",
       "getPendingOrders",
@@ -91,7 +99,7 @@ export const REPORT_DEFINITIONS: Record<ReportType, ReportDefinition> = {
     title: "Weekly Report",
     description: "Every Monday morning: the last 7 days, trends, and best/worst products.",
     defaultSchedule: "0 9 * * 1", // Monday 09:00 local
-    window: { periodDays: 7, untilDays: 0, label: "the last 7 days" },
+    window: { preset: "last_7_days", periodDays: 7, untilDays: 0, label: "the last 7 days" },
     tools: [
       "getSalesSummary",
       "getPendingOrders",
@@ -107,7 +115,7 @@ export const REPORT_DEFINITIONS: Record<ReportType, ReportDefinition> = {
     title: "Monthly Report",
     description: "First of every month: the last 30 days, customer growth, and priorities.",
     defaultSchedule: "0 9 1 * *", // 1st of the month, 09:00 local
-    window: { periodDays: 30, untilDays: 0, label: "the last 30 days" },
+    window: { preset: "last_month", periodDays: 30, untilDays: 0, label: "last month" },
     tools: [
       "getSalesSummary",
       "getPendingOrders",

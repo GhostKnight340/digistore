@@ -29,12 +29,14 @@ interface ToolInputs {
 /** Safe, clamped input per tool for a report window. */
 function toolInputs(type: ReportType): ToolInputs {
   const { window } = reportDefinition(type);
-  const period = { periodDays: window.periodDays, untilDays: window.untilDays };
+  // Range-based tools take a timezone-aware date preset; getTopSellingProducts
+  // still takes periodDays/untilDays (its validator is unchanged).
+  const range = { range: { preset: window.preset } };
   return {
-    getSalesSummary: period,
-    getPaymentSummary: period,
-    getFulfillmentPerformance: period,
-    getTopSellingProducts: { ...period, limit: 10 },
+    getSalesSummary: range,
+    getPaymentSummary: range,
+    getFulfillmentPerformance: range,
+    getTopSellingProducts: { periodDays: window.periodDays, untilDays: window.untilDays, limit: 10 },
     getPendingOrders: { limit: 20 },
     getRecentOperationalEvents: { limit: 15 },
   };
