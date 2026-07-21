@@ -18,6 +18,8 @@ export interface RateContext {
   module: string;
   provider: string;
   now?: number;
+  /** Optional per-dimension limit overrides from settings (spec §10). */
+  limits?: Partial<Record<"user" | "guild" | "module" | "provider" | "global", number>>;
 }
 
 export interface RateDecision {
@@ -53,6 +55,7 @@ export async function consumeRateLimit(ctx: RateContext): Promise<RateDecision> 
   const now = ctx.now ?? Date.now();
   try {
     for (const policy of RATE_POLICIES) {
+      const limit = ctx.limits?.[policy.dimension] ?? policy.limit;
       const bucket = rateBucket(policy.dimension, valueFor(policy.dimension, ctx), policy.windowMs, now);
       const endMs = windowEnd(policy.windowMs, now);
       const row = await prisma.aiRateCounter.upsert({
@@ -60,7 +63,7 @@ export async function consumeRateLimit(ctx: RateContext): Promise<RateDecision> 
         create: { bucket, count: 1, expiresAt: new Date(endMs) },
         update: { count: { increment: 1 } },
       });
-      if (overLimit(row.count, policy.limit)) {
+      if (overLimit(row.count, limit)) {
         return { allowed: false, exceeded: policy.dimension, retryAfterMs: endMs - now };
       }
     }

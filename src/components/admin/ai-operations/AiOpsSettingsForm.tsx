@@ -127,6 +127,30 @@ export default function AiOpsSettingsForm({
           <Field label="Rétention des journaux AI (jours)">
             <input type="number" min={1} className="ai-input" value={form.logRetentionDays} onChange={(e) => set("logRetentionDays", Number(e.target.value))} />
           </Field>
+          <Field label="Expiration conversation (min)">
+            <input type="number" min={1} className="ai-input" value={form.conversationTtlMinutes} onChange={(e) => set("conversationTtlMinutes", Number(e.target.value))} />
+          </Field>
+          <Field label="Messages retenus / conversation">
+            <input type="number" min={2} className="ai-input" value={form.conversationMessageLimit} onChange={(e) => set("conversationMessageLimit", Number(e.target.value))} />
+          </Field>
+          <Field label="Rounds d'outils max">
+            <input type="number" min={1} className="ai-input" value={form.maxToolRounds} onChange={(e) => set("maxToolRounds", Number(e.target.value))} />
+          </Field>
+          <Field label="Appels d'outils max / exécution">
+            <input type="number" min={1} className="ai-input" value={form.maxToolCallsPerExecution} onChange={(e) => set("maxToolCallsPerExecution", Number(e.target.value))} />
+          </Field>
+          <Field label="Timeout provider (ms)">
+            <input type="number" min={1000} step={500} className="ai-input" value={form.providerTimeoutMs} onChange={(e) => set("providerTimeoutMs", Number(e.target.value))} />
+          </Field>
+          <Field label="Tentatives provider (retries)">
+            <input type="number" min={0} max={5} className="ai-input" value={form.providerMaxRetries} onChange={(e) => set("providerMaxRetries", Number(e.target.value))} />
+          </Field>
+          <Field label="Limite / utilisateur / min">
+            <input type="number" min={1} className="ai-input" value={form.userRateLimitPerMin} onChange={(e) => set("userRateLimitPerMin", Number(e.target.value))} />
+          </Field>
+          <Field label="Limite globale / min">
+            <input type="number" min={1} className="ai-input" value={form.globalRateLimitPerMin} onChange={(e) => set("globalRateLimitPerMin", Number(e.target.value))} />
+          </Field>
         </div>
         <div className="mt-4 flex items-center gap-3">
           <button type="button" onClick={saveSettings} disabled={pending} className="btn-primary text-sm">

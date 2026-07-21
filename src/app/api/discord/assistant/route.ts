@@ -142,6 +142,7 @@ export async function POST(request: Request) {
     guildId: identity.guildId,
     module: "discord_assistant",
     provider: settings.defaultProvider,
+    limits: { user: settings.userRateLimitPerMin, global: settings.globalRateLimitPerMin },
   });
   if (!rate.allowed) {
     return NextResponse.json({ status: "rate_limited", reason: `rate_${rate.exceeded}` });
@@ -173,7 +174,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "error", reason: result.reason });
     }
     // Persist the turn so context survives worker restarts / other instances.
-    await appendTurn(identity, question, result.answer);
+    await appendTurn(identity, question, result.answer, {
+      messageLimit: settings.conversationMessageLimit,
+      ttlMinutes: settings.conversationTtlMinutes,
+    });
     if (canClaim) await completeIdempotency(idemKey, result.answer);
     return NextResponse.json({ status: "ok", answer: result.answer });
   } catch (error) {

@@ -77,6 +77,23 @@ export async function saveAiOpsSettingsAction(
     }
     if (typeof input.logRetentionDays === "number") patch.logRetentionDays = Math.min(3650, Math.max(1, Math.trunc(input.logRetentionDays)));
     if (typeof input.redactSensitive === "boolean") patch.redactSensitive = input.redactSensitive;
+    // Tunable runtime knobs (spec §10), each clamped to a safe integer range.
+    const clampInt = (v: unknown, lo: number, hi: number): number | undefined =>
+      typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.trunc(v))) : undefined;
+    const KNOBS: [keyof AiOpsSettingsUpdate, number, number][] = [
+      ["conversationTtlMinutes", 1, 1440],
+      ["conversationMessageLimit", 2, 50],
+      ["maxToolRounds", 1, 10],
+      ["maxToolCallsPerExecution", 1, 30],
+      ["providerTimeoutMs", 1000, 120000],
+      ["providerMaxRetries", 0, 5],
+      ["userRateLimitPerMin", 1, 1000],
+      ["globalRateLimitPerMin", 1, 100000],
+    ];
+    for (const [key, lo, hi] of KNOBS) {
+      const c = clampInt(input[key], lo, hi);
+      if (c !== undefined) (patch[key] as number) = c;
+    }
     for (const key of ["discordGuildId", "defaultReportChannelId", "defaultAlertChannelId", "defaultApprovalChannelId"] as const) {
       const v = input[key];
       if (v === null || (typeof v === "string" && v.length <= 32)) patch[key] = v;

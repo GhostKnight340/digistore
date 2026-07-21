@@ -26,18 +26,21 @@ import type { ConvTurn } from "../discord/conversationBuffer";
 
 export const DISCORD_ASSISTANT_MODULE = "discord_assistant" as const;
 
-/**
- * Bounds for the tool-calling loop. Kept modest so a single question can never
- * fan out without limit; made configurable via AI Operations settings later.
- */
-const TOOL_LOOP_LIMITS: ToolLoopLimits = {
-  maxRounds: 4,
-  maxCallsPerTool: 3,
-  maxTotalCalls: 8,
-  timeoutMs: 30_000,
-  maxRetries: 2,
-  backoffMs: 500,
-};
+/** Per-tool call cap is a fixed guardrail; the rest come from settings (spec §10). */
+const MAX_CALLS_PER_TOOL = 3;
+const BACKOFF_MS = 500;
+
+/** Build the loop bounds from AI Operations settings so they change without a deploy. */
+function loopLimits(ctx: ModuleRunContext): ToolLoopLimits {
+  return {
+    maxRounds: ctx.settings.maxToolRounds,
+    maxCallsPerTool: MAX_CALLS_PER_TOOL,
+    maxTotalCalls: ctx.settings.maxToolCallsPerExecution,
+    timeoutMs: ctx.settings.providerTimeoutMs,
+    maxRetries: ctx.settings.providerMaxRetries,
+    backoffMs: BACKOFF_MS,
+  };
+}
 
 export interface AssistantAnswer {
   ok: true;
@@ -77,7 +80,7 @@ async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise
     systemPrompt: buildSystemPrompt(ctx.config.instructions),
     question: input.question,
     history: input.history,
-    limits: TOOL_LOOP_LIMITS,
+    limits: loopLimits(ctx),
   });
   return {
     provider: result.provider,

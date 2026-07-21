@@ -43,6 +43,14 @@ export interface AiOpsSettingsDTO {
   defaultApprovalChannelId: string | null;
   logRetentionDays: number;
   redactSensitive: boolean;
+  conversationTtlMinutes: number;
+  conversationMessageLimit: number;
+  maxToolRounds: number;
+  maxToolCallsPerExecution: number;
+  providerTimeoutMs: number;
+  providerMaxRetries: number;
+  userRateLimitPerMin: number;
+  globalRateLimitPerMin: number;
 }
 
 export interface AiModuleConfigDTO {
@@ -100,6 +108,14 @@ export async function getAiOpsSettings(): Promise<AiOpsSettingsDTO> {
     defaultApprovalChannelId: row.defaultApprovalChannelId,
     logRetentionDays: row.logRetentionDays,
     redactSensitive: row.redactSensitive,
+    conversationTtlMinutes: row.conversationTtlMinutes,
+    conversationMessageLimit: row.conversationMessageLimit,
+    maxToolRounds: row.maxToolRounds,
+    maxToolCallsPerExecution: row.maxToolCallsPerExecution,
+    providerTimeoutMs: row.providerTimeoutMs,
+    providerMaxRetries: row.providerMaxRetries,
+    userRateLimitPerMin: row.userRateLimitPerMin,
+    globalRateLimitPerMin: row.globalRateLimitPerMin,
   };
 }
 

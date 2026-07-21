@@ -2183,6 +2183,20 @@ model AiOpsSettings {
   // When true, sensitive values are redacted from any context handed to a model.
   redactSensitive  Boolean @default(true)
 
+  // Tunable runtime knobs (spec §10) — changing these takes effect without a
+  // code change. Conversation memory:
+  conversationTtlMinutes   Int @default(30)
+  conversationMessageLimit Int @default(10)
+  // Tool-calling loop bounds:
+  maxToolRounds            Int @default(4)
+  maxToolCallsPerExecution Int @default(8)
+  // Provider reliability:
+  providerTimeoutMs        Int @default(30000)
+  providerMaxRetries       Int @default(2)
+  // Cross-instance rate limits, per minute:
+  userRateLimitPerMin      Int @default(12)
+  globalRateLimitPerMin    Int @default(240)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 }
