@@ -47,27 +47,29 @@ test("the embed prints deterministic figures with health status, not model-inven
   assert.match(flat, /54\.00/); // total cost from figures
 });
 
-test("no embed field value is ever empty", () => {
-  const payload = buildSupplierPayload(
+test("the single-list description is never empty even when everything is blank", () => {
+  const embed = buildSupplierPayload(
     metrics({ suppliers: [], costs: [], alerts: [], fulfillment: { total: null, failed: null, byStatus: [] } }),
     { summary: "", recommendations: [], trends: "", topPriorities: [] },
-  );
-  for (const field of payload.embeds![0].fields ?? []) {
-    assert.ok(field.value.trim().length > 0, `field "${field.name}" must not be empty`);
-  }
+  ).embeds![0];
+  assert.ok((embed.description ?? "").trim().length > 0);
+  assert.match(embed.description!, /\*\*Status\*\*/);
+  assert.match(embed.description!, /Nothing needed/); // Actions fallback
+  assert.equal(embed.fields, undefined); // single list, no separate fields
 });
 
 test("missing costs/fulfillment render as n/a, never invented", () => {
-  const flat = JSON.stringify(
-    buildSupplierPayload(metrics({ costs: [], fulfillment: { total: null, failed: null, byStatus: [] } }), narrative).embeds![0],
-  );
-  assert.match(flat, /n\/a|No delivered-order costs/);
+  const desc = buildSupplierPayload(
+    metrics({ costs: [], fulfillment: { total: null, failed: null, byStatus: [] } }),
+    narrative,
+  ).embeds![0].description!;
+  assert.match(desc, /n\/a|None this period/);
 });
 
 test("unavailable tools are surfaced, not hidden", () => {
-  const flat = JSON.stringify(buildSupplierPayload(metrics({}, { unavailable: ["getSupplierApiHealth"] }), narrative).embeds![0]);
-  assert.match(flat, /Unavailable data/);
-  assert.match(flat, /getSupplierApiHealth/);
+  const desc = buildSupplierPayload(metrics({}, { unavailable: ["getSupplierApiHealth"] }), narrative).embeds![0].description!;
+  assert.match(desc, /Unavailable/);
+  assert.match(desc, /getSupplierApiHealth/);
 });
 
 test("the markdown rendering carries the same health + alerts for previews", () => {

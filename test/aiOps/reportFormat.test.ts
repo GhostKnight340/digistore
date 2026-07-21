@@ -37,42 +37,40 @@ function metrics(overrides: Partial<ReportMetrics["figures"]> = {}, extra: Parti
   };
 }
 
-test("the embed prints deterministic figures, not model-invented ones", () => {
-  const payload = buildReportPayload(metrics(), narrative);
-  const embed = payload.embeds![0];
-  const flat = JSON.stringify(embed);
+test("the single-list embed prints deterministic figures + an Actions list", () => {
+  const embed = buildReportPayload(metrics(), narrative).embeds![0];
+  const desc = embed.description!;
   assert.match(embed.title!, /Morning Brief/);
-  assert.match(flat, /1,234 MAD/); // revenue from figures
-  assert.match(flat, /Netflix 1 mois/); // top product from figures
-  assert.equal(embed.description, "Solid morning; orders are flowing.");
+  assert.match(desc, /1,234 MAD/); // revenue from figures
+  assert.match(desc, /Netflix 1 mois/); // top product from figures
+  assert.match(desc, /\*\*Actions\*\*/); // merged recommendations + priorities
+  assert.match(desc, /Clear the waiting orders\./);
+  assert.equal(embed.fields, undefined); // single list, no separate fields
 });
 
-test("no embed field value is ever empty (Discord rejects empty fields)", () => {
-  const payload = buildReportPayload(metrics({ paymentMethods: [], topProducts: [], operationalAlerts: [] }), {
+test("the description is never empty even when everything is blank", () => {
+  const embed = buildReportPayload(metrics({ paymentMethods: [], topProducts: [], operationalAlerts: [] }), {
     summary: "",
     recommendations: [],
     trends: "",
     topPriorities: [],
-  });
-  for (const field of payload.embeds![0].fields ?? []) {
-    assert.ok(field.value.trim().length > 0, `field "${field.name}" must not be empty`);
-  }
+  }).embeds![0];
+  assert.ok((embed.description ?? "").trim().length > 0);
+  assert.match(embed.description!, /Nothing urgent/); // Actions fallback
 });
 
 test("missing figures render as n/a, never invented", () => {
-  const payload = buildReportPayload(
+  const embed = buildReportPayload(
     metrics({ revenueMad: null, ordersTotal: null, ordersDelivered: null, ordersWaiting: null }),
     narrative,
-  );
-  const flat = JSON.stringify(payload.embeds![0]);
-  assert.match(flat, /n\/a/);
+  ).embeds![0];
+  assert.match(embed.description!, /n\/a/);
 });
 
 test("unavailable tools are surfaced, not hidden", () => {
-  const payload = buildReportPayload(metrics({}, { unavailable: ["getPaymentSummary"] }), narrative);
-  const flat = JSON.stringify(payload.embeds![0]);
-  assert.match(flat, /Unavailable data/);
-  assert.match(flat, /getPaymentSummary/);
+  const embed = buildReportPayload(metrics({}, { unavailable: ["getPaymentSummary"] }), narrative).embeds![0];
+  assert.match(embed.description!, /Unavailable/);
+  assert.match(embed.description!, /getPaymentSummary/);
 });
 
 test("the markdown rendering carries the same figures for previews/replies", () => {
@@ -83,7 +81,6 @@ test("the markdown rendering carries the same figures for previews/replies", () 
 });
 
 test("operational alerts are listed as bullets", () => {
-  const payload = buildReportPayload(metrics({ operationalAlerts: ["Job \"x\" is failing (2 consecutive)"] }), narrative);
-  const alerts = payload.embeds![0].fields!.find((f) => f.name.includes("Alerts"));
-  assert.match(alerts!.value, /failing/);
+  const embed = buildReportPayload(metrics({ operationalAlerts: ['Job "x" is failing (2 consecutive)'] }), narrative).embeds![0];
+  assert.match(embed.description!, /failing/);
 });
