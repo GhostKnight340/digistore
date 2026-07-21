@@ -2,81 +2,25 @@ import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
 import { publicOrderReference } from "@/lib/db/orders";
-import { urlHasSensitiveToken } from "@/lib/deliveryFields";
-import type { DeliveredFieldDTO } from "@/lib/dto";
 import { isDiscordEnabled } from "./config";
 import { createDmChannel, postChannelMessage, DiscordApiError } from "./client";
+import { buildDeliveryItems, buildDeliveryMessage } from "./deliveryMessage";
 
 /**
  * Discord DM order delivery. Additive convenience channel only — this module
  * NEVER changes whether an order is considered delivered, and follows the
- * never-throw contract: deliverOrderViaDiscord() resolves regardless of Discord
+ * never-throw contract: sendDeliveredOrderDm() resolves regardless of Discord
  * being disabled, misconfigured, or the DM failing.
  *
- * Sensitive redemption values are wrapped in Discord spoiler syntax so they are
- * blurred until clicked. Codes are never placed in embeds, logs, error
- * messages, or audit metadata.
+ * Automatic delivery on fulfillment was removed: order delivery over Discord is
+ * now handled MANUALLY by an admin (the fulfillment page surfaces the customer's
+ * Discord username and a ready-to-send message). Only the customer-triggered
+ * "Envoyer aussi sur Discord" self-serve resend still sends via the bot here.
+ *
+ * The message composition lives in ./deliveryMessage (shared with the admin view
+ * that builds the manual "ready to send" text). Codes are never placed in
+ * embeds, logs, error messages, or audit metadata.
  */
-
-/** Wrap a sensitive value so Discord blurs it until the customer clicks. */
-function spoiler(value: string): string {
-  const trimmed = value.trim();
-  // Prefer an inline-code span inside the spoiler for legibility, but fall back
-  // to a bare spoiler if the value itself contains a backtick (which would
-  // otherwise break out of the code span). Either way the value stays hidden.
-  return trimmed.includes("`") ? `||${trimmed}||` : `||\`${trimmed}\`||`;
-}
-
-type DeliveryItem = {
-  productName: string;
-  faceLabel: string | null;
-  fields: DeliveredFieldDTO[];
-};
-
-function buildDeliveryMessage(
-  orderNumber: string,
-  items: DeliveryItem[],
-): string {
-  const lines: string[] = [
-    "🎮 **Votre commande Ghost.ma est prête !**",
-    "",
-    `**Commande :** #${orderNumber}`,
-    "",
-  ];
-
-  for (const item of items) {
-    lines.push(`**Produit :** ${item.productName}`);
-    if (item.faceLabel) lines.push(`**Valeur :** ${item.faceLabel}`);
-    for (const field of item.fields) {
-      if (field.code) {
-        lines.push("**Votre code :**", spoiler(field.code));
-      }
-      if (field.pin) {
-        lines.push("**PIN :**", spoiler(field.pin));
-      }
-      if (field.url) {
-        // A normal public redemption URL is NOT a secret — send it plainly.
-        // Only spoiler-wrap a URL that embeds a sensitive one-time token.
-        lines.push(
-          "**Lien d’utilisation :**",
-          urlHasSensitiveToken(field.url) ? spoiler(field.url) : field.url,
-        );
-      }
-      if (field.instructions) {
-        // Instructions are not sensitive.
-        lines.push("**Instructions :**", field.instructions);
-      }
-    }
-    lines.push("");
-  }
-
-  lines.push(
-    "Cliquez sur le code masqué pour l’afficher.",
-    "",
-    "Merci pour votre commande 💙",
-  );
-  return lines.join("\n");
-}
 
 /** Coarse, customer-safe failure category — never a raw Discord payload. */
 function failureReason(error: unknown): string {
@@ -166,25 +110,7 @@ export async function sendDeliveredOrderDm(
     }
     if (order.deliveredCodes.length === 0) return { ok: false, status: "SKIPPED", reason: "no_codes" };
 
-    const items: DeliveryItem[] = order.deliveredCodes.map((dc) => {
-      const payloadFields = Array.isArray(dc.deliveryPayload)
-        ? (dc.deliveryPayload as unknown as DeliveredFieldDTO[])
-        : null;
-      const fields: DeliveredFieldDTO[] =
-        payloadFields && payloadFields.length > 0
-          ? payloadFields
-          : [{ code: dc.digitalCode?.code ?? dc.manualCode ?? "" }];
-      const variant = dc.orderItem?.variant;
-      const faceLabel =
-        variant && variant.faceValue != null
-          ? `${variant.faceValue} ${variant.faceCurrency}`
-          : null;
-      return {
-        productName: dc.product?.name ?? "Produit",
-        faceLabel,
-        fields: fields.filter((f) => f.code || f.pin || f.url || f.instructions),
-      };
-    });
+    const items = buildDeliveryItems(order.deliveredCodes);
 
     const reference = await publicOrderReference(order);
     const content = buildDeliveryMessage(reference.number, items);
@@ -237,10 +163,38 @@ export async function sendDeliveredOrderDm(
 }
 
 /**
- * Automatic Discord DM delivery from the fulfillment path. Fire-and-forget:
- * `void deliverOrderViaDiscord(orderId)`. Only sends when the customer opted in
- * before fulfillment (see the `auto` guards in sendDeliveredOrderDm).
+ * Records that an admin manually delivered the order over Discord (copy-pasted
+ * the ready-to-send message themselves). No bot send happens — this only stamps
+ * the delivery status/date and appends a code-free audit event, so the order
+ * page reflects that Discord delivery is done. Never throws.
  */
-export async function deliverOrderViaDiscord(orderId: string): Promise<void> {
-  await sendDeliveredOrderDm(orderId, { trigger: "auto" });
+export async function markDiscordDeliveryManuallySent(
+  orderId: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const now = new Date();
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        discordDeliveryStatus: "SENT",
+        discordDeliveryAttemptedAt: now,
+        discordDeliverySentAt: now,
+        discordDeliveryError: null,
+      },
+    });
+    await prisma.paymentEvent.create({
+      data: {
+        orderId,
+        type: "discord_delivery",
+        note: "Livraison Discord marquée comme envoyée manuellement (admin).",
+      },
+    });
+    return { ok: true };
+  } catch (error) {
+    console.error(
+      "[discord:dm-delivery] mark-manual failed:",
+      error instanceof Error ? error.message : "unexpected error",
+    );
+    return { ok: false };
+  }
 }

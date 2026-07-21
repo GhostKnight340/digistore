@@ -29,6 +29,7 @@ import {
   disableCode,
 } from "@/lib/db/inventory";
 import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
+import { markDiscordDeliveryManuallySent } from "@/lib/discord/dm";
 import {
   changeOrderStatus,
   clearAllOrders,
@@ -377,6 +378,17 @@ export async function changeOrderStatusAction(
     revalidatePath(`/payment/${orderId}`);
   }
   return result;
+}
+
+/**
+ * Marks an order's Discord delivery as manually sent (admin copied the
+ * ready-to-send message into Discord themselves). No bot DM is triggered.
+ */
+export async function markDiscordDeliverySentAction(orderId: string): Promise<ActionResult> {
+  await assertAdminAccess();
+  const result = await markDiscordDeliveryManuallySent(orderId);
+  if (result.ok) revalidatePath(`/admin/orders/${orderId}`);
+  return result.ok ? { ok: true } : { ok: false, error: "Échec de la mise à jour." };
 }
 
 export async function deleteOrderAction(orderId: string): Promise<ActionResult> {

@@ -130,6 +130,10 @@ export interface AdminOrderDiscordDTO {
   deliveryError: string | null;
   deliveryAttemptedAt: string | null;
   deliverySentAt: string | null;
+  /** Customer's Discord handle for MANUAL delivery (DM-verified, else OAuth). */
+  username: string | null;
+  /** Pre-composed message the admin copies into Discord — null until codes exist. */
+  readyMessage: string | null;
 }
 
 /** Admin order view — adds simulated email logs. */

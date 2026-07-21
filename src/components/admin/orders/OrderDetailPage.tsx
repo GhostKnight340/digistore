@@ -22,6 +22,7 @@ import {
   getAdminOrderDetailAction,
   getAvailableCodesAction,
   deliverOrderAction,
+  markDiscordDeliverySentAction,
 } from "@/app/actions/admin";
 import {
   approvePaymentAction,
@@ -688,7 +689,15 @@ export default function OrderDetailPage({
             itemCount={totalCodes}
           />
           <TimelineCard order={order} />
-          <DiscordCard order={order} />
+          <DiscordCard
+            order={order}
+            busy={busy}
+            onMarkSent={() =>
+              runAction("Livraison Discord marquée comme envoyée.", () =>
+                markDiscordDeliverySentAction(order.id),
+              )
+            }
+          />
           <EmailsCard order={order} />
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button
@@ -1991,8 +2000,17 @@ function TimelineCard({ order }: { order: AdminOrderDTO }) {
   );
 }
 
-function DiscordCard({ order }: { order: AdminOrderDTO }) {
+function DiscordCard({
+  order,
+  busy,
+  onMarkSent,
+}: {
+  order: AdminOrderDTO;
+  busy: boolean;
+  onMarkSent: () => void;
+}) {
   const d = order.discord;
+  const canMarkSent = d.deliveryRequested && !!d.readyMessage && d.deliveryStatus !== "SENT";
 
   const connectionLabel =
     d.connection === "activated"
@@ -2042,15 +2060,71 @@ function DiscordCard({ order }: { order: AdminOrderDTO }) {
             Raison : {d.deliveryError}
           </p>
         ) : null}
+        {d.deliveryRequested
+          ? row(
+              "Utilisateur Discord",
+              d.username ? `@${d.username}` : <span style={{ color: C.faint }}>inconnu</span>,
+            )
+          : null}
         {d.deliverySentAt ? (
           <p style={{ fontSize: 11, color: C.faint, margin: "2px 0 0" }}>
             Envoyé le {formatDate(d.deliverySentAt)}
           </p>
         ) : null}
       </div>
-      {/* Seam: the deferred "Renvoyer par Discord" admin retry action attaches
-          here once implemented (eligible only for delivered orders with a
-          verified DM user id and an existing delivered code). */}
+
+      {/* Manual Discord delivery: the admin copies this message into Discord and
+          marks it sent. No bot DM is triggered (automatic send was removed). */}
+      {d.deliveryRequested && d.readyMessage ? (
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11.5, color: C.faint }}>Message prêt à envoyer</span>
+            <CopyButton value={d.readyMessage} label="Copier" />
+          </div>
+          <textarea
+            readOnly
+            value={d.readyMessage}
+            rows={8}
+            onFocus={(e) => e.currentTarget.select()}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              resize: "vertical",
+              fontSize: 11.5,
+              lineHeight: 1.5,
+              color: C.text,
+              background: "rgba(0,0,0,0.2)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 8,
+              padding: 10,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            }}
+          />
+          <button
+            type="button"
+            onClick={onMarkSent}
+            disabled={busy || !canMarkSent}
+            style={{
+              alignSelf: "flex-start",
+              fontSize: 12,
+              fontWeight: 600,
+              color: canMarkSent ? "#fff" : C.faint,
+              background: canMarkSent ? "#5865F2" : "transparent",
+              border: `1px solid ${canMarkSent ? "#5865F2" : "rgba(255,255,255,0.12)"}`,
+              borderRadius: 8,
+              padding: "6px 12px",
+              cursor: busy || !canMarkSent ? "not-allowed" : "pointer",
+              opacity: busy ? 0.6 : 1,
+            }}
+          >
+            {d.deliveryStatus === "SENT" ? "Déjà envoyé" : "Marquer comme envoyé"}
+          </button>
+        </div>
+      ) : d.deliveryRequested ? (
+        <p style={{ fontSize: 11.5, color: C.faint, margin: "12px 0 0" }}>
+          Le message prêt à envoyer apparaîtra une fois la commande livrée (codes attribués).
+        </p>
+      ) : null}
     </div>
   );
 }

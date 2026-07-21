@@ -16,7 +16,6 @@ import {
   notifyFulfillmentCompleted,
   notifyStockAlert,
 } from "@/lib/discord/notify";
-import { deliverOrderViaDiscord } from "@/lib/discord/dm";
 import type { ActionResult, AssignmentEntry, DeliveredFieldDTO, ItemAssignment } from "@/lib/dto";
 import {
   getSupplierProvider,
@@ -515,9 +514,9 @@ export async function deliverOrder(
       adminUrl,
     });
 
-    // Optional Discord DM of the delivered code(s). Additive convenience only:
-    // never throws, never affects the delivered order status (see dm.ts).
-    void deliverOrderViaDiscord(orderId);
+    // Discord order delivery is intentionally MANUAL (see dm.ts): the admin
+    // sends the ready-to-send message from the fulfillment page. No automatic
+    // bot DM fires here.
 
     // Provider post-delivery hooks (e.g. Reloadly §10 cost reconciliation).
     // Best-effort, append-only side effects; never affect the delivered order.

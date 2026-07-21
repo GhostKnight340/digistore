@@ -19,6 +19,7 @@ import { timeAdmin } from "./adminTiming";
 import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
 import { notifyOrderCreated } from "@/lib/discord/notify";
+import { buildDeliveryItems, buildDeliveryMessage } from "@/lib/discord/deliveryMessage";
 import {
   absoluteAppUrl,
   formatPublicOrderNumber,
@@ -699,19 +700,54 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
         discordDeliveryError: true,
         discordDeliveryAttemptedAt: true,
         discordDeliverySentAt: true,
-        customer: { select: { discordId: true, discordDmActivated: true } },
+        customer: {
+          select: {
+            discordId: true,
+            discordDmActivated: true,
+            discordDmUsername: true,
+            discordDmDisplayName: true,
+            discordUsername: true,
+            discordGlobalName: true,
+          },
+        },
+        // Delivered codes drive the manual "ready to send" message (admin
+        // copies it into Discord). Present only once the order is fulfilled.
+        deliveredCodes: {
+          select: {
+            manualCode: true,
+            deliveryPayload: true,
+            digitalCode: { select: { code: true } },
+            product: { select: { name: true } },
+            orderItem: {
+              select: {
+                variant: { select: { faceValue: true, faceCurrency: true, name: true } },
+              },
+            },
+          },
+        },
       },
     }),
   ]);
 
   if (!order) return null;
   const reference = await publicOrderReference(order);
-  const connection: "none" | "connected" | "activated" = discordRow?.customer
-    ?.discordDmActivated
+  const dCustomer = discordRow?.customer;
+  const connection: "none" | "connected" | "activated" = dCustomer?.discordDmActivated
     ? "activated"
-    : discordRow?.customer?.discordId
+    : dCustomer?.discordId
       ? "connected"
       : "none";
+  const username =
+    dCustomer?.discordDmUsername ??
+    dCustomer?.discordDmDisplayName ??
+    dCustomer?.discordUsername ??
+    dCustomer?.discordGlobalName ??
+    null;
+  const codes = discordRow?.deliveredCodes ?? [];
+  const readyMessage =
+    codes.length > 0
+      ? buildDeliveryMessage(reference.number, buildDeliveryItems(codes))
+      : null;
   return {
     ...buildCustomerDTO(order, reference, { includeUndeliveredCodes: true }),
     emailLogs: emailLogs.map(buildEmailLogDTO),
@@ -727,6 +763,8 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
       deliverySentAt: discordRow?.discordDeliverySentAt
         ? iso(discordRow.discordDeliverySentAt)
         : null,
+      username,
+      readyMessage,
     },
   };
 }
