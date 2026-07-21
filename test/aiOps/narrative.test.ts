@@ -40,7 +40,7 @@ test("coerceNarrative falls back when the summary is missing or unparseable", ()
   assert.equal(coerceNarrative("", FALLBACK), FALLBACK);
 });
 
-test("coerceNarrative caps list fields at 4 items", () => {
+test("coerceNarrative caps list fields (brevity)", () => {
   const raw = JSON.stringify({ summary: "s", recommendations: ["1", "2", "3", "4", "5", "6"], trends: "", topPriorities: [] });
-  assert.equal(coerceNarrative(raw, FALLBACK).recommendations.length, 4);
+  assert.equal(coerceNarrative(raw, FALLBACK).recommendations.length, 3);
 });

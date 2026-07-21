@@ -25,6 +25,20 @@ export const NARRATIVE_JSON_INSTRUCTION = [
 ].join("\n");
 
 /**
+ * Shared brevity directive. These reports are a quick glance in Discord, not a
+ * memo — keep every field short and skip padding, especially when things are
+ * healthy or there is little data.
+ */
+export const NARRATIVE_BREVITY = [
+  "Keep it SHORT — this is a quick glance in Discord, not a memo:",
+  "- summary: 1-2 sentences, max ~35 words.",
+  "- recommendations: at most 2, each ONE short line; omit entirely if nothing is actionable.",
+  "- trends: one short sentence, or just 'stable' (or its equivalent) when nothing stands out.",
+  "- topPriorities: at most 2, each ONE short line.",
+  "- When everything is healthy or there is little/no data, say so in a single line — do NOT pad, speculate about causes, or repeat the same point across fields.",
+].join("\n");
+
+/**
  * Leniently extracts the first JSON object from a completion. Free/small models
  * often wrap JSON in prose or code fences, so we scan for a balanced `{…}` block
  * rather than trusting strict structured output. Returns null when nothing
@@ -53,7 +67,7 @@ export function coerceNarrative(text: string, fallback: AiNarrative): AiNarrativ
   const s = extractJsonObject(text);
   const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
   const arr = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean).slice(0, 4) : [];
+    Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean).slice(0, 3) : [];
 
   const summary = s ? str(s.summary) : "";
   if (!summary) return fallback;

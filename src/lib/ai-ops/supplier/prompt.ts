@@ -8,7 +8,7 @@
  * unit-testable.
  */
 
-import { NARRATIVE_JSON_INSTRUCTION } from "../narrative";
+import { NARRATIVE_JSON_INSTRUCTION, NARRATIVE_BREVITY } from "../narrative";
 
 function languageName(code: string): string {
   const c = (code ?? "").toLowerCase();
@@ -28,11 +28,9 @@ export function buildSupplierPrompt(language: string, extra?: string): string {
     "",
     "You are given a JSON payload: `figures` (deterministic supplier metrics already computed — per-supplier API health/status, subscription, latency, delivered-order costs, fulfillment counts, and precomputed operational alerts) and `unavailable` (metric groups that could not be retrieved this run).",
     "",
-    "Your job is the WORDS only — a brief operations read for the team:",
-    "- `summary`: 2-4 sentences. Lead with anything broken or at risk (a supplier down, a subscription inactive, failing calls); otherwise confirm suppliers are healthy.",
-    "- `recommendations`: concrete, actionable, tied to the actual figures/alerts.",
-    "- `trends`: one short paragraph; say 'stable' if nothing stands out.",
-    "- `topPriorities`: the few supplier actions that matter most right now.",
+    "Your job is the WORDS only — a brief operations read for the team. Lead with anything broken or at risk (a supplier down, a subscription inactive, failing calls); otherwise just confirm suppliers are healthy in one line.",
+    "",
+    NARRATIVE_BREVITY,
     "",
     "Hard rules:",
     "- NEVER invent, estimate, restate, or extrapolate any number, cost, latency, or timestamp. The formatter prints the figures itself; reference them qualitatively (\"latency is high\", \"a supplier is down\") and never state a value not present in `figures`.",

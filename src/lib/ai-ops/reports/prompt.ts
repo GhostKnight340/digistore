@@ -11,6 +11,7 @@
  */
 
 import { reportDefinition, type ReportType } from "./reportTypes";
+import { NARRATIVE_BREVITY } from "../narrative";
 
 /** The prose the model returns. Numbers live in the deterministic figures. */
 export interface ReportNarrative {
@@ -55,11 +56,9 @@ export function buildReportPrompt(type: ReportType, language: string, extra?: st
     "",
     "You are given a JSON payload: `figures` (deterministic numbers already computed, covering the period named in `windowLabel`) and `unavailable` (a list of metric groups that could not be retrieved this run).",
     "",
-    "Your job is the WORDS only — a brief executive read, not a dashboard:",
-    "- `summary`: 2-4 sentences. Speak like an assistant briefing a CEO, not a report generator.",
-    "- `recommendations`: concrete, actionable, tied to the actual figures.",
-    "- `trends`: one short paragraph; say 'stable' if nothing stands out.",
-    "- `topPriorities`: the few things that matter most for the period ahead.",
+    "Your job is the WORDS only — a brief executive read, not a dashboard. Speak like an assistant briefing a CEO.",
+    "",
+    NARRATIVE_BREVITY,
     "",
     "Hard rules:",
     "- NEVER invent, estimate, restate, or extrapolate any number. The formatter prints the figures itself; you reference them qualitatively (\"revenue was strong\", \"orders are waiting\") — do not repeat exact amounts you are unsure of, and never state a figure not present in `figures`.",
