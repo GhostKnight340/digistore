@@ -121,7 +121,7 @@ export function isChannelPurpose(value: string): value is ChannelPurpose {
 // "mock" returns deterministic placeholder output (the foundation default, no
 // key required); "disabled" hard-refuses. Real providers are wired later.
 
-export const AI_PROVIDERS = ["mock", "disabled", "anthropic", "openai"] as const;
+export const AI_PROVIDERS = ["mock", "disabled", "openrouter", "anthropic", "openai"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
 export function isAiProvider(value: string): value is AiProvider {

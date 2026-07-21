@@ -18,6 +18,23 @@ export function isAiOpsEnvEnabled(): boolean {
   return process.env.AI_OPS_ENABLED === "true";
 }
 
+/** OpenRouter API key — SECRET, server-only, never NEXT_PUBLIC. */
+export function getOpenRouterApiKey(): string | undefined {
+  return process.env.OPENROUTER_API_KEY || undefined;
+}
+
+/**
+ * Optional attribution headers OpenRouter uses for its rankings. Safe to expose;
+ * default to the public site. Never affects auth.
+ */
+export function getOpenRouterReferer(): string {
+  return process.env.OPENROUTER_SITE_URL || "https://ghost.ma";
+}
+
+export function getOpenRouterTitle(): string {
+  return process.env.OPENROUTER_APP_TITLE || "Ghost.ma AI Operations";
+}
+
 /** Anthropic API key — SECRET, server-only, never NEXT_PUBLIC. */
 export function getAnthropicApiKey(): string | undefined {
   return process.env.ANTHROPIC_API_KEY || undefined;
@@ -39,6 +56,8 @@ export function isProviderConfigured(provider: AiProvider): boolean {
       return true;
     case "disabled":
       return false;
+    case "openrouter":
+      return Boolean(getOpenRouterApiKey());
     case "anthropic":
       return Boolean(getAnthropicApiKey());
     case "openai":

@@ -16,9 +16,22 @@
 
 import "server-only";
 
-import { fallbackProvider, isProviderConfigured } from "./config";
+import {
+  fallbackProvider,
+  getOpenRouterApiKey,
+  getOpenRouterReferer,
+  getOpenRouterTitle,
+  isProviderConfigured,
+} from "./config";
 import { estimateCostUsd, estimateTokens } from "./usage";
 import { isAiProvider, type AiProvider } from "./types";
+import {
+  OPENROUTER_URL,
+  buildOpenRouterBody,
+  isRetryableStatus,
+  mapOpenRouterStatus,
+  parseOpenRouterResponse,
+} from "./providers/openrouterCore";
 
 export interface AiToolDefinition {
   name: string;
@@ -132,6 +145,87 @@ function safeStringify(value: unknown): string {
   }
 }
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Real OpenRouter adapter (OpenAI-compatible chat completions). The pure
+ * request/response/error logic lives in providers/openrouterCore.ts; this class
+ * is only the network edge: auth header, timeout via AbortController, and a
+ * BOUNDED retry (opt-in through the request's retry policy — there is no
+ * automatic fallback to a different, more expensive model by default).
+ *
+ * Never leaks the key: the Authorization header is built here and never logged.
+ */
+class OpenRouterProvider implements AiProviderClient {
+  readonly provider: AiProvider = "openrouter";
+  constructor(private readonly apiKey: string) {}
+
+  async complete(request: AiCompletionRequest): Promise<AiCompletionResult> {
+    const body = buildOpenRouterBody(request);
+    const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxRetries = Math.max(0, request.retry?.maxRetries ?? 0);
+    const backoffMs = request.retry?.backoffMs ?? 500;
+
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(OPENROUTER_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": getOpenRouterReferer(),
+            "X-Title": getOpenRouterTitle(),
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          if (isRetryableStatus(response.status) && attempt < maxRetries) {
+            await sleep(backoffMs * (attempt + 1));
+            continue;
+          }
+          // Body is drained but never surfaced — an OpenRouter error body can
+          // echo the request/system prompt; only the status maps to a code.
+          throw new AiProviderError(
+            mapOpenRouterStatus(response.status),
+            `OpenRouter request failed (${response.status}).`,
+          );
+        }
+
+        const json = await response.json();
+        const parsed = parseOpenRouterResponse(request, json);
+        return {
+          provider: this.provider,
+          model: parsed.model,
+          text: parsed.text,
+          structured: parsed.structured,
+          usage: parsed.usage,
+        };
+      } catch (error) {
+        if (error instanceof AiProviderError) throw error;
+        const aborted = error instanceof Error && error.name === "AbortError";
+        if (!aborted && attempt < maxRetries) {
+          await sleep(backoffMs * (attempt + 1));
+          continue;
+        }
+        throw new AiProviderError(
+          aborted ? "timeout" : "unknown",
+          aborted ? "OpenRouter request timed out." : "OpenRouter request error.",
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
+}
+
 /**
  * Resolves the concrete client for a requested provider. Unknown or
  * unconfigured providers degrade to the mock (never to an expensive real
@@ -141,8 +235,16 @@ export function resolveProvider(requested: string): AiProviderClient {
   const provider: AiProvider = isAiProvider(requested) ? requested : fallbackProvider();
   if (provider === "disabled") return new DisabledProvider();
   if (provider === "mock") return new MockProvider();
-  // Real providers are not wired in this foundation task: if a key is present
-  // we still fall back to mock (no SDK adapter yet), and if not, mock as well.
+
+  // OpenRouter is the wired real provider. If its key is present, use it;
+  // otherwise degrade to mock (never to another, more expensive provider).
+  if (provider === "openrouter") {
+    const key = getOpenRouterApiKey();
+    return key ? new OpenRouterProvider(key) : new MockProvider();
+  }
+
+  // Anthropic/OpenAI direct SDK adapters are not wired yet — degrade to mock
+  // rather than silently failing over to an expensive path.
   if (!isProviderConfigured(provider)) return new MockProvider();
   return new MockProvider();
 }

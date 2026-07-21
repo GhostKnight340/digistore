@@ -22,6 +22,13 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   "claude-haiku-4-5": { inPerMTok: 1, outPerMTok: 5 },
   "claude-sonnet-5": { inPerMTok: 3, outPerMTok: 15 },
   "claude-opus-4-8": { inPerMTok: 15, outPerMTok: 75 },
+  // OpenRouter-namespaced ids (fallback estimate only — OpenRouter returns the
+  // real cost in usage.cost when available).
+  "anthropic/claude-haiku-4.5": { inPerMTok: 1, outPerMTok: 5 },
+  "anthropic/claude-sonnet-4.5": { inPerMTok: 3, outPerMTok: 15 },
+  "anthropic/claude-opus-4.1": { inPerMTok: 15, outPerMTok: 75 },
+  "openai/gpt-4o-mini": { inPerMTok: 0.15, outPerMTok: 0.6 },
+  "google/gemini-flash-1.5": { inPerMTok: 0.075, outPerMTok: 0.3 },
   // Mock/disabled providers cost nothing.
   mock: { inPerMTok: 0, outPerMTok: 0 },
   disabled: { inPerMTok: 0, outPerMTok: 0 },
