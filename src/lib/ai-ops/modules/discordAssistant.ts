@@ -20,34 +20,22 @@ import "server-only";
 
 import { callTool } from "../tools/service";
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
-import { buildSystemPrompt, SNAPSHOT_TOOLS } from "../discord/assistantPrompt";
+import { buildSystemPrompt } from "../discord/assistantPrompt";
+import { runToolLoop, type ToolLoopLimits } from "../toolLoop";
 import type { ConversationTurn } from "../discord/conversation";
-import type { ToolName } from "../types";
 
 export const DISCORD_ASSISTANT_MODULE = "discord_assistant" as const;
 
 /**
- * Safe input for a snapshot tool. Interim: the fixed "today" snapshot uses the
- * date-range tools scoped to today; the tool-calling loop (next phase) lets the
- * model pick the range per question.
+ * Bounds for the tool-calling loop. Kept modest so a single question can never
+ * fan out without limit; made configurable via AI Operations settings later.
  */
-function toolInput(tool: ToolName): unknown {
-  const range = { range: { preset: "today" as const } };
-  switch (tool) {
-    case "getSalesSummary":
-    case "getOrderSummary":
-    case "getPaymentSummary":
-    case "getFulfillmentPerformance":
-    case "getCustomerMetrics":
-      return range;
-    case "getProductPerformance":
-      return { ...range, limit: 10 };
-    case "getRecentOperationalEvents":
-      return { limit: 15 };
-    default:
-      return {};
-  }
-}
+const TOOL_LOOP_LIMITS: ToolLoopLimits = {
+  maxRounds: 4,
+  maxCallsPerTool: 3,
+  maxTotalCalls: 8,
+  timeoutMs: 30_000,
+};
 
 export interface AssistantAnswer {
   ok: true;
@@ -70,51 +58,31 @@ export interface AnswerInput {
 }
 
 /**
- * Gather the snapshot through the safe tool layer. Only granted tools are pulled
- * (permissions are also re-checked inside `callTool`); a failed/denied tool is
- * recorded as unavailable rather than aborting the whole answer.
+ * The module body handed to the runner (guardrails wrap this). It runs the
+ * bounded tool-calling loop: the model selects the granted safe tools it needs
+ * (including several for comparison questions), each executed via `callTool`,
+ * and answers strictly from the results.
  */
-async function gatherSnapshot(ctx: ModuleRunContext): Promise<Record<string, unknown>> {
-  const granted = new Set<string>(ctx.config.grantedTools);
-  const snapshot: Record<string, unknown> = {};
-  for (const { tool, label } of SNAPSHOT_TOOLS) {
-    if (!granted.has(tool)) continue; // respect the permission model
-    const result = await callTool({
-      module: DISCORD_ASSISTANT_MODULE,
-      tool,
-      input: toolInput(tool),
-      executionId: ctx.executionId,
-    });
-    snapshot[label] = result.ok ? result.data : { unavailable: true, reason: result.status };
-  }
-  return snapshot;
-}
-
-/** The module body handed to the runner (guardrails wrap this). */
 async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise<ModuleRunOutput> {
-  const businessData = await gatherSnapshot(ctx);
-  const completion = await ctx.client.complete({
+  const result = await runToolLoop({
+    client: ctx.client,
     model: ctx.model,
-    system: buildSystemPrompt(ctx.config.instructions),
-    input: {
-      question: input.question,
-      conversation: input.history ?? [],
-      businessData,
-      dataScope: "today",
-    },
-    timeoutMs: 30_000,
+    grantedTools: ctx.config.grantedTools,
+    // Every tool the model picks is executed through the safe tool layer, which
+    // re-checks permission, validates input, rate-limits, redacts, and logs.
+    executeTool: ({ name, input: toolInput }) =>
+      callTool({ module: DISCORD_ASSISTANT_MODULE, tool: name, input: toolInput, executionId: ctx.executionId }),
+    systemPrompt: buildSystemPrompt(ctx.config.instructions),
+    question: input.question,
+    history: input.history,
+    limits: TOOL_LOOP_LIMITS,
   });
-  const answer = completion.text.trim();
   return {
-    provider: completion.provider,
-    model: completion.model,
-    summary: `CEO assistant answered via ${completion.provider}/${completion.model}.`,
-    text: answer,
-    usage: {
-      tokensIn: completion.usage.tokensIn,
-      tokensOut: completion.usage.tokensOut,
-      costUsd: completion.usage.estimatedCostUsd,
-    },
+    provider: result.provider,
+    model: result.model,
+    summary: `CEO assistant answered via ${result.provider}/${result.model} (${result.toolCalls} tool call(s)).`,
+    text: result.text,
+    usage: result.usage,
   };
 }
 

@@ -6,18 +6,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import {
-  buildSystemPrompt,
-  SNAPSHOT_TOOLS,
-} from "../../src/lib/ai-ops/discord/assistantPrompt";
+import { buildSystemPrompt } from "../../src/lib/ai-ops/discord/assistantPrompt";
 import { DEFAULT_TOOL_GRANTS } from "../../src/lib/ai-ops/types";
+import { toolDefinitionsFor, definedTools } from "../../src/lib/ai-ops/toolDefs";
 
 // ─── Prompt builder ──────────────────────────────────────────────────────────
 
-test("the system prompt forbids inventing numbers", () => {
+test("the system prompt forbids inventing numbers and grounds in tool results", () => {
   const p = buildSystemPrompt().toLowerCase();
   assert.ok(p.includes("never invent"), "must forbid inventing numbers");
-  assert.ok(p.includes("only from the provided"), "must ground answers in provided data");
+  assert.ok(p.includes("come from a tool"), "every metric must come from a tool result");
 });
 
 test("the system prompt asks the model to mirror the user's language (FR/EN)", () => {
@@ -39,23 +37,41 @@ test("operator instructions are appended, not replaced", () => {
   assert.ok(p.includes("Prefer bullet points."), "extra guidance appended");
 });
 
-// ─── Snapshot spec ───────────────────────────────────────────────────────────
+// ─── Tool definitions exposed to the model ───────────────────────────────────
 
-test("every snapshot tool is one the module is granted by default", () => {
-  const granted = new Set<string>(DEFAULT_TOOL_GRANTS.discord_assistant);
-  for (const { tool } of SNAPSHOT_TOOLS) {
-    assert.ok(granted.has(tool), `${tool} must be in the module's default grants`);
+test("only granted CEO tools are exposed as model tool definitions", () => {
+  const grants = DEFAULT_TOOL_GRANTS.discord_assistant;
+  const defs = toolDefinitionsFor(grants);
+  const names = new Set(defs.map((d) => d.name));
+  // Every exposed def is a granted tool (no leaking non-granted tools).
+  for (const d of defs) assert.ok((grants as readonly string[]).includes(d.name), `${d.name} not granted`);
+  // The core CEO tools all have a model-facing definition.
+  for (const t of ["getSalesSummary", "getOrderSummary", "getProductPerformance", "getOperationalIssues"]) {
+    assert.ok(names.has(t), `${t} must be exposed to the model`);
   }
+  // A module granted nothing exposes nothing.
+  assert.equal(toolDefinitionsFor([]).length, 0);
+  // definedTools is a subset of the CEO grants (no stray definitions).
+  assert.ok(definedTools().length >= 6);
 });
 
 // ─── Source-level security guards ────────────────────────────────────────────
 
 const MODULE_SRC = readFileSync("src/lib/ai-ops/modules/discordAssistant.ts", "utf8");
+const LOOP_SRC = readFileSync("src/lib/ai-ops/toolLoop.ts", "utf8");
 
 test("the module never imports Prisma directly — it must use the safe tool layer", () => {
   assert.ok(!/@\/lib\/db\/prisma/.test(MODULE_SRC), "must not import the prisma client");
   assert.ok(!/from ["']@prisma\/client["']/.test(MODULE_SRC), "must not import prisma client pkg");
+  // Data is read via callTool, wired into the tool-calling loop.
   assert.ok(/callTool\(/.test(MODULE_SRC), "must read data through callTool");
+  assert.ok(/runToolLoop\(/.test(MODULE_SRC), "must drive the bounded tool-calling loop");
+});
+
+test("the tool loop enforces grants and never runs model code", () => {
+  assert.ok(/granted\.has\(/.test(LOOP_SRC), "must reject non-granted tools");
+  assert.ok(/isToolName\(/.test(LOOP_SRC), "must reject unknown tools");
+  assert.ok(!/eval\(|new Function/.test(LOOP_SRC), "must never execute model-generated code");
 });
 
 test("the module never imports discord.js (that lives only in the worker)", () => {

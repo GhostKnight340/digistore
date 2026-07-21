@@ -9,7 +9,7 @@
  * (fetch, timeout, retry) lives in src/lib/ai-ops/provider.ts.
  */
 
-import type { AiCompletionRequest, AiErrorCode } from "../provider";
+import type { AiCompletionRequest, AiErrorCode, AiMessage, AiToolCall } from "../provider";
 import { estimateCostUsd } from "../usage";
 
 export const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -36,9 +36,35 @@ export function resolveOpenRouterModel(model: string | undefined | null): string
   return MODEL_ALIASES[m] ?? m;
 }
 
+export interface OpenRouterToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
 export interface OpenRouterMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  tool_calls?: OpenRouterToolCall[];
+  tool_call_id?: string;
+  name?: string;
+}
+
+/** Map provider-agnostic messages to OpenAI-compatible OpenRouter messages. */
+export function toOpenRouterMessages(messages: AiMessage[]): OpenRouterMessage[] {
+  return messages.map((m) => {
+    const out: OpenRouterMessage = { role: m.role, content: m.content ?? "" };
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      out.tool_calls = m.toolCalls.map((t) => ({
+        id: t.id,
+        type: "function",
+        function: { name: t.name, arguments: t.arguments },
+      }));
+    }
+    if (m.toolCallId) out.tool_call_id = m.toolCallId;
+    if (m.name) out.name = m.name;
+    return out;
+  });
 }
 
 export interface OpenRouterRequestBody {
@@ -65,12 +91,18 @@ function userContent(input: unknown): string {
 
 /** Builds the OpenAI-compatible request body from a provider-agnostic request. Pure. */
 export function buildOpenRouterBody(request: AiCompletionRequest): OpenRouterRequestBody {
+  // A multi-turn tool-calling loop supplies the full message history; otherwise
+  // build the simple system + user pair from system/input.
+  const messages =
+    request.messages && request.messages.length > 0
+      ? toOpenRouterMessages(request.messages)
+      : [
+          { role: "system" as const, content: request.system },
+          { role: "user" as const, content: userContent(request.input) },
+        ];
   const body: OpenRouterRequestBody = {
     model: resolveOpenRouterModel(request.model),
-    messages: [
-      { role: "system", content: request.system },
-      { role: "user", content: userContent(request.input) },
-    ],
+    messages,
     usage: { include: true },
   };
   if (request.responseSchema) {
@@ -92,14 +124,33 @@ export interface ParsedCompletion {
   model: string;
   text: string;
   structured?: unknown;
+  toolCalls?: AiToolCall[];
   usage: { tokensIn: number; tokensOut: number; estimatedCostUsd: number };
 }
 
 /** Shape of the fields we read from an OpenRouter response. */
 interface OpenRouterResponse {
   model?: string;
-  choices?: { message?: { content?: string | null } }[];
+  choices?: {
+    message?: {
+      content?: string | null;
+      tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[];
+    };
+  }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+}
+
+/** Extract validated tool calls from a response message (skips malformed ones). */
+function parseToolCalls(raw: unknown): AiToolCall[] {
+  if (!Array.isArray(raw)) return [];
+  const calls: AiToolCall[] = [];
+  for (const tc of raw as { id?: unknown; function?: { name?: unknown; arguments?: unknown } }[]) {
+    const id = typeof tc?.id === "string" ? tc.id : "";
+    const name = typeof tc?.function?.name === "string" ? tc.function.name : "";
+    const args = typeof tc?.function?.arguments === "string" ? tc.function.arguments : "{}";
+    if (id && name) calls.push({ id, name, arguments: args });
+  }
+  return calls;
 }
 
 /**
@@ -113,7 +164,9 @@ export function parseOpenRouterResponse(
 ): ParsedCompletion {
   const res = (json ?? {}) as OpenRouterResponse;
   const model = res.model ?? resolveOpenRouterModel(request.model);
-  const text = res.choices?.[0]?.message?.content ?? "";
+  const message = res.choices?.[0]?.message;
+  const text = message?.content ?? "";
+  const toolCalls = parseToolCalls(message?.tool_calls);
   const tokensIn = Math.max(0, res.usage?.prompt_tokens ?? 0);
   const tokensOut = Math.max(0, res.usage?.completion_tokens ?? 0);
   const reportedCost = typeof res.usage?.cost === "number" ? res.usage.cost : null;
@@ -131,6 +184,7 @@ export function parseOpenRouterResponse(
     model,
     text: request.responseSchema ? "" : text,
     structured,
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     usage: { tokensIn, tokensOut, estimatedCostUsd },
   };
 }

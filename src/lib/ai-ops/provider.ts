@@ -40,6 +40,28 @@ export interface AiToolDefinition {
   parameters: Record<string, unknown>;
 }
 
+/** A tool call the model requested. `arguments` is a raw JSON string (unparsed). */
+export interface AiToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+/**
+ * A conversation message for the multi-turn tool-calling loop. When a request
+ * carries `messages`, the adapter uses them verbatim instead of building from
+ * `system` + `input` — enabling the assistant→tool→assistant round trips.
+ */
+export interface AiMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  /** Assistant messages that requested tools. */
+  toolCalls?: AiToolCall[];
+  /** Tool-result messages: the id of the call being answered + the tool name. */
+  toolCallId?: string;
+  name?: string;
+}
+
 export interface AiRetryPolicy {
   maxRetries: number;
   backoffMs: number;
@@ -48,8 +70,10 @@ export interface AiRetryPolicy {
 export interface AiCompletionRequest {
   model: string;
   system: string;
-  /** Structured input; serialized by the adapter. */
+  /** Structured input; serialized by the adapter. Ignored when `messages` is set. */
   input: unknown;
+  /** Full message history for the tool-calling loop; overrides system+input. */
+  messages?: AiMessage[];
   tools?: AiToolDefinition[];
   /** Ask the provider for structured JSON output matching this schema. */
   responseSchema?: Record<string, unknown>;
@@ -70,6 +94,8 @@ export interface AiCompletionResult {
   text: string;
   /** Parsed structured output, when a responseSchema was supplied. */
   structured?: unknown;
+  /** Tool calls the model requested this turn (empty/undefined when none). */
+  toolCalls?: AiToolCall[];
   usage: AiUsage;
 }
 
@@ -115,7 +141,9 @@ class DisabledProvider implements AiProviderClient {
 class MockProvider implements AiProviderClient {
   readonly provider: AiProvider = "mock";
   async complete(request: AiCompletionRequest): Promise<AiCompletionResult> {
-    const inputText = `${request.system}\n${safeStringify(request.input)}`;
+    const inputText = request.messages
+      ? request.messages.map((m) => m.content).join("\n")
+      : `${request.system}\n${safeStringify(request.input)}`;
     const tokensIn = estimateTokens(inputText);
     const text = request.responseSchema
       ? ""
@@ -206,6 +234,7 @@ class OpenRouterProvider implements AiProviderClient {
           model: parsed.model,
           text: parsed.text,
           structured: parsed.structured,
+          toolCalls: parsed.toolCalls,
           usage: parsed.usage,
         };
       } catch (error) {
