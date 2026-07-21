@@ -1,6 +1,8 @@
 import "server-only";
 
+import { Prisma } from "@prisma/client";
 import { prisma, ensureDatabaseReady } from "@/lib/db/prisma";
+import { normalizeSearch, ALIAS_GROUPS } from "@/lib/search/text";
 import { getStoreSettings } from "@/lib/db/catalog";
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveFooterPaymentBadges } from "@/lib/footerConfig";
@@ -298,13 +300,44 @@ export async function listCouponRefs(): Promise<
   });
 }
 
+/**
+ * Expand a query into the terms the storefront would also match: the query
+ * itself plus every canonical/alias in any alias group it touches (so "psn"
+ * finds "PlayStation"). Reuses the single shared alias table.
+ */
+function expandProductQueryTerms(query: string): string[] {
+  const norm = normalizeSearch(query);
+  if (!norm) return [];
+  const terms = new Set<string>([norm]);
+  for (const group of ALIAS_GROUPS) {
+    const all = [group.canonical, ...group.aliases].map(normalizeSearch);
+    if (all.some((t) => t && (t === norm || t.includes(norm) || norm.includes(t)))) {
+      all.forEach((t) => t && terms.add(t));
+    }
+  }
+  return [...terms];
+}
+
 export async function searchProductsForComposer(
   query: string,
 ): Promise<{ id: string; name: string; region: string; priceMad: number; imageUrl: string | null; productUrl: string }[]> {
   await ensureDatabaseReady();
   const q = query.trim();
+  const terms = expandProductQueryTerms(q);
+  const where: Prisma.ProductWhereInput = q
+    ? {
+        active: true,
+        OR: terms.flatMap((t) => [
+          { name: { contains: t, mode: "insensitive" as const } },
+          { brand: { contains: t, mode: "insensitive" as const } },
+          { category: { contains: t, mode: "insensitive" as const } },
+          { slug: { contains: t.replace(/\s+/g, "-"), mode: "insensitive" as const } },
+          { searchAliases: { has: t } },
+        ]),
+      }
+    : { active: true };
   const rows = await prisma.product.findMany({
-    where: q ? { active: true, name: { contains: q, mode: "insensitive" } } : { active: true },
+    where,
     take: 20,
     orderBy: { sortOrder: "asc" },
     select: { id: true, name: true, slug: true, region: true, priceMad: true, imageUrl: true },

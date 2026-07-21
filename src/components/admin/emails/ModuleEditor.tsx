@@ -408,18 +408,45 @@ function ProductEditor({
   const [results, setResults] = useState<
     { id: string; name: string; region: string; priceMad: number; imageUrl: string | null; productUrl: string }[]
   >([]);
+  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const search = async () => {
-    const list = await searchProductsAction(query);
-    setResults(list);
+    setLoading(true);
+    try {
+      const list = await searchProductsAction(query);
+      setResults(list);
+      setSearched(true);
+    } catch {
+      setResults([]);
+      setSearched(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <input className={FIELD} placeholder="Rechercher un produit" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <button type="button" onClick={search} className="btn-ghost text-xs">Chercher</button>
+        <input
+          className={FIELD}
+          placeholder="Rechercher un produit (nom, ex. PSN, Steam…)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              search();
+            }
+          }}
+        />
+        <button type="button" onClick={search} disabled={loading} className="btn-ghost text-xs">
+          {loading ? "…" : "Chercher"}
+        </button>
       </div>
+      {searched && results.length === 0 && !loading && (
+        <p className="text-xs text-muted">Aucun produit trouvé.</p>
+      )}
       {results.length > 0 && (
         <ul className="max-h-40 overflow-y-auto rounded-xl border border-border">
           {results.map((p) => (
