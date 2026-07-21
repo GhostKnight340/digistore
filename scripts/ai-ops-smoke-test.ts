@@ -5,8 +5,8 @@
  * OpenRouter completion through the provider-agnostic interface, printing the
  * text, token usage, and cost. No database, no other side effects.
  *
- *   npm run ai-ops:smoke-test                 # default cheap model
- *   npm run ai-ops:smoke-test anthropic/claude-haiku-4.5
+ *   npm run ai-ops:smoke-test                 # default free model
+ *   npm run ai-ops:smoke-test anthropic/claude-haiku-4.5   # paid, needs credits
  */
 import { resolveProvider } from "../src/lib/ai-ops/provider";
 import { isProviderConfigured } from "../src/lib/ai-ops/config";
@@ -19,7 +19,7 @@ async function main() {
     process.exit(1);
   }
 
-  const model = process.argv[2] || "anthropic/claude-haiku-4.5";
+  const model = process.argv[2] || "google/gemma-4-26b-a4b-it:free";
   const client = resolveProvider("openrouter");
   console.log(`→ Calling OpenRouter (provider=${client.provider}, model=${model})…`);
 

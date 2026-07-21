@@ -218,16 +218,31 @@ async function getOrderDetails({ orderId }: OrderIdInput) {
 
 async function getPaymentSummary({ periodDays }: PeriodInput) {
   const since = sinceDays(periodDays);
-  const grouped = await prisma.order.groupBy({
-    by: ["status"],
-    where: { createdAt: { gte: since } },
-    _count: { _all: true },
-    _sum: { totalMad: true },
-  });
+  const [byStatus, byMethod] = await Promise.all([
+    prisma.order.groupBy({
+      by: ["status"],
+      where: { createdAt: { gte: since } },
+      _count: { _all: true },
+      _sum: { totalMad: true },
+    }),
+    // Breakdown by payment method answers "what payment methods were used?" —
+    // an aggregate, no per-customer data.
+    prisma.order.groupBy({
+      by: ["paymentMethod"],
+      where: { createdAt: { gte: since } },
+      _count: { _all: true },
+      _sum: { totalMad: true },
+    }),
+  ]);
   return {
     periodDays,
-    byStatus: grouped.map((g) => ({
+    byStatus: byStatus.map((g) => ({
       status: g.status,
+      count: g._count._all,
+      totalMad: g._sum.totalMad ?? 0,
+    })),
+    byMethod: byMethod.map((g) => ({
+      paymentMethod: g.paymentMethod,
       count: g._count._all,
       totalMad: g._sum.totalMad ?? 0,
     })),
