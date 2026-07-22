@@ -16,7 +16,10 @@ import type {
   OpsHealthStatus,
 } from "@/lib/dto";
 import CeoBriefing from "@/components/admin/CeoBriefing";
-import { briefingFromSnapshot } from "@/lib/ops/ceoBriefing";
+import { briefingFromSnapshot } from "@/lib/ops/ceoBriefing/fallback";
+import { computeCandidates, materialFactsHash } from "@/lib/ops/ceoBriefing/candidates";
+import { refreshCeoBriefingAction } from "@/app/actions/operations";
+import type { CeoBriefingDTO } from "@/lib/dto";
 import { relativeTime } from "./shared";
 
 /** Auto-refresh cadence — cheap snapshot (cached supplier state, no provider calls). */
@@ -36,8 +39,38 @@ function sevOf(status: OpsHealthStatus): SevKey {
   return status === "healthy" ? "ok" : status === "warning" ? "warn" : status === "offline" ? "danger" : "neutral";
 }
 
-export default function OperationsDashboard({ initial }: { initial: OperationsSnapshotDTO }) {
+export default function OperationsDashboard({
+  initial,
+  initialBriefing,
+}: {
+  initial: OperationsSnapshotDTO;
+  initialBriefing?: CeoBriefingDTO | null;
+}) {
   const [snapshot, setSnapshot] = useState(initial);
+  // The CEO Briefing: server-provided (AI or fallback), with the deterministic
+  // fallback as the instant client-side default so the card is never empty.
+  const [briefing, setBriefing] = useState<CeoBriefingDTO>(initialBriefing ?? briefingFromSnapshot(initial));
+  const [briefingBusy, setBriefingBusy] = useState(false);
+  const briefingBusyRef = useRef(false);
+
+  // Detect a material change since the shown briefing was generated (cheap, pure)
+  // so we can offer a manual refresh without spending on the AI every poll.
+  const liveHash = materialFactsHash(computeCandidates(snapshot, { supportOpen: 0 }));
+  const briefingStale = liveHash !== briefing.snapshotHash;
+
+  const refreshBriefing = useCallback(async () => {
+    if (briefingBusyRef.current) return;
+    briefingBusyRef.current = true;
+    setBriefingBusy(true);
+    try {
+      setBriefing(await refreshCeoBriefingAction());
+    } catch {
+      /* keep the last good briefing on a transient failure */
+    } finally {
+      briefingBusyRef.current = false;
+      setBriefingBusy(false);
+    }
+  }, []);
   const [range, setRange] = useState<Range>((initial.kpi.range as Range) ?? "7d");
   const [refreshing, setRefreshing] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -175,10 +208,16 @@ export default function OperationsDashboard({ initial }: { initial: OperationsSn
         </div>
       </header>
 
-      {/* CEO Briefing — one-glance daily situation, directly below the greeting.
-          Computed from the live snapshot the dashboard already polls (no extra
-          round-trip); updates in place every POLL_MS. */}
-      <CeoBriefing briefing={briefingFromSnapshot(snapshot)} />
+      {/* CEO Briefing — one-glance executive synthesis, directly below the
+          greeting. Server-generated (AI or deterministic fallback), refreshed on
+          demand; a subtle nudge appears when the live snapshot has materially
+          changed since it was written (so we don't spend on the AI every poll). */}
+      <CeoBriefing
+        briefing={briefing}
+        onRefresh={refreshBriefing}
+        refreshing={briefingBusy}
+        stale={briefingStale}
+      />
 
       {actionMsg && (
         <p className={`rounded-lg px-3 py-2 text-sm ${actionMsg.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>

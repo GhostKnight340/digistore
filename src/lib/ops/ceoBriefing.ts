@@ -1,126 +1,178 @@
+import "server-only";
+
 /**
- * CEO Briefing resolver (Ghost Mission Control) — PURE.
+ * CEO Briefing orchestrator (server entry).
  *
- * Turns an operations snapshot into one always-on daily briefing: the single
- * most important situation right now, plus what to do about it. The panel shows
- * exactly one state — never a stacked list of alerts — resolved by a
- * priority-ordered rule (first true condition wins):
+ * Hybrid pipeline (spec): deterministic facts → candidate issues (severity in
+ * code) → AI writes/prioritizes among candidates and returns approved action ids
+ * → server resolves ids to real routes. The AI never invents facts, routes, or
+ * actions, never executes anything, and can never lower a genuine critical
+ * (validation rejects that and we fall back).
  *
- *   1. system/supplier failure → `critical`
- *   2. anything pending (payment reviews, supplier warnings, other alerts) → `ok`
- *   3. everything healthy, nothing pending → `quiet`
+ * Cost control: the briefing is cached in a `StoreSetting` row (5–15 min TTL,
+ * keyed by a hash of the material facts). We only call the model on a manual
+ * refresh, when the material facts change, or when the cache expires — never on
+ * every client render. If the AI is disabled/unavailable/times out/returns
+ * something invalid, the deterministic fallback renders — never an empty card.
  *
- * `launch` and `opportunity` are part of the design's five states but need
- * backend signals that do not exist yet — a launch-checklist model and a
- * nightly opportunity-detection job. They are intentionally not emitted here;
- * wire them in once those signals land (the component already renders them).
- *
- * Every figure is real: it is derived from the {@link OperationsSnapshotDTO}
- * the Operations dashboard already holds — no fabricated estimates (`estimate`
- * stays null, we have no honest time-to-resolve signal). This module is kept
- * free of server-only imports so the client Operations dashboard can compute
- * the briefing from its live snapshot without a second round-trip.
+ * The pure pieces live under ./ceoBriefing/*; the client renders the fallback
+ * from ./ceoBriefing/fallback (client-safe) for its instant view.
  */
 
-import type { CeoBriefingActionDTO, CeoBriefingDTO, OperationsSnapshotDTO } from "@/lib/dto";
+import type { CeoBriefingDTO } from "@/lib/dto";
+import { getOperationsSnapshot } from "@/lib/ops/dashboard";
+import { countOpenSupportTickets } from "@/lib/db/supportTickets";
+import { getAiOpsSettings } from "@/lib/ai-ops/store";
+import { resolveProvider, AiProviderError } from "@/lib/ai-ops/provider";
+import { startExecution, finishExecution, recordUsage } from "@/lib/ai-ops/executions";
+import type { OperationsSnapshotDTO } from "@/lib/dto";
 
-const PRIORITY_LABEL = {
-  ok: "Priorité faible",
-  critical: "Priorité urgente",
-  launch: "Priorité moyenne",
-  opportunity: "Opportunité",
-  quiet: "Priorité faible",
-} as const;
+import { computeCandidates, materialFactsHash } from "./ceoBriefing/candidates";
+import { buildAiPayload } from "./ceoBriefing/snapshot";
+import { buildBriefingPrompt, validateAiDecision, assembleFromDecision } from "./ceoBriefing/ai";
+import { fallbackBriefingFromCandidates } from "./ceoBriefing/fallback";
+import { readBriefingCache, writeBriefingCache } from "./ceoBriefing/cache";
+import type { CandidateExtras } from "./ceoBriefing/types";
 
-/** French pluralization helper for the small counts we render. */
-function plural(n: number, singular: string, plural = `${singular}s`): string {
-  return `${n} ${n === 1 ? singular : plural}`;
+const MODULE = "ceo_briefing";
+/** Serve a cached briefing for this long before regenerating (spec: 5–15 min). */
+const CACHE_TTL_MS = 10 * 60 * 1000;
+/** Providers that can actually produce a briefing; others go straight to fallback. */
+const REAL_PROVIDERS = new Set(["anthropic", "openrouter"]);
+
+/** In-lambda dedupe so a burst of renders shares one generation. */
+let inflight: Promise<CeoBriefingDTO> | null = null;
+
+export interface GetCeoBriefingOptions {
+  /** Reuse an already-loaded snapshot (the ops page passes its own). */
+  snapshot?: OperationsSnapshotDTO;
+  /** Bypass the cache and regenerate now (manual refresh). */
+  forceRefresh?: boolean;
+  adminName?: string | null;
+}
+
+async function safeSupportOpen(): Promise<number> {
+  try {
+    return await countOpenSupportTickets();
+  } catch {
+    return 0;
+  }
 }
 
 /**
- * Pure snapshot → briefing mapping. Split out from the async fetch so it can be
- * reasoned about (and unit-tested) without a database.
+ * Resolve the current CEO Briefing (AI or deterministic fallback), honoring the
+ * cache. Always resolves to a valid, non-empty briefing.
  */
-export function briefingFromSnapshot(snap: OperationsSnapshotDTO): CeoBriefingDTO {
-  const criticalWarnings = snap.warnings.filter((w) => w.severity === "critical");
-  const otherWarnings = snap.warnings.filter((w) => w.severity !== "critical");
-  const liveSuppliers = snap.suppliers.filter((s) => s.enabled && s.configured);
-  const offlineSuppliers = liveSuppliers.filter((s) => s.health === "offline");
-  const degradedSuppliers = liveSuppliers.filter((s) => s.health === "warning");
-  const awaiting = snap.payments.awaitingReview;
+export async function getCeoBriefing(options: GetCeoBriefingOptions = {}): Promise<CeoBriefingDTO> {
+  if (!options.forceRefresh && inflight) return inflight;
+  const run = generate(options);
+  if (!options.forceRefresh) {
+    inflight = run.finally(() => {
+      inflight = null;
+    });
+    return inflight;
+  }
+  return run;
+}
 
-  // 1 · CRITICAL — a failure is blocking automatic delivery right now.
-  if (criticalWarnings.length > 0 || offlineSuppliers.length > 0 || snap.overallStatus === "offline") {
-    const top = criticalWarnings[0];
-    const facts: string[] = [];
-    if (offlineSuppliers.length > 0) {
-      facts.push(`${plural(offlineSuppliers.length, "fournisseur")} hors service (${offlineSuppliers.map((s) => s.name).join(", ")})`);
+async function generate(options: GetCeoBriefingOptions): Promise<CeoBriefingDTO> {
+  const snapshot = options.snapshot ?? (await getOperationsSnapshot({ adminName: options.adminName ?? undefined }));
+  const extras: CandidateExtras = { supportOpen: await safeSupportOpen() };
+  const candidates = computeCandidates(snapshot, extras);
+  const hash = materialFactsHash(candidates);
+  const now = new Date().toISOString();
+
+  // Cache hit: same material facts, still fresh, and not a forced refresh.
+  if (!options.forceRefresh) {
+    const cached = await readBriefingCache();
+    if (cached && cached.briefing.snapshotHash === hash && Date.now() - cached.generatedAtMs < CACHE_TTL_MS) {
+      return cached.briefing;
     }
-    if (awaiting > 0) facts.push(`${plural(awaiting, "paiement")} à vérifier`);
-    facts.push("Livraison manuelle recommandée en attendant");
-
-    const actions: CeoBriefingActionDTO[] = [];
-    if (top?.resolveHref) actions.push({ label: "Résoudre l'incident", href: top.resolveHref, primary: false });
-    actions.push({ label: "Ouvrir les fournisseurs", href: "/admin/suppliers", primary: true });
-
-    const affected = criticalWarnings.length + offlineSuppliers.length;
-    return {
-      state: "critical",
-      title: top?.title ?? "Panne fournisseur détectée",
-      message: top?.description ?? "Une panne fournisseur bloque des livraisons automatiques.",
-      bulletLine: facts.join(" · "),
-      estimate: null,
-      affected: String(affected || 1),
-      priorityLabel: PRIORITY_LABEL.critical,
-      actions: actions.slice(0, 2),
-    };
   }
 
-  // 2 · OK — healthy overall, but at least one thing wants attention today.
-  if (awaiting > 0 || degradedSuppliers.length > 0 || otherWarnings.length > 0) {
-    const topWarning = otherWarnings[0];
-    const message =
-      awaiting > 0
-        ? `Le plus important aujourd'hui : ${plural(awaiting, "paiement")} à vérifier. Le reste du système tourne sans intervention.`
-        : topWarning
-          ? `Le plus important aujourd'hui : ${topWarning.title.toLowerCase()}. Le reste du système tourne sans intervention.`
-          : "Aucune action urgente. Le système tourne sans intervention.";
+  const settings = await getAiOpsSettings();
+  const provider = settings.defaultProvider;
+  const model = settings.defaultModel;
 
-    const facts = [
-      `${plural(awaiting, "paiement")} à vérifier`,
-      degradedSuppliers.length > 0 ? `${plural(degradedSuppliers.length, "fournisseur")} dégradé${degradedSuppliers.length !== 1 ? "s" : ""}` : "Aucun incident fournisseur",
-    ];
-    if (otherWarnings.length > 0) facts.push(plural(otherWarnings.length, "avertissement"));
-
-    const actions: CeoBriefingActionDTO[] = [];
-    if (topWarning?.resolveHref) actions.push({ label: "Voir le détail", href: topWarning.resolveHref, primary: false });
-    else actions.push({ label: "Ouvrir les fournisseurs", href: "/admin/suppliers", primary: false });
-    actions.push({ label: "Revue paiements", href: "/admin?tab=payments", primary: true });
-
-    return {
-      state: "ok",
-      title: "Tout fonctionne normalement",
-      message,
-      bulletLine: facts.join(" · "),
-      estimate: null,
-      affected: awaiting > 0 ? String(awaiting) : null,
-      priorityLabel: PRIORITY_LABEL.ok,
-      actions: actions.slice(0, 2),
-    };
+  if (settings.globalEnabled && REAL_PROVIDERS.has(provider)) {
+    const briefing = await tryAi(snapshot, extras, candidates, hash, now, {
+      provider,
+      model,
+      timeoutMs: settings.providerTimeoutMs,
+    });
+    if (briefing) {
+      await writeBriefingCache({ briefing, generatedAtMs: Date.now(), model });
+      return briefing;
+    }
   }
 
-  // 3 · QUIET — everything healthy, nothing pending.
-  return {
-    state: "quiet",
-    title: "Journée calme — rien d'urgent",
-    message: "Tout est sain. Aucune action requise pour le moment.",
-    bulletLine: "Aucun paiement en attente · Aucun incident fournisseur · Systèmes opérationnels",
-    estimate: null,
-    affected: null,
-    priorityLabel: PRIORITY_LABEL.quiet,
-    actions: [
-      { label: "Voir les produits", href: "/admin?tab=products", primary: false },
-      { label: "Vue d'ensemble", href: "/admin", primary: true },
-    ],
-  };
+  // Deterministic fallback — always valid, never empty.
+  const fallback = fallbackBriefingFromCandidates(candidates, now, hash);
+  await writeBriefingCache({ briefing: fallback, generatedAtMs: Date.now(), model: null });
+  return fallback;
+}
+
+async function tryAi(
+  snapshot: OperationsSnapshotDTO,
+  extras: CandidateExtras,
+  candidates: ReturnType<typeof computeCandidates>,
+  hash: string,
+  now: string,
+  cfg: { provider: string; model: string; timeoutMs: number },
+): Promise<CeoBriefingDTO | null> {
+  const payload = buildAiPayload(snapshot, extras, candidates, now);
+  const { system, input } = buildBriefingPrompt(payload);
+  const executionId = await startExecution({
+    module: MODULE,
+    trigger: "manual",
+    executionMode: "auto",
+    provider: cfg.provider,
+    model: cfg.model,
+  });
+  const startedAtMs = Date.now();
+  try {
+    const client = resolveProvider(cfg.provider);
+    const result = await client.complete({
+      model: cfg.model,
+      system,
+      input,
+      maxTokens: 600,
+      timeoutMs: cfg.timeoutMs,
+      // Cache the (stable) system prompt; the volatile payload sits after it.
+      cache: { enabled: true, strategy: "explicit_static_prefix", ttl: "5m" },
+    });
+    const decision = validateAiDecision(result.structured ?? result.text, candidates, payload.allowedActionIds);
+    const briefing = assembleFromDecision(decision, candidates, now, hash);
+
+    await recordUsage({
+      module: MODULE,
+      provider: result.provider,
+      model: result.model,
+      tokensIn: result.usage.tokensIn,
+      tokensOut: result.usage.tokensOut,
+      costUsd: result.usage.estimatedCostUsd,
+      executionId,
+      cacheEnabled: result.cache?.enabled,
+      cacheHit: result.cache?.hit,
+      cacheCreated: result.cache?.created,
+      cacheCreationTokens: result.cache?.cacheCreationTokens,
+      cacheReadTokens: result.cache?.cacheReadTokens,
+      cacheStrategy: result.cache?.strategy ?? null,
+      cacheTtl: result.cache?.ttl ?? null,
+      costWithoutCacheUsd: result.cache?.costWithoutCacheUsd ?? null,
+    });
+    await finishExecution(executionId, MODULE, startedAtMs, {
+      status: "success",
+      summary: `${briefing.state} · ${decision.primaryIssueType} · conf ${decision.confidence.toFixed(2)}`,
+      estimatedTokensIn: result.usage.tokensIn,
+      estimatedTokensOut: result.usage.tokensOut,
+      estimatedCostUsd: result.usage.estimatedCostUsd,
+    });
+    return briefing;
+  } catch (err) {
+    // Safe, non-identifying failure reason (provider bodies are already drained).
+    const reason = err instanceof AiProviderError ? err.code : err instanceof Error ? err.message.slice(0, 120) : "unknown";
+    await finishExecution(executionId, MODULE, startedAtMs, { status: "failure", error: reason });
+    return null; // caller renders the deterministic fallback
+  }
 }

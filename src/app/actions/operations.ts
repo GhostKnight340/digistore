@@ -10,6 +10,7 @@
 import { requireAdminCustomer } from "@/lib/auth";
 import { getStoreSettings, saveStoreSettings } from "@/lib/db/catalog";
 import { getOperationsSnapshot } from "@/lib/ops/dashboard";
+import { getCeoBriefing } from "@/lib/ops/ceoBriefing";
 import {
   refreshSupplierBalanceAction,
   testSupplierConnectionAction,
@@ -21,6 +22,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { STORE_SETTINGS_TAG } from "@/lib/cacheTags";
 import type {
   ActionResult,
+  CeoBriefingDTO,
   OperationsSnapshotDTO,
   OpsActivityLogFilters,
   OpsActivityLogPageDTO,
@@ -37,6 +39,22 @@ export async function getOperationsSnapshotAction(
 ): Promise<OperationsSnapshotDTO> {
   const customer = await requireAdminCustomer();
   return getOperationsSnapshot({ adminName: customer.name, range: coerceRange(range ?? "7d") });
+}
+
+/**
+ * The CEO Briefing (AI or deterministic fallback), served from cache. Cheap:
+ * re-uses the cached briefing unless the material facts changed or the TTL
+ * expired. Admin-only.
+ */
+export async function getCeoBriefingAction(): Promise<CeoBriefingDTO> {
+  const customer = await requireAdminCustomer();
+  return getCeoBriefing({ adminName: customer.name });
+}
+
+/** Manual refresh — bypasses the cache and regenerates the briefing now. */
+export async function refreshCeoBriefingAction(): Promise<CeoBriefingDTO> {
+  const customer = await requireAdminCustomer();
+  return getCeoBriefing({ adminName: customer.name, forceRefresh: true });
 }
 
 /** Recompute only the time-ranged KPI tiles when the operator switches range. */

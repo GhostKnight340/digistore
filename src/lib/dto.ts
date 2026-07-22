@@ -580,40 +580,70 @@ export interface AdminOverviewMetricsDTO {
 
 /**
  * The single situation the briefing card renders. Exactly one is active at a
- * time (never a stacked list). `iconKey` maps to the icon/accent color in the
- * presentational component:
- *   ok → check-circle (green) · critical → alert-triangle (red) ·
- *   launch → rocket (blue) · opportunity → trending-up (violet) ·
- *   quiet → sparkles (light blue).
+ * time (never a stacked list). Maps to the icon/accent color in the component:
+ *   healthy → check-circle (green) · attention → alert-circle (amber) ·
+ *   critical → alert-triangle (red) · opportunity → trending-up (violet) ·
+ *   launch → rocket (blue).
  *
- * `launch` and `opportunity` need backend signals that do not exist yet (a
- * launch checklist model and a nightly opportunity-detection job); the resolver
- * never emits them today, but the component supports them for when they land.
+ * The state is chosen deterministically from the highest-priority candidate
+ * issue (see src/lib/ops/ceoBriefing); the AI may only reword and prioritize
+ * among eligible candidates — it can never lower a genuine critical.
  */
-export type CeoBriefingState = "ok" | "critical" | "launch" | "opportunity" | "quiet";
+export type CeoBriefingState = "critical" | "attention" | "opportunity" | "healthy" | "launch";
 
-/** One deep-link CTA. The design renders at most two (spec allows three). */
+/** Whether the briefing text was written by the AI or the deterministic fallback. */
+export type CeoBriefingSource = "ai" | "fallback";
+
+/**
+ * One deep-link CTA. `href` is ALWAYS resolved server-side from an approved
+ * action id — the AI only ever returns the id, never a URL. The design renders
+ * at most two.
+ */
 export interface CeoBriefingActionDTO {
+  /** The approved action id this resolved from (audit/debug). */
+  actionId: string;
   label: string;
   href: string;
   primary: boolean;
 }
 
-/** One-glance daily briefing: the single most important thing + what to do. */
+/**
+ * One-glance executive briefing: the single most important thing right now +
+ * what to do next. Synthesizes the operational state (it does not repeat the
+ * full "Points à traiter" list). Every figure is validated server-side; the AI
+ * only interprets facts and picks among pre-approved candidates and actions.
+ */
 export interface CeoBriefingDTO {
   state: CeoBriefingState;
+  /** Optional short category above the title (e.g. "Fournisseurs"). */
+  eyebrow: string | null;
+  /** Headline (≤ 70 chars). */
   title: string;
-  /** Natural-language synthesis ("Le plus important aujourd'hui est…"). */
-  message: string;
-  /** Sub-facts joined with " · " — never a bulleted list. */
-  bulletLine: string;
-  /** Estimated time to resolve, e.g. "10 min"; null when not applicable. */
-  estimate: string | null;
-  /** Affected-orders count as a string; null when not applicable. */
-  affected: string | null;
-  /** Small tinted pill: "Priorité faible/moyenne/urgente" or "Opportunité". */
+  /** One-line synthesis (≤ 180 chars). */
+  summary: string;
+  /** Optional secondary supporting fact/sentence (≤ 120 chars). */
+  context: string | null;
+  /** Small tinted pill: "Priorité urgente/élevée/moyenne", "Opportunité", … */
   priorityLabel: string;
+  /**
+   * Short factual justification for the "Pourquoi cette priorité ?" affordance —
+   * assembled from validated data, NEVER model chain-of-thought.
+   */
+  reasoningSummary: string | null;
+  /** 1–2 CTAs, resolved from the approved action registry. */
   actions: CeoBriefingActionDTO[];
+  /** Whether the AI or the deterministic fallback produced the text. */
+  source: CeoBriefingSource;
+  /** Model confidence 0..1 (AI only; null for the fallback). */
+  confidence: number | null;
+  /** ISO timestamp of generation. */
+  generatedAt: string;
+  /**
+   * Stable hash of the material facts this briefing was generated from. The
+   * client compares it against the live snapshot to detect a material change
+   * and offer a manual refresh (without spending on the AI every poll).
+   */
+  snapshotHash: string;
 }
 
 /** A single delivery assignment entry: either an inventory code or a manual one. */
