@@ -33,9 +33,13 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.18",
+    "@composio/core": "^0.14.0",
+    "@composio/vercel": "^0.11.1",
     "@prisma/client": "^6.19.3",
     "@sentry/nextjs": "^10.66.0",
     "@vercel/speed-insights": "^2.0.0",
+    "ai": "^7.0.34",
     "discord.js": "^14.26.4",
     "dotenv": "^16.6.1",
     "next": "^15.1.6",
