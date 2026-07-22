@@ -137,6 +137,84 @@ async function execTool(
 }
 
 // ---------------------------------------------------------------------------
+// ig_user_id resolution
+// ---------------------------------------------------------------------------
+//
+// Instagram Graph tools take an `ig_user_id` (the Business account id). That id
+// is NOT part of the OAuth token — it must be read from the connected account.
+// verifyConnection was calling the profile tool with empty args, so Composio
+// rejected it with "Following fields are missing: {'ig_user_id'}".
+
+function idString(v: unknown): string | null {
+  if (typeof v === "string" && v.trim()) return v.trim();
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return null;
+}
+
+/** Best-effort deep search of the connected-account object for the IG account id. */
+function deepFindIgUserId(value: unknown, depth = 0): string | null {
+  if (depth > 6 || value == null || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const hit = deepFindIgUserId(v, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  const obj = value as Record<string, unknown>;
+  // 1) Explicit Instagram id keys win.
+  for (const [k, v] of Object.entries(obj)) {
+    if (/^(ig_?user_?id|instagram_?business_?account_?id|ig_?id)$/i.test(k)) {
+      const s = idString(v);
+      if (s) return s;
+    }
+  }
+  // 2) Generic id keys carrying a Graph-style numeric id (8–20 digits).
+  for (const [k, v] of Object.entries(obj)) {
+    if (/^(id|user_?id|account_?id)$/i.test(k)) {
+      const s = idString(v);
+      if (s && /^\d{8,20}$/.test(s)) return s;
+    }
+  }
+  // 3) Recurse.
+  for (const v of Object.values(obj)) {
+    const hit = deepFindIgUserId(v, depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Nested KEY NAMES + value TYPES only (never values) — safe to log; no token leak. */
+function keyStructure(value: unknown, depth = 0): unknown {
+  if (depth > 3 || value == null || typeof value !== "object") return typeof value;
+  if (Array.isArray(value)) return value.length ? [keyStructure(value[0], depth + 1)] : [];
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = v && typeof v === "object" ? keyStructure(v, depth + 1) : typeof v;
+  }
+  return out;
+}
+
+/** Resolve the Instagram Business account id for the linked connection. */
+async function resolveIgUserId(conn: ActiveConnection): Promise<string | null> {
+  try {
+    const composio = getComposio();
+    const account = await composio.connectedAccounts.get(conn.connectedAccountId);
+    const id = deepFindIgUserId(account);
+    // Safe diagnostics: the id is an account id (not a secret), and the structure
+    // is key names + value TYPES only — enough to locate the id if this misses,
+    // without ever logging a token value.
+    // eslint-disable-next-line no-console
+    console.log("[instagram] connected account", { igUserId: id, structure: keyStructure(account) });
+    return id;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[instagram] resolveIgUserId failed", normalizeComposioError(error).logHint);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Response extraction (defensive — Graph API field names vary by tool version)
 // ---------------------------------------------------------------------------
 
@@ -434,7 +512,8 @@ export async function verifyConnection(): Promise<VerifyResult> {
     };
   }
 
-  const res = await execTool(profileSlug, conn, {});
+  const igUserId = await resolveIgUserId(conn);
+  const res = await execTool(profileSlug, conn, igUserId ? { ig_user_id: igUserId } : {});
   if (!res.ok) {
     const reauth = res.code === "permission_denied" || res.code === "account_not_found";
     const status: SocialIntegrationStatus = reauth ? "REAUTH_REQUIRED" : "ERROR";
