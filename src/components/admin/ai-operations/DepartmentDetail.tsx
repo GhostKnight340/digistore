@@ -44,7 +44,8 @@ function withAlpha(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
-function healthColor(h: number): string {
+function healthColor(h: number | null): string {
+  if (h == null) return "#6b7280"; // no data → muted grey
   return h >= 90 ? "#4ade80" : h >= 70 ? "#f5a623" : "#f87171";
 }
 function usd(n: number): string {
@@ -114,7 +115,7 @@ export default function DepartmentDetailView({ detail }: { detail: DepartmentDet
   const quickStats = [
     { label: "Exécutions", value: String(perf.execToday) },
     { label: "Coût aujourd'hui", value: usd(perf.costTodayUsd) },
-    { label: "Santé", value: `${perf.health}%`, color: healthColor(perf.health) },
+    { label: "Santé", value: perf.health == null ? "—" : `${perf.health}%`, color: healthColor(perf.health) },
     { label: "Modèle", value: form.modelOverride || detail.defaultModel },
     { label: "Outils", value: `${grantedCount}/${detail.tools.length}` },
   ];

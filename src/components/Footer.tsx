@@ -99,7 +99,8 @@ export default function Footer() {
             { href: "/privacy", label: "Confidentialité" },
             { href: "/refunds", label: "Remboursements" },
             { href: "/legal", label: "Mentions légales" },
-          ]}
+            // Hidden when the admin unpublishes the page (the route also 404s).
+          ].filter((l) => settings.legalPages[l.href.slice(1)]?.published !== false)}
         />
       </div>
       <div className="border-t border-border">

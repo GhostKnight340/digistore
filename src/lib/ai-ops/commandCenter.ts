@@ -41,8 +41,9 @@ export interface DeptDTO {
   execToday: number;
   costTodayUsd: number;
   grantedToolCount: number;
-  /** 0-100 health from the module's 7-day success ratio (100 when it has not run). */
-  health: number;
+  /** 0-100 health from the module's 7-day success ratio; null when it has not
+   *  run in the last 7 days (no data — shown as "—", excluded from the average). */
+  health: number | null;
   /** 7 daily execution counts, oldest → today. */
   spark: number[];
   lastSuccessAt: string | null;
@@ -98,7 +99,8 @@ export interface CommandCenterSnapshot {
   integrations: IntegrationDTO[];
   usageSeries: UsageSeriesDTO;
   insights: string[];
-  healthScore: number;
+  /** Average health of modules that HAVE run in the last 7 days; null if none have. */
+  healthScore: number | null;
   activeConversations: number;
   generatedAt: string;
 }
@@ -181,7 +183,7 @@ export async function getCommandCenterSnapshot(): Promise<CommandCenterSnapshot>
     const r = rolls.get(m.module) ?? { spark: new Array(SPARK_DAYS).fill(0), execToday: 0, costTodayUsd: 0, success7: 0, total7: 0 };
     const lastStatus = cfg?.lastStatus ?? null;
     const status = deptStatus(m.enabled, m.executionMode, lastStatus, cfg?.lastRunAt ?? null);
-    const health = r.total7 > 0 ? Math.round((r.success7 / r.total7) * 100) : 100;
+    const health = r.total7 > 0 ? Math.round((r.success7 / r.total7) * 100) : null;
     const currentActivity =
       status === "error" && m.lastError
         ? m.lastError
@@ -265,9 +267,12 @@ export async function getCommandCenterSnapshot(): Promise<CommandCenterSnapshot>
       : "Aucune approbation en attente.",
   ].slice(0, 6);
 
-  const healthScore = departments.length
-    ? Math.round(departments.reduce((sum, d) => sum + d.health, 0) / departments.length)
-    : 100;
+  // Honest score: average only modules that actually ran (health !== null), so an
+  // idle module that has never executed doesn't inflate the score with a fake 100.
+  const scored = departments.filter((d): d is DeptDTO & { health: number } => d.health !== null);
+  const healthScore = scored.length
+    ? Math.round(scored.reduce((sum, d) => sum + d.health, 0) / scored.length)
+    : null;
 
   const activeConversations = conversations.filter(
     (c) => now.getTime() - new Date(c.lastActivityAt).getTime() < 60 * 60 * 1000,

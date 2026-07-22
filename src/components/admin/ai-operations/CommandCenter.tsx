@@ -50,8 +50,12 @@ function withAlpha(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
-function healthColor(h: number): string {
+function healthColor(h: number | null): string {
+  if (h == null) return "#6b7280"; // no data → muted grey
   return h >= 90 ? "#4ade80" : h >= 70 ? "#f5a623" : "#f87171";
+}
+function healthLabel(h: number | null): string {
+  return h == null ? "—" : `${h}%`;
 }
 function usd(n: number): string {
   return `$${n.toFixed(n < 1 ? 3 : 2)}`;
@@ -114,7 +118,7 @@ export default function CommandCenter({ initial }: { initial: CommandCenterSnaps
     { label: "Appels d'outils (jour)", value: String(base.usage.toolCallsToday), suffix: "", valueColor: "#eef0f4", sub: "aujourd'hui" },
     { label: "Coût estimé (mois)", value: usd(base.usage.monthSpendUsd), suffix: base.usage.monthlyBudgetUsd > 0 ? `/ $${base.usage.monthlyBudgetUsd.toFixed(0)}` : "", valueColor: "#eef0f4", sub: "budget mensuel" },
     { label: "Provider actuel", value: base.defaultProvider, suffix: "", valueColor: "#eef0f4", sub: base.defaultModel },
-    { label: "Score de santé global", value: String(snap.healthScore), suffix: "%", valueColor: healthColor(snap.healthScore), sub: base.warnings.length ? `${base.warnings.length} avertissement(s)` : "aucun avertissement" },
+    { label: "Score de santé global", value: snap.healthScore == null ? "—" : String(snap.healthScore), suffix: snap.healthScore == null ? "" : "%", valueColor: healthColor(snap.healthScore), sub: snap.healthScore == null ? "aucun module exécuté" : base.warnings.length ? `${base.warnings.length} avertissement(s)` : "aucun avertissement" },
   ];
 
   return (
@@ -368,7 +372,7 @@ function DeptCard({ d, busy, canRun, onRun }: { d: DeptDTO; busy: boolean; canRu
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.06)" }}>
         <Stat label="Exéc." value={String(d.execToday)} />
         <Stat label="Coût" value={usd(d.costTodayUsd)} />
-        <Stat label="Santé" value={`${d.health}%`} valueColor={healthColor(d.health)} />
+        <Stat label="Santé" value={healthLabel(d.health)} valueColor={healthColor(d.health)} />
       </div>
       <button type="button" onClick={onRun} disabled={!canRun || busy} style={{ ...btnGhost, textAlign: "center", justifyContent: "center", opacity: canRun ? 1 : 0.5, cursor: canRun ? "pointer" : "not-allowed" }} title={canRun ? "Exécuter maintenant" : "Module désactivé"}>
         {busy ? "…" : "Exécuter maintenant"}

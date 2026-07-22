@@ -37,7 +37,8 @@ export interface DeptPerformance {
   budgetUsagePct: number;
   successRatePct: number | null;
   avgResponseMs: number | null;
-  health: number;
+  /** 7-day success ratio; null when the module has not run (no data). */
+  health: number | null;
   spark: number[];
   totalRuns7d: number;
 }
@@ -127,7 +128,7 @@ export async function getDepartmentDetail(module: string): Promise<DepartmentDet
   }
   const total7 = execRows.length;
   const successRatePct = total7 > 0 ? Math.round((success7 / total7) * 100) : null;
-  const health = total7 > 0 ? Math.round((success7 / total7) * 100) : 100;
+  const health = total7 > 0 ? Math.round((success7 / total7) * 100) : null;
   const maxDailyCostUsd = config.maxDailyCostUsd;
   const budgetUsagePct = maxDailyCostUsd > 0 ? Math.min(100, Math.round((costTodayUsd / maxDailyCostUsd) * 100)) : 0;
 

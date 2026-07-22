@@ -156,6 +156,8 @@ export type StoreSettings = {
       content: string;
       seoTitle: string;
       seoDescription: string;
+      /** When false, the public page 404s and its footer link is hidden. */
+      published: boolean;
     }
   >;
   paymentDisplay: Record<string, PaymentDisplaySetting>;
@@ -431,6 +433,7 @@ export const defaultStoreSettings: StoreSettings = {
     terms: {
       title: "Conditions Générales de Vente",
       slug: "terms",
+      published: true,
       seoTitle: "Conditions Générales de Vente - ghost.ma",
       seoDescription: "Conditions de vente des produits numériques proposés par ghost.ma.",
       content:
@@ -439,6 +442,7 @@ export const defaultStoreSettings: StoreSettings = {
     privacy: {
       title: "Politique de Confidentialité",
       slug: "privacy",
+      published: true,
       seoTitle: "Politique de Confidentialité - ghost.ma",
       seoDescription: "Informations sur la collecte et l'utilisation des données personnelles par ghost.ma.",
       content:
@@ -447,6 +451,7 @@ export const defaultStoreSettings: StoreSettings = {
     refunds: {
       title: "Politique de Remboursement",
       slug: "refunds",
+      published: true,
       seoTitle: "Politique de Remboursement - ghost.ma",
       seoDescription: "Règles de remboursement applicables aux produits numériques ghost.ma.",
       content:
@@ -455,6 +460,7 @@ export const defaultStoreSettings: StoreSettings = {
     legal: {
       title: "Mentions légales",
       slug: "legal",
+      published: true,
       seoTitle: "Mentions légales - ghost.ma",
       seoDescription: "Mentions légales et informations d'identité de ghost.ma.",
       content:
@@ -463,6 +469,7 @@ export const defaultStoreSettings: StoreSettings = {
     support: {
       title: "Contact & Support",
       slug: "support",
+      published: true,
       seoTitle: "Contact & Support - ghost.ma",
       seoDescription: "Contacter le support ghost.ma pour une commande ou une question.",
       content:
@@ -635,6 +642,31 @@ function mergeEmailTemplates(stored: unknown): StoreSettings["emailTemplates"] {
   return merged;
 }
 
+/**
+ * Merges stored legal pages onto the defaults field-by-field. Preserves the
+ * admin's edited title/slug/content/SEO, and backfills `published: true` for
+ * settings saved before the visibility toggle existed (so nothing silently
+ * disappears from a store that never opted a page out).
+ */
+function mergeLegalPages(stored: unknown): StoreSettings["legalPages"] {
+  const merged: StoreSettings["legalPages"] = { ...defaultStoreSettings.legalPages };
+  if (!isObject(stored)) return merged;
+  for (const [key, raw] of Object.entries(stored)) {
+    if (!isObject(raw)) continue;
+    const fallback = merged[key] ?? { title: key, slug: key, content: "", seoTitle: "", seoDescription: "", published: true };
+    const pick = (v: unknown, fb: string) => (typeof v === "string" ? v : fb);
+    merged[key] = {
+      title: pick(raw.title, fallback.title),
+      slug: pick(raw.slug, fallback.slug),
+      content: pick(raw.content, fallback.content),
+      seoTitle: pick(raw.seoTitle, fallback.seoTitle),
+      seoDescription: pick(raw.seoDescription, fallback.seoDescription),
+      published: typeof raw.published === "boolean" ? raw.published : fallback.published,
+    };
+  }
+  return merged;
+}
+
 export function mergeStoreSettings(value: unknown): StoreSettings {
   if (!isObject(value)) return defaultStoreSettings;
 
@@ -784,12 +816,7 @@ export function mergeStoreSettings(value: unknown): StoreSettings {
       ? value.featuredProductIds.filter((id): id is string => typeof id === "string")
       : defaultStoreSettings.featuredProductIds,
     emailTemplates: mergeEmailTemplates(value.emailTemplates),
-    legalPages: isObject(value.legalPages)
-      ? {
-          ...defaultStoreSettings.legalPages,
-          ...(value.legalPages as StoreSettings["legalPages"]),
-        }
-      : defaultStoreSettings.legalPages,
+    legalPages: mergeLegalPages(value.legalPages),
     categoryMedia: isObject(value.categoryMedia)
       ? (value.categoryMedia as Record<string, string | null>)
       : defaultStoreSettings.categoryMedia,

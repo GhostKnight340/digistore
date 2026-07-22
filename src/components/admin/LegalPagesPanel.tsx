@@ -119,7 +119,7 @@ export default function LegalPagesPanel() {
   function update(
     key: string,
     field: keyof typeof page,
-    value: string,
+    value: string | boolean,
   ) {
     setDraft((current) => ({
       ...current,
