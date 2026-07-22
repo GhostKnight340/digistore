@@ -202,6 +202,7 @@ export const TOOL_VALIDATORS: Record<ToolName, (input: unknown) => ValidationRes
   getSupplierApiHealth: noInput,
   getTopSellingProducts: periodLimit,
   getProductPerformance: rangeLimit,
+  getMarginSummary: rangeInput,
   getRecentOperationalEvents: limit,
 };
 

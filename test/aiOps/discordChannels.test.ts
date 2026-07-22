@@ -20,10 +20,11 @@ test("rejects non-snowflake channel ids", () => {
   assert.equal(isValidChannelId("123456789012345678901"), false); // 21 digits
 });
 
-test("channel purposes are the six the spec lists", () => {
+test("channel purposes cover every reporting/interaction surface", () => {
   assert.deepEqual([...CHANNEL_PURPOSES].sort(), [
     "alerts",
     "assistant",
+    "business_intelligence",
     "daily_reports",
     "marketing_drafts",
     "supplier_reports",

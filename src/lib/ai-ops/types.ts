@@ -64,6 +64,7 @@ export const TOOL_NAMES = [
   "getSupplierApiHealth",
   "getTopSellingProducts",
   "getProductPerformance",
+  "getMarginSummary",
   "getRecentOperationalEvents",
 ] as const;
 
@@ -111,6 +112,7 @@ export const CHANNEL_PURPOSES = [
   "daily_reports",
   "alerts",
   "supplier_reports",
+  "business_intelligence",
   "marketing_drafts",
 ] as const;
 
@@ -233,7 +235,7 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
   business_intelligence: {
     key: "business_intelligence",
     label: "Business Intelligence",
-    description: "Aggregated operational and financial intelligence reports.",
+    description: "Weekly financial & profitability intelligence: margins, product mix, concentration, growth.",
     defaultMode: "READ_ONLY",
     defaultSchedule: "0 9 * * 1",
     scheduled: true,
@@ -243,6 +245,8 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
       "getFulfillmentPerformance",
       "getProductPerformance",
       "getTopSellingProducts",
+      // Financial layer: windowed revenue-vs-cost gross margins (MAD).
+      "getMarginSummary",
       "getRecentOperationalEvents",
     ],
   },

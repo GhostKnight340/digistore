@@ -13,9 +13,11 @@ import "server-only";
 import type { ModuleBody } from "./runner";
 import { isModuleKey, type ModuleKey } from "./types";
 import { supplierBody } from "./modules/supplierIntelligence";
+import { businessIntelligenceBody } from "./modules/businessIntelligence";
 
 const MODULE_BODIES: Partial<Record<ModuleKey, ModuleBody>> = {
   supplier_intelligence: supplierBody,
+  business_intelligence: businessIntelligenceBody,
 };
 
 /** The real body for a module, or undefined (→ the runner's placeholder run). */

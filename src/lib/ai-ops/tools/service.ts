@@ -25,6 +25,8 @@ import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
 import { formatPublicOrderNumber } from "@/lib/orderNumber";
+import { getPricingSettings } from "@/lib/db/pricing-settings";
+import { convertToMad } from "@/lib/expenses/currency";
 import { getAiOpsSettings, getModuleConfig } from "../store";
 import { evaluateStaticGate } from "../gate";
 import { validateToolInput } from "./schemas";
@@ -189,6 +191,8 @@ async function runTool(tool: ToolName, input: unknown, timeZone: string): Promis
       return getTopSellingProducts(input as PeriodLimitInput);
     case "getProductPerformance":
       return getProductPerformance(input as RangeLimitInput, timeZone);
+    case "getMarginSummary":
+      return getMarginSummary(input as RangeInput, timeZone);
     case "getRecentOperationalEvents":
       return getRecentOperationalEvents(input as LimitInput);
     default:
@@ -522,6 +526,146 @@ async function getProductPerformance({ range, limit }: RangeLimitInput, timeZone
       unitsSold: g._sum.quantity ?? 0,
       orderLines: g._count._all,
     })),
+  };
+}
+
+/**
+ * Windowed gross-margin summary for Business Intelligence. Joins delivered
+ * REVENUE (orderItem.unitPriceMad × quantity, already MAD) against delivered
+ * supplier COST (supplierFulfillment.costAmount in provider currency, converted
+ * to MAD via the store's admin-set FX table), grouped by product category.
+ *
+ * Honest by construction: margin is computed only over the revenue whose supplier
+ * cost is actually known and convertible, and `costCoveragePct` /
+ * `unconvertedCostRecords` report how complete that picture is — a category with
+ * no captured cost shows null margin, never a fabricated one. Read-only,
+ * aggregate; no per-customer data.
+ */
+async function getMarginSummary({ range }: RangeInput, timeZone: string) {
+  const { where: createdAt, label } = resolvedRange(range, timeZone);
+  const CAP = 20000;
+
+  const [revenueLines, costRows, pricing] = await Promise.all([
+    prisma.orderItem.findMany({
+      where: { order: { status: "delivered", createdAt } },
+      select: { productId: true, unitPriceMad: true, quantity: true },
+      take: CAP,
+    }),
+    prisma.supplierFulfillment.findMany({
+      where: { status: "delivered", createdAt, costAmount: { not: null } },
+      select: { orderItemId: true, costAmount: true, costCurrency: true },
+      take: CAP,
+    }),
+    getPricingSettings(),
+  ]);
+
+  // Attribute each cost row to a product via its order item.
+  const costItemIds = [...new Set(costRows.map((c) => c.orderItemId))];
+  const costItems = costItemIds.length
+    ? await prisma.orderItem.findMany({ where: { id: { in: costItemIds } }, select: { id: true, productId: true } })
+    : [];
+  const productOfItem = new Map(costItems.map((i) => [i.id, i.productId]));
+
+  interface ProdAgg {
+    revenueMad: number;
+    costMad: number;
+    units: number;
+    hasCost: boolean;
+  }
+  const byProduct = new Map<string, ProdAgg>();
+  const prod = (pid: string): ProdAgg => {
+    let a = byProduct.get(pid);
+    if (!a) {
+      a = { revenueMad: 0, costMad: 0, units: 0, hasCost: false };
+      byProduct.set(pid, a);
+    }
+    return a;
+  };
+
+  for (const l of revenueLines) {
+    const a = prod(l.productId);
+    a.revenueMad += Number(l.unitPriceMad) * l.quantity;
+    a.units += l.quantity;
+  }
+  let unconvertedCostRecords = 0;
+  for (const c of costRows) {
+    const pid = productOfItem.get(c.orderItemId);
+    if (!pid) continue;
+    const { amountMad } = convertToMad(Number(c.costAmount), c.costCurrency ?? "", pricing.fxRatesToMad);
+    if (amountMad == null) {
+      unconvertedCostRecords += 1; // missing FX rate — excluded, not guessed
+      continue;
+    }
+    const a = prod(pid);
+    a.costMad += amountMad;
+    a.hasCost = true;
+  }
+
+  const products = byProduct.size
+    ? await prisma.product.findMany({ where: { id: { in: [...byProduct.keys()] } }, select: { id: true, category: true } })
+    : [];
+  const categoryOf = new Map(products.map((p) => [p.id, p.category ?? "—"]));
+
+  interface CatAgg {
+    revenueMad: number;
+    coveredRevenueMad: number;
+    costMad: number;
+    units: number;
+  }
+  const byCategory = new Map<string, CatAgg>();
+  for (const [pid, a] of byProduct) {
+    const cat = categoryOf.get(pid) ?? "—";
+    let c = byCategory.get(cat);
+    if (!c) {
+      c = { revenueMad: 0, coveredRevenueMad: 0, costMad: 0, units: 0 };
+      byCategory.set(cat, c);
+    }
+    c.revenueMad += a.revenueMad;
+    c.costMad += a.costMad;
+    c.units += a.units;
+    if (a.hasCost) c.coveredRevenueMad += a.revenueMad;
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  // Margin is over the COST-COVERED revenue so unknown-cost products never inflate it.
+  const marginPct = (covered: number, cost: number) => (covered > 0 ? Math.round(((covered - cost) / covered) * 1000) / 10 : null);
+
+  const categories = [...byCategory.entries()]
+    .map(([category, c]) => ({
+      category,
+      revenueMad: round2(c.revenueMad),
+      costMad: round2(c.costMad),
+      grossProfitMad: round2(c.coveredRevenueMad - c.costMad),
+      marginPct: marginPct(c.coveredRevenueMad, c.costMad),
+      unitsSold: c.units,
+    }))
+    .sort((a, b) => b.revenueMad - a.revenueMad)
+    .slice(0, 15);
+
+  let revenueMad = 0;
+  let coveredRevenueMad = 0;
+  let costMad = 0;
+  for (const a of byProduct.values()) {
+    revenueMad += a.revenueMad;
+    costMad += a.costMad;
+    if (a.hasCost) coveredRevenueMad += a.revenueMad;
+  }
+
+  return {
+    range: label,
+    currency: "MAD",
+    fxRatesToMad: pricing.fxRatesToMad,
+    totals: {
+      revenueMad: round2(revenueMad),
+      coveredRevenueMad: round2(coveredRevenueMad),
+      costMad: round2(costMad),
+      grossProfitMad: round2(coveredRevenueMad - costMad),
+      marginPct: marginPct(coveredRevenueMad, costMad),
+    },
+    byCategory: categories,
+    // How much of revenue has a known, convertible supplier cost (margin caveat).
+    costCoveragePct: revenueMad > 0 ? Math.round((coveredRevenueMad / revenueMad) * 1000) / 10 : null,
+    unconvertedCostRecords,
   };
 }
 
