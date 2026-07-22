@@ -1244,3 +1244,25 @@ export async function loadDraft(draftId: string): Promise<
     modules: row.modules,
   };
 }
+
+/**
+ * Delete a draft. Only rows still in "draft" status are removable — a real send
+ * is an immutable historical record and is never destroyed here.
+ */
+export async function deleteDraft(
+  draftId: string,
+  admin: { id: string; name: string },
+): Promise<{ ok: boolean; error?: string }> {
+  await ensureDatabaseReady();
+  const row = await prisma.adminEmailSend.findUnique({ where: { id: draftId }, select: { status: true } });
+  if (!row) return { ok: false, error: "Brouillon introuvable." };
+  if (row.status !== "draft") return { ok: false, error: "Seul un brouillon peut être supprimé." };
+  await prisma.adminEmailSend.delete({ where: { id: draftId } });
+  await writeAuditLog({
+    adminId: admin.id,
+    adminName: admin.name,
+    action: "email.draft_deleted",
+    metadata: { draftId },
+  });
+  return { ok: true };
+}

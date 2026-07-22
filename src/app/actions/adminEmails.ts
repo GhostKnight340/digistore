@@ -26,6 +26,7 @@ import {
   saveDraft,
   listDrafts,
   loadDraft,
+  deleteDraft,
   type ComposePayload,
 } from "@/lib/email/adminEmailService";
 
@@ -157,6 +158,17 @@ export async function listDraftsAction() {
 export async function loadDraftAction(draftId: string) {
   await assertEmailPermission(EMAIL_PERMISSIONS.COMPOSE);
   return loadDraft(draftId);
+}
+
+export async function deleteDraftAction(draftId: string) {
+  try {
+    const admin = await assertEmailPermission(EMAIL_PERMISSIONS.COMPOSE);
+    const result = await deleteDraft(draftId, admin);
+    revalidatePath("/admin/emails/history");
+    return result;
+  } catch (error) {
+    return mapError(error);
+  }
 }
 
 /** Effective email permissions for the current admin (UI enable/disable only). */

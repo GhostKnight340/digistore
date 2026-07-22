@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,18 +9,39 @@ import {
   sendEmailAction,
   sendTestEmailAction,
   saveDraftAction,
+  deleteDraftAction,
 } from "@/app/actions/adminEmails";
 import { COMPOSER_TEMPLATES } from "@/lib/email/composerTemplates";
-import { MODULE_TYPES } from "@/lib/email/composerModules";
 import type { ComposePayload } from "@/lib/email/adminEmailService";
 import RecipientPicker from "./RecipientPicker";
-import ModuleEditor, { blankModule, MODULE_LABELS } from "./ModuleEditor";
+import { blankModule } from "./ModuleEditor";
 import type { ClientRecipient, ComposerPermissions, ComposerState, EmailModule } from "./types";
 import { newId } from "./types";
+import SectionShell from "./composer/SectionShell";
+import TemplateGrid from "./composer/TemplateGrid";
+import VariablePicker from "./composer/VariablePicker";
+import ModuleCard from "./composer/ModuleCard";
+import ModuleLibrary from "./composer/ModuleLibrary";
+import PreviewPanel, { type PreviewData } from "./composer/PreviewPanel";
+import ActionBar from "./composer/ActionBar";
+import TestModal from "./composer/TestModal";
+import ReviewModal, { type SendSummaryData } from "./composer/ReviewModal";
+import { computeValidation } from "./composer/validation";
 
-type PreviewData = { subject: string; preheader: string; html: string; missingVariables: string[] };
+type DraftStatus = "saved" | "unsaved" | "saving";
+type FocusField = "subject" | "preheader" | "title" | null;
+type MobileTab = "recipients" | "message" | "preview" | "check";
 
-type SummaryData = Awaited<ReturnType<typeof summarizeSendAction>>;
+const BLANK: ComposerState = {
+  templateKey: "custom",
+  recipientMode: "existing",
+  subject: "",
+  preheader: "",
+  eyebrow: "Ghost.ma",
+  title: "",
+  recipients: [],
+  modules: [],
+};
 
 export default function EmailComposer({
   permissions,
@@ -32,30 +53,48 @@ export default function EmailComposer({
   adminTestEmail: string;
 }) {
   const router = useRouter();
-  const [state, setState] = useState<ComposerState>(
-    initialDraft ?? {
-      templateKey: "custom",
-      recipientMode: "existing",
-      subject: "",
-      preheader: "",
-      eyebrow: "Ghost.ma",
-      title: "",
-      recipients: [],
-      modules: [],
-    },
-  );
+  const [state, setState] = useState<ComposerState>(initialDraft ?? BLANK);
   const [draftId, setDraftId] = useState<string | null>(initialDraft?.draftId ?? null);
+  const [draftStatus, setDraftStatus] = useState<DraftStatus>("saved");
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+
+  // Preview
   const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
-  const [previewOpen, setPreviewOpen] = useState(false); // mobile sheet
-  const [busy, setBusy] = useState(false);
-  const [flash, setFlash] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
-  const [confirm, setConfirm] = useState<SummaryData | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [zoom, setZoom] = useState(100);
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const set = useCallback(<K extends keyof ComposerState>(key: K, value: ComposerState[K]) => {
-    setState((s) => ({ ...s, [key]: value }));
-  }, []);
+  // Layout & UI
+  const [isMobile, setIsMobile] = useState(false);
+  const [tab, setTab] = useState<MobileTab>("recipients");
+  const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 1: true, 2: true, 3: true, 4: false });
+  const [openModules, setOpenModules] = useState<Record<string, boolean>>({});
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [focusField, setFocusField] = useState<FocusField>(null);
+
+  // Flows
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const [testOpen, setTestOpen] = useState(false);
+  const [reviewSummary, setReviewSummary] = useState<SendSummaryData | null>(null);
+  const [undo, setUndo] = useState<{ module: EmailModule; index: number } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const validation = useMemo(() => computeValidation(state), [state]);
+  const creditTotal = useMemo(() => {
+    const eligible = state.recipients.filter((r) => r.customerId).length;
+    return state.modules
+      .filter((m): m is Extract<EmailModule, { type: "credit" }> => m.type === "credit" && m.behavior === "grant")
+      .reduce((sum, m) => sum + m.amountMad * eligible, 0);
+  }, [state.modules, state.recipients]);
+  const templateLabel = COMPOSER_TEMPLATES.find((t) => t.key === state.templateKey)?.label ?? "—";
 
   const toPayload = useCallback(
     (): ComposePayload => ({
@@ -71,100 +110,239 @@ export default function EmailComposer({
     [state],
   );
 
-  // Live preview (debounced).
+  // ── State helpers (mark unsaved on any edit) ────────────────────────────────
+  const edit = useCallback((updater: (s: ComposerState) => ComposerState) => {
+    setState(updater);
+    setDraftStatus("unsaved");
+  }, []);
+  const set = useCallback(
+    <K extends keyof ComposerState>(key: K, value: ComposerState[K]) => edit((s) => ({ ...s, [key]: value })),
+    [edit],
+  );
+
+  // ── Layout detection ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // ── Overflow menu outside-click ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) setOverflowOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [overflowOpen]);
+
+  // ── Live preview (debounced) ────────────────────────────────────────────────
   useEffect(() => {
     if (!permissions.compose) return;
     if (previewTimer.current) clearTimeout(previewTimer.current);
+    setPreviewLoading(true);
     previewTimer.current = setTimeout(async () => {
       try {
-        const res = await previewEmailAction(toPayload(), 0);
+        const idx = Math.min(previewIndex, Math.max(0, state.recipients.length - 1));
+        const res = await previewEmailAction(toPayload(), idx);
         if (res.ok && res.html) {
-          setPreview({
-            subject: res.subject ?? "",
-            preheader: res.preheader ?? "",
-            html: res.html,
-            missingVariables: res.missingVariables ?? [],
-          });
+          setPreview({ subject: res.subject ?? "", preheader: res.preheader ?? "", html: res.html, missingVariables: res.missingVariables ?? [] });
         }
       } catch {
-        /* preview is best-effort */
+        /* best-effort */
+      } finally {
+        setPreviewLoading(false);
       }
     }, 400);
     return () => {
       if (previewTimer.current) clearTimeout(previewTimer.current);
     };
-  }, [toPayload, permissions.compose]);
+  }, [toPayload, previewIndex, state.recipients.length, permissions.compose]);
 
-  const applyTemplate = useCallback((key: string) => {
-    const tpl = COMPOSER_TEMPLATES.find((t) => t.key === key);
-    if (!tpl) return;
-    setState((s) => ({
-      ...s,
-      templateKey: key,
-      subject: tpl.subject,
-      preheader: tpl.preheader,
-      eyebrow: tpl.eyebrow,
-      title: tpl.title,
-      modules: tpl.modules.map((m) => ({ ...m, id: newId() }) as EmailModule),
-    }));
-  }, []);
+  // ── Autosave (debounced) + unsaved-navigation guard ─────────────────────────
+  const doSaveDraft = useCallback(
+    async (silent = false) => {
+      if (!permissions.compose) return;
+      setDraftStatus("saving");
+      if (!silent) setBusy(true);
+      try {
+        const res = await saveDraftAction(toPayload(), draftId);
+        if (res.ok && res.draftId) {
+          setDraftId(res.draftId);
+          setDraftStatus("saved");
+          setLastSaved(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+          if (!silent) showFlash("ok", "Brouillon enregistré.");
+        } else {
+          setDraftStatus("unsaved");
+          if (!silent) showFlash("err", res.error ?? "Échec de l'enregistrement.");
+        }
+      } finally {
+        if (!silent) setBusy(false);
+      }
+    },
+    [permissions.compose, toPayload, draftId],
+  );
 
-  const addModule = useCallback((type: EmailModule["type"]) => {
-    setState((s) => ({ ...s, modules: [...s.modules, blankModule(type)] }));
-  }, []);
+  useEffect(() => {
+    if (draftStatus !== "unsaved" || !permissions.compose) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => void doSaveDraft(true), 2500);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, [draftStatus, permissions.compose, doSaveDraft]);
 
-  const updateModule = useCallback((id: string, m: EmailModule) => {
-    setState((s) => ({ ...s, modules: s.modules.map((x) => (x.id === id ? m : x)) }));
-  }, []);
-
-  const removeModule = useCallback((id: string) => {
-    setState((s) => ({ ...s, modules: s.modules.filter((x) => x.id !== id) }));
-  }, []);
-
-  const move = useCallback((id: string, dir: -1 | 1) => {
-    setState((s) => {
-      const idx = s.modules.findIndex((x) => x.id === id);
-      const next = idx + dir;
-      if (idx < 0 || next < 0 || next >= s.modules.length) return s;
-      const modules = [...s.modules];
-      [modules[idx], modules[next]] = [modules[next], modules[idx]];
-      return { ...s, modules };
-    });
-  }, []);
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (draftStatus !== "saved") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [draftStatus]);
 
   const showFlash = (kind: "ok" | "err", msg: string) => {
     setFlash({ kind, msg });
     setTimeout(() => setFlash(null), 5000);
   };
 
-  const doSaveDraft = async () => {
+  // ── Template / modules ──────────────────────────────────────────────────────
+  const applyTemplate = useCallback(
+    (key: string) => {
+      const tpl = COMPOSER_TEMPLATES.find((t) => t.key === key);
+      if (!tpl) return;
+      const modules = tpl.modules.map((m) => ({ ...m, id: newId() }) as EmailModule);
+      edit((s) => ({ ...s, templateKey: key, subject: tpl.subject, preheader: tpl.preheader, eyebrow: tpl.eyebrow, title: tpl.title, modules }));
+      setOpenModules(Object.fromEntries(modules.map((m) => [m.id, false])));
+    },
+    [edit],
+  );
+
+  const addModule = useCallback(
+    (type: EmailModule["type"]) => {
+      const m = blankModule(type);
+      edit((s) => ({ ...s, modules: [...s.modules, m] }));
+      setOpenModules((o) => ({ ...o, [m.id]: true }));
+    },
+    [edit],
+  );
+
+  const updateModule = useCallback((id: string, m: EmailModule) => edit((s) => ({ ...s, modules: s.modules.map((x) => (x.id === id ? m : x)) })), [edit]);
+
+  const duplicateModule = useCallback(
+    (id: string) => {
+      const copyId = newId();
+      edit((s) => {
+        const idx = s.modules.findIndex((x) => x.id === id);
+        if (idx < 0) return s;
+        const copy = { ...s.modules[idx], id: copyId } as EmailModule;
+        return { ...s, modules: [...s.modules.slice(0, idx + 1), copy, ...s.modules.slice(idx + 1)] };
+      });
+      setOpenModules((o) => ({ ...o, [copyId]: true }));
+    },
+    [edit],
+  );
+
+  const commitUndo = useCallback(() => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo(null);
+  }, []);
+
+  const removeModule = useCallback(
+    (id: string) => {
+      commitUndo();
+      const index = state.modules.findIndex((x) => x.id === id);
+      if (index < 0) return;
+      const module = state.modules[index];
+      edit((s) => ({ ...s, modules: s.modules.filter((x) => x.id !== id) }));
+      setUndo({ module, index });
+      undoTimer.current = setTimeout(() => setUndo(null), 5000);
+    },
+    [edit, commitUndo, state.modules],
+  );
+
+  const restoreUndo = useCallback(() => {
+    if (!undo) return;
+    const { module, index } = undo;
+    edit((s) => {
+      const modules = [...s.modules];
+      modules.splice(Math.min(index, modules.length), 0, module);
+      return { ...s, modules };
+    });
+    commitUndo();
+  }, [undo, edit, commitUndo]);
+
+  const move = useCallback(
+    (id: string, dir: -1 | 1) =>
+      edit((s) => {
+        const idx = s.modules.findIndex((x) => x.id === id);
+        const next = idx + dir;
+        if (idx < 0 || next < 0 || next >= s.modules.length) return s;
+        const modules = [...s.modules];
+        [modules[idx], modules[next]] = [modules[next], modules[idx]];
+        return { ...s, modules };
+      }),
+    [edit],
+  );
+
+  const setAllModules = (open: boolean) => setOpenModules(Object.fromEntries(state.modules.map((m) => [m.id, open])));
+
+  // ── Variable insertion (into last-focused field) ────────────────────────────
+  const insertVariable = useCallback(
+    (token: string) => {
+      if (!focusField) return;
+      edit((s) => ({ ...s, [focusField]: `${s[focusField]}${s[focusField] ? " " : ""}${token}` }));
+    },
+    [focusField, edit],
+  );
+
+  // ── Header actions ──────────────────────────────────────────────────────────
+  const doReset = () => {
+    if (draftStatus !== "saved" && !window.confirm("Réinitialiser le composeur ? Les modifications non enregistrées seront perdues.")) return;
+    setState(BLANK);
+    setDraftId(null);
+    setDraftStatus("saved");
+    setOpenModules({});
+    setOverflowOpen(false);
+    showFlash("ok", "Composeur réinitialisé.");
+  };
+  const doDuplicate = () => {
+    setDraftId(null);
+    setDraftStatus("unsaved");
+    setOverflowOpen(false);
+    showFlash("ok", "Copie créée — enregistrez pour la conserver.");
+  };
+  const doDeleteDraft = async () => {
+    if (!draftId) {
+      doReset();
+      return;
+    }
+    if (!window.confirm("Supprimer définitivement ce brouillon ?")) return;
+    setOverflowOpen(false);
     setBusy(true);
     try {
-      const res = await saveDraftAction(toPayload(), draftId);
-      if (res.ok && res.draftId) {
-        setDraftId(res.draftId);
-        showFlash("ok", "Brouillon enregistré.");
+      const res = await deleteDraftAction(draftId);
+      if (res.ok) {
+        setState(BLANK);
+        setDraftId(null);
+        setDraftStatus("saved");
+        setOpenModules({});
+        showFlash("ok", "Brouillon supprimé.");
       } else {
-        showFlash("err", res.error ?? "Échec de l'enregistrement.");
+        showFlash("err", res.error ?? "Échec de la suppression.");
       }
     } finally {
       setBusy(false);
     }
   };
 
-  const doTest = async () => {
-    const address = window.prompt("Adresse pour l'e-mail de test :", adminTestEmail);
-    if (!address) return;
-    setBusy(true);
-    try {
-      const res = await sendTestEmailAction(toPayload(), address);
-      showFlash(res.ok ? "ok" : "err", res.ok ? `Test envoyé à ${address}.` : res.error ?? "Échec du test.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openConfirm = async () => {
+  // ── Send flows ──────────────────────────────────────────────────────────────
+  const openReview = async () => {
     setBusy(true);
     try {
       const summary = await summarizeSendAction(toPayload());
@@ -172,243 +350,270 @@ export default function EmailComposer({
         showFlash("err", summary.error ?? "Impossible d'envoyer.");
         return;
       }
-      setConfirm(summary);
+      setReviewSummary(summary);
     } finally {
       setBusy(false);
     }
   };
 
-  const doSend = async () => {
-    setConfirm(null);
-    setBusy(true);
-    try {
-      const res = await sendEmailAction(toPayload());
-      if (res.ok) {
-        showFlash("ok", `Envoyé : ${res.sentCount} réussi(s), ${res.failedCount} échec(s).`);
-        if (res.sendId) router.push(`/admin/emails/history/${res.sendId}`);
-      } else {
-        showFlash("err", res.error ?? "Échec de l'envoi.");
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
+  const doSend = useCallback(async () => {
+    const res = await sendEmailAction(toPayload());
+    return res;
+  }, [toPayload]);
 
-  const canSend = permissions.send && state.recipients.length > 0 && state.modules.length > 0 && state.subject.trim().length > 0;
-
-  return (
-    <div className="min-w-0">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-white">Envoyer un e-mail</h1>
-          <p className="text-sm text-muted">Composez et envoyez un e-mail transactionnel ou de service client.</p>
-        </div>
-        <Link href="/admin/emails/history" className="btn-ghost text-sm">Historique</Link>
-      </div>
-
-      {flash && (
-        <div className={`mb-4 rounded-xl px-4 py-2 text-sm ${flash.kind === "ok" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>
-          {flash.msg}
-        </div>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-        {/* ── Left: editor ── */}
-        <div className="space-y-4">
-          <RecipientPicker
-            mode={state.recipientMode}
-            recipients={state.recipients}
-            onModeChange={(m) => set("recipientMode", m)}
-            onChange={(r: ClientRecipient[]) => set("recipients", r)}
-          />
-
-          <div className="card p-4">
-            <label className="mb-1 block text-xs font-medium text-muted">Modèle</label>
-            <select className="input text-sm" value={state.templateKey} onChange={(e) => applyTemplate(e.target.value)}>
-              {COMPOSER_TEMPLATES.map((t) => (
-                <option key={t.key} value={t.key}>{t.label}</option>
-              ))}
-            </select>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-muted">Objet</label>
-                <input className="input text-sm" value={state.subject} onChange={(e) => set("subject", e.target.value)} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Pré-en-tête</label>
-                <input className="input text-sm" value={state.preheader} onChange={(e) => set("preheader", e.target.value)} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Surtitre</label>
-                <input className="input text-sm" value={state.eyebrow} onChange={(e) => set("eyebrow", e.target.value)} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-muted">Titre principal</label>
-                <input className="input text-sm" value={state.title} onChange={(e) => set("title", e.target.value)} />
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-faint">
-              Variables : {"{{customer.name}}"} · {"{{customer.creditBalance}}"} · {"{{order.number}}"} · {"{{store.name}}"} · {"{{support.email}}"}
-            </p>
-          </div>
-
-          {/* Modules */}
-          <div className="card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-text">Contenu</h2>
-              <span className="chip">{state.modules.length} module(s)</span>
-            </div>
-
-            <div className="space-y-3">
-              {state.modules.map((m, i) => (
-                <div key={m.id} className="rounded-xl border border-border bg-surface2/40 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-accent">{MODULE_LABELS[m.type]}</span>
-                    <div className="flex items-center gap-1">
-                      <button type="button" disabled={i === 0} onClick={() => move(m.id, -1)} className="rounded px-1.5 py-0.5 text-xs text-muted hover:bg-surface2 disabled:opacity-30" aria-label="Monter">↑</button>
-                      <button type="button" disabled={i === state.modules.length - 1} onClick={() => move(m.id, 1)} className="rounded px-1.5 py-0.5 text-xs text-muted hover:bg-surface2 disabled:opacity-30" aria-label="Descendre">↓</button>
-                      <button type="button" onClick={() => removeModule(m.id)} className="rounded px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-500/10" aria-label="Supprimer">✕</button>
-                    </div>
-                  </div>
-                  <ModuleEditor
-                    module={m}
-                    recipients={state.recipients}
-                    canGrantCredit={permissions.creditGrant}
-                    onChange={(next) => updateModule(m.id, next)}
-                  />
-                </div>
-              ))}
-              {state.modules.length === 0 && (
-                <p className="text-sm text-muted">Aucun module. Ajoutez du contenu ci-dessous.</p>
-              )}
-            </div>
-
-            <div className="mt-3">
-              <label className="mb-1 block text-xs font-medium text-muted">Ajouter un module</label>
-              <div className="flex flex-wrap gap-2">
-                {MODULE_TYPES.map((t) => (
-                  <button key={t} type="button" onClick={() => addModule(t)} className="chip hover:border-accent hover:text-accent">
-                    + {MODULE_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Actions (sticky-ish on mobile) */}
-          <div className="sticky bottom-0 z-10 flex flex-wrap gap-2 rounded-xl border border-border bg-card/95 p-3 backdrop-blur">
-            <button type="button" onClick={doSaveDraft} disabled={busy || !permissions.compose} className="btn-ghost text-sm">
-              Enregistrer le brouillon
-            </button>
-            <button type="button" onClick={doTest} disabled={busy || !permissions.send} className="btn-ghost text-sm">
-              Envoyer un test
-            </button>
-            <button type="button" onClick={() => setPreviewOpen(true)} className="btn-ghost text-sm lg:hidden">
-              Aperçu
-            </button>
-            <button type="button" onClick={openConfirm} disabled={busy || !canSend} className="btn-primary text-sm">
-              Envoyer
-            </button>
-          </div>
-        </div>
-
-        {/* ── Right: preview (desktop) ── */}
-        <div className="hidden lg:block">
-          <div className="sticky top-4">
-            <PreviewPanel preview={preview} mode={previewMode} onModeChange={setPreviewMode} />
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile preview sheet */}
-      {previewOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 lg:hidden" onClick={() => setPreviewOpen(false)}>
-          <div className="mt-auto max-h-[90vh] overflow-y-auto rounded-t-2xl bg-card p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-text">Aperçu</h2>
-              <button type="button" onClick={() => setPreviewOpen(false)} className="btn-ghost text-xs">Fermer</button>
-            </div>
-            <PreviewPanel preview={preview} mode={previewMode} onModeChange={setPreviewMode} />
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation modal */}
-      {confirm && confirm.ok && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setConfirm(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-card p-5" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-text">Confirmer l&apos;envoi</h2>
-            <p className="mt-2 text-sm text-muted">
-              Cette action enverra l&apos;e-mail à <strong>{confirm.recipientCount}</strong> destinataire(s)
-              {confirm.totalCreditMad > 0 && (
-                <> et ajoutera un total de <strong>{confirm.totalCreditMad} DH</strong> de crédit Ghost à{" "}
-                <strong>{confirm.creditRecipientCount}</strong> client(s)</>
-              )}
-              . Cette opération sera enregistrée dans l&apos;historique.
-            </p>
-            <ul className="mt-3 space-y-1 text-xs text-muted">
-              <li>Objet : {state.subject || "(vide)"}</li>
-              <li>Modèle : {COMPOSER_TEMPLATES.find((t) => t.key === state.templateKey)?.label}</li>
-              <li>Modules : {state.modules.length}</li>
-              <li>Clients avec compte : {confirm.customerCount} · Adresses manuelles : {confirm.manualCount}</li>
-              {confirm.blockedCreditCount > 0 && (
-                <li className="text-amber-500">{confirm.blockedCreditCount} adresse(s) ne peuvent pas recevoir de crédit (pas de compte).</li>
-              )}
-              {confirm.missingVariablesByRecipient.length > 0 && (
-                <li className="text-amber-500">
-                  Variables manquantes pour {confirm.missingVariablesByRecipient.length} destinataire(s).
-                </li>
-              )}
-            </ul>
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirm(null)} className="btn-ghost text-sm">Annuler</button>
-              <button type="button" onClick={doSend} className="btn-primary text-sm">
-                {confirm.totalCreditMad > 0 ? "Confirmer et créditer" : "Confirmer l'envoi"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+  const doTestSend = useCallback(
+    async (address: string) => {
+      const res = await sendTestEmailAction(toPayload(), address);
+      return { ok: res.ok, error: res.error };
+    },
+    [toPayload],
   );
-}
 
-function PreviewPanel({
-  preview,
-  mode,
-  onModeChange,
-}: {
-  preview: PreviewData | null;
-  mode: "desktop" | "mobile";
-  onModeChange: (m: "desktop" | "mobile") => void;
-}) {
-  return (
-    <div className="card overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border p-3">
-        <h2 className="text-sm font-semibold text-text">Aperçu</h2>
-        <div className="flex gap-1">
-          <button type="button" onClick={() => onModeChange("desktop")} className={`rounded-lg px-2 py-1 text-xs ${mode === "desktop" ? "bg-accent text-white" : "text-muted hover:bg-surface2"}`}>Bureau</button>
-          <button type="button" onClick={() => onModeChange("mobile")} className={`rounded-lg px-2 py-1 text-xs ${mode === "mobile" ? "bg-accent text-white" : "text-muted hover:bg-surface2"}`}>Mobile</button>
+  // ── Section content pieces (reused across desktop & mobile layouts) ──────────
+  const recipientSummary = `${state.recipients.length} destinataire(s) · ${state.recipients.filter((r) => r.customerId).length} client(s) · ${state.recipients.filter((r) => !r.customerId).length} manuelle(s)`;
+  const previewName = state.recipients[previewIndex]?.name || state.recipients[previewIndex]?.email?.split("@")[0] || "Exemple";
+
+  const recipientsSection = (
+    <SectionShell index={1} title="Destinataires" summary={recipientSummary} open={isMobile || openSections[1]} onToggle={() => setOpenSections((o) => ({ ...o, 1: !o[1] }))}>
+      <RecipientPicker mode={state.recipientMode} recipients={state.recipients} onModeChange={(m) => set("recipientMode", m)} onChange={(r: ClientRecipient[]) => set("recipients", r)} />
+    </SectionShell>
+  );
+
+  const fieldClass = "input text-sm";
+  const templateSection = (
+    <SectionShell
+      index={2}
+      title="Modèle et objet"
+      summary={`${templateLabel} · ${state.subject || "objet vide"}`}
+      open={isMobile || openSections[2]}
+      onToggle={() => setOpenSections((o) => ({ ...o, 2: !o[2] }))}
+      actions={<VariablePicker disabled={!focusField} onInsert={insertVariable} />}
+    >
+      <div className="space-y-4">
+        <TemplateGrid value={state.templateKey} onSelect={applyTemplate} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-muted">Objet</label>
+            <input className={fieldClass} value={state.subject} onFocus={() => setFocusField("subject")} onChange={(e) => set("subject", e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Pré-en-tête</label>
+            <input className={fieldClass} value={state.preheader} onFocus={() => setFocusField("preheader")} onChange={(e) => set("preheader", e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Surtitre</label>
+            <input className={fieldClass} value={state.eyebrow} onChange={(e) => set("eyebrow", e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-muted">Titre principal</label>
+            <input className={fieldClass} value={state.title} onFocus={() => setFocusField("title")} onChange={(e) => set("title", e.target.value)} />
+          </div>
         </div>
       </div>
-      {preview ? (
-        <div className="p-3">
-          <div className="mb-2 rounded-lg bg-surface p-2 text-xs">
-            <div className="truncate font-medium text-text">{preview.subject || "(objet vide)"}</div>
-            <div className="truncate text-muted">{preview.preheader}</div>
+    </SectionShell>
+  );
+
+  const contentSection = (
+    <SectionShell
+      index={3}
+      title="Contenu"
+      summary={`${state.modules.length} module(s)`}
+      open={isMobile || openSections[3]}
+      onToggle={() => setOpenSections((o) => ({ ...o, 3: !o[3] }))}
+      actions={
+        <div className="relative flex items-center gap-2">
+          {state.modules.length > 0 && (
+            <button type="button" onClick={() => setAllModules(!state.modules.every((m) => openModules[m.id]))} className="btn-ghost text-xs">
+              {state.modules.every((m) => openModules[m.id]) ? "Tout réduire" : "Tout ouvrir"}
+            </button>
+          )}
+          <button type="button" onClick={() => setLibraryOpen((o) => !o)} className="btn-primary text-xs">+ Ajouter un module</button>
+          <ModuleLibrary open={libraryOpen} sheet={isMobile} onClose={() => setLibraryOpen(false)} onPick={addModule} />
+        </div>
+      }
+    >
+      <div className="space-y-2">
+        {state.modules.map((m, i) => (
+          <ModuleCard
+            key={m.id}
+            module={m}
+            index={i}
+            count={state.modules.length}
+            open={!!openModules[m.id]}
+            recipients={state.recipients}
+            canGrantCredit={permissions.creditGrant}
+            onToggle={() => setOpenModules((o) => ({ ...o, [m.id]: !o[m.id] }))}
+            onChange={(next) => updateModule(m.id, next)}
+            onMove={(dir) => move(m.id, dir)}
+            onDuplicate={() => duplicateModule(m.id)}
+            onDelete={() => removeModule(m.id)}
+          />
+        ))}
+        {state.modules.length === 0 && (
+          <button type="button" onClick={() => setLibraryOpen(true)} className="w-full rounded-xl border border-dashed border-border-strong py-6 text-sm text-muted hover:border-accent/60 hover:text-text">
+            Aucun contenu. Cliquez pour ajouter un module.
+          </button>
+        )}
+      </div>
+    </SectionShell>
+  );
+
+  const settingsSection = (
+    <SectionShell index={4} title="Paramètres d'envoi" summary="Envoi immédiat" open={isMobile || openSections[4]} onToggle={() => setOpenSections((o) => ({ ...o, 4: !o[4] }))}>
+      <div className="space-y-2">
+        <div className="rounded-xl border border-accent/50 bg-accent/10 p-3">
+          <div className="flex items-center gap-2 text-sm text-text">
+            <span className="h-2 w-2 rounded-full bg-accent" /> Envoi immédiat
           </div>
-          {preview.missingVariables.length > 0 && (
-            <div className="mb-2 rounded-lg bg-amber-500/15 px-2 py-1 text-[11px] text-amber-500">
-              Variables non résolues : {preview.missingVariables.join(", ")}
+          <p className="mt-1 text-xs text-muted">L&apos;e-mail part dès la confirmation dans « Vérifier et envoyer ».</p>
+        </div>
+        <p className="text-xs text-faint">La programmation d&apos;un envoi différé sera ajoutée prochainement.</p>
+      </div>
+    </SectionShell>
+  );
+
+  const previewPanel = (
+    <PreviewPanel
+      preview={preview}
+      loading={previewLoading}
+      mode={previewMode}
+      onModeChange={setPreviewMode}
+      zoom={zoom}
+      onZoom={setZoom}
+      recipients={state.recipients}
+      previewIndex={previewIndex}
+      onPreviewIndex={setPreviewIndex}
+      senderName="ghost.ma"
+      senderEmail="support@ghost.ma"
+      collapsible={!isMobile}
+      collapsed={previewCollapsed}
+      onCollapse={() => setPreviewCollapsed((c) => !c)}
+    />
+  );
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  const statusPill = {
+    saved: { cls: "bg-emerald-400/15 text-emerald-300", label: "Brouillon enregistré" },
+    unsaved: { cls: "bg-amber-400/15 text-amber-300", label: "Modifications non enregistrées" },
+    saving: { cls: "bg-accent/15 text-sky-300", label: "Enregistrement…" },
+  }[draftStatus];
+
+  const header = (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold text-white">Composer un e-mail</h1>
+        <p className="text-sm text-muted">Créez et envoyez un e-mail transactionnel ou de service client.</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusPill.cls}`}>{statusPill.label}</span>
+        <Link href="/admin/emails/history" className="btn-ghost text-sm">Historique</Link>
+        <div ref={overflowRef} className="relative">
+          <button type="button" onClick={() => setOverflowOpen((o) => !o)} aria-label="Plus d'actions" className="btn-ghost px-2.5 text-sm">⋮</button>
+          {overflowOpen && (
+            <div className="absolute right-0 z-30 mt-1 w-52 rounded-xl border border-border bg-[#15161b] p-1 shadow-2xl">
+              <button type="button" onClick={doDuplicate} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-text hover:bg-surface2">Dupliquer</button>
+              <button type="button" onClick={doReset} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-text hover:bg-surface2">Réinitialiser</button>
+              <button type="button" onClick={doDeleteDraft} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-red-500/10">Supprimer le brouillon</button>
             </div>
           )}
-          <div className="mx-auto overflow-hidden rounded-lg border border-border bg-white" style={{ maxWidth: mode === "mobile" ? 380 : "100%" }}>
-            <iframe title="Aperçu e-mail" srcDoc={preview.html} className="h-[560px] w-full" sandbox="" />
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Mobile "Vérification" tab content ───────────────────────────────────────
+  const checkTab = (
+    <div className="space-y-3">
+      <div className={`rounded-xl border px-3 py-2 text-sm ${validation.status === "blocked" ? "border-red-400/40 bg-red-400/10 text-red-200" : validation.status === "review" ? "border-amber-400/40 bg-amber-400/10 text-amber-200" : "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"}`}>
+        {validation.status === "ready" ? "Prêt à envoyer." : `${validation.issues.length} élément(s) à vérifier.`}
+      </div>
+      <ul className="space-y-1.5">
+        {validation.issues.length === 0 && <li className="text-xs text-emerald-300">Tout est prêt.</li>}
+        {validation.issues.map((issue) => (
+          <li key={issue.id} className="flex items-start gap-2 text-xs">
+            <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${issue.blocking ? "bg-red-400" : "bg-amber-400"}`} />
+            <span className={issue.blocking ? "text-red-200" : "text-amber-200"}>{issue.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  const flashBar = flash && (
+    <div className={`mb-4 rounded-xl px-4 py-2 text-sm ${flash.kind === "ok" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>{flash.msg}</div>
+  );
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="relative min-w-0">
+      {header}
+      {flashBar}
+
+      {isMobile ? (
+        <div className="pb-28">
+          <div className="mb-4 flex gap-1 rounded-xl border border-border bg-surface p-1">
+            {([["recipients", "Destinataires"], ["message", "Message"], ["preview", "Aperçu"], ["check", "Vérification"]] as [MobileTab, string][]).map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setTab(id)} className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium ${tab === id ? "bg-accent text-white" : "text-muted"}`}>{label}</button>
+            ))}
           </div>
+          {tab === "recipients" && recipientsSection}
+          {tab === "message" && <div className="space-y-4">{templateSection}{contentSection}{settingsSection}</div>}
+          {tab === "preview" && <div className="h-[70vh]">{previewPanel}</div>}
+          {tab === "check" && checkTab}
         </div>
       ) : (
-        <p className="p-4 text-sm text-muted">L&apos;aperçu s&apos;affichera ici.</p>
+        <div className="flex gap-4 pb-24">
+          <div className="min-w-0 flex-1 space-y-4" style={{ flexBasis: "62%" }}>
+            {recipientsSection}
+            {templateSection}
+            {contentSection}
+            {settingsSection}
+          </div>
+          <div className={previewCollapsed ? "shrink-0" : "shrink-0"} style={{ flexBasis: previewCollapsed ? "auto" : "38%", width: previewCollapsed ? 40 : undefined }}>
+            <div className="sticky top-4 h-[calc(100vh-8rem)]">{previewPanel}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky action bar */}
+      <div className="sticky bottom-0 z-20 -mx-4 sm:-mx-0">
+        <ActionBar
+          validation={validation}
+          recipientCount={state.recipients.length}
+          creditTotal={creditTotal}
+          lastSaved={lastSaved}
+          busy={busy}
+          canCompose={permissions.compose}
+          canSend={permissions.send}
+          onSaveDraft={() => void doSaveDraft(false)}
+          onTest={() => setTestOpen(true)}
+          onReview={() => void openReview()}
+        />
+      </div>
+
+      {/* Undo toast */}
+      {undo && (
+        <div className="fixed bottom-24 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-border bg-[#15161b] px-4 py-2.5 text-sm text-text shadow-2xl">
+          <span>Module supprimé</span>
+          <button type="button" onClick={restoreUndo} className="font-medium text-sky-300 hover:underline">Annuler</button>
+        </div>
+      )}
+
+      <TestModal open={testOpen} sheet={isMobile} defaultAddress={adminTestEmail} previewName={previewName} onSend={doTestSend} onClose={() => setTestOpen(false)} />
+
+      {reviewSummary && (
+        <ReviewModal
+          open
+          sheet={isMobile}
+          summary={reviewSummary}
+          validation={validation}
+          subject={state.subject}
+          templateLabel={templateLabel}
+          moduleCount={state.modules.length}
+          onSend={doSend}
+          onClose={() => setReviewSummary(null)}
+          onGoToSend={(id) => router.push(`/admin/emails/history/${id}`)}
+        />
       )}
     </div>
   );

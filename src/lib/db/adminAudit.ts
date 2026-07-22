@@ -34,6 +34,7 @@ export type AuditAction =
   | "wallet.unfrozen"
   | "wallet.reconciled"
   | "email.draft_saved"
+  | "email.draft_deleted"
   | "email.test_sent"
   | "email.sent"
   | "email.credit_granted"

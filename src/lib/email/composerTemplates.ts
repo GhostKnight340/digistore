@@ -17,6 +17,10 @@ export type ModuleSeed = DistributiveOmit<EmailModule, "id">;
 export type ComposerTemplate = {
   key: string;
   label: string;
+  /** Category label shown as the card eyebrow in the template grid. */
+  category: string;
+  /** One-line purpose shown under the name in the template grid. */
+  purpose: string;
   subject: string;
   preheader: string;
   eyebrow: string;
@@ -29,6 +33,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "custom",
     label: "Message personnalisé",
+    category: "Général",
+    purpose: "Un message libre, à composer entièrement vous-même.",
     subject: "Un message de la part de ghost.ma",
     preheader: "",
     eyebrow: "Ghost.ma",
@@ -38,6 +44,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "apology",
     label: "Excuses / geste commercial",
+    category: "Service client",
+    purpose: "Présenter des excuses et offrir un geste commercial.",
     subject: "Toutes nos excuses — un geste de notre part",
     preheader: "Nous sommes désolés pour ce désagrément.",
     eyebrow: "Service client",
@@ -62,6 +70,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "order_update",
     label: "Mise à jour de commande",
+    category: "Commande",
+    purpose: "Informer le client de l'évolution de sa commande.",
     subject: "Mise à jour de votre commande {{order.number}}",
     preheader: "Le point sur votre commande.",
     eyebrow: "Commande",
@@ -73,6 +83,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "payment_issue",
     label: "Problème de paiement",
+    category: "Paiement",
+    purpose: "Signaler un paiement en attente ou à corriger.",
     subject: "Action requise sur votre paiement",
     preheader: "Nous avons besoin d'une information pour valider votre paiement.",
     eyebrow: "Paiement",
@@ -89,6 +101,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "proof_required",
     label: "Justificatif requis",
+    category: "Paiement",
+    purpose: "Demander un justificatif de paiement au client.",
     subject: "Un justificatif est nécessaire",
     preheader: "Merci de nous transmettre un justificatif de paiement.",
     eyebrow: "Paiement",
@@ -103,6 +117,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "refund",
     label: "Remboursement",
+    category: "Remboursement",
+    purpose: "Confirmer le traitement d'un remboursement.",
     subject: "Votre remboursement",
     preheader: "Le point sur votre remboursement.",
     eyebrow: "Remboursement",
@@ -114,6 +130,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "ghost_credit_gift",
     label: "Crédit Ghost offert",
+    category: "Geste commercial",
+    purpose: "Offrir un crédit Ghost en cadeau au client.",
     subject: "Un crédit Ghost vous attend 🎁",
     preheader: "Nous avons ajouté du crédit Ghost sur votre compte.",
     eyebrow: "Crédit Ghost",
@@ -132,6 +150,8 @@ export const COMPOSER_TEMPLATES: ComposerTemplate[] = [
   {
     key: "general_info",
     label: "Information générale",
+    category: "Information générale",
+    purpose: "Diffuser une information importante.",
     subject: "Information importante — ghost.ma",
     preheader: "",
     eyebrow: "Information",
