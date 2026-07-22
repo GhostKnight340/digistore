@@ -32,6 +32,7 @@ import {
   getPaymentProofAction,
 } from "@/app/actions/payments";
 import { getReloadlyDeliveryChecksAction } from "@/app/actions/suppliers";
+import { createAdminRefundAction } from "@/app/actions/adminRefunds";
 import type {
   AdminCodeDTO,
   AdminOrderDTO,
@@ -414,6 +415,27 @@ export default function OrderDetailPage({
     }
   }
 
+  async function startRefund() {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await createAdminRefundAction({
+        orderId: order.id,
+        source: "ADMIN_CREATED",
+        reason: "other",
+        description: "Demande de remboursement créée depuis la commande.",
+      });
+      if (result.ok) {
+        window.location.href = `/admin/refunds/${result.id}`;
+        return;
+      }
+      setError(result.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function sendReviewEmail() {
     if (!reviewEmail) return;
     await runAction("Email envoyé et statut mis à jour.", () =>
@@ -573,6 +595,9 @@ export default function OrderDetailPage({
         </div>
 
         <div className="s4-actions s4-header-actions" style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <HeaderButton tone="accent" disabled={busy} onClick={() => void startRefund()}>
+            Démarrer un remboursement
+          </HeaderButton>
           {canReject ? (
             <HeaderButton
               tone="danger"
@@ -745,6 +770,9 @@ export default function OrderDetailPage({
           borderTop: `1px solid ${C.border}`,
         }}
       >
+        <HeaderButton tone="accent" disabled={busy} onClick={() => void startRefund()}>
+          Rembourser
+        </HeaderButton>
         {canApprove ? (
           <HeaderButton
             tone="success"
@@ -1038,7 +1066,7 @@ function HeaderButton({
   icon,
 }: {
   children: ReactNode;
-  tone: "success" | "danger" | "neutral";
+  tone: "success" | "danger" | "neutral" | "accent";
   disabled?: boolean;
   onClick: () => void;
   icon?: ReactNode;
@@ -1059,6 +1087,11 @@ function HeaderButton({
       border: `1px solid ${C.borderStronger}`,
       background: C.surfaceInput,
       color: C.text,
+    },
+    accent: {
+      border: `1px solid ${C.accentBorder}`,
+      background: C.accentSoft,
+      color: C.accentText,
     },
   };
   return (
