@@ -103,6 +103,16 @@ export type SupplierMappingCheckResult = {
   };
 };
 
+/**
+ * Which credential set / API host a read-only or purchase call targets.
+ * OMITTED everywhere on the production money path, so callers default to the
+ * provider's own environment (live for Reloadly). ONLY the Fulfillment Test
+ * Center passes `"sandbox"` explicitly, to exercise this exact code against the
+ * supplier's sandbox without touching live credentials. Providers without
+ * environments (FazerCards) ignore the argument.
+ */
+export type SupplierEnvironment = "sandbox" | "live";
+
 export type SupplierProvider = {
   slug: SupplierSlug;
   name: string;
@@ -116,17 +126,23 @@ export type SupplierProvider = {
   supportsBalance: boolean;
   /** "sandbox" | "live" for providers with environments, null otherwise. */
   environment(): "sandbox" | "live" | null;
-  isConfigured(): boolean;
+  isConfigured(environment?: SupplierEnvironment): boolean;
   /** Read-only auth + availability check. MUST never place an order. */
-  testConnection(): Promise<SupplierConnectionTest>;
+  testConnection(environment?: SupplierEnvironment): Promise<SupplierConnectionTest>;
   /** Read-only wallet balance. Only present when supportsBalance. */
-  getBalance?(): Promise<SupplierBalance>;
+  getBalance?(environment?: SupplierEnvironment): Promise<SupplierBalance>;
   /** Read-only catalog check that a mapping points at a real, compatible,
    *  available supplier product. MUST never place an order. */
-  validateMapping(input: SupplierMappingCheckInput): Promise<SupplierMappingCheckResult>;
+  validateMapping(
+    input: SupplierMappingCheckInput,
+    environment?: SupplierEnvironment,
+  ): Promise<SupplierMappingCheckResult>;
   /** Places ONE real order (idempotent per idempotencyScope) and returns the
    *  normalized delivery payload. Throws a safe-to-display Error on failure. */
-  purchase(request: SupplierPurchaseRequest): Promise<SupplierPurchaseResult>;
+  purchase(
+    request: SupplierPurchaseRequest,
+    environment?: SupplierEnvironment,
+  ): Promise<SupplierPurchaseResult>;
 };
 
 export const SUPPLIER_PROVIDERS: Record<SupplierSlug, SupplierProvider> = {

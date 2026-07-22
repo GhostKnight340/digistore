@@ -294,7 +294,7 @@ model GuideProduct {
 // restock/price notifications can be layered on later without a migration; no
 // notification state is implied to exist yet.
 model WishlistItem {
-  id String   @id @default(cuid())
+  id         String   @id @default(cuid())
   customerId String
   productId  String
   createdAt  DateTime @default(now())
@@ -1229,7 +1229,7 @@ model SupplierWebhookEvent {
 // payloads (codes, credentials, customer data) — only outcome metadata safe to
 // show any admin.
 model SupplierLog {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   supplierId     String
   // "purchase" | "health_check" | "balance" | "status_poll"
   requestType    String
@@ -2160,6 +2160,27 @@ model AlertCooldown {
   @@index([severity, lastFiredAt])
 }
 
+// Isolated operational verification history. Deliberately has no relation to
+// Order, Customer, inventory, revenue, analytics, or EmailLog.
+model FulfillmentTestRun {
+  id            String   @id @default(cuid())
+  supplier      String
+  environment   String
+  mode          String   @default("full")
+  status        String
+  durationMs    Int
+  healthScore   Int
+  stages        Json
+  warnings      Json
+  safeError     String?
+  developerError String?
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([supplier, environment, status])
+}
+
 // Append-only admin/audit timeline for a promo code (mirrors PaymentEvent).
 model PromoCodeEvent {
   id          String   @id @default(cuid())
@@ -2338,7 +2359,7 @@ model AiScheduledJob {
   // The owning module (informational; a job may fan out to one module).
   module String?
 
-  enabled Boolean @default(true)
+  enabled  Boolean @default(true)
   // Cron expression, interpreted in AiOpsSettings.timezone.
   schedule String?
 
@@ -2545,7 +2566,7 @@ model AiDiscordChannelMapping {
 model AiConversation {
   id             String   @id @default(cuid())
   // Deterministic identity: `${guildId}:${channelId}:${threadId ?? "-"}:${userId}:${module}`.
-  key            String  @unique
+  key            String   @unique
   guildId        String
   channelId      String
   threadId       String?

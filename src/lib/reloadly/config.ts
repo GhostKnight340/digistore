@@ -15,18 +15,27 @@
 
 export type ReloadlyEnvironment = "sandbox" | "live";
 
-export function getReloadlyClientId(): string | undefined {
-  return process.env.RELOADLY_CLIENT_ID || undefined;
+export function getReloadlyClientId(
+  environment: ReloadlyEnvironment = getReloadlyEnvironment(),
+): string | undefined {
+  return (environment === "sandbox"
+    ? process.env.RELOADLY_SANDBOX_CLIENT_ID
+    : process.env.RELOADLY_CLIENT_ID) || undefined;
 }
 
-export function getReloadlyClientSecret(): string | undefined {
-  return process.env.RELOADLY_CLIENT_SECRET || undefined;
+export function getReloadlyClientSecret(
+  environment: ReloadlyEnvironment = getReloadlyEnvironment(),
+): string | undefined {
+  return (environment === "sandbox"
+    ? process.env.RELOADLY_SANDBOX_CLIENT_SECRET
+    : process.env.RELOADLY_CLIENT_SECRET) || undefined;
 }
 
 /**
  * Fails closed to "sandbox" for anything other than an explicit "live", so a
  * missing/misconfigured env var can never accidentally place a real-money
- * order.
+ * order. Callers that need a specific environment (e.g. the fulfillment test
+ * center) pass it explicitly.
  */
 export function getReloadlyEnvironment(): ReloadlyEnvironment {
   return process.env.RELOADLY_ENV === "live" ? "live" : "sandbox";
@@ -36,8 +45,10 @@ export function isReloadlyLive(): boolean {
   return getReloadlyEnvironment() === "live";
 }
 
-export function isReloadlyConfigured(): boolean {
-  return Boolean(getReloadlyClientId()) && Boolean(getReloadlyClientSecret());
+export function isReloadlyConfigured(
+  environment: ReloadlyEnvironment = getReloadlyEnvironment(),
+): boolean {
+  return Boolean(getReloadlyClientId(environment)) && Boolean(getReloadlyClientSecret(environment));
 }
 
 export const RELOADLY_AUTH_URL = "https://auth.reloadly.com/oauth/token";
@@ -52,6 +63,8 @@ export const RELOADLY_GIFT_CARDS_AUDIENCE = {
   live: "https://giftcards.reloadly.com",
 } as const satisfies Record<ReloadlyEnvironment, string>;
 
-export function getGiftCardsBaseUrl(): string {
-  return RELOADLY_GIFT_CARDS_AUDIENCE[getReloadlyEnvironment()];
+export function getGiftCardsBaseUrl(
+  environment: ReloadlyEnvironment = getReloadlyEnvironment(),
+): string {
+  return RELOADLY_GIFT_CARDS_AUDIENCE[environment];
 }

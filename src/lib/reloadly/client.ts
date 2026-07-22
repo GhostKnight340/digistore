@@ -18,6 +18,7 @@ import {
   getReloadlyClientSecret,
   isReloadlyConfigured,
 } from "./config";
+import type { ReloadlyEnvironment } from "./config";
 
 export class ReloadlyApiError extends Error {
   status: number;
@@ -94,9 +95,9 @@ export const RELOADLY_LOOKUP_TIMEOUT_MS = 10_000;
 /** Order placement: allow longer, the provider fulfils synchronously. */
 export const RELOADLY_ORDER_TIMEOUT_MS = 15_000;
 
-async function fetchAccessToken(audience: string): Promise<TokenCacheEntry> {
-  const clientId = getReloadlyClientId();
-  const clientSecret = getReloadlyClientSecret();
+async function fetchAccessToken(audience: string, environment: ReloadlyEnvironment): Promise<TokenCacheEntry> {
+  const clientId = getReloadlyClientId(environment);
+  const clientSecret = getReloadlyClientSecret(environment);
   if (!clientId || !clientSecret) {
     throw new ReloadlyConfigError(
       "RELOADLY_CLIENT_ID / RELOADLY_CLIENT_SECRET are not configured.",
@@ -134,14 +135,15 @@ async function fetchAccessToken(audience: string): Promise<TokenCacheEntry> {
   };
 }
 
-async function getAccessToken(audience: string): Promise<string> {
-  const cached = tokenCache.get(audience);
+async function getAccessToken(audience: string, environment: ReloadlyEnvironment): Promise<string> {
+  const cacheKey = `${environment}:${audience}`;
+  const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiresAt - TOKEN_REFRESH_SKEW_MS > Date.now()) {
     return cached.accessToken;
   }
 
-  const fresh = await fetchAccessToken(audience);
-  tokenCache.set(audience, fresh);
+  const fresh = await fetchAccessToken(audience, environment);
+  tokenCache.set(cacheKey, fresh);
   return fresh.accessToken;
 }
 
@@ -169,14 +171,15 @@ export async function reloadlyRequest<T>(
   baseUrl: string,
   path: string,
   init: ReloadlyRequestInit = {},
+  environment: ReloadlyEnvironment = "live",
 ): Promise<T> {
-  if (!isReloadlyConfigured()) {
+  if (!isReloadlyConfigured(environment)) {
     throw new ReloadlyConfigError(
       "Reloadly is not configured (missing RELOADLY_CLIENT_ID / RELOADLY_CLIENT_SECRET).",
     );
   }
 
-  const token = await getAccessToken(baseUrl);
+  const token = await getAccessToken(baseUrl, environment);
 
   const url = new URL(path, baseUrl);
   for (const [key, value] of Object.entries(init.query ?? {})) {

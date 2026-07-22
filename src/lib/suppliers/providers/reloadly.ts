@@ -7,6 +7,7 @@ import "server-only";
 import {
   getReloadlyEnvironment,
   isReloadlyConfigured,
+  type ReloadlyEnvironment,
 } from "@/lib/reloadly/config";
 import {
   describeReloadlyError,
@@ -101,17 +102,17 @@ export const reloadlyProvider: SupplierProvider = {
     return getReloadlyEnvironment();
   },
 
-  isConfigured() {
-    return isReloadlyConfigured();
+  isConfigured(environment: ReloadlyEnvironment = getReloadlyEnvironment()) {
+    return isReloadlyConfigured(environment);
   },
 
   /** Read-only: one cheap catalog read (auth proof) + a balance read. */
-  async testConnection() {
+  async testConnection(environment: ReloadlyEnvironment = getReloadlyEnvironment()) {
     const startedAt = Date.now();
     const details: { label: string; value: string }[] = [
-      { label: "Environnement", value: getReloadlyEnvironment() },
+      { label: "Environnement", value: environment },
     ];
-    if (!isReloadlyConfigured()) {
+    if (!isReloadlyConfigured(environment)) {
       return {
         ok: false,
         message: "Reloadly n’est pas configuré (identifiants manquants).",
@@ -120,10 +121,10 @@ export const reloadlyProvider: SupplierProvider = {
       };
     }
     try {
-      await getGiftCardProducts({ size: 1 });
+      await getGiftCardProducts({ size: 1 }, environment);
       details.push({ label: "Catalogue", value: "accessible" });
       try {
-        const balance = await getAccountBalance();
+        const balance = await getAccountBalance(environment);
         details.push({ label: "Solde", value: `${balance.balance} ${balance.currencyCode}` });
       } catch {
         details.push({ label: "Solde", value: "indisponible (permission)" });
@@ -144,8 +145,8 @@ export const reloadlyProvider: SupplierProvider = {
     }
   },
 
-  async getBalance() {
-    const balance = await getAccountBalance();
+  async getBalance(environment: ReloadlyEnvironment = getReloadlyEnvironment()) {
+    const balance = await getAccountBalance(environment);
     return { amount: String(balance.balance), currency: balance.currencyCode };
   },
 
@@ -155,14 +156,14 @@ export const reloadlyProvider: SupplierProvider = {
    * denomination. Returns authoritative name/region/cost for prefill. Never
    * places an order.
    */
-  async validateMapping(input) {
+  async validateMapping(input, environment: ReloadlyEnvironment = getReloadlyEnvironment()) {
     const productId = Number(input.supplierProductId);
     if (!Number.isInteger(productId) || productId <= 0) {
       return { ok: false, message: "Identifiant produit Reloadly invalide (nombre attendu)." };
     }
     let product;
     try {
-      product = await getGiftCardProduct(productId);
+      product = await getGiftCardProduct(productId, environment);
     } catch (error) {
       return { ok: false, message: describeReloadlyError("validate-mapping", error) };
     }
@@ -219,7 +220,10 @@ export const reloadlyProvider: SupplierProvider = {
    * blindly re-clicking "Livrer". Everything after a successful placement is
    * safe to retry — the lookup above will find the transaction.
    */
-  async purchase(request: SupplierPurchaseRequest): Promise<SupplierPurchaseResult> {
+  async purchase(
+    request: SupplierPurchaseRequest,
+    environment: ReloadlyEnvironment = getReloadlyEnvironment(),
+  ): Promise<SupplierPurchaseResult> {
     const params = parseEntryParams(request.entryParams);
     if (request.context.faceValue == null) {
       throw new Error("Valeur faciale manquante pour la variante Reloadly.");
@@ -228,7 +232,7 @@ export const reloadlyProvider: SupplierProvider = {
     // Pre-flight: confirm the face value is an actually-offered denomination.
     // Turns Reloadly's opaque "400 Invalid price" into an actionable message
     // and avoids a wasted order attempt.
-    const product = await getGiftCardProduct(params.reloadlyProductId);
+    const product = await getGiftCardProduct(params.reloadlyProductId, environment);
     const { fxRatesToMad } = await getPricingSettings();
     const { ok, issues } = validateReloadlyDenomination(
       product,
@@ -250,7 +254,7 @@ export const reloadlyProvider: SupplierProvider = {
     let order: Awaited<ReturnType<typeof placeGiftCardOrder>>;
     let existing: Awaited<ReturnType<typeof findGiftCardOrderByCustomIdentifier>>;
     try {
-      existing = await findGiftCardOrderByCustomIdentifier(request.idempotencyScope);
+      existing = await findGiftCardOrderByCustomIdentifier(request.idempotencyScope, environment);
     } catch (error) {
       throw new Error(
         "Impossible de vérifier auprès de Reloadly si cette commande a déjà été passée " +
@@ -263,15 +267,18 @@ export const reloadlyProvider: SupplierProvider = {
       order = existing;
     } else {
       try {
-        order = await placeGiftCardOrder({
-          productId: params.reloadlyProductId,
-          countryCode: params.reloadlyCountryCode,
-          quantity: 1,
-          unitPrice: request.context.faceValue,
-          customIdentifier: request.idempotencyScope,
-          senderName: RELOADLY_SENDER_NAME,
-          recipientEmail: request.context.customerEmail,
-        });
+        order = await placeGiftCardOrder(
+          {
+            productId: params.reloadlyProductId,
+            countryCode: params.reloadlyCountryCode,
+            quantity: 1,
+            unitPrice: request.context.faceValue,
+            customIdentifier: request.idempotencyScope,
+            senderName: RELOADLY_SENDER_NAME,
+            recipientEmail: request.context.customerEmail,
+          },
+          environment,
+        );
       } catch (error) {
         const certainty = classifyPurchaseFailure({
           isNetworkError: isReloadlyNetworkError(error),
@@ -299,13 +306,13 @@ export const reloadlyProvider: SupplierProvider = {
       attempt += 1
     ) {
       await sleep(STATUS_POLL_DELAY_MS);
-      status = (await getGiftCardOrderStatus(order.transactionId)).status;
+      status = (await getGiftCardOrderStatus(order.transactionId, environment)).status;
     }
     if (status !== "SUCCESSFUL") {
       throw new Error(`Commande Reloadly non aboutie (statut: ${status}).`);
     }
 
-    const cards = await getGiftCardOrderCards(order.transactionId);
+    const cards = await getGiftCardOrderCards(order.transactionId, environment);
     const fields = normalizeReloadlyCards(cards);
     const primary = primaryDeliveryValue(fields);
     if (fields.length === 0 || !primary) {

@@ -6,7 +6,7 @@
  * `DigitalCode` inventory.
  */
 import "server-only";
-import { getGiftCardsBaseUrl } from "./config";
+import { getGiftCardsBaseUrl, type ReloadlyEnvironment } from "./config";
 import { reloadlyRequest, RELOADLY_ORDER_TIMEOUT_MS } from "./client";
 
 export type ReloadlyDenominationType = "FIXED" | "RANGE";
@@ -154,13 +154,16 @@ type ReloadlyGiftCardProductsResponse = {
  * Safe to call from an admin-only context to browse the catalog; not part
  * of any customer-facing or fulfillment path.
  */
-export async function getGiftCardProducts(options?: {
-  page?: number;
-  size?: number;
-  countryCode?: string;
-}): Promise<ReloadlyGiftCardProductsResponse> {
+export async function getGiftCardProducts(
+  options?: {
+    page?: number;
+    size?: number;
+    countryCode?: string;
+  },
+  environment: ReloadlyEnvironment = "live",
+): Promise<ReloadlyGiftCardProductsResponse> {
   return reloadlyRequest<ReloadlyGiftCardProductsResponse>(
-    getGiftCardsBaseUrl(),
+    getGiftCardsBaseUrl(environment),
     "/products",
     {
       query: {
@@ -169,15 +172,19 @@ export async function getGiftCardProducts(options?: {
         countryCode: options?.countryCode,
       },
     },
+    environment,
   );
 }
 
 export async function getGiftCardProduct(
   productId: number,
+  environment: ReloadlyEnvironment = "live",
 ): Promise<ReloadlyGiftCardProduct> {
   return reloadlyRequest<ReloadlyGiftCardProduct>(
-    getGiftCardsBaseUrl(),
+    getGiftCardsBaseUrl(environment),
     `/products/${productId}`,
+    {},
+    environment,
   );
 }
 
@@ -270,10 +277,14 @@ export type ReloadlyAccountBalance = {
  * Reads the Reloadly wallet balance for the configured account. Read-only and
  * safe for an admin health/overview view — spends nothing, places no order.
  */
-export async function getAccountBalance(): Promise<ReloadlyAccountBalance> {
+export async function getAccountBalance(
+  environment: ReloadlyEnvironment = "live",
+): Promise<ReloadlyAccountBalance> {
   return reloadlyRequest<ReloadlyAccountBalance>(
-    getGiftCardsBaseUrl(),
+    getGiftCardsBaseUrl(environment),
     "/accounts/balance",
+    {},
+    environment,
   );
 }
 
@@ -332,15 +343,17 @@ export type ReloadlyGiftCardOrderResult = {
  */
 export async function placeGiftCardOrder(
   input: PlaceGiftCardOrderInput,
+  environment: ReloadlyEnvironment = "live",
 ): Promise<ReloadlyGiftCardOrderResult> {
   return reloadlyRequest<ReloadlyGiftCardOrderResult>(
-    getGiftCardsBaseUrl(),
+    getGiftCardsBaseUrl(environment),
     "/orders",
     {
       method: "POST",
       body: input,
       timeoutMs: RELOADLY_ORDER_TIMEOUT_MS,
     },
+    environment,
   );
 }
 
@@ -356,12 +369,16 @@ export async function placeGiftCardOrder(
  */
 export async function findGiftCardOrderByCustomIdentifier(
   customIdentifier: string,
+  environment: ReloadlyEnvironment = "live",
 ): Promise<ReloadlyGiftCardOrderResult | null> {
   const response = await reloadlyRequest<
     ReloadlyGiftCardOrderResult[] | { content?: ReloadlyGiftCardOrderResult[] }
-  >(getGiftCardsBaseUrl(), "/reports/transactions", {
-    query: { customIdentifier, size: 5 },
-  });
+  >(
+    getGiftCardsBaseUrl(environment),
+    "/reports/transactions",
+    { query: { customIdentifier, size: 5 } },
+    environment,
+  );
   const list = Array.isArray(response) ? response : (response?.content ?? []);
   // Defensive: the endpoint filters server-side, but never reuse a
   // transaction whose identifier does not match ours exactly.
@@ -375,10 +392,13 @@ export async function findGiftCardOrderByCustomIdentifier(
  */
 export async function getGiftCardOrderStatus(
   transactionId: number,
+  environment: ReloadlyEnvironment = "live",
 ): Promise<ReloadlyGiftCardOrderResult> {
   return reloadlyRequest<ReloadlyGiftCardOrderResult>(
-    getGiftCardsBaseUrl(),
+    getGiftCardsBaseUrl(environment),
     `/reports/transactions/${transactionId}`,
+    {},
+    environment,
   );
 }
 
@@ -396,9 +416,12 @@ export type ReloadlyGiftCardOrderCard = {
  */
 export async function getGiftCardOrderCards(
   transactionId: number,
+  environment: ReloadlyEnvironment = "live",
 ): Promise<ReloadlyGiftCardOrderCard[]> {
   return reloadlyRequest<ReloadlyGiftCardOrderCard[]>(
-    getGiftCardsBaseUrl(),
+    getGiftCardsBaseUrl(environment),
     `/orders/transactions/${transactionId}/cards`,
+    {},
+    environment,
   );
 }

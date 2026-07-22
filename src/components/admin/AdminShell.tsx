@@ -50,6 +50,7 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   suppliers: "/admin/suppliers",
   // Operations is the standalone operational control center.
   operations: "/admin/operations",
+  "fulfillment-test": "/admin/operations/fulfillment-test",
   // Admin Email Composer (compose + history) is its own management area.
   emails: "/admin/emails/compose",
   // AI Operations is the standalone control center for the AI modules.
@@ -90,6 +91,11 @@ const NAV: NavGroup[] = [
             <circle cx="12" cy="12" r="4" />
           </>,
         ),
+      },
+      {
+        id: "fulfillment-test",
+        label: "Test fulfillment",
+        icon: icon(<><path d="M9 3h6M10 3v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" /><path d="M8 14h8" /></>),
       },
       {
         id: "overview",
