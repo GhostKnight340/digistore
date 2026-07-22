@@ -224,6 +224,7 @@ export async function getAdminNavCountsAction(): Promise<{
   activeOrders: number;
   paymentReview: number;
   supportOpen: number;
+  refundsOpen: number;
 }> {
   await assertAdminAccess();
   return getAdminNavCounts();

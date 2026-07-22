@@ -140,6 +140,18 @@ export async function changeOrderStatus(
     };
   }
 
+  // Refunds are a first-class, auditable case now — never a bare status flip.
+  // Marking an order "Remboursée" by hand would skip creating the refund record
+  // (amount, method, reason, proof, timeline), so it is refused here at the
+  // authority layer. Refunds are created and processed from Admin > Remboursements.
+  if (input.toStatus === "refunded") {
+    return {
+      ok: false,
+      error:
+        "Un remboursement se traite désormais depuis Admin > Remboursements (dossier de remboursement), pas en changeant le statut de la commande.",
+    };
+  }
+
   try {
     let fromStatus: string | undefined;
     let createdAt: Date | undefined;

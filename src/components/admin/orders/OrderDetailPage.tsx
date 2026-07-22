@@ -93,13 +93,15 @@ const METHOD_LABELS: Record<string, string> = {
   test: "Test",
 };
 
+// "refunded" is intentionally NOT selectable here: a refund is an auditable
+// case created and processed from Admin > Remboursements, never a bare status
+// flip (the server rejects a manual "refunded" transition too).
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
   "payment_submitted",
   "payment_confirmed",
   "payment_issue",
   "rejected",
-  "refunded",
   "cancelled",
 ];
 

@@ -824,9 +824,10 @@ export async function getAdminNavCounts(): Promise<{
   activeOrders: number;
   paymentReview: number;
   supportOpen: number;
+  refundsOpen: number;
 }> {
   await ensureDatabaseReady();
-  const [activeOrders, paymentReview, supportOpen] = await Promise.all([
+  const [activeOrders, paymentReview, supportOpen, refundsOpen] = await Promise.all([
     timeAdmin(
       "admin.navCounts",
       "order.count.active",
@@ -845,8 +846,30 @@ export async function getAdminNavCounts(): Promise<{
       () => prisma.supportTicket.count({ where: { status: "open" } }),
       (count) => count,
     ),
+    // Refund cases that need an admin action now (new, customer replied, or a
+    // chosen resolution awaiting processing). Excludes cases waiting on the
+    // customer and terminal cases.
+    timeAdmin(
+      "admin.navCounts",
+      "refundRequest.count.open",
+      () =>
+        prisma.refundRequest.count({
+          where: {
+            status: {
+              in: [
+                "REQUESTED",
+                "CUSTOMER_RESPONDED",
+                "CHOICE_RECEIVED",
+                "REFUND_PROCESSING",
+                "REPLACEMENT_PENDING",
+              ],
+            },
+          },
+        }),
+      (count) => count,
+    ),
   ]);
-  return { activeOrders, paymentReview, supportOpen };
+  return { activeOrders, paymentReview, supportOpen, refundsOpen };
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {

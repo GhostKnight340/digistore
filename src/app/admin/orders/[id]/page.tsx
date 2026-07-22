@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import AdminShellRoute from "@/components/admin/AdminShellRoute";
 import OrderDetailPage from "@/components/admin/orders/OrderDetailPage";
+import OrderRefundsPanel from "@/components/admin/orders/OrderRefundsPanel";
 import { getAdminOrderDetail } from "@/lib/db/orders";
 import { getAdminPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveOrderPaymentMethod } from "@/lib/paymentMethod";
@@ -29,6 +30,9 @@ export default async function AdminOrderPage({
   return (
     <AdminShellRoute active="orders" admin={toAdminIdentity(customer.name, customer.role)}>
       <OrderDetailPage initialOrder={order} paymentMethodLabel={method?.name} />
+      <div className="admin-panel-pad pt-0">
+        <OrderRefundsPanel orderId={order.id} />
+      </div>
     </AdminShellRoute>
   );
 }

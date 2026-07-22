@@ -223,14 +223,19 @@ export async function sendPaymentReviewEmailAction(
   input: ReviewEmailInput,
 ): Promise<ActionResult> {
   await requireAdminCustomer();
-  const toStatus =
-    intent === "reject" ? "rejected" : intent === "refund_update" ? "refunded" : "payment_issue";
-  const emailType =
-    intent === "reject"
-      ? "payment_rejected"
-      : intent === "refund_update"
-        ? "refund_update"
-        : "payment_issue";
+  // Refunds are handled as auditable cases now (Admin > Remboursements), not by
+  // flipping an order to "refunded" from the payment-review email. Block the
+  // legacy refund intent at the authority layer so no unrecorded refund slips
+  // through.
+  if (intent === "refund_update") {
+    return {
+      ok: false,
+      error:
+        "Les remboursements se gèrent depuis Admin > Remboursements (dossier de remboursement).",
+    };
+  }
+  const toStatus = intent === "reject" ? "rejected" : "payment_issue";
+  const emailType = intent === "reject" ? "payment_rejected" : "payment_issue";
   return applyPaymentStatusWithEmail(
     orderId,
     toStatus,

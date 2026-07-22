@@ -535,6 +535,67 @@ export type SystemAlertNotification = {
   context?: Record<string, string | number | boolean | null | undefined>;
 };
 
+// ---------------------------------------------------------------------------
+// Refund workflow → #support (existing operational channel; no new channel)
+// ---------------------------------------------------------------------------
+
+export type RefundNotification = {
+  kind:
+    | "requested"
+    | "info_received"
+    | "choice_submitted"
+    | "waiting_too_long"
+    | "awaiting_processing";
+  refundNumber: string;
+  orderNumber: string;
+  customerName: string;
+  statusLabel: string;
+  amountLabel?: string | null;
+  /** Deep link to the admin case. */
+  url?: string | null;
+  extra?: string | null;
+};
+
+const REFUND_KIND_TITLE: Record<RefundNotification["kind"], string> = {
+  requested: "Nouvelle demande de remboursement",
+  info_received: "Informations complémentaires reçues",
+  choice_submitted: "Choix de résolution reçu",
+  waiting_too_long: "Demande de remboursement en attente",
+  awaiting_processing: "Remboursement approuvé à traiter",
+};
+
+const REFUND_KIND_COLOR: Record<RefundNotification["kind"], number> = {
+  requested: COLOR.purple,
+  info_received: COLOR.blue,
+  choice_submitted: COLOR.teal,
+  waiting_too_long: COLOR.amber,
+  awaiting_processing: COLOR.orange,
+};
+
+/** Notify admins of a refund-case event. Links directly to the case. */
+export function notifyRefundEvent(input: RefundNotification): Promise<void> {
+  const fields = [
+    { name: "Demande", value: input.refundNumber, inline: true },
+    { name: "Commande", value: input.orderNumber, inline: true },
+    { name: "Client", value: input.customerName || "—", inline: true },
+    { name: "Statut", value: input.statusLabel, inline: true },
+  ];
+  if (input.amountLabel) fields.push({ name: "Montant", value: input.amountLabel, inline: true });
+
+  const descriptionParts = [input.extra, input.url ? `[Ouvrir le dossier](${input.url})` : null].filter(
+    Boolean,
+  ) as string[];
+
+  return safeSend("support", () =>
+    embed({
+      title: REFUND_KIND_TITLE[input.kind],
+      description: descriptionParts.length ? descriptionParts.join("\n") : undefined,
+      color: REFUND_KIND_COLOR[input.kind],
+      fields,
+    }),
+  );
+}
+
 export function notifySystemAlert(input: SystemAlertNotification): Promise<void> {
   const contextFields = Object.entries(input.context ?? {})
     .filter(([, value]) => value !== undefined && value !== null)

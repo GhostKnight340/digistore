@@ -28,7 +28,12 @@ const C = {
   borderStrong: "rgba(255,255,255,0.1)",
 };
 
-export type NavCounts = { activeOrders: number; paymentReview: number; supportOpen: number };
+export type NavCounts = {
+  activeOrders: number;
+  paymentReview: number;
+  supportOpen: number;
+  refundsOpen: number;
+};
 
 /**
  * Nav ids that are their own standalone route rather than an in-place ?tab=
@@ -49,6 +54,8 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   emails: "/admin/emails/compose",
   // AI Operations is the standalone control center for the AI modules.
   "ai-operations": "/admin/ai-operations",
+  // Refunds is the standalone support/resolution queue.
+  refunds: "/admin/refunds",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
@@ -57,7 +64,7 @@ type NavItem = {
   id: string;
   label: string;
   icon: ReactNode;
-  badge?: "activeOrders" | "paymentReview" | "supportOpen";
+  badge?: "activeOrders" | "paymentReview" | "supportOpen" | "refundsOpen";
   badgeTone?: "accent" | "warning";
 };
 
@@ -218,6 +225,8 @@ const NAV: NavGroup[] = [
       {
         id: "refunds",
         label: "Remboursements",
+        badge: "refundsOpen",
+        badgeTone: "warning",
         icon: icon(
           <>
             <polyline points="1 4 1 10 7 10" />

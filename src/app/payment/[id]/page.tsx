@@ -25,6 +25,7 @@ import RegionBadge from "@/components/RegionBadge";
 import OrderDiscordDelivery from "@/components/payment/OrderDiscordDelivery";
 import DeliveredOrderDiscord from "@/components/payment/DeliveredOrderDiscord";
 import OrderConfirmationMascot from "@/components/OrderConfirmationMascot";
+import RefundRequestSection from "@/components/refunds/RefundRequestSection";
 import OrdersUnavailableNotice from "@/components/store/OrdersUnavailableNotice";
 import { urlHasSensitiveToken } from "@/lib/deliveryFields";
 import { useProductCatalog } from "@/context/ProductCatalogContext";
@@ -744,6 +745,11 @@ function PaymentExperience({
                 <div className="text-xs text-[#9FB8FF]">Contacter le support</div>
               </div>
             </a>
+
+            {/* Refund request — self-contained: shows the request status or a
+                low-emphasis "Demander un remboursement" action for a paid order.
+                Authorizes against the order id/token server-side. */}
+            <RefundRequestSection orderRef={order.id} />
 
             {/* Cancel order — low-emphasis destructive action, never competes
                 with the primary payment CTA. Shown only while the order is

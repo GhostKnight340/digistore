@@ -294,7 +294,7 @@ model GuideProduct {
 // restock/price notifications can be layered on later without a migration; no
 // notification state is implied to exist yet.
 model WishlistItem {
-  id         String   @id @default(cuid())
+  id String   @id @default(cuid())
   customerId String
   productId  String
   createdAt  DateTime @default(now())
@@ -585,6 +585,7 @@ model Order {
   promotionSnapshot    OrderPromotionSnapshot?
   ghostCreditTxns      GhostCreditTransaction[]
   milestoneGrants      SpendingMilestoneGrant[]
+  refundRequests       RefundRequest[]
 
   @@index([status])
   @@index([customerEmail])
@@ -706,6 +707,7 @@ model Customer {
   adminAuditLogs         AdminAuditLog[]
   feedbackSubmissions    FeedbackSubmission[]
   adminEmailRecipients   AdminEmailRecipient[]
+  refundRequests         RefundRequest[]
 
   @@index([updatedAt])
   @@index([emailVerified])
@@ -1225,7 +1227,7 @@ model SupplierWebhookEvent {
 // payloads (codes, credentials, customer data) — only outcome metadata safe to
 // show any admin.
 model SupplierLog {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   supplierId     String
   // "purchase" | "health_check" | "balance" | "status_poll"
   requestType    String
@@ -1835,7 +1837,10 @@ model GhostCreditTransaction {
   direction        String
   // reason: "promo_reward" | "promo_reversal" | "spending_milestone_reward"
   //       | "milestone_reversal" | "order_spend" | "order_spend_refund"
-  //       | "admin_grant" | "admin_reversal" | "expiration"
+  //       | "admin_grant" | "admin_reversal" | "expiration" | "refund_credit"
+  // "refund_credit": a refund case paid out as Ghost Credit (a new credit of the
+  // approved refund amount), distinct from "order_spend_refund" which merely
+  // restitutes credit that was spent on the order. Never resets the expiry timer.
   reason           String
   // Whether this entry is a QUALIFYING earning event that resets the 180-day
   // inactivity timer. TRUE only for promo Ghost Credit rewards and spending-
@@ -2292,7 +2297,7 @@ model AiScheduledJob {
   // The owning module (informational; a job may fan out to one module).
   module String?
 
-  enabled  Boolean @default(true)
+  enabled Boolean @default(true)
   // Cron expression, interpreted in AiOpsSettings.timezone.
   schedule String?
 
@@ -2497,7 +2502,7 @@ model AiDiscordChannelMapping {
 // a short rolling summary of older turns, and the active date range. Redaction is
 // applied before anything is written. Expired rows are pruned on access.
 model AiConversation {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   // Deterministic identity: `${guildId}:${channelId}:${threadId ?? "-"}:${userId}:${module}`.
   key            String  @unique
   guildId        String
@@ -2575,11 +2580,11 @@ model AiIdempotencyKey {
 // specializing the AiScheduledJob pattern for the 4 independently-configurable
 // reports. Report types are the union in src/lib/ai-ops/reports/reportTypes.ts.
 model AiReportSchedule {
-  id String @id @default(cuid())
+  id         String @id @default(cuid())
   // reportType: "morning" | "evening" | "weekly" | "monthly"
   reportType String @unique
 
-  enabled Boolean @default(false)
+  enabled  Boolean @default(false)
   // Cron expression, interpreted in `timezone` (or AiOpsSettings.timezone).
   schedule String
   // Optional IANA timezone override for THIS report; null → global timezone.
@@ -2617,4 +2622,238 @@ model AiReportSchedule {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([enabled])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Refund workflow
+//
+// A refund is a first-class support/resolution CASE, NOT merely an order status.
+// RefundRequest is the operational entity; the order's own lifecycle
+// (Order.status) is never overwritten to drive the refund — a derived refund
+// badge is shown instead. Contact details are SNAPSHOT onto the request so a
+// later customer/order edit never rewrites the historical case. Statuses are
+// plain strings (repo convention); the allowed set + French labels live in
+// src/lib/refunds/status.ts, which also owns the legal state transitions.
+// ─────────────────────────────────────────────────────────────────────────────
+model RefundRequest {
+  id  String @id @default(cuid())
+  // Human-readable case number RF-000012, derived from this autoincrement seq
+  // (unique + race-free, same pattern as FeedbackSubmission.seq).
+  seq Int    @unique @default(autoincrement())
+
+  orderId String
+
+  // Snapshots — never rewritten if the customer/order later changes. customerId
+  // is null for guest orders (the request is still authorized via the order's
+  // deliveryToken / logged-in owner, exactly like the delivery page).
+  customerId    String?
+  customerName  String
+  customerEmail String
+  customerPhone String?
+
+  // source: "CUSTOMER_ORDER_PAGE" | "ADMIN_CREATED" | "SUPPORT" | "WHATSAPP" | "EMAIL"
+  source      String @default("CUSTOMER_ORDER_PAGE")
+  // reason: "code_invalid" | "code_used" | "wrong_product" | "not_delivered"
+  //       | "duplicate_payment" | "order_error" | "technical" | "other"
+  reason      String
+  description String
+
+  requestedAmountMad Int
+  currency           String @default("MAD")
+
+  // Workflow status — see REFUND_STATUSES in src/lib/refunds/status.ts.
+  // "REQUESTED" | "UNDER_REVIEW" | "INFORMATION_REQUIRED" | "CUSTOMER_RESPONDED"
+  // | "APPROVED_AWAITING_CHOICE" | "CHOICE_RECEIVED" | "REFUND_PROCESSING"
+  // | "REFUNDED" | "CREDITED" | "REPLACEMENT_PENDING" | "REPLACED"
+  // | "NOT_ELIGIBLE" | "CANCELLED"
+  status String @default("REQUESTED")
+
+  // eligibilityDecision: null (undecided) | "eligible" | "not_eligible"
+  eligibilityDecision String?
+  rejectionReason     String?
+
+  // Which resolution choices the admin offers the customer on approval. Subset
+  // of ["ORIGINAL_PAYMENT_METHOD","GHOST_CREDIT","REPLACEMENT_PRODUCT"].
+  offeredResolutions          String[] @default([])
+  // Whether the originally-purchased variant stays eligible in the same-value
+  // replacement listing (admin choice; default excludes the problematic item).
+  allowSameVariantReplacement Boolean  @default(false)
+
+  assignedAdminId   String?
+  assignedAdminName String?
+
+  // Optional post-resolution support feedback (never affects eligibility).
+  // supportRating: null | "up" | "down"
+  supportRating  String?
+  supportComment String?
+
+  // True for records backfilled from pre-workflow "refunded" orders — they have
+  // no detailed case history and are labelled as such.
+  legacy Boolean @default(false)
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+  reviewedAt       DateTime?
+  approvedAt       DateTime?
+  customerChoiceAt DateTime?
+  processedAt      DateTime?
+  closedAt         DateTime?
+
+  order       Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer    Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  attachments RefundAttachment[]
+  messages    RefundMessage[]
+  events      RefundEvent[]
+  notes       RefundNote[]
+  tokens      RefundActionToken[]
+  resolution  RefundResolution?
+
+  @@index([status])
+  @@index([orderId])
+  @@index([customerId])
+  @@index([customerEmail])
+  @@index([createdAt])
+  @@index([reason])
+}
+
+// Evidence attached to a refund case (screenshots / PDF). Uploaded by the
+// customer (request form or the secure info page) or an admin. Stored the same
+// way as feedback/product media (data: URL in prod, /uploads in dev). MIME is
+// sniffed server-side, never trusted from the client.
+model RefundAttachment {
+  id              String   @id @default(cuid())
+  refundRequestId String
+  // uploadedBy: "CUSTOMER" | "ADMIN"
+  uploadedBy      String
+  url             String
+  fileName        String
+  mimeType        String
+  sizeBytes       Int
+  createdAt       DateTime @default(now())
+
+  request RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Cascade)
+
+  @@index([refundRequestId])
+}
+
+// Every customer-facing communication on a case (a snapshot of exactly what was
+// sent), plus SYSTEM/INTERNAL log lines. WhatsApp is recorded as "opened
+// externally" — we never claim delivery we cannot confirm.
+model RefundMessage {
+  id              String   @id @default(cuid())
+  refundRequestId String
+  // channel: "EMAIL" | "WHATSAPP" | "INTERNAL" | "SYSTEM"
+  channel         String
+  templateKey     String?
+  subject         String?
+  body            String
+  sentById        String?
+  sentByName      String?
+  // deliveryResult: "sent" | "failed" | "simulated" | "opened_externally" | null
+  deliveryResult  String?
+  emailLogId      String?
+  createdAt       DateTime @default(now())
+
+  request RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Cascade)
+
+  @@index([refundRequestId, createdAt])
+}
+
+// Append-only auditable timeline for a case.
+model RefundEvent {
+  id              String   @id @default(cuid())
+  refundRequestId String
+  // type: e.g. "requested" | "review_started" | "info_requested" | "info_received"
+  //       | "approved" | "rejected" | "choice_submitted" | "refund_sent"
+  //       | "credit_issued" | "replacement_selected" | "replacement_delivered"
+  //       | "cancelled" | "closed" | "note_added" | "email_sent" | "whatsapp_opened"
+  type            String
+  // actorType: "CUSTOMER" | "ADMIN" | "SYSTEM"
+  actorType       String
+  actorName       String?
+  // Safe, non-sensitive context only — never secrets, tokens, or full codes.
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  request RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Cascade)
+
+  @@index([refundRequestId, createdAt])
+}
+
+// Private internal admin notes on a case. NEVER shown to the customer.
+model RefundNote {
+  id              String   @id @default(cuid())
+  refundRequestId String
+  authorId        String
+  authorName      String
+  body            String
+  createdAt       DateTime @default(now())
+
+  request RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Cascade)
+
+  @@index([refundRequestId, createdAt])
+}
+
+// The selected + processed resolution for a case (one per request). Created when
+// the customer submits their choice (type/amount/variant/selectedAt), then
+// completed by the admin (transactionReference/proof/processedAt). Money moves
+// are recorded on the existing GhostCreditTransaction ledger — ghostCreditTxnId
+// links to that row; this table never becomes a second accounting source.
+model RefundResolution {
+  id              String @id @default(cuid())
+  refundRequestId String @unique
+  // type: "ORIGINAL_PAYMENT_METHOD" | "GHOST_CREDIT" | "REPLACEMENT_PRODUCT"
+  type            String
+  amountMad       Int
+  currency        String @default("MAD")
+
+  // Replacement selection (REPLACEMENT_PRODUCT).
+  selectedVariantId  String?
+  selectedProductId  String?
+  replacementLabel   String?
+  replacementOrderId String?
+
+  // Original-method snapshot (ORIGINAL_PAYMENT_METHOD) — the order's method key,
+  // never sensitive account data.
+  originalPaymentMethod String?
+  transactionReference  String?
+  // Optional refund-proof upload URL (stored like other attachments).
+  proofUrl              String?
+  processingNote        String?
+
+  // Link to the wallet ledger row created for a GHOST_CREDIT payout.
+  ghostCreditTxnId String?
+
+  // False when an admin set the resolution directly rather than the customer
+  // choosing it through the secure link.
+  selectedByCustomer Boolean @default(true)
+
+  processedById   String?
+  processedByName String?
+  selectedAt      DateTime?
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  request RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Cascade)
+}
+
+// Single-purpose, single-request, expiring secure link handed to the customer
+// for the "provide more info" and "choose your resolution" pages. Only the hash
+// is stored (mirrors AuthToken); possession of the raw token authorizes exactly
+// one purpose on exactly one refund request and nothing else.
+model RefundActionToken {
+  id              String    @id @default(cuid())
+  refundRequestId String
+  // purpose: "PROVIDE_INFO" | "CHOOSE_RESOLUTION"
+  purpose         String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  request RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Cascade)
+
+  @@index([refundRequestId, purpose])
+  @@index([expiresAt])
 }

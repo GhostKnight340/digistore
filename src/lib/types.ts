@@ -319,6 +319,61 @@ export type GhostCreditDirection = "credit" | "debit";
 /** Ghost Credit ledger transaction status. */
 export type GhostCreditStatus = "active" | "reversed" | "expired";
 
+// ─── Refund workflow ─────────────────────────────────────────────────────────
+// String-backed like every other status in this codebase; these unions are the
+// single source of truth for the allowed values (mirrored by the schema
+// comments). Labels + legal transitions live in src/lib/refunds/status.ts.
+
+/** Internal workflow status of a refund case. */
+export type RefundStatus =
+  | "REQUESTED"
+  | "UNDER_REVIEW"
+  | "INFORMATION_REQUIRED"
+  | "CUSTOMER_RESPONDED"
+  | "APPROVED_AWAITING_CHOICE"
+  | "CHOICE_RECEIVED"
+  | "REFUND_PROCESSING"
+  | "REFUNDED"
+  | "CREDITED"
+  | "REPLACEMENT_PENDING"
+  | "REPLACED"
+  | "NOT_ELIGIBLE"
+  | "CANCELLED";
+
+/** Where a refund request originated. */
+export type RefundSource =
+  | "CUSTOMER_ORDER_PAGE"
+  | "ADMIN_CREATED"
+  | "SUPPORT"
+  | "WHATSAPP"
+  | "EMAIL";
+
+/** Customer-selected reason for a refund request. */
+export type RefundReason =
+  | "code_invalid"
+  | "code_used"
+  | "wrong_product"
+  | "not_delivered"
+  | "duplicate_payment"
+  | "order_error"
+  | "technical"
+  | "other";
+
+/** The resolution a case is settled with. */
+export type RefundResolutionType =
+  | "ORIGINAL_PAYMENT_METHOD"
+  | "GHOST_CREDIT"
+  | "REPLACEMENT_PRODUCT";
+
+/** Communication channel logged on a refund message. */
+export type RefundMessageChannel = "EMAIL" | "WHATSAPP" | "INTERNAL" | "SYSTEM";
+
+/** Who performed a refund event / uploaded an attachment. */
+export type RefundActorType = "CUSTOMER" | "ADMIN" | "SYSTEM";
+
+/** Purpose scoping a secure refund customer-link token. */
+export type RefundTokenPurpose = "PROVIDE_INFO" | "CHOOSE_RESOLUTION";
+
 export interface Order {
   id: string;
   createdAt: string;

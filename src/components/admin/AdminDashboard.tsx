@@ -141,11 +141,14 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
         />
       );
     case "refunds":
+      // Refunds moved to the dedicated support/resolution queue at /admin/refunds.
       return (
         <RestoredPanel
           title="Remboursements"
           eyebrow="Section admin"
-          text="La revue des remboursements est disponible ici. Les paiements et commandes restent synchronisés."
+          text="La file des demandes de remboursement dispose désormais de sa propre page."
+          href="/admin/refunds"
+          linkLabel="Ouvrir les remboursements"
         />
       );
     default:

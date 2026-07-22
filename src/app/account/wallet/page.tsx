@@ -36,6 +36,8 @@ function reasonLabel(txn: GhostCreditTransactionDTO): string {
       return "Utilisé sur une commande";
     case "order_spend_refund":
       return "Restitué (commande non finalisée)";
+    case "refund_credit":
+      return "Remboursement en Crédit Ghost";
     case "admin_grant":
       return "Crédit manuel";
     case "admin_reversal":
