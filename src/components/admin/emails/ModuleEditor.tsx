@@ -19,7 +19,7 @@ export function blankModule(type: EmailModule["type"]): EmailModule {
   const id = newId();
   switch (type) {
     case "text":
-      return { type, id, body: "", align: "left" };
+      return { type, id, body: "", align: "justify" };
     case "credit":
       return { type, id, amountMad: 5, title: "Crédit Ghost offert", description: "", behavior: "display", buttonLabel: "Voir mon solde" };
     case "button":
@@ -69,7 +69,7 @@ export default function ModuleEditor({
             <label className={LABEL}>Texte</label>
             <textarea className={`${FIELD} min-h-[90px]`} value={module.body} onChange={(e) => patch({ body: e.target.value })} />
           </div>
-          <AlignSelect value={module.align ?? "left"} onChange={(align) => patch({ align })} />
+          <AlignSelect value={module.align ?? "justify"} includeJustify onChange={(align) => patch({ align })} />
         </div>
       );
 
@@ -175,12 +175,21 @@ const NOTICE_TONES: { value: "info" | "success" | "warning" | "error"; label: st
   { value: "error", label: "Erreur", activeClass: "border-red-400/50 bg-red-400/10 text-red-300" },
 ];
 
-function AlignSelect({ value, onChange }: { value: string; onChange: (v: "left" | "center" | "right") => void }) {
+function AlignSelect({
+  value,
+  onChange,
+  includeJustify,
+}: {
+  value: string;
+  onChange: (v: "left" | "center" | "right" | "justify") => void;
+  includeJustify?: boolean;
+}) {
   return (
-    <select className="input text-sm" value={value} onChange={(e) => onChange(e.target.value as "left" | "center" | "right")}>
+    <select className="input text-sm" value={value} onChange={(e) => onChange(e.target.value as "left" | "center" | "right" | "justify")}>
       <option value="left">Gauche</option>
       <option value="center">Centré</option>
       <option value="right">Droite</option>
+      {includeJustify && <option value="justify">Justifié</option>}
     </select>
   );
 }

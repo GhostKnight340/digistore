@@ -10,7 +10,7 @@
  * and importable by both the server actions and the renderer.
  */
 
-export type ModuleAlign = "left" | "center" | "right";
+export type ModuleAlign = "left" | "center" | "right" | "justify";
 export type NoticeStyle = "info" | "success" | "warning" | "error";
 export type ButtonStyle = "primary" | "secondary";
 export type CreditBehavior = "display" | "grant";
@@ -184,7 +184,7 @@ function optStr(value: unknown, max = MAX_SHORT): string | undefined {
 }
 
 function align(value: unknown): ModuleAlign | undefined {
-  return value === "left" || value === "center" || value === "right" ? value : undefined;
+  return value === "left" || value === "center" || value === "right" || value === "justify" ? value : undefined;
 }
 
 function intMad(value: unknown): number {

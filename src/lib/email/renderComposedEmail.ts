@@ -75,7 +75,7 @@ function moduleHtml(module: EmailModule, vars: VariableMap): string {
             sub(module.heading),
           )}</h2>`
         : "";
-      const align = module.align ?? "left";
+      const align = module.align ?? "justify";
       return `<div style="margin: 18px 0 0; text-align: ${align};">${heading}<p style="margin: 0; color: #4b5563; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7;">${escapeHtml(
         sub(module.body),
       ).replace(/\r?\n/g, "<br />")}</p></div>`;
