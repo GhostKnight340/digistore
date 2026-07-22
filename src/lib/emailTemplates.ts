@@ -156,7 +156,7 @@ const REVIEW_TEMPLATE_META: Partial<
 > = {
   new_proof_requested: {
     motifLabel: "Motif de la demande",
-    ctaText: "Ajoutez un nouveau justificatif de paiement ici :",
+    ctaText: "Ajouter un nouveau justificatif :",
     ctaUrlVar: "payment_url",
   },
   payment_issue: {
@@ -308,10 +308,11 @@ function brandedEmailHtml(
       ctaUrl: orderUrl || paymentUrl,
     },
     new_proof_requested: {
-      title: subject,
+      title: "Un nouveau justificatif est nécessaire",
       intro: text,
-      ctaLabel: "Ajouter un justificatif",
+      ctaLabel: "Ajouter un nouveau justificatif",
       ctaUrl: paymentUrl || orderUrl,
+      fallbackLabel: "Si le bouton ne fonctionne pas correctement, cliquez ici.",
     },
     payment_issue: {
       title: subject,
@@ -446,10 +447,14 @@ function brandedEmailHtml(
                 ${selected.code ? "" : brandedButton(selected.ctaLabel ?? "Ouvrir ghost.ma", selected.ctaUrl ?? "")}
                 ${
                   fallbackUrl && selected.fallbackLabel
-                    ? `<p style="margin: 16px 0 0; color: #6b7280; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
-                        ${escapeHtml(selected.fallbackLabel)}<br />
-                        <a href="${escapeHtml(fallbackUrl)}" style="color: #3e7bfa; word-break: break-all;">${escapeHtml(fallbackUrl)}</a>
-                      </p>`
+                    ? key === "new_proof_requested"
+                      ? `<p style="margin: 16px 0 0; color: #6b7280; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6; text-align: center;">
+                          Si le bouton ne fonctionne pas correctement, <a href="${escapeHtml(fallbackUrl)}" style="color: #3e7bfa;">cliquez ici</a>.
+                        </p>`
+                      : `<p style="margin: 16px 0 0; color: #6b7280; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;">
+                          ${escapeHtml(selected.fallbackLabel)}<br />
+                          <a href="${escapeHtml(fallbackUrl)}" style="color: #3e7bfa; word-break: break-all;">${escapeHtml(fallbackUrl)}</a>
+                        </p>`
                     : ""
                 }
                 ${

@@ -579,6 +579,8 @@ model Order {
   supplierFulfillments SupplierFulfillment[]
   emailLogs            EmailLog[]
   paymentProof         PaymentProof?
+  paymentProofRevisions PaymentProofRevision[]
+  paymentProofRequests  PaymentProofRequest[]
   paymentEvents        PaymentEvent[]
   customer             Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
   promoRedemption      PromoRedemption?
@@ -1340,6 +1342,45 @@ model PaymentProof {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([uploadedAt])
+}
+
+// Immutable snapshots of superseded payment proofs. PaymentProof remains the
+// current proof for existing read paths; every replacement is copied here first
+// so admins retain a complete audit history.
+model PaymentProofRevision {
+  id         String   @id @default(cuid())
+  orderId    String
+  fileName   String
+  mimeType   String
+  data       String
+  uploadedAt DateTime
+  archivedAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, uploadedAt])
+}
+
+// Idempotency and audit record for an admin request asking the customer to
+// submit a replacement payment proof.
+model PaymentProofRequest {
+  id             String    @id @default(cuid())
+  orderId        String
+  idempotencyKey String    @unique
+  recipient      String
+  subject        String
+  message        String
+  reason         String
+  // "PENDING" | "SENT" | "FAILED"
+  status         String    @default("PENDING")
+  emailLogId     String?
+  createdAt      DateTime  @default(now())
+  sentAt         DateTime?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@index([status])
 }
 
 // Audit trail for payment lifecycle events.

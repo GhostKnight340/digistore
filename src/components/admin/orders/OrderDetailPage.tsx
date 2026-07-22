@@ -33,6 +33,10 @@ import {
 } from "@/app/actions/payments";
 import { getReloadlyDeliveryChecksAction } from "@/app/actions/suppliers";
 import { createAdminRefundAction } from "@/app/actions/adminRefunds";
+import {
+  isValidPaymentRecipient,
+  PAYMENT_PROOF_REQUEST_REASONS,
+} from "@/lib/paymentProofRequest";
 import type {
   AdminCodeDTO,
   AdminOrderDTO,
@@ -201,10 +205,12 @@ export default function OrderDetailPage({
     subject: string;
     message: string;
     reason: string;
+    recipient: { name: string; email: string };
+    idempotencyKey: string;
   } | null>(null);
   // Live server-rendered preview — identical rendering path to the sent email.
-  const [reviewPreview, setReviewPreview] = useState<{ text: string; loading: boolean }>({
-    text: "",
+  const [reviewPreview, setReviewPreview] = useState<{ html: string; loading: boolean }>({
+    html: "",
     loading: false,
   });
   // Inventory OFF also forces manual/provider fulfillment (no local code pool).
@@ -406,8 +412,10 @@ export default function OrderDetailPage({
         subject: preview.subject,
         message: preview.message,
         reason: preview.reason,
+        recipient: preview.recipient,
+        idempotencyKey: crypto.randomUUID(),
       });
-      setReviewPreview({ text: preview.text, loading: false });
+      setReviewPreview({ html: preview.html, loading: false });
     } catch (previewError) {
       setError(previewError instanceof Error ? previewError.message : "Aperçu email impossible.");
     } finally {
@@ -438,14 +446,30 @@ export default function OrderDetailPage({
 
   async function sendReviewEmail() {
     if (!reviewEmail) return;
-    await runAction("Email envoyé et statut mis à jour.", () =>
-      sendPaymentReviewEmailAction(order.id, reviewEmail.intent, {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await sendPaymentReviewEmailAction(order.id, reviewEmail.intent, {
         subject: reviewEmail.subject,
         message: reviewEmail.message,
         reason: reviewEmail.reason,
-      }),
-    );
-    setReviewEmail(null);
+        idempotencyKey: reviewEmail.idempotencyKey,
+      });
+      if (!result.ok) {
+        setError(result.error ?? "Envoi impossible.");
+        return;
+      }
+      setMessage(
+        reviewEmail.intent === "request_proof"
+          ? "Nouveau justificatif demandé au client."
+          : "E-mail envoyé et statut mis à jour.",
+      );
+      setReviewEmail(null);
+      await refreshOrder();
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Keep the modal preview truthful: re-render server-side (same path as the
@@ -465,7 +489,7 @@ export default function OrderDetailPage({
           message: reviewMessage ?? "",
           reason: reviewReason ?? "",
         });
-        if (!cancelled) setReviewPreview({ text: rendered.text, loading: false });
+        if (!cancelled) setReviewPreview({ html: rendered.html, loading: false });
       } catch {
         if (!cancelled) setReviewPreview((current) => ({ ...current, loading: false }));
       }
@@ -879,16 +903,40 @@ export default function OrderDetailPage({
             </div>
             <CloseButton onClick={() => setReviewEmail(null)} />
           </div>
-          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ marginTop: 18, display: "flex", maxHeight: "min(76vh, 820px)", flexDirection: "column", gap: 14, overflowY: "auto", paddingRight: 4 }}>
+            <Field label="Destinataire">
+              <div style={{ ...inputStyle, height: "auto", minHeight: 58, padding: "10px 13px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: C.text, fontSize: 13.5, fontWeight: 600 }}>{reviewEmail.recipient.name}</div>
+                  <div style={{ color: C.muted, fontSize: 12.5, overflowWrap: "anywhere" }}>{reviewEmail.recipient.email}</div>
+                </div>
+                <button type="button" onClick={() => void navigator.clipboard.writeText(reviewEmail.recipient.email)} style={ghostLinkStyle}>
+                  Copier
+                </button>
+              </div>
+              {!isValidPaymentRecipient(reviewEmail.recipient.email) ? (
+                <p style={{ margin: "6px 0 0", color: C.danger, fontSize: 12 }}>
+                  Cette commande ne possède pas d’adresse e-mail valide. L’envoi est désactivé.
+                </p>
+              ) : null}
+            </Field>
             <Field label="Sujet">
               <input
                 className="s4-input"
+                list={reviewEmail.intent === "request_proof" ? "proof-request-reasons" : undefined}
                 value={reviewEmail.subject}
                 onChange={(event) =>
                   setReviewEmail((current) => (current ? { ...current, subject: event.target.value } : current))
                 }
                 style={inputStyle}
               />
+              {reviewEmail.intent === "request_proof" ? (
+                <datalist id="proof-request-reasons">
+                  {PAYMENT_PROOF_REQUEST_REASONS.map((reason) => (
+                    <option key={reason} value={reason} />
+                  ))}
+                </datalist>
+              ) : null}
             </Field>
             <Field
               label={
@@ -926,33 +974,39 @@ export default function OrderDetailPage({
                 style={{ ...inputStyle, height: "auto", padding: "10px 13px", resize: "vertical", lineHeight: 1.5 }}
               />
             </Field>
-            <div style={{ ...cardStyle, background: C.surfaceInput, padding: 16 }}>
+            <div style={{ ...cardStyle, background: "#eef1f7", padding: 12 }}>
               <p style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: C.faint, margin: 0 }}>
-                Aperçu {reviewPreview.loading ? "· mise à jour…" : "(email réel)"}
+                Aperçu de l’e-mail réel {reviewPreview.loading ? "· mise à jour…" : ""}
               </p>
-              <h3 style={{ fontSize: 14.5, fontWeight: 600, color: C.text, margin: "8px 0 0" }}>
-                {reviewEmail.subject}
-              </h3>
-              <pre
+              <iframe
+                title="Aperçu de l’e-mail réel"
+                sandbox=""
+                srcDoc={reviewPreview.html}
                 style={{
+                  width: "100%",
+                  height: 460,
                   marginTop: 10,
-                  whiteSpace: "pre-wrap",
-                  fontSize: 12.5,
-                  lineHeight: 1.6,
-                  color: C.muted,
-                  fontFamily: "inherit",
+                  border: 0,
+                  borderRadius: 10,
+                  background: "#eef1f7",
                 }}
-              >
-                {reviewPreview.text}
-              </pre>
+              />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <SecondaryButton onClick={() => setReviewEmail(null)}>Annuler</SecondaryButton>
               <PrimaryButton
-                disabled={busy || !reviewEmail.subject.trim() || !reviewEmail.message.trim()}
+                disabled={
+                  busy ||
+                  !reviewEmail.subject.trim() ||
+                  !reviewEmail.message.trim() ||
+                  (reviewEmail.intent === "request_proof" && !reviewEmail.reason.trim()) ||
+                  !isValidPaymentRecipient(reviewEmail.recipient.email)
+                }
                 onClick={sendReviewEmail}
               >
-                Envoyer et appliquer
+                {reviewEmail.intent === "request_proof"
+                  ? "Envoyer et demander un justificatif"
+                  : "Envoyer et appliquer"}
               </PrimaryButton>
             </div>
           </div>

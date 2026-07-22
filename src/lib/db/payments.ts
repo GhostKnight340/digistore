@@ -1,5 +1,6 @@
 import "server-only";
 
+import { Prisma } from "@prisma/client";
 import { ensureDatabaseReady, prisma } from "./prisma";
 import { timeAdmin } from "./adminTiming";
 import { type EmailTemplateKey } from "@/lib/emailTemplates";
@@ -19,6 +20,10 @@ import {
   notifyFulfillmentNeeded,
 } from "@/lib/discord/notify";
 import type { ActionResult, AdminPaymentProofDTO } from "@/lib/dto";
+import {
+  isValidPaymentRecipient,
+  validatePaymentProofRequest,
+} from "@/lib/paymentProofRequest";
 
 /**
  * A deliberate, customer-safe French failure raised inside a payment
@@ -45,6 +50,7 @@ const ALLOWED_PROOF_TYPES = [
 export async function submitPayment(
   orderId: string,
   proof?: { fileName: string; mimeType: string; dataBase64: string },
+  customerMessage?: string | null,
 ): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -91,6 +97,18 @@ export async function submitPayment(
       }
 
       if (proof) {
+        const previous = await tx.paymentProof.findUnique({ where: { orderId } });
+        if (previous) {
+          await tx.paymentProofRevision.create({
+            data: {
+              orderId,
+              fileName: previous.fileName,
+              mimeType: previous.mimeType,
+              data: previous.data,
+              uploadedAt: previous.uploadedAt,
+            },
+          });
+        }
         await tx.paymentProof.upsert({
           where: { orderId },
           update: {
@@ -114,7 +132,9 @@ export async function submitPayment(
           type: "status_change",
           fromStatus,
           toStatus: "payment_submitted",
-          note: proof ? `Justificatif importé : ${proof.fileName}` : "Aucun justificatif importé.",
+          note: proof
+            ? `Justificatif importé : ${proof.fileName}.${customerMessage ? ` Message client : ${customerMessage}` : ""}`
+            : "Aucun justificatif importé.",
         },
       });
 
@@ -458,7 +478,7 @@ async function setPaymentStatus(
  */
 const DEFAULT_REVIEW_MESSAGE: Partial<Record<EmailTemplateKey, string>> = {
   new_proof_requested:
-    "Nous avons besoin d'un nouveau justificatif de paiement pour votre commande {{order_number}}.",
+    "Nous avons besoin d’un nouveau justificatif de paiement afin de poursuivre la vérification de votre commande {{order_number}}.\n\nVous pouvez transmettre votre nouveau justificatif en cliquant sur le bouton ci-dessous.\n\nMerci pour votre coopération.\n\nL’équipe Ghost.ma",
   payment_issue:
     "Un problème a été détecté avec le paiement de votre commande {{order_number}}. Vérifiez les informations sur la page de paiement ou contactez notre support.",
   payment_rejected: "Le paiement de votre commande {{order_number}} n'a pas pu être validé.",
@@ -509,7 +529,125 @@ export async function renderPaymentStatusEmailPreview(
     subject: rawSubject,
     body: rawBody,
   });
-  return { ...rendered, variables, message: interpolateVars(rawBody, variables) };
+  return {
+    ...rendered,
+    variables,
+    message: interpolateVars(rawBody, variables),
+    recipient: { name: order.customerName, email: order.customerEmail },
+  };
+}
+
+/**
+ * Sends a replacement-proof request once, then records the state/history only
+ * after the mail provider accepted (or staging safely simulated) the message.
+ */
+export async function requestNewPaymentProofWithEmail(input: {
+  orderId: string;
+  idempotencyKey: string;
+  adminName: string;
+  subject: string;
+  message: string;
+  reason: string;
+}): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const subject = input.subject.trim();
+  const message = input.message.trim();
+  const reason = input.reason.trim();
+  const idempotencyKey = input.idempotencyKey.trim();
+  const validationError = validatePaymentProofRequest({
+    subject,
+    message,
+    reason,
+    idempotencyKey,
+  });
+  if (validationError) return { ok: false, error: validationError };
+
+  const order = await prisma.order.findUnique({ where: { id: input.orderId } });
+  if (!order) return { ok: false, error: "Commande introuvable." };
+  if (!isValidPaymentRecipient(order.customerEmail)) {
+    return { ok: false, error: "Cette commande ne possède pas d’adresse e-mail valide." };
+  }
+  if (["payment_confirmed", "delivered", "refunded", "cancelled"].includes(order.status)) {
+    return { ok: false, error: "Cette commande n’accepte plus de nouveau justificatif." };
+  }
+
+  try {
+    await prisma.paymentProofRequest.create({
+      data: {
+        orderId: order.id,
+        idempotencyKey,
+        recipient: order.customerEmail,
+        subject,
+        message,
+        reason,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prisma.paymentProofRequest.findUnique({ where: { idempotencyKey } });
+      return existing?.status === "SENT"
+        ? { ok: true }
+        : { ok: false, error: "Cet envoi est déjà en cours ou a échoué." };
+    }
+    throw error;
+  }
+
+  const reference = await publicOrderReference(order);
+  const delivery = await sendTransactionalEmail({
+    to: order.customerEmail,
+    orderId: order.id,
+    customerId: order.customerId,
+    templateKey: "new_proof_requested",
+    type: "payment_issue",
+    subject,
+    body: message,
+    manuallyEdited: true,
+    variables: {
+      customer_name: order.customerName,
+      order_number: reference.number,
+      order_url: absoluteAppUrl(`/order/${order.deliveryToken ?? reference.pathSegment}`),
+      payment_url: absoluteAppUrl(`/payment/${order.deliveryToken ?? reference.pathSegment}`),
+      total: `${order.totalMad} DH`,
+      reason,
+    },
+  });
+
+  if (!delivery.ok) {
+    await prisma.paymentProofRequest.update({
+      where: { idempotencyKey },
+      data: { status: "FAILED", emailLogId: delivery.logId },
+    });
+    return { ok: false, error: "L’e-mail n’a pas pu être envoyé. Aucun statut n’a été modifié." };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.order.findUnique({
+      where: { id: order.id },
+      select: { status: true },
+    });
+    if (!current) throw new PaymentActionError("Commande introuvable.");
+    const canMoveToIssue = !["payment_confirmed", "delivered", "refunded", "cancelled"].includes(
+      current.status,
+    );
+    if (canMoveToIssue) {
+      await tx.order.update({ where: { id: order.id }, data: { status: "payment_issue" } });
+    }
+    await tx.paymentEvent.create({
+      data: {
+        orderId: order.id,
+        type: "proof_request",
+        fromStatus: current.status,
+        toStatus: canMoveToIssue ? "payment_issue" : current.status,
+        note: `Nouveau justificatif demandé au client. Motif : ${reason} Destinataire : ${order.customerEmail}. Admin : ${input.adminName}.`,
+      },
+    });
+    await tx.paymentProofRequest.update({
+      where: { idempotencyKey },
+      data: { status: "SENT", emailLogId: delivery.logId, sentAt: new Date() },
+    });
+  });
+
+  return { ok: true };
 }
 
 /**

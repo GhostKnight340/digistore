@@ -180,6 +180,7 @@ function PaymentExperience({
 
   // ── Local state ──
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofMessage, setProofMessage] = useState("");
   const [proofError, setProofError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -220,6 +221,11 @@ function PaymentExperience({
   const proofBased = isPending && proofFlow;
   // A refused / flagged proof-based order can resubmit a new justificatif in-app.
   const canResubmitProof = isRejected && proofFlow;
+  const latestProofRequest = [...order.paymentEvents]
+    .reverse()
+    .find((event) => event.type === "proof_request");
+  const proofRequestReason =
+    latestProofRequest?.note?.match(/Motif : ([\s\S]*?) Destinataire :/)?.[1]?.trim() ?? null;
   // Upload zone + sticky CTA appear for the initial upload and for a resubmit.
   const showProofUpload = proofBased || canResubmitProof;
 
@@ -261,10 +267,12 @@ function PaymentExperience({
       const fd = new FormData();
       fd.append("orderId", order.id);
       if (proofFile) fd.append("proof", proofFile);
+      if (proofMessage.trim()) fd.append("message", proofMessage.trim());
       const res = await submitPaymentAction(fd);
       if (!res.ok) setError(res.error ?? "Une erreur est survenue.");
       else {
         setProofFile(null);
+        setProofMessage("");
         refresh();
       }
     } catch {
@@ -513,10 +521,12 @@ function PaymentExperience({
                 {proofBased && (
                   <ProofCard
                     proofFile={proofFile}
+                    message={proofMessage}
                     proofRequired={proofRequired}
                     submitting={submitting}
                     proofError={proofError}
                     onChange={handleProofChange}
+                    onMessage={setProofMessage}
                     onSubmit={handleSubmit}
                   />
                 )}
@@ -546,14 +556,33 @@ function PaymentExperience({
                   canResubmit={canResubmitProof}
                 />
                 {canResubmitProof && activeMethod && (
-                  <ProofCard
-                    proofFile={proofFile}
-                    proofRequired={proofRequired}
-                    submitting={submitting}
-                    proofError={proofError}
-                    onChange={handleProofChange}
-                    onSubmit={handleSubmit}
-                  />
+                  <>
+                    {status === "payment_issue" && proofRequestReason ? (
+                      <div className="rounded-2xl border border-[#3E7BFA]/30 bg-[#3E7BFA]/10 p-5">
+                        <h2 className="text-lg font-semibold text-white">Nouveau justificatif demandé</h2>
+                        <p className="mt-2 text-sm text-[#B7C2D8]">Commande {publicOrderNumber}</p>
+                        <div className="mt-4 rounded-xl border border-white/10 bg-black/15 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-[#8EABF5]">
+                            Motif de la demande
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-white">{proofRequestReason}</p>
+                        </div>
+                        <p className="mt-3 text-xs text-[#9DA9BF]">
+                          Formats acceptés : PNG, JPG, JPEG ou PDF · Taille maximale : 5 Mo.
+                        </p>
+                      </div>
+                    ) : null}
+                    <ProofCard
+                      proofFile={proofFile}
+                      message={proofMessage}
+                      proofRequired={proofRequired}
+                      submitting={submitting}
+                      proofError={proofError}
+                      onChange={handleProofChange}
+                      onMessage={setProofMessage}
+                      onSubmit={handleSubmit}
+                    />
+                  </>
                 )}
               </>
             )}
@@ -1378,17 +1407,21 @@ function AmountPanel({
 
 function ProofCard({
   proofFile,
+  message,
   proofRequired,
   submitting,
   proofError,
   onChange,
+  onMessage,
   onSubmit,
 }: {
   proofFile: File | null;
+  message: string;
   proofRequired: boolean;
   submitting: boolean;
   proofError: string;
   onChange: (f: File | null) => void;
+  onMessage: (value: string) => void;
   onSubmit: () => void;
 }) {
   const enabled = (!proofRequired || !!proofFile) && !submitting;
@@ -1452,6 +1485,17 @@ function ProofCard({
         )}
 
         {proofError && <p className="mt-2 text-xs text-[#E8A6A6]">{proofError}</p>}
+
+        <label className="mt-4 block text-sm font-medium text-white">
+          Message complémentaire <span className="font-normal text-[#646A77]">(facultatif)</span>
+        </label>
+        <textarea
+          value={message}
+          onChange={(event) => onMessage(event.target.value.slice(0, 1000))}
+          rows={3}
+          placeholder="Ajoutez une précision utile pour notre équipe."
+          className="mt-2 w-full resize-y rounded-xl border border-white/[0.1] bg-[#0B0C10] px-4 py-3 text-sm text-white placeholder:text-[#646A77] focus:border-[#3E7BFA]/60 focus:outline-none"
+        />
 
         {/* Desktop inline CTA */}
         <div className="mt-4 hidden min-[900px]:block">

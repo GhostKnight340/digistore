@@ -10,6 +10,7 @@ import {
   getPaymentProof,
   renderPaymentStatusEmailPreview,
   applyPaymentStatusWithEmail,
+  requestNewPaymentProofWithEmail,
 } from "@/lib/db/payments";
 import type { EmailTemplateKey } from "@/lib/emailTemplates";
 import { getPublicPaymentMethods, getAdminPaymentMethods } from "@/lib/db/paymentMethods";
@@ -77,6 +78,10 @@ export async function submitPaymentAction(formData: FormData): Promise<ActionRes
   if (!orderId) return { ok: false, error: "Accès non autorisé à cette commande." };
 
   const file = formData.get("proof") as File | null;
+  const customerMessage = String(formData.get("message") ?? "").trim();
+  if (customerMessage.length > 1000) {
+    return { ok: false, error: "Le message est trop long (1 000 caractères maximum)." };
+  }
   let proof: { fileName: string; mimeType: string; dataBase64: string } | undefined;
 
   if (file && file.size > 0) {
@@ -96,7 +101,7 @@ export async function submitPaymentAction(formData: FormData): Promise<ActionRes
     };
   }
 
-  return submitPayment(orderId, proof);
+  return submitPayment(orderId, proof, customerMessage || null);
 }
 
 function normalizeProofMimeType(file: File): string | null {
@@ -144,7 +149,12 @@ export async function markPaymentIssueAction(orderId: string): Promise<ActionRes
 }
 
 type ReviewIntent = "reject" | "request_proof" | "refund_update";
-type ReviewEmailInput = { subject: string; message: string; reason: string };
+type ReviewEmailInput = {
+  subject: string;
+  message: string;
+  reason: string;
+  idempotencyKey?: string;
+};
 
 function reviewTemplateKey(intent: ReviewIntent): EmailTemplateKey {
   return intent === "reject"
@@ -180,7 +190,14 @@ function reviewTimelineNote(intent: ReviewIntent, reason: string): string {
 export async function getPaymentEmailPreviewAction(
   orderId: string,
   intent: ReviewIntent,
-): Promise<{ subject: string; message: string; reason: string; text: string; html: string }> {
+): Promise<{
+  subject: string;
+  message: string;
+  reason: string;
+  text: string;
+  html: string;
+  recipient: { name: string; email: string };
+}> {
   await requireAdminCustomer();
   const key = reviewTemplateKey(intent);
   const rendered = await renderPaymentStatusEmailPreview(
@@ -194,6 +211,7 @@ export async function getPaymentEmailPreviewAction(
     reason: "",
     text: rendered.text,
     html: rendered.html,
+    recipient: rendered.recipient,
   };
 }
 
@@ -222,7 +240,7 @@ export async function sendPaymentReviewEmailAction(
   intent: ReviewIntent,
   input: ReviewEmailInput,
 ): Promise<ActionResult> {
-  await requireAdminCustomer();
+  const admin = await requireAdminCustomer();
   // Refunds are handled as auditable cases now (Admin > Remboursements), not by
   // flipping an order to "refunded" from the payment-review email. Block the
   // legacy refund intent at the authority layer so no unrecorded refund slips
@@ -233,6 +251,19 @@ export async function sendPaymentReviewEmailAction(
       error:
         "Les remboursements se gèrent depuis Admin > Remboursements (dossier de remboursement).",
     };
+  }
+  if (intent === "request_proof") {
+    if (!input.reason.trim()) {
+      return { ok: false, error: "Le motif de la demande est obligatoire." };
+    }
+    return requestNewPaymentProofWithEmail({
+      orderId,
+      idempotencyKey: input.idempotencyKey ?? "",
+      adminName: admin.name,
+      subject: input.subject,
+      message: input.message,
+      reason: input.reason,
+    });
   }
   const toStatus = intent === "reject" ? "rejected" : "payment_issue";
   const emailType = intent === "reject" ? "payment_rejected" : "payment_issue";
