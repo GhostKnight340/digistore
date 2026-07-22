@@ -357,7 +357,7 @@ function AdminCreateRefundModal({
           value={orderNumber}
           onChange={(e) => setOrderNumber(e.target.value)}
           placeholder="#000008"
-          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="input mt-1.5 rounded-lg px-3 py-2"
         />
 
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -366,7 +366,7 @@ function AdminCreateRefundModal({
             <select
               value={source}
               onChange={(e) => setSource(e.target.value as RefundSource)}
-              className="mt-1.5 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"
+              className="input mt-1.5 rounded-lg px-2 py-2"
             >
               {(Object.keys(REFUND_SOURCE_LABELS) as RefundSource[]).map((s) => (
                 <option key={s} value={s}>
@@ -380,7 +380,7 @@ function AdminCreateRefundModal({
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value as RefundReason)}
-              className="mt-1.5 w-full rounded-lg border border-border bg-background px-2 py-2 text-sm text-foreground"
+              className="input mt-1.5 rounded-lg px-2 py-2"
             >
               {REFUND_REASONS.map((r) => (
                 <option key={r} value={r}>
@@ -398,7 +398,7 @@ function AdminCreateRefundModal({
           value={amount}
           onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
           placeholder="Par défaut : total de la commande"
-          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="input mt-1.5 rounded-lg px-3 py-2"
         />
 
         <label className="mt-4 block text-sm font-medium text-foreground">Résumé</label>
@@ -406,7 +406,7 @@ function AdminCreateRefundModal({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
-          className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+          className="input mt-1.5 resize-none rounded-lg px-3 py-2"
         />
 
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
