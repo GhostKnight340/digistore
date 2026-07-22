@@ -27,8 +27,12 @@ import type {
   InstagramActionResult,
 } from "@/lib/composio/instagram/types";
 
+// NOTE: this is a "use server" file — Next.js only allows async-function exports
+// from it (a non-function export throws "A 'use server' file can only export
+// async functions" at runtime). These path constants must therefore stay
+// module-local (they are only used here); do not `export` them.
 const ADMIN_PATH = "/admin/integrations/instagram";
-export const INSTAGRAM_CALLBACK_PATH = `${ADMIN_PATH}/callback`;
+const INSTAGRAM_CALLBACK_PATH = `${ADMIN_PATH}/callback`;
 
 type Actor = { id: string; name: string };
 
