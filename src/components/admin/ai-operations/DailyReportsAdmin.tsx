@@ -4,7 +4,7 @@
  * Daily Reports admin (spec: Daily Reports admin page). Configure each of the
  * four executive reports independently — enabled, schedule, timezone, channel,
  * model, max tokens, retries — plus Run now, Preview, and last/next execution.
- * A history table shows recent runs. Mirrors AiModuleConfigForm's styling.
+ * A history table shows recent runs. Uses the shared ops design kit styling.
  */
 
 import { useState, useTransition } from "react";

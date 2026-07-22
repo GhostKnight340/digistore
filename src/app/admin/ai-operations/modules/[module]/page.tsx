@@ -2,12 +2,16 @@ import { notFound } from "next/navigation";
 import { requireAdminCustomer } from "@/lib/auth";
 import { toAdminIdentity } from "@/lib/adminIdentity";
 import AdminShellRoute from "@/components/admin/AdminShellRoute";
-import AiModuleConfigForm from "@/components/admin/ai-operations/AiModuleConfigForm";
-import { getModuleConfig } from "@/lib/ai-ops/store";
+import DepartmentDetailView from "@/components/admin/ai-operations/DepartmentDetail";
+import { getDepartmentDetail } from "@/lib/ai-ops/departmentDetail";
 
 export const dynamic = "force-dynamic";
 
-/** /admin/ai-operations/modules/[module] — per-module configuration page. */
+/**
+ * /admin/ai-operations/modules/[module] — the Command Center department detail:
+ * overview + performance, tool permissions, execution history, and the module's
+ * schedule/cost configuration (all four tabs). Admin-only.
+ */
 export default async function AiModulePage({
   params,
 }: {
@@ -15,25 +19,12 @@ export default async function AiModulePage({
 }) {
   const customer = await requireAdminCustomer();
   const { module } = await params;
-  const config = await getModuleConfig(module);
-  if (!config) notFound();
+  const detail = await getDepartmentDetail(module);
+  if (!detail) notFound();
 
   return (
     <AdminShellRoute active="ai-operations" admin={toAdminIdentity(customer.name, customer.role)}>
-      <div className="mb-4">
-        <a href="/admin/ai-operations" className="text-xs text-faint hover:text-white">← AI Operations</a>
-        <h1 className="mt-1 text-lg font-semibold text-white">{config.label}</h1>
-        <p className="text-xs text-muted">{config.description}</p>
-        {module === "daily_reports" && (
-          <a
-            href="/admin/ai-operations/reports"
-            className="mt-2 inline-block text-xs text-blue-300 hover:text-blue-200"
-          >
-            → Configure the four reports (schedules, channels, run now, preview)
-          </a>
-        )}
-      </div>
-      <AiModuleConfigForm config={config} />
+      <DepartmentDetailView detail={detail} />
     </AdminShellRoute>
   );
 }
