@@ -67,23 +67,37 @@ async function activeConnection(): Promise<ActiveConnection | null> {
   };
 }
 
-/** Lists the Instagram toolkit's actual tool slugs (for capability resolution). */
-async function discoverToolkitSlugs(userId: string): Promise<string[]> {
+/**
+ * Lists the Instagram toolkit's actual tool slugs (for capability resolution).
+ *
+ * Uses `getRawComposioTools` — which returns the RAW `Tool[]` (each carrying a
+ * real `.slug`) — NOT `tools.get(userId, …)`, which returns provider-WRAPPED,
+ * execution-ready tools whose shape has no reliable `.slug`/`.name`. The wrapped
+ * form silently produced an empty slug list, so every capability (incl. profile)
+ * resolved to nothing and verification failed with "aucune action de profil".
+ */
+async function discoverToolkitSlugs(): Promise<string[]> {
   const composio = getComposio();
-  const tools = await composio.tools.get(userId, {
+  const tools = await composio.tools.getRawComposioTools({
     toolkits: [INSTAGRAM_TOOLKIT_SLUG],
     limit: 200,
   });
-  const list = Array.isArray(tools) ? (tools as Array<{ name?: unknown; slug?: unknown }>) : [];
-  return list
-    .map((t) => (typeof t.name === "string" ? t.name : typeof t.slug === "string" ? t.slug : null))
+  const list = Array.isArray(tools) ? tools : [];
+  const slugs = list
+    .map((t) => (typeof t?.slug === "string" ? t.slug : null))
     .filter((s): s is string => Boolean(s));
+  // Tool slugs are non-sensitive names. Logged so that, if capability matching
+  // ever comes up empty, the real toolkit slugs are visible in the server logs
+  // (to tune the matchers in capabilities.ts).
+  // eslint-disable-next-line no-console
+  console.log("[instagram] toolkit slugs", { count: slugs.length, slugs });
+  return slugs;
 }
 
 /** Resolves the capability→slug map from the live toolkit (empty on failure). */
-async function resolveSlugs(userId: string): Promise<Partial<Record<InstagramCapability, string>>> {
+async function resolveSlugs(): Promise<Partial<Record<InstagramCapability, string>>> {
   try {
-    const slugs = await discoverToolkitSlugs(userId);
+    const slugs = await discoverToolkitSlugs();
     return resolveCapabilitySlugs(slugs);
   } catch {
     return {};
@@ -400,7 +414,7 @@ export async function verifyConnection(): Promise<VerifyResult> {
     return { ok: false, status: "DISCONNECTED", message: "Aucun compte Instagram lié.", username: null, capabilities: [] };
   }
 
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   const available = INSTAGRAM_CAPABILITIES.filter((c) => slugMap[c]);
   const profileSlug = slugMap.profile;
 
@@ -475,7 +489,7 @@ export async function syncNow(): Promise<VerifyResult> {
 export async function getProfile(): Promise<ProfileFields | null> {
   const conn = await activeConnection();
   if (!conn) return null;
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   if (!slugMap.profile) return null;
   const res = await execTool(slugMap.profile, conn, {});
   return res.ok ? extractProfile(res.data) : null;
@@ -485,7 +499,7 @@ export async function getProfile(): Promise<ProfileFields | null> {
 export async function getRecentMedia(limit = 12): Promise<InstagramMediaDTO[]> {
   const conn = await activeConnection();
   if (!conn) return [];
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   if (!slugMap.media) return [];
   const res = await execTool(slugMap.media, conn, { limit });
   if (!res.ok) return [];
@@ -496,7 +510,7 @@ export async function getRecentMedia(limit = 12): Promise<InstagramMediaDTO[]> {
 export async function getMediaDetails(mediaId: string): Promise<InstagramMediaDTO | null> {
   const conn = await activeConnection();
   if (!conn || !mediaId) return null;
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   const slug = slugMap.mediaDetails ?? slugMap.media;
   if (!slug) return null;
   const res = await execTool(slug, conn, { media_id: mediaId });
@@ -507,7 +521,7 @@ export async function getMediaDetails(mediaId: string): Promise<InstagramMediaDT
 export async function getComments(mediaId: string): Promise<InstagramCommentDTO[]> {
   const conn = await activeConnection();
   if (!conn || !mediaId) return [];
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   if (!slugMap.comments) return [];
   const res = await execTool(slugMap.comments, conn, { media_id: mediaId });
   if (!res.ok) return [];
@@ -528,7 +542,7 @@ export async function replyToComment(input: {
 }): Promise<{ ok: boolean; code?: string; message?: string; resultId?: string | null }> {
   const conn = await activeConnection();
   if (!conn) return { ok: false, code: "account_not_found", message: "Aucun compte Instagram lié." };
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   if (!slugMap.commentReply) {
     return { ok: false, code: "unsupported_action", message: "Les réponses aux commentaires ne sont pas disponibles." };
   }
@@ -578,7 +592,7 @@ export async function publishMedia(input: {
 }): Promise<{ ok: boolean; code?: string; message?: string; mediaId?: string | null }> {
   const conn = await activeConnection();
   if (!conn) return { ok: false, code: "account_not_found", message: "Aucun compte Instagram lié." };
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   if (!slugMap.publish) {
     return { ok: false, code: "unsupported_action", message: "La publication n’est pas disponible." };
   }
@@ -642,7 +656,7 @@ export async function disconnectOrUnlink(revoke: boolean): Promise<{ ok: boolean
 export async function getAvailableCapabilities(): Promise<InstagramCapability[]> {
   const conn = await activeConnection();
   if (!conn) return [];
-  const slugMap = await resolveSlugs(conn.composioUserId);
+  const slugMap = await resolveSlugs();
   return INSTAGRAM_CAPABILITIES.filter((c) => slugMap[c]);
 }
 
