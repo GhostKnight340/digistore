@@ -26,7 +26,7 @@ export default function SectionShell({
   children: ReactNode;
 }) {
   return (
-    <section className="card overflow-hidden">
+    <section className="card">
       <div className="flex items-center gap-3 p-4">
         <button
           type="button"
