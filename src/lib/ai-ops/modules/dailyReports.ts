@@ -19,12 +19,11 @@ import "server-only";
 
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
 import { gatherReportMetrics, type ReportMetrics } from "../reports/metrics";
-import { buildReportPrompt, type ReportNarrative } from "../reports/prompt";
+import { buildReportPrompt, coerceReportNarrative, type ReportNarrative } from "../reports/prompt";
 import { buildReportPayload, buildReportText } from "../reports/format";
 import { deliverReport, notifyReportFailure } from "../reports/discord";
 import { reportDefinition, reportLabel, type ReportType } from "../reports/reportTypes";
 import { DAILY_REPORTS_MODULE } from "../reports/module";
-import { coerceNarrative } from "../narrative";
 import type { ExecutionTrigger } from "../types";
 
 export { DAILY_REPORTS_MODULE };
@@ -53,22 +52,55 @@ export interface GenerateReportResult {
   delivered?: boolean;
 }
 
-/** A deterministic narrative built from the figures — no invented numbers. */
+/**
+ * A deterministic briefing built from the computed deltas — used when the AI
+ * narrative is unavailable (provider down / rate-limited / unparseable). It
+ * quotes only figures/comparison values, so it can never hallucinate a number,
+ * and it follows the same "omit what carries no insight" contract as the prompt.
+ */
 function fallbackNarrative(metrics: ReportMetrics): ReportNarrative {
   const def = reportDefinition(metrics.type);
   const f = metrics.figures;
-  const priorities: string[] = [];
-  if (f.ordersWaiting && f.ordersWaiting > 0) priorities.push("Process the orders still waiting.");
-  if (f.pendingPaymentConfirmations && f.pendingPaymentConfirmations > 0) {
-    priorities.push("Confirm the pending payments.");
+  const c = metrics.comparison;
+
+  const whatChanged: string[] = [];
+  if (c.available) {
+    if (c.revenue.deltaPct && c.revenue.direction !== "flat") {
+      whatChanged.push(`Revenue ${c.revenue.direction === "up" ? "rose" : "fell"} ${c.revenue.deltaPct} versus ${c.baselineLabel}.`);
+    }
+    if (c.ordersTotal.deltaAbs != null && c.ordersTotal.direction !== "flat") {
+      whatChanged.push(`Order volume ${c.ordersTotal.direction === "up" ? "increased" : "decreased"} versus ${c.baselineLabel}.`);
+    }
+    for (const p of c.productMovements.slice(0, 2)) {
+      if (p.status === "new") whatChanged.push(`${p.name} began selling (${p.current}).`);
+      else if (p.status === "gone") whatChanged.push(`${p.name} stopped selling.`);
+      else whatChanged.push(`${p.name} demand ${p.status === "up" ? "rose" : "fell"}${p.deltaPct ? ` (${p.deltaPct})` : ""}.`);
+    }
   }
-  if (f.operationalAlerts.length) priorities.push("Resolve the operational alerts listed below.");
-  if (!priorities.length) priorities.push("No blocking items — keep monitoring fulfillment and stock.");
+
+  const anomalies: string[] = [];
+  if (f.ordersWaiting && f.ordersWaiting > 0) anomalies.push(`${f.ordersWaiting} order(s) still waiting to be processed.`);
+  if (f.pendingPaymentConfirmations && f.pendingPaymentConfirmations > 0) {
+    anomalies.push(`${f.pendingPaymentConfirmations} payment(s) awaiting confirmation.`);
+  }
+  for (const alert of f.operationalAlerts) anomalies.push(alert);
+
+  const recommendedActions: string[] = [];
+  if (f.pendingPaymentConfirmations && f.pendingPaymentConfirmations > 0) recommendedActions.push("Review the pending payment confirmations first.");
+  if (f.ordersWaiting && f.ordersWaiting > 0) recommendedActions.push("Clear the orders still waiting.");
+  if (f.operationalAlerts.length) recommendedActions.push("Resolve the operational alerts listed above.");
+
+  const quiet = !whatChanged.length && !anomalies.length;
   return {
-    summary: `${def.title}: figures for ${metrics.windowLabel} are below.`,
-    recommendations: ["Review the figures and act on anything unusual."],
-    trends: "",
-    topPriorities: priorities,
+    executiveSummary: quiet
+      ? "No significant operational changes were detected since the previous period."
+      : `${def.title}: the notable items for ${metrics.windowLabel} are below (AI narrative was unavailable).`,
+    whatChanged,
+    anomalies,
+    likelyExplanation: "",
+    recommendedActions: recommendedActions.slice(0, 3),
+    keepUnchanged: "",
+    watchList: "",
   };
 }
 
@@ -88,14 +120,20 @@ async function reportBody(input: GenerateReportInput, ctx: ModuleRunContext): Pr
     const completion = await ctx.client.complete({
       model: ctx.model,
       system: buildReportPrompt(input.reportType, ctx.settings.reportLanguage, ctx.config.instructions),
-      // Send ONLY the computed figures (+ which sources were unavailable), never
-      // the raw tool snapshot: the figures already carry every number the model
-      // needs, so this ~halves input tokens with no loss of grounding.
-      input: { windowLabel: metrics.windowLabel, figures: metrics.figures, unavailable: metrics.unavailable },
+      // Send the computed figures + the period-over-period comparison (+ which
+      // sources were unavailable), never the raw tool snapshot: these already
+      // carry every number the model may quote, so this keeps input tokens low
+      // with no loss of grounding.
+      input: {
+        windowLabel: metrics.windowLabel,
+        figures: metrics.figures,
+        comparison: metrics.comparison,
+        unavailable: metrics.unavailable,
+      },
       maxTokens: ctx.maxTokens ?? undefined,
       timeoutMs: 30_000,
     });
-    narrative = coerceNarrative(completion.text, fallbackNarrative(metrics));
+    narrative = coerceReportNarrative(completion.text, fallbackNarrative(metrics));
     provider = completion.provider;
     model = completion.model;
     usage = {
