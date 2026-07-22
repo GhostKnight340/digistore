@@ -22,8 +22,15 @@ import {
   startExecution,
 } from "./executions";
 import { evaluateBudget } from "./budget";
-import { AiProviderError, resolveProvider, type AiProviderClient } from "./provider";
+import {
+  AiProviderError,
+  resolveProvider,
+  type AiCacheConfig,
+  type AiCacheOutcome,
+  type AiProviderClient,
+} from "./provider";
 import { isModuleKey, type ExecutionTrigger, type ModuleKey } from "./types";
+import { logCacheOutcome } from "./cacheLog";
 
 /**
  * What a module body receives: the resolved config/settings, the provider client
@@ -41,6 +48,8 @@ export interface ModuleRunContext {
   model: string;
   /** Optional per-run token ceiling forwarded to the provider (see maxTokens). */
   maxTokens: number | null;
+  /** Resolved prompt-caching config for this module — pass into ctx.client.complete. */
+  cache: AiCacheConfig;
   executionId: string | null;
   client: AiProviderClient;
 }
@@ -52,6 +61,8 @@ export interface ModuleRunOutput {
   summary: string;
   text: string;
   usage: { tokensIn: number; tokensOut: number; costUsd: number };
+  /** Prompt-caching outcome from the provider call (Anthropic only). */
+  cache?: AiCacheOutcome;
 }
 
 export type ModuleBody = (ctx: ModuleRunContext) => Promise<ModuleRunOutput>;
@@ -128,8 +139,14 @@ export async function runModule(input: RunModuleInput): Promise<RunModuleResult>
 
   try {
     const client = resolveProvider(provider);
-    const runCtx: ModuleRunContext = { module, trigger: input.trigger, config, settings, provider, model, maxTokens, executionId, client };
+    const cache: AiCacheConfig = {
+      enabled: config.promptCachingEnabled,
+      strategy: config.promptCachingStrategy,
+      ttl: config.promptCacheTtl,
+    };
+    const runCtx: ModuleRunContext = { module, trigger: input.trigger, config, settings, provider, model, maxTokens, cache, executionId, client };
     const output = input.body ? await input.body(runCtx) : await placeholderRun(runCtx);
+    const c = output.cache;
     await recordUsage({
       module,
       provider: output.provider,
@@ -138,7 +155,18 @@ export async function runModule(input: RunModuleInput): Promise<RunModuleResult>
       tokensOut: output.usage.tokensOut,
       costUsd: output.usage.costUsd,
       executionId,
+      cacheCreationTokens: c?.cacheCreationTokens,
+      cacheReadTokens: c?.cacheReadTokens,
+      cacheEnabled: c?.enabled,
+      cacheHit: c?.hit,
+      cacheCreated: c?.created,
+      cacheStrategy: c?.strategy ?? null,
+      cacheTtl: c?.ttl ?? null,
+      cacheFallbackReason: c?.fallbackReason ?? null,
+      costWithoutCacheUsd: c?.costWithoutCacheUsd ?? null,
     });
+    // Prompt-caching activity records (investigation log only; no Discord noise).
+    logCacheOutcome(module, executionId, c);
     await finishExecution(executionId, module, startedAtMs, {
       status: "success",
       summary: output.summary,
@@ -175,6 +203,7 @@ async function placeholderRun(ctx: ModuleRunContext): Promise<ModuleRunOutput> {
     model: ctx.model,
     system: ctx.config.instructions || `You are the ${ctx.config.label} for Ghost.ma.`,
     input: { note: "foundation placeholder run" },
+    cache: ctx.cache,
   });
   return {
     provider: completion.provider,
@@ -186,5 +215,6 @@ async function placeholderRun(ctx: ModuleRunContext): Promise<ModuleRunOutput> {
       tokensOut: completion.usage.tokensOut,
       costUsd: completion.usage.estimatedCostUsd,
     },
+    cache: completion.cache,
   };
 }

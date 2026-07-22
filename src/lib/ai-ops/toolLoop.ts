@@ -14,7 +14,7 @@
 
 import { toolDefinitionsFor } from "./toolDefs";
 import { isToolName, type AiProvider, type ToolName } from "./types";
-import type { AiMessage, AiProviderClient } from "./provider";
+import type { AiCacheConfig, AiCacheOutcome, AiMessage, AiProviderClient } from "./provider";
 
 export interface ToolLoopLimits {
   maxRounds: number;
@@ -44,6 +44,8 @@ export interface ToolLoopInput {
   question: string;
   history?: { role: "user" | "assistant"; content: string }[];
   limits: ToolLoopLimits;
+  /** Prompt-caching config (Anthropic only). Automatic caching for the append-only history. */
+  cache?: AiCacheConfig;
 }
 
 export interface ToolLoopResult {
@@ -53,6 +55,8 @@ export interface ToolLoopResult {
   usage: { tokensIn: number; tokensOut: number; costUsd: number };
   rounds: number;
   toolCalls: number;
+  /** Cache outcome of the FINAL turn (the largest cached prefix), for accounting. */
+  cache?: AiCacheOutcome;
 }
 
 function safeParseArgs(raw: string): unknown {
@@ -80,6 +84,10 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopResult>
   let totalCalls = 0;
   let provider: AiProvider = client.provider;
   let resolvedModel = model;
+  // Cache activity summed across the loop's turns (each round is its own call
+  // with its own cached prefix). Automatic caching lets each round reuse the
+  // append-only history the previous round just wrote.
+  const cacheAcc = newCacheAcc();
 
   for (let round = 0; round < limits.maxRounds; round++) {
     const completion = await client.complete({
@@ -88,18 +96,20 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopResult>
       input: null,
       messages,
       tools,
+      cache: input.cache,
       timeoutMs: limits.timeoutMs,
       retry: { maxRetries: limits.maxRetries, backoffMs: limits.backoffMs },
     });
     usage.tokensIn += completion.usage.tokensIn;
     usage.tokensOut += completion.usage.tokensOut;
     usage.costUsd += completion.usage.estimatedCostUsd;
+    mergeCache(cacheAcc, completion.cache);
     provider = completion.provider;
     resolvedModel = completion.model;
 
     const calls = completion.toolCalls ?? [];
     if (calls.length === 0) {
-      return { text: completion.text.trim(), provider, model: resolvedModel, usage, rounds: round, toolCalls: totalCalls };
+      return { text: completion.text.trim(), provider, model: resolvedModel, usage, rounds: round, toolCalls: totalCalls, cache: finalizeCache(cacheAcc) };
     }
 
     // Record the assistant turn that requested the tools, then answer each call.
@@ -136,12 +146,14 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopResult>
         content: "Give your final answer now from the data already gathered. Do not request more tools.",
       },
     ],
+    cache: input.cache,
     timeoutMs: limits.timeoutMs,
     retry: { maxRetries: limits.maxRetries, backoffMs: limits.backoffMs },
   });
   usage.tokensIn += final.usage.tokensIn;
   usage.tokensOut += final.usage.tokensOut;
   usage.costUsd += final.usage.estimatedCostUsd;
+  mergeCache(cacheAcc, final.cache);
   return {
     text: final.text.trim(),
     provider: final.provider,
@@ -149,5 +161,46 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopResult>
     usage,
     rounds: limits.maxRounds,
     toolCalls: totalCalls,
+    cache: finalizeCache(cacheAcc),
+  };
+}
+
+// ── Cache accounting across the loop's turns ─────────────────────────────────
+
+interface CacheAcc {
+  seen: boolean;
+  outcome: AiCacheOutcome | null;
+  creation: number;
+  read: number;
+  uncached: number;
+  actualCost: number;
+  costWithout: number;
+}
+function newCacheAcc(): CacheAcc {
+  return { seen: false, outcome: null, creation: 0, read: 0, uncached: 0, actualCost: 0, costWithout: 0 };
+}
+function mergeCache(acc: CacheAcc, c: AiCacheOutcome | undefined): void {
+  if (!c) return;
+  acc.seen = true;
+  acc.outcome = c; // keep the last turn's metadata (strategy/ttl/enabled/applied)
+  acc.creation += c.cacheCreationTokens;
+  acc.read += c.cacheReadTokens;
+  acc.uncached += c.uncachedInputTokens;
+  acc.actualCost += c.actualCostUsd;
+  acc.costWithout += c.costWithoutCacheUsd;
+}
+function finalizeCache(acc: CacheAcc): AiCacheOutcome | undefined {
+  if (!acc.seen || !acc.outcome) return undefined;
+  const savings = Math.round((acc.costWithout - acc.actualCost) * 1_000_000) / 1_000_000;
+  return {
+    ...acc.outcome,
+    cacheCreationTokens: acc.creation,
+    cacheReadTokens: acc.read,
+    uncachedInputTokens: acc.uncached,
+    hit: acc.read > 0,
+    created: acc.creation > 0,
+    actualCostUsd: Math.round(acc.actualCost * 1_000_000) / 1_000_000,
+    costWithoutCacheUsd: Math.round(acc.costWithout * 1_000_000) / 1_000_000,
+    savingsUsd: savings,
   };
 }

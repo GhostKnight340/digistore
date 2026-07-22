@@ -81,6 +81,9 @@ async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise
     question: input.question,
     history: input.history,
     limits: loopLimits(ctx),
+    // Automatic caching: the system prompt + tool defs + append-only history are
+    // a stable, growing prefix reused across the loop's rounds and turns.
+    cache: ctx.cache,
   });
   return {
     provider: result.provider,
@@ -88,6 +91,7 @@ async function assistantBody(input: AnswerInput, ctx: ModuleRunContext): Promise
     summary: `CEO assistant answered via ${result.provider}/${result.model} (${result.toolCalls} tool call(s)).`,
     text: result.text,
     usage: result.usage,
+    cache: result.cache,
   };
 }
 

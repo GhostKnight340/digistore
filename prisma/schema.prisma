@@ -2233,6 +2233,16 @@ model AiModuleConfig {
   // Notify the alerts channel when an execution fails.
   notifyOnFailure Boolean @default(true)
 
+  // Anthropic prompt caching (see src/lib/ai-ops/caching.ts). Only applied when
+  // the module runs on the Anthropic provider with a Claude model; ignored by
+  // other adapters. promptCachingStrategy: "automatic" | "explicit_static_prefix"
+  // | "disabled". promptCacheTtl: "5m" | "1h" — 1h is opt-in only, never
+  // defaulted on. Conversational modules seed to automatic; scheduled/dynamic
+  // ones to explicit_static_prefix (see the migration).
+  promptCachingEnabled  Boolean @default(true)
+  promptCachingStrategy String  @default("automatic")
+  promptCacheTtl        String  @default("5m")
+
   // Prompt / instruction configuration handed to the provider as the system
   // instruction. Kept as text; never contains secrets.
   instructions String @default("")
@@ -2435,10 +2445,28 @@ model AiUsageRecord {
   provider    String
   model       String
 
+  // tokensIn is the UNCACHED input remainder when caching is active (Anthropic's
+  // `input_tokens`); the full prompt size is tokensIn + cacheCreation + cacheRead.
   tokensIn  Int     @default(0)
   tokensOut Int     @default(0)
-  // Estimated cost in USD for this call.
+  // Estimated cost in USD for this call (cache-aware when caching applied).
   costUsd   Decimal @default(0) @db.Decimal(12, 6)
+
+  // Prompt-caching accounting (Anthropic only; zeros/nulls otherwise). See
+  // src/lib/ai-ops/caching.ts. cacheEnabled = the module wanted caching;
+  // cacheCreated/cacheHit are derived from the two token counts. cacheStrategy
+  // ("automatic" | "explicit_static_prefix" | "disabled"), cacheTtl ("5m" | "1h").
+  cacheCreationTokens Int      @default(0)
+  cacheReadTokens     Int      @default(0)
+  cacheEnabled        Boolean  @default(false)
+  cacheHit            Boolean  @default(false)
+  cacheCreated        Boolean  @default(false)
+  cacheStrategy       String?
+  cacheTtl            String?
+  // A short, non-sensitive note when a cache-config rejection forced an uncached retry.
+  cacheFallbackReason String?
+  // What the same tokens would have cost with NO caching (for the savings estimate).
+  costWithoutCacheUsd Decimal? @db.Decimal(12, 6)
 
   createdAt DateTime @default(now())
 

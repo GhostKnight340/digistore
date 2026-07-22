@@ -84,10 +84,16 @@ const TOOL_DEFINITIONS: Partial<Record<ToolName, AiToolDefinition>> = {
   },
 };
 
-/** The provider tool definitions for exactly the tools a module is granted. */
+/**
+ * The provider tool definitions for exactly the tools a module is granted.
+ * Sorted by a stable canonical key (tool name) so the definitions serialize
+ * identically every request regardless of DB grant order — reordered tools
+ * invalidate the tools/system/messages prompt caches (spec: deterministic
+ * prefixes), so retrieval order must never leak into the request.
+ */
 export function toolDefinitionsFor(granted: readonly ToolName[]): AiToolDefinition[] {
   const defs: AiToolDefinition[] = [];
-  for (const tool of granted) {
+  for (const tool of [...granted].sort()) {
     const def = TOOL_DEFINITIONS[tool];
     if (def) defs.push(def);
   }

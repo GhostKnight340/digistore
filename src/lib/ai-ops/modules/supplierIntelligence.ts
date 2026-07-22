@@ -79,12 +79,17 @@ export async function supplierBody(ctx: ModuleRunContext): Promise<ModuleRunOutp
 
   let narrative: AiNarrative;
   let usage = { tokensIn: 0, tokensOut: 0, costUsd: 0 };
+  let cacheOutcome: ModuleRunOutput["cache"];
   let provider = ctx.provider;
   let model = ctx.model;
   let narrativeFailed = false;
   try {
     const completion = await ctx.client.complete({
       model: ctx.model,
+      // Stable reusable prefix = the supplier-intelligence system prompt; the
+      // window figures below are the volatile suffix. Explicit stable-prefix
+      // caching pins the breakpoint on the system block.
+      cache: ctx.cache,
       system: buildSupplierPrompt(ctx.settings.reportLanguage, ctx.config.instructions),
       input: { windowLabel: metrics.windowLabel, figures: metrics.figures, unavailable: metrics.unavailable },
       maxTokens: ctx.maxTokens ?? undefined,
@@ -98,6 +103,7 @@ export async function supplierBody(ctx: ModuleRunContext): Promise<ModuleRunOutp
       tokensOut: completion.usage.tokensOut,
       costUsd: completion.usage.estimatedCostUsd,
     };
+    cacheOutcome = completion.cache;
   } catch {
     narrativeFailed = true;
     narrative = fallbackNarrative(metrics);
@@ -123,6 +129,7 @@ export async function supplierBody(ctx: ModuleRunContext): Promise<ModuleRunOutp
     summary: `Supplier Intelligence posted ${how}.`,
     text,
     usage,
+    cache: cacheOutcome,
   };
 }
 

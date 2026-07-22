@@ -160,10 +160,24 @@ export async function logToolCall(input: ToolCallLogInput): Promise<void> {
   });
 }
 
-export interface RecordUsageInput {
+/** Prompt-caching accounting for one call (Anthropic only; omitted otherwise). */
+export interface UsageCacheFields {
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
+  cacheEnabled?: boolean;
+  cacheHit?: boolean;
+  cacheCreated?: boolean;
+  cacheStrategy?: string | null;
+  cacheTtl?: string | null;
+  cacheFallbackReason?: string | null;
+  costWithoutCacheUsd?: number | null;
+}
+
+export interface RecordUsageInput extends UsageCacheFields {
   module: string;
   provider: string;
   model: string;
+  /** Uncached input tokens (the full-price remainder when caching is active). */
   tokensIn: number;
   tokensOut: number;
   executionId?: string | null;
@@ -183,6 +197,16 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
         tokensOut: input.tokensOut,
         costUsd,
         executionId: input.executionId ?? null,
+        // Prompt-caching accounting — zeros/nulls when caching did not apply.
+        cacheCreationTokens: input.cacheCreationTokens ?? 0,
+        cacheReadTokens: input.cacheReadTokens ?? 0,
+        cacheEnabled: input.cacheEnabled ?? false,
+        cacheHit: input.cacheHit ?? false,
+        cacheCreated: input.cacheCreated ?? false,
+        cacheStrategy: input.cacheStrategy ?? null,
+        cacheTtl: input.cacheTtl ?? null,
+        cacheFallbackReason: input.cacheFallbackReason ?? null,
+        costWithoutCacheUsd: input.costWithoutCacheUsd ?? null,
       },
     }),
   );

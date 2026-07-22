@@ -32,6 +32,7 @@ import {
 } from "@/lib/ai-ops/discord/conversationStore";
 import { transitionApproval } from "@/lib/ai-ops/approvalStore";
 import { setJobEnabled } from "@/lib/ai-ops/jobStore";
+import { isCacheStrategy, isCacheTtl } from "@/lib/ai-ops/caching";
 import { runModule } from "@/lib/ai-ops/runner";
 import {
   isExecutionMode,
@@ -145,6 +146,15 @@ export async function saveModuleConfigAction(
     if (typeof input.maxExecutionsPerDay === "number") patch.maxExecutionsPerDay = Math.min(10_000, Math.max(0, Math.trunc(input.maxExecutionsPerDay)));
     if (typeof input.maxDailyCostUsd === "number") patch.maxDailyCostUsd = Math.max(0, input.maxDailyCostUsd);
     if (typeof input.notifyOnFailure === "boolean") patch.notifyOnFailure = input.notifyOnFailure;
+    if (typeof input.promptCachingEnabled === "boolean") patch.promptCachingEnabled = input.promptCachingEnabled;
+    if (typeof input.promptCachingStrategy === "string") {
+      if (!isCacheStrategy(input.promptCachingStrategy)) return { ok: false, error: "Invalid caching strategy." };
+      patch.promptCachingStrategy = input.promptCachingStrategy;
+    }
+    if (typeof input.promptCacheTtl === "string") {
+      if (!isCacheTtl(input.promptCacheTtl)) return { ok: false, error: "Invalid cache TTL." };
+      patch.promptCacheTtl = input.promptCacheTtl;
+    }
     if (typeof input.instructions === "string") patch.instructions = input.instructions.slice(0, 8000);
 
     await updateModuleConfig(module, patch);

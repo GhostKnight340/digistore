@@ -35,7 +35,7 @@ test("body carries system + a single user message and a required max_tokens", ()
   assert.equal(body.system, "You are a helper.");
   assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, "user");
-  assert.ok(body.messages[0].content.includes("how many orders"));
+  assert.ok(String(body.messages[0].content).includes("how many orders"));
   assert.equal(body.max_tokens, DEFAULT_MAX_TOKENS);
 });
 

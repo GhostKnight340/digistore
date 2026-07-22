@@ -25,6 +25,7 @@ import {
   type ToolName,
 } from "./types";
 import { normalizeGrants } from "./permissions";
+import { isCacheStrategy, isCacheTtl, type CacheStrategy, type CacheTtl } from "./caching";
 
 const SETTINGS_ID = "default";
 
@@ -66,6 +67,10 @@ export interface AiModuleConfigDTO {
   maxExecutionsPerDay: number;
   maxDailyCostUsd: number;
   notifyOnFailure: boolean;
+  /** Anthropic prompt caching (see src/lib/ai-ops/caching.ts). */
+  promptCachingEnabled: boolean;
+  promptCachingStrategy: CacheStrategy;
+  promptCacheTtl: CacheTtl;
   instructions: string;
   lastRunAt: Date | null;
   lastSuccessAt: Date | null;
@@ -172,6 +177,9 @@ function toModuleDTO(
     maxExecutionsPerDay: number;
     maxDailyCostUsd: { toNumber?: () => number } | number;
     notifyOnFailure: boolean;
+    promptCachingEnabled: boolean;
+    promptCachingStrategy: string;
+    promptCacheTtl: string;
     instructions: string;
     lastRunAt: Date | null;
     lastSuccessAt: Date | null;
@@ -197,6 +205,9 @@ function toModuleDTO(
     maxExecutionsPerDay: row.maxExecutionsPerDay,
     maxDailyCostUsd: num(row.maxDailyCostUsd),
     notifyOnFailure: row.notifyOnFailure,
+    promptCachingEnabled: row.promptCachingEnabled,
+    promptCachingStrategy: isCacheStrategy(row.promptCachingStrategy) ? row.promptCachingStrategy : "automatic",
+    promptCacheTtl: isCacheTtl(row.promptCacheTtl) ? row.promptCacheTtl : "5m",
     instructions: row.instructions,
     lastRunAt: row.lastRunAt,
     lastSuccessAt: row.lastSuccessAt,
@@ -236,6 +247,9 @@ export interface AiModuleConfigUpdate {
   maxExecutionsPerDay?: number;
   maxDailyCostUsd?: number;
   notifyOnFailure?: boolean;
+  promptCachingEnabled?: boolean;
+  promptCachingStrategy?: CacheStrategy;
+  promptCacheTtl?: CacheTtl;
   instructions?: string;
 }
 

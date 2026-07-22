@@ -101,6 +101,9 @@ export default function DepartmentDetailView({ detail }: { detail: DepartmentDet
         maxExecutionsPerDay: form.maxExecutionsPerDay,
         maxDailyCostUsd: form.maxDailyCostUsd,
         notifyOnFailure: form.notifyOnFailure,
+        promptCachingEnabled: form.promptCachingEnabled,
+        promptCachingStrategy: form.promptCachingStrategy,
+        promptCacheTtl: form.promptCacheTtl,
         instructions: form.instructions,
         grantedTools: [...tools],
       });
@@ -300,6 +303,22 @@ function Schedule({ form, set, onSave, pending, message, defaultModel }: { form:
         </FieldDD>
         <FieldDD label="Coût quotidien max estimé (USD)">
           <input type="number" min={0} step="0.01" className="cc-input" value={form.maxDailyCostUsd} onChange={(e) => set("maxDailyCostUsd", Number(e.target.value))} />
+        </FieldDD>
+        <div style={{ height: 1, background: "rgba(255,255,255,.06)" }} />
+        <div style={{ fontSize: 10, color: "#6b6e78", textTransform: "uppercase", letterSpacing: ".03em" }}>Cache de prompt (Anthropic uniquement)</div>
+        <Toggle label="Cache activé" checked={form.promptCachingEnabled} onChange={(v) => set("promptCachingEnabled", v)} />
+        <FieldDD label="Stratégie">
+          <select className="cc-input" value={form.promptCachingStrategy} onChange={(e) => set("promptCachingStrategy", e.target.value as AiModuleConfigDTO["promptCachingStrategy"])}>
+            <option value="automatic">automatic (conversations)</option>
+            <option value="explicit_static_prefix">explicit_static_prefix (rapports)</option>
+            <option value="disabled">disabled</option>
+          </select>
+        </FieldDD>
+        <FieldDD label="Durée du cache (TTL)">
+          <select className="cc-input" value={form.promptCacheTtl} onChange={(e) => set("promptCacheTtl", e.target.value as AiModuleConfigDTO["promptCacheTtl"])}>
+            <option value="5m">5 minutes (défaut)</option>
+            <option value="1h">1 heure (avancé)</option>
+          </select>
         </FieldDD>
       </div>
       <div style={{ ...CARD, gridColumn: "1 / -1" }}>

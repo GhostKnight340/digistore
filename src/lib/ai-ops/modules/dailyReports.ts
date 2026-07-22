@@ -113,12 +113,18 @@ async function reportBody(input: GenerateReportInput, ctx: ModuleRunContext): Pr
   // deterministic fallback narrative — the figures (the real value) always ship.
   let narrative: ReportNarrative;
   let usage = { tokensIn: 0, tokensOut: 0, costUsd: 0 };
+  let cacheOutcome: ModuleRunOutput["cache"];
   let provider = ctx.provider;
   let model = ctx.model;
   let narrativeFailed = false;
   try {
     const completion = await ctx.client.complete({
       model: ctx.model,
+      // The report system prompt (department rules, Ghost.ma operating rules,
+      // safety policy, output contract) is the STABLE reusable prefix; the
+      // figures/comparison/timestamp payload below is the volatile suffix — so
+      // explicit stable-prefix caching pins the breakpoint on this system block.
+      cache: ctx.cache,
       system: buildReportPrompt(input.reportType, ctx.settings.reportLanguage, ctx.config.instructions),
       // Send the computed figures + the period-over-period comparison (+ which
       // sources were unavailable), never the raw tool snapshot: these already
@@ -141,6 +147,7 @@ async function reportBody(input: GenerateReportInput, ctx: ModuleRunContext): Pr
       tokensOut: completion.usage.tokensOut,
       costUsd: completion.usage.estimatedCostUsd,
     };
+    cacheOutcome = completion.cache;
   } catch {
     narrativeFailed = true;
     narrative = fallbackNarrative(metrics);
@@ -173,6 +180,7 @@ async function reportBody(input: GenerateReportInput, ctx: ModuleRunContext): Pr
     summary: `${reportLabel(input.reportType)} ${delivered ? "posted" : "generated"} ${how}.`,
     text,
     usage,
+    cache: cacheOutcome,
   };
 }
 

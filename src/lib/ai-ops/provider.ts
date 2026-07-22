@@ -42,7 +42,18 @@ import {
   isRetryableStatus as isRetryableAnthropicStatus,
   mapAnthropicStatus,
   parseAnthropicResponse,
+  resolveAnthropicModel,
+  type AppliedCache,
 } from "./providers/anthropicCore";
+import {
+  computeCacheCost,
+  createdFromUsage,
+  hitFromUsage,
+  resolveCacheDirective,
+  type CacheSkipReason,
+  type CacheStrategy,
+  type CacheTtl,
+} from "./caching";
 
 export interface AiToolDefinition {
   name: string;
@@ -78,6 +89,17 @@ export interface AiRetryPolicy {
   backoffMs: number;
 }
 
+/**
+ * The module's prompt-caching configuration, forwarded on the request. The
+ * ADAPTER decides whether to actually apply it (only Anthropic + a Claude model
+ * + an eligible block ever caches); non-Anthropic adapters ignore this field.
+ */
+export interface AiCacheConfig {
+  enabled: boolean;
+  strategy: CacheStrategy;
+  ttl: CacheTtl;
+}
+
 export interface AiCompletionRequest {
   model: string;
   system: string;
@@ -92,12 +114,46 @@ export interface AiCompletionRequest {
   maxTokens?: number;
   timeoutMs?: number;
   retry?: AiRetryPolicy;
+  /** Prompt-caching config (Anthropic only; ignored by other adapters). */
+  cache?: AiCacheConfig;
 }
 
 export interface AiUsage {
   tokensIn: number;
   tokensOut: number;
   estimatedCostUsd: number;
+  /** Tokens written to cache this call (Anthropic caching only; else absent). */
+  cacheCreationTokens?: number;
+  /** Tokens served from cache this call (Anthropic caching only; else absent). */
+  cacheReadTokens?: number;
+}
+
+/**
+ * The prompt-caching outcome for one Anthropic call — enough to power the metrics
+ * and the per-execution detail view, and to distinguish "caching enabled" from
+ * "cache created" from "cache hit" from "no cache activity". Absent on non-cache-
+ * capable providers.
+ */
+export interface AiCacheOutcome {
+  /** The module wanted caching (enabled && strategy != disabled). */
+  enabled: boolean;
+  /** `cache_control` was actually attached to the request body. */
+  applied: boolean;
+  strategy: CacheStrategy;
+  ttl: CacheTtl;
+  /** Why caching was skipped / produced no activity (when not a plain hit). */
+  skipReason?: CacheSkipReason;
+  /** Set when a cache-config rejection forced a single uncached retry. */
+  fallbackReason?: string | null;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  uncachedInputTokens: number;
+  hit: boolean;
+  created: boolean;
+  /** Cost WITH caching (write premium + cheap reads) vs the no-cache counterfactual. */
+  actualCostUsd: number;
+  costWithoutCacheUsd: number;
+  savingsUsd: number;
 }
 
 export interface AiCompletionResult {
@@ -110,6 +166,8 @@ export interface AiCompletionResult {
   /** Tool calls the model requested this turn (empty/undefined when none). */
   toolCalls?: AiToolCall[];
   usage: AiUsage;
+  /** Prompt-caching outcome (Anthropic only; undefined otherwise). */
+  cache?: AiCacheOutcome;
 }
 
 /** Stable, non-identifying error categories so callers can branch/normalize. */
@@ -292,7 +350,38 @@ class AnthropicProvider implements AiProviderClient {
   constructor(private readonly apiKey: string) {}
 
   async complete(request: AiCompletionRequest): Promise<AiCompletionResult> {
-    const body = buildAnthropicBody(request);
+    const cfg: AiCacheConfig = request.cache ?? { enabled: false, strategy: "disabled", ttl: "5m" };
+    const directive = resolveCacheDirective(cfg, {
+      provider: this.provider,
+      model: resolveAnthropicModel(request.model),
+      hasStablePrefix: Boolean(request.system && request.system.trim()),
+    });
+    const applied: AppliedCache = directive.apply ? { strategy: directive.strategy, ttl: directive.ttl } : null;
+
+    try {
+      return await this.attempt(request, applied, cfg, directive.apply ? undefined : directive.skipReason, null);
+    } catch (error) {
+      // A 400 while caching was applied MAY be a malformed cache configuration.
+      // We cannot read the (redacted) error body, so we retry ONCE without
+      // cache_control — safe, because a completion has no side effects and the
+      // caller's already-executed tool results are untouched. A non-cache 400
+      // simply 400s again and is surfaced unchanged.
+      if (applied && error instanceof AiProviderError && error.code === "invalid_response") {
+        return await this.attempt(request, null, cfg, "retried_uncached", "cache configuration rejected; retried uncached");
+      }
+      throw error;
+    }
+  }
+
+  /** One bounded network attempt (transient retries inside); `cache` gates cache_control. */
+  private async attempt(
+    request: AiCompletionRequest,
+    cache: AppliedCache,
+    cfg: AiCacheConfig,
+    skipReason: CacheSkipReason | undefined,
+    fallbackReason: string | null,
+  ): Promise<AiCompletionResult> {
+    const body = buildAnthropicBody(request, cache);
     const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const maxRetries = Math.max(0, request.retry?.maxRetries ?? 0);
     const backoffMs = request.retry?.backoffMs ?? 500;
@@ -326,14 +415,7 @@ class AnthropicProvider implements AiProviderClient {
         }
 
         const json = await response.json();
-        const parsed = parseAnthropicResponse(request, json);
-        return {
-          provider: this.provider,
-          model: parsed.model,
-          text: parsed.text,
-          structured: parsed.structured,
-          usage: parsed.usage,
-        };
+        return this.buildResult(parseAnthropicResponse(request, json), cache, cfg, skipReason, fallbackReason);
       } catch (error) {
         if (error instanceof AiProviderError) throw error;
         const aborted = error instanceof Error && error.name === "AbortError";
@@ -349,6 +431,66 @@ class AnthropicProvider implements AiProviderClient {
         clearTimeout(timer);
       }
     }
+  }
+
+  /** Assembles the completion result, computing cache-aware cost + the outcome. */
+  private buildResult(
+    parsed: ReturnType<typeof parseAnthropicResponse>,
+    applied: AppliedCache,
+    cfg: AiCacheConfig,
+    skipReason: CacheSkipReason | undefined,
+    fallbackReason: string | null,
+  ): AiCompletionResult {
+    const uncachedInputTokens = parsed.usage.tokensIn;
+    const { cacheCreationTokens, cacheReadTokens, tokensOut } = parsed.usage;
+
+    let estimatedCostUsd = parsed.usage.estimatedCostUsd;
+    let costWithoutCacheUsd = estimatedCostUsd;
+    let savingsUsd = 0;
+    if (applied) {
+      const breakdown = computeCacheCost(parsed.model, applied.ttl, {
+        uncachedInputTokens,
+        cacheCreationTokens,
+        cacheReadTokens,
+        tokensOut,
+      });
+      estimatedCostUsd = breakdown.actualCostUsd;
+      costWithoutCacheUsd = breakdown.costWithoutCacheUsd;
+      savingsUsd = breakdown.savingsUsd;
+    }
+
+    const hit = hitFromUsage(cacheReadTokens);
+    const created = createdFromUsage(cacheCreationTokens);
+    // If caching was applied but the response shows no activity, the prefix was
+    // below the model's minimum — not an error, just "no cache activity".
+    const resolvedSkip: CacheSkipReason | undefined = applied && !hit && !created ? "no_cache_usage_returned" : skipReason;
+
+    const cache: AiCacheOutcome = {
+      enabled: cfg.enabled && cfg.strategy !== "disabled",
+      applied: Boolean(applied),
+      strategy: cfg.strategy,
+      ttl: cfg.ttl,
+      skipReason: resolvedSkip,
+      fallbackReason,
+      cacheCreationTokens,
+      cacheReadTokens,
+      uncachedInputTokens,
+      hit,
+      created,
+      actualCostUsd: estimatedCostUsd,
+      costWithoutCacheUsd,
+      savingsUsd,
+    };
+
+    return {
+      provider: this.provider,
+      model: parsed.model,
+      text: parsed.text,
+      structured: parsed.structured,
+      toolCalls: parsed.toolCalls,
+      usage: { tokensIn: uncachedInputTokens, tokensOut, estimatedCostUsd, cacheCreationTokens, cacheReadTokens },
+      cache,
+    };
   }
 }
 
