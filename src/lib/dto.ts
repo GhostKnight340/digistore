@@ -559,6 +559,46 @@ export interface AdminOverviewMetricsDTO {
   queue: { id: string; ref: string; label: string; waitMin: number }[];
 }
 
+// ─── CEO Briefing (Ghost Mission Control) ────────────────────────────────────
+
+/**
+ * The single situation the briefing card renders. Exactly one is active at a
+ * time (never a stacked list). `iconKey` maps to the icon/accent color in the
+ * presentational component:
+ *   ok → check-circle (green) · critical → alert-triangle (red) ·
+ *   launch → rocket (blue) · opportunity → trending-up (violet) ·
+ *   quiet → sparkles (light blue).
+ *
+ * `launch` and `opportunity` need backend signals that do not exist yet (a
+ * launch checklist model and a nightly opportunity-detection job); the resolver
+ * never emits them today, but the component supports them for when they land.
+ */
+export type CeoBriefingState = "ok" | "critical" | "launch" | "opportunity" | "quiet";
+
+/** One deep-link CTA. The design renders at most two (spec allows three). */
+export interface CeoBriefingActionDTO {
+  label: string;
+  href: string;
+  primary: boolean;
+}
+
+/** One-glance daily briefing: the single most important thing + what to do. */
+export interface CeoBriefingDTO {
+  state: CeoBriefingState;
+  title: string;
+  /** Natural-language synthesis ("Le plus important aujourd'hui est…"). */
+  message: string;
+  /** Sub-facts joined with " · " — never a bulleted list. */
+  bulletLine: string;
+  /** Estimated time to resolve, e.g. "10 min"; null when not applicable. */
+  estimate: string | null;
+  /** Affected-orders count as a string; null when not applicable. */
+  affected: string | null;
+  /** Small tinted pill: "Priorité faible/moyenne/urgente" or "Opportunité". */
+  priorityLabel: string;
+  actions: CeoBriefingActionDTO[];
+}
+
 /** A single delivery assignment entry: either an inventory code or a manual one. */
 export interface AssignmentEntry {
   digitalCodeId?: string;

@@ -166,10 +166,13 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
   const { settings } = useStoreSettings();
   const inventoryOn = isInventoryEnabled(settings);
 
-  // Honor deep links like /admin?tab=orders (used by standalone routes such as
-  // the order-detail page navigating back through the sidebar).
+  // The URL is the source of truth for the active tab: honor deep links like
+  // /admin?tab=orders (standalone routes, the CEO-briefing CTAs) and,
+  // crucially, keep browser back/forward correct — navigating back to /admin
+  // with no ?tab must fall back to the overview, not leave the last panel shown.
+  // setActiveTab with an unchanged value is a no-op, so this stays cheap.
   useEffect(() => {
-    if (tabParam && tabParam !== activeTab) setActiveTab(tabParam);
+    setActiveTab(tabParam ?? "overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabParam]);
 

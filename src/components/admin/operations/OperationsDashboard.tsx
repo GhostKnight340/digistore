@@ -15,6 +15,8 @@ import type {
   OpsActivityItemDTO,
   OpsHealthStatus,
 } from "@/lib/dto";
+import CeoBriefing from "@/components/admin/CeoBriefing";
+import { briefingFromSnapshot } from "@/lib/ops/ceoBriefing";
 import { relativeTime } from "./shared";
 
 /** Auto-refresh cadence — cheap snapshot (cached supplier state, no provider calls). */
@@ -172,6 +174,11 @@ export default function OperationsDashboard({ initial }: { initial: OperationsSn
           </button>
         </div>
       </header>
+
+      {/* CEO Briefing — one-glance daily situation, directly below the greeting.
+          Computed from the live snapshot the dashboard already polls (no extra
+          round-trip); updates in place every POLL_MS. */}
+      <CeoBriefing briefing={briefingFromSnapshot(snapshot)} />
 
       {actionMsg && (
         <p className={`rounded-lg px-3 py-2 text-sm ${actionMsg.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
