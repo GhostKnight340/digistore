@@ -66,6 +66,12 @@ export const TOOL_NAMES = [
   "getProductPerformance",
   "getMarginSummary",
   "getRecentOperationalEvents",
+  // Instagram (Composio) read-only tools — social/marketing department only.
+  // Publishing and comment replies are deliberately NOT tools: they are
+  // human-confirmed in Admin > Intégrations > Instagram, never agent-driven.
+  "getInstagramProfile",
+  "getInstagramRecentMedia",
+  "getInstagramComments",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -262,6 +268,12 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
       "getSalesSummary",
       "getProductPerformance",
       "getTopSellingProducts",
+      // Instagram read-only context for drafting social content. The agent
+      // drafts replies/posts in its response; it cannot publish — publishing is
+      // human-only in the admin panel.
+      "getInstagramProfile",
+      "getInstagramRecentMedia",
+      "getInstagramComments",
     ],
   },
 };

@@ -80,6 +80,12 @@ export interface RangeLimitInput {
   range: DateRangeInput;
   limit: number;
 }
+export interface InstagramLimitInput {
+  limit: number;
+}
+export interface InstagramMediaInput {
+  mediaId: string;
+}
 
 // ─── Validators, keyed by tool name ──────────────────────────────────────────
 
@@ -186,6 +192,18 @@ function noInput(input: unknown): ValidationResult<Record<string, never>> {
   return ok(asObject(input) && {});
 }
 
+/** Instagram recent-media limit (bounded small — a Composio read per call). */
+function instagramLimit(input: unknown): ValidationResult<InstagramLimitInput> {
+  return ok({ limit: clampedInt(asObject(input).limit, 1, 24, 12) });
+}
+
+/** Instagram comments require a valid media id. */
+function instagramMedia(input: unknown): ValidationResult<InstagramMediaInput> {
+  const v = asObject(input).mediaId;
+  if (!validId(v)) return err("mediaId is required and must be a valid Instagram media id.");
+  return ok({ mediaId: v });
+}
+
 /** The validator table. Every ToolName MUST have an entry. */
 export const TOOL_VALIDATORS: Record<ToolName, (input: unknown) => ValidationResult<unknown>> = {
   getSalesSummary: rangeInput,
@@ -204,6 +222,9 @@ export const TOOL_VALIDATORS: Record<ToolName, (input: unknown) => ValidationRes
   getProductPerformance: rangeLimit,
   getMarginSummary: rangeInput,
   getRecentOperationalEvents: limit,
+  getInstagramProfile: noInput,
+  getInstagramRecentMedia: instagramLimit,
+  getInstagramComments: instagramMedia,
 };
 
 /** Validate `input` for `tool`. Unknown tool → error (fail closed). */

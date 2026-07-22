@@ -56,6 +56,8 @@ export const ADMIN_STANDALONE_ROUTES: Record<string, string> = {
   "ai-operations": "/admin/ai-operations",
   // Refunds is the standalone support/resolution queue.
   refunds: "/admin/refunds",
+  // Integrations hub — external connections (Instagram via Composio, …).
+  integrations: "/admin/integrations/instagram",
 };
 
 export type AdminIdentity = { name: string; roleLabel: string; initials: string };
@@ -341,6 +343,22 @@ const NAV: NavGroup[] = [
             <path d="M12 2a2 2 0 0 1 2 2v1a7 7 0 0 1 4 6v3l1.5 3H4.5L6 14v-3a7 7 0 0 1 4-6V4a2 2 0 0 1 2-2z" />
             <circle cx="9" cy="11" r="1" />
             <circle cx="15" cy="11" r="1" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    heading: "Intégrations",
+    items: [
+      {
+        id: "integrations",
+        label: "Instagram",
+        icon: icon(
+          <>
+            <rect x="3" y="3" width="18" height="18" rx="5" />
+            <circle cx="12" cy="12" r="4" />
+            <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
           </>,
         ),
       },

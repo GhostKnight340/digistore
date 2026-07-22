@@ -2898,3 +2898,66 @@ model RefundActionToken {
   @@index([refundRequestId, purpose])
   @@index([expiresAt])
 }
+
+// Links a Ghost.ma social channel to a Composio "connected account". One row per
+// provider (Instagram is the only provider today; `provider` is unique). NO OAuth
+// access tokens are ever stored here — Composio holds and refreshes the tokens;
+// Ghost.ma keeps only the Composio connected-account id (sensitive operational
+// data, never exposed publicly) plus safe profile/status metadata for the admin
+// panel. Allowed `status` values: see SOCIAL_INTEGRATION_STATUSES in
+// src/lib/composio/instagram/status.ts.
+model SocialIntegration {
+  id String @id @default(cuid())
+  // provider: "INSTAGRAM"
+  provider String @unique
+  // status: "CONNECTED" | "DISCONNECTED" | "EXPIRED" | "ERROR" | "REAUTH_REQUIRED"
+  status String @default("DISCONNECTED")
+  // Composio identifiers — operational secrets, never sent to the browser.
+  composioUserId     String?
+  connectedAccountId String?
+  authConfigId       String?
+  // Safe profile metadata surfaced in the admin panel.
+  accountId         String?
+  username          String?
+  profileName       String?
+  profilePictureUrl String?
+  accountType       String?
+  facebookPageId    String?
+  facebookPageName  String?
+  // Resolved capability keys (see INSTAGRAM_CAPABILITIES).
+  capabilities String[] @default([])
+  // Sanitized last error (no secrets, no request arguments).
+  lastErrorCode    String?
+  lastErrorMessage String?
+  connectedAt    DateTime?
+  lastVerifiedAt DateTime?
+  lastSyncAt     DateTime?
+  disconnectedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  @@index([provider])
+}
+
+// Append-only record of *write* actions performed on Instagram (comment replies
+// and media publishes). Powers duplicate-submission guards — `idempotencyKey` is
+// unique, so a repeated click / retry with the same key can't post twice — and a
+// small "what we published" history. Holds only safe object ids, never secrets.
+model InstagramActionRecord {
+  id String @id @default(cuid())
+  // kind: "COMMENT_REPLY" | "PUBLISH_MEDIA"
+  kind           String
+  idempotencyKey String @unique
+  adminId        String
+  adminName      String
+  // status: "PENDING" | "SUCCESS" | "FAILED"
+  status       String
+  targetId     String?
+  resultId     String?
+  caption      String?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([kind, createdAt])
+}

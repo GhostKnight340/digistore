@@ -82,6 +82,32 @@ const TOOL_DEFINITIONS: Partial<Record<ToolName, AiToolDefinition>> = {
       additionalProperties: false,
     },
   },
+  getInstagramProfile: {
+    name: "getInstagramProfile",
+    description:
+      "The connected Instagram business profile (username, name, account type). Read-only; no publishing.",
+    parameters: NO_PARAMS,
+  },
+  getInstagramRecentMedia: {
+    name: "getInstagramRecentMedia",
+    description: "Recent Instagram posts (caption, type, date, comment/like counts). Read-only.",
+    parameters: {
+      type: "object",
+      properties: { limit: { type: "integer", description: "How many posts (1–24).", minimum: 1, maximum: 24 } },
+      additionalProperties: false,
+    },
+  },
+  getInstagramComments: {
+    name: "getInstagramComments",
+    description:
+      "Comments on one Instagram post (by mediaId). Read-only — replies are published only by a human in the admin panel.",
+    parameters: {
+      type: "object",
+      properties: { mediaId: { type: "string", description: "The Instagram media id to read comments for." } },
+      required: ["mediaId"],
+      additionalProperties: false,
+    },
+  },
 };
 
 /**

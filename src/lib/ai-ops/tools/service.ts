@@ -38,6 +38,8 @@ import { isModuleKey, isToolName, type ModuleKey, type ToolName } from "../types
 import { resolveDateRange, type DateRangeInput } from "../dateRange";
 import type {
   CustomerIdInput,
+  InstagramLimitInput,
+  InstagramMediaInput,
   LimitInput,
   OrderIdInput,
   PeriodLimitInput,
@@ -46,6 +48,11 @@ import type {
   SupplierInput,
   SupportRefInput,
 } from "./schemas";
+import {
+  getProfile as igGetProfile,
+  getRecentMedia as igGetRecentMedia,
+  getComments as igGetComments,
+} from "@/lib/composio/instagram/service";
 
 /** Thrown by a tool when its (already shape-valid) input can't be resolved. */
 class ToolInputError extends Error {}
@@ -195,6 +202,12 @@ async function runTool(tool: ToolName, input: unknown, timeZone: string): Promis
       return getMarginSummary(input as RangeInput, timeZone);
     case "getRecentOperationalEvents":
       return getRecentOperationalEvents(input as LimitInput);
+    case "getInstagramProfile":
+      return getInstagramProfile();
+    case "getInstagramRecentMedia":
+      return getInstagramRecentMedia(input as InstagramLimitInput);
+    case "getInstagramComments":
+      return getInstagramComments(input as InstagramMediaInput);
     default:
       throw new Error("unreachable");
   }
@@ -682,6 +695,55 @@ async function getRecentOperationalEvents({ limit }: LimitInput) {
     }),
   ]);
   return { supplierLogs, jobRuns };
+}
+
+// ─── Instagram (Composio) read-only tools ────────────────────────────────────
+// These wrap the Instagram service (which resolves the connected account from
+// the DB, never from the model) and return only safe, aggregate-friendly data.
+// There is intentionally NO publish/reply tool: those are human-confirmed in the
+// admin panel, never agent-driven.
+
+async function getInstagramProfile() {
+  const profile = await igGetProfile();
+  if (!profile) return { connected: false };
+  return {
+    connected: true,
+    username: profile.username,
+    profileName: profile.profileName,
+    accountType: profile.accountType,
+    facebookPage: profile.facebookPageName,
+  };
+}
+
+async function getInstagramRecentMedia({ limit }: InstagramLimitInput) {
+  const media = await igGetRecentMedia(limit);
+  return {
+    count: media.length,
+    media: media.map((m) => ({
+      id: m.id,
+      caption: m.caption,
+      mediaType: m.mediaType,
+      timestamp: m.timestamp,
+      commentsCount: m.commentsCount,
+      likeCount: m.likeCount,
+      permalink: m.permalink,
+    })),
+  };
+}
+
+async function getInstagramComments({ mediaId }: InstagramMediaInput) {
+  const comments = await igGetComments(mediaId);
+  return {
+    mediaId,
+    count: comments.length,
+    comments: comments.map((c) => ({
+      id: c.id,
+      username: c.username,
+      text: c.text,
+      timestamp: c.timestamp,
+      replied: c.replied,
+    })),
+  };
 }
 
 /** Exposed for the permission/list UI: the tools a given module MAY call. */

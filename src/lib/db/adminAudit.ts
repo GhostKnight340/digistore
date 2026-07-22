@@ -38,7 +38,15 @@ export type AuditAction =
   | "email.test_sent"
   | "email.sent"
   | "email.credit_granted"
-  | "email.retried";
+  | "email.retried"
+  | "instagram.connected"
+  | "instagram.verified"
+  | "instagram.reauthorized"
+  | "instagram.synced"
+  | "instagram.unlinked"
+  | "instagram.comment_replied"
+  | "instagram.post_published"
+  | "instagram.action_failed";
 
 export interface WriteAuditInput {
   adminId: string;
