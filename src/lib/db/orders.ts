@@ -20,6 +20,8 @@ import { sendTransactionalEmail } from "@/lib/email/send-email";
 import { getCurrentCustomer } from "@/lib/auth";
 import { notifyOrderCreated } from "@/lib/discord/notify";
 import { buildDeliveryItems, buildDeliveryMessage } from "@/lib/discord/deliveryMessage";
+import { buildWhatsappOrderMessage, toWhatsappNumber } from "@/lib/whatsapp/orderMessage";
+import { absoluteUrl } from "@/lib/siteUrl";
 import {
   absoluteAppUrl,
   formatPublicOrderNumber,
@@ -702,6 +704,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
         discordDeliverySentAt: true,
         customer: {
           select: {
+            phone: true,
             discordId: true,
             discordDmActivated: true,
             discordDmUsername: true,
@@ -748,10 +751,29 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
     codes.length > 0
       ? buildDeliveryMessage(reference.number, buildDeliveryItems(codes))
       : null;
+  const base = buildCustomerDTO(order, reference, { includeUndeliveredCodes: true });
+  // WhatsApp manual delivery: pre-compose a message linking to the order page.
+  // A future automatic sender reuses buildWhatsappOrderMessage() unchanged.
+  const orderUrl = absoluteUrl(`/payment/${base.publicOrderPathSegment}`);
+  const whatsappMessage = buildWhatsappOrderMessage({
+    orderNumber: reference.number,
+    customerName: base.customerName,
+    orderUrl,
+  });
+  const whatsappPhone = dCustomer?.phone ?? null;
+  const whatsappNumber = toWhatsappNumber(whatsappPhone ?? "");
   return {
-    ...buildCustomerDTO(order, reference, { includeUndeliveredCodes: true }),
+    ...base,
     emailLogs: emailLogs.map(buildEmailLogDTO),
     proofMimeType: order.paymentProof?.mimeType ?? null,
+    whatsapp: {
+      phone: whatsappPhone,
+      waMeUrl: whatsappNumber
+        ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
+        : null,
+      message: whatsappMessage,
+      orderUrl,
+    },
     discord: {
       connection,
       deliveryRequested: discordRow?.discordDeliveryRequested ?? false,

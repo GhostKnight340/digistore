@@ -1,7 +1,7 @@
 import { requireAdminCustomer } from "@/lib/auth";
 import { toAdminIdentity } from "@/lib/adminIdentity";
 import AdminShellRoute from "@/components/admin/AdminShellRoute";
-import { getStatus, getRecentMedia } from "@/lib/composio/instagram/service";
+import { getStatusSafe, getRecentMedia } from "@/lib/composio/instagram/service";
 import type { InstagramMediaDTO } from "@/lib/composio/instagram/types";
 import InstagramIntegrationView from "@/components/admin/integrations/InstagramIntegrationView";
 
@@ -31,7 +31,7 @@ export default async function InstagramIntegrationPage({
   const customer = await requireAdminCustomer();
   const params = await searchParams;
 
-  const status = await getStatus();
+  const status = await getStatusSafe();
 
   // Recent media is a live Composio read — never let it break the page.
   let media: InstagramMediaDTO[] = [];

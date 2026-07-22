@@ -109,7 +109,7 @@ export default async function RootLayout({
         {showStagingBanner ? (
           <div
             role="status"
-            className="sticky top-0 z-[100] bg-amber-500 px-3 py-1 text-center text-[12px] font-semibold uppercase tracking-wide text-black"
+            className="sticky top-0 z-[100] flex h-[26px] items-center justify-center bg-amber-500 px-3 text-center text-[12px] font-semibold uppercase tracking-wide text-black"
           >
             {runtimeEnvLabel().toUpperCase()} — données et paiements de test
           </div>
@@ -160,7 +160,18 @@ export default async function RootLayout({
                   </section>
                 </main>
               ) : (
-                <div className="flex min-h-screen flex-col">
+                <div
+                  className="flex min-h-screen flex-col"
+                  // The staging banner is a 26px sticky bar above this wrapper;
+                  // expose its height so the fixed-height admin shell can shrink
+                  // to fit (calc below) instead of overflowing the viewport.
+                  // Absent (prod / no banner) → the shell falls back to 0px.
+                  style={
+                    showStagingBanner
+                      ? ({ "--admin-shell-offset": "26px" } as React.CSSProperties)
+                      : undefined
+                  }
+                >
                   {/* Navbar/Footer/SupportPill self-hide on /admin client-side
                       (usePathname), so they stay correct across soft navigations
                       rather than depending on the root layout's frozen

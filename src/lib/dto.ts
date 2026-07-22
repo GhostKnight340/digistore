@@ -136,11 +136,28 @@ export interface AdminOrderDiscordDTO {
   readyMessage: string | null;
 }
 
+/** WhatsApp manual-delivery helpers for the admin order view. */
+export interface AdminOrderWhatsappDTO {
+  /** Customer phone on file (raw), or null — the wa.me recipient. */
+  phone: string | null;
+  /**
+   * wa.me deep link opening WhatsApp to the customer with `message` pre-filled,
+   * or null when no phone is on file. Manual send today; a future automatic
+   * sender reuses the same pre-composed `message`.
+   */
+  waMeUrl: string | null;
+  /** Pre-composed message the admin copies / sends. Always present. */
+  message: string;
+  /** Absolute link to the customer's order page (embedded in the message). */
+  orderUrl: string;
+}
+
 /** Admin order view — adds simulated email logs. */
 export interface AdminOrderDTO extends CustomerOrderDTO {
   emailLogs: EmailLogDTO[];
   proofMimeType: string | null;
   discord: AdminOrderDiscordDTO;
+  whatsapp: AdminOrderWhatsappDTO;
 }
 
 export interface AdminPaymentProofDTO {

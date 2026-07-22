@@ -256,6 +256,44 @@ export async function getStatus(): Promise<InstagramStatusDTO> {
 }
 
 /**
+ * Page-safe variant of getStatus(): a failure to read the integration row (e.g.
+ * the table missing on a mis-migrated environment, or a transient DB error) must
+ * NOT error-boundary the whole admin section. Returns a degraded ERROR status so
+ * the panel renders an "unavailable" state, and logs the cause server-side.
+ */
+export async function getStatusSafe(): Promise<InstagramStatusDTO> {
+  try {
+    return await getStatus();
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[instagram] getStatus failed", normalizeComposioError(error).logHint);
+    return {
+      configured: isComposioConfigured(),
+      connected: false,
+      status: "ERROR",
+      statusLabel: statusLabel("ERROR"),
+      username: null,
+      profileName: null,
+      profilePictureUrl: null,
+      accountId: null,
+      accountType: null,
+      facebookPageId: null,
+      facebookPageName: null,
+      profileUrl: null,
+      capabilities: INSTAGRAM_CAPABILITIES.map((key) => ({
+        key,
+        ...capabilityLabel(key),
+        available: false,
+      })),
+      connectedAt: null,
+      lastVerifiedAt: null,
+      lastSyncAt: null,
+      lastError: { message: "Statut indisponible pour le moment." },
+    };
+  }
+}
+
+/**
  * Flow A — discover Instagram accounts already connected inside Composio and
  * return SAFE metadata + a signed ref (never the raw connected-account id).
  */

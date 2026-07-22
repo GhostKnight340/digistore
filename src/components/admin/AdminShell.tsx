@@ -450,11 +450,13 @@ function NavRow({
   item,
   active,
   count,
+  collapsed,
   onClick,
 }: {
   item: NavItem;
   active: boolean;
   count?: number;
+  collapsed?: boolean;
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -468,12 +470,16 @@ function NavRow({
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      // Native tooltip stands in for the hidden label when railed.
+      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
       style={{
         display: "flex",
         alignItems: "center",
+        justifyContent: collapsed ? "center" : "flex-start",
         gap: "11px",
         height: "36px",
-        padding: "0 12px",
+        padding: collapsed ? "0" : "0 12px",
         width: "100%",
         borderRadius: "9px",
         fontSize: "13.5px",
@@ -487,11 +493,30 @@ function NavRow({
         transition: "background 120ms ease, color 120ms ease",
       }}
     >
-      <span style={{ flexShrink: 0, display: "flex" }}>{item.icon}</span>
-      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {item.label}
+      <span style={{ flexShrink: 0, display: "flex", position: "relative" }}>
+        {item.icon}
+        {/* Railed: the numeric badge can't fit, so show a corner dot instead. */}
+        {collapsed && showBadge ? (
+          <span
+            style={{
+              position: "absolute",
+              top: "-3px",
+              right: "-4px",
+              width: "7px",
+              height: "7px",
+              borderRadius: "50%",
+              background: badgeColor,
+              boxShadow: `0 0 0 2px ${C.sidebar}`,
+            }}
+          />
+        ) : null}
       </span>
-      {showBadge ? (
+      {!collapsed ? (
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {item.label}
+        </span>
+      ) : null}
+      {!collapsed && showBadge ? (
         <span
           style={{
             marginLeft: "auto",
@@ -526,6 +551,26 @@ export default function AdminShell({
   const [searchFocus, setSearchFocus] = useState(false);
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Desktop-only "icon rail" collapse. Mobile keeps the off-canvas drawer.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem("admin:sidebar-collapsed") === "1");
+    } catch {
+      /* private mode / no storage — default expanded. */
+    }
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem("admin:sidebar-collapsed", next ? "1" : "0");
+      } catch {
+        /* ignore persistence failure */
+      }
+      return next;
+    });
+  const railed = collapsed && !isMobile;
   const { settings } = useStoreSettings();
 
   // Inventory OFF → hide the Stock section entirely (the inventory system
@@ -552,7 +597,7 @@ export default function AdminShell({
     nav.flatMap((group) => group.items).find((item) => item.id === active)?.label ?? "ghost.ma";
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#070809", color: C.text }}>
+    <div style={{ display: "flex", height: "calc(100vh - var(--admin-shell-offset, 0px))", background: "#070809", color: C.text }}>
       {/* ===== Mobile drawer backdrop ===== */}
       {isMobile && drawerOpen ? (
         <div
@@ -565,7 +610,8 @@ export default function AdminShell({
       {/* ===== Sidebar ===== */}
       <aside
         style={{
-          width: isMobile ? "min(82vw, 300px)" : "248px",
+          width: isMobile ? "min(82vw, 300px)" : railed ? "72px" : "248px",
+          transition: "width 200ms ease",
           flexShrink: 0,
           background: C.sidebar,
           borderRight: `1px solid ${C.border}`,
@@ -591,8 +637,9 @@ export default function AdminShell({
             height: "60px",
             display: "flex",
             alignItems: "center",
+            justifyContent: railed ? "center" : "flex-start",
             gap: "11px",
-            padding: "0 20px",
+            padding: railed ? "0" : "0 20px",
             borderBottom: `1px solid ${C.borderHairline}`,
             flexShrink: 0,
           }}
@@ -606,10 +653,12 @@ export default function AdminShell({
             height={28}
             style={{ width: "28px", height: "28px", flexShrink: 0 }}
           />
-          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-            <span style={{ fontSize: "15px", fontWeight: 600, letterSpacing: "-0.01em" }}>ghost.ma</span>
-            <span style={{ fontSize: "11px", color: C.faint, fontFamily: "var(--font-mono)" }}>admin</span>
-          </div>
+          {!railed ? (
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+              <span style={{ fontSize: "15px", fontWeight: 600, letterSpacing: "-0.01em" }}>ghost.ma</span>
+              <span style={{ fontSize: "11px", color: C.faint, fontFamily: "var(--font-mono)" }}>admin</span>
+            </div>
+          ) : null}
           {isMobile ? (
             <button
               type="button"
@@ -652,7 +701,7 @@ export default function AdminShell({
               {group.divider ? (
                 <div style={{ height: "1px", background: C.borderHairline, margin: "14px 8px" }} />
               ) : null}
-              {group.heading ? (
+              {group.heading && !railed ? (
                 <div
                   style={{
                     fontSize: "10.5px",
@@ -672,6 +721,7 @@ export default function AdminShell({
                   item={item}
                   active={active === item.id}
                   count={item.badge ? counts?.[item.badge] : undefined}
+                  collapsed={railed}
                   onClick={() => handleNavigate(item.id)}
                 />
               ))}
@@ -679,22 +729,65 @@ export default function AdminShell({
           ))}
         </nav>
 
-        <div style={{ padding: "12px", borderTop: `1px solid ${C.borderHairline}`, flexShrink: 0 }}>
+        <div style={{ padding: "12px", borderTop: `1px solid ${C.borderHairline}`, flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+          {/* Desktop-only collapse toggle. Mobile uses the drawer close button. */}
+          {!isMobile ? (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title={railed ? "Développer le menu" : "Réduire le menu"}
+              aria-label={railed ? "Développer le menu" : "Réduire le menu"}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: railed ? "center" : "flex-start",
+                gap: "11px",
+                height: "34px",
+                padding: railed ? "0" : "0 12px",
+                width: "100%",
+                borderRadius: "9px",
+                border: "none",
+                cursor: "pointer",
+                background: "transparent",
+                color: C.muted,
+                fontSize: "13px",
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ flexShrink: 0, transform: railed ? "rotate(180deg)" : "none", transition: "transform 200ms ease" }}
+              >
+                <polyline points="11 17 6 12 11 7" />
+                <polyline points="18 17 13 12 18 7" />
+              </svg>
+              {!railed ? <span>Réduire le menu</span> : null}
+            </button>
+          ) : null}
           <div
             style={{
               display: "flex",
               alignItems: "center",
+              justifyContent: railed ? "center" : "flex-start",
               gap: "10px",
               padding: "8px",
               borderRadius: "10px",
               background: C.surfaceInput,
               border: `1px solid ${C.borderHairline}`,
             }}
+            title={railed ? `${admin.name} · ${admin.roleLabel}` : undefined}
           >
             <div
               style={{
                 width: "30px",
                 height: "30px",
+                flexShrink: 0,
                 borderRadius: "8px",
                 background: "linear-gradient(145deg,#2c3445,#171b26)",
                 display: "flex",
@@ -707,23 +800,27 @@ export default function AdminShell({
             >
               {admin.initials}
             </div>
-            <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-              <div
-                style={{
-                  fontSize: "12.5px",
-                  fontWeight: 500,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {admin.name}
-              </div>
-              <div style={{ fontSize: "11px", color: C.faint }}>{admin.roleLabel}</div>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2">
-              <polyline points="18 15 12 9 6 15" />
-            </svg>
+            {!railed ? (
+              <>
+                <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
+                  <div
+                    style={{
+                      fontSize: "12.5px",
+                      fontWeight: 500,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {admin.name}
+                  </div>
+                  <div style={{ fontSize: "11px", color: C.faint }}>{admin.roleLabel}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </>
+            ) : null}
           </div>
         </div>
       </aside>
