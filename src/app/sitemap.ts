@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getCategorySeoIndex, getParentProductSlugs } from "@/lib/db/catalog";
+import { getCategorySeoIndex, getParentProductSlugs, getStoreSettings } from "@/lib/db/catalog";
 import { getActiveCollectionSlugs } from "@/lib/db/collections";
 import { getPublishedGuideSlugs } from "@/lib/db/guides";
 import { categoryPathFromSlug } from "@/lib/categoryUrl";
@@ -14,18 +14,27 @@ export const dynamic = "force-dynamic";
 const STATIC_PATHS = ["/", "/products", "/collections", "/guides", "/support", "/about", "/conditions", "/privacy", "/terms", "/refunds"];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [categories, productSlugs, collectionSlugs, guides] = await Promise.all([
+  const [categories, productSlugs, collectionSlugs, guides, settings] = await Promise.all([
     getCategorySeoIndex().catch(() => []),
     getParentProductSlugs().catch(() => [] as string[]),
     // Only active, in-window, non-empty collections (see getActiveCollectionSlugs).
     getActiveCollectionSlugs().catch(() => [] as string[]),
     // Only published, non-scheduled, non-archived guides.
     getPublishedGuideSlugs().catch(() => [] as { slug: string; updatedAt: Date }[]),
+    getStoreSettings().catch(() => null),
   ]);
 
   const now = new Date();
 
-  const staticEntries: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
+  // Drop legal pages an admin has hidden (those routes 404). On a settings-read
+  // failure, keep them — never silently shrink the sitemap on a transient error.
+  const legalPathKey: Record<string, string> = { "/terms": "terms", "/privacy": "privacy", "/refunds": "refunds", "/legal": "legal" };
+  const visiblePaths = STATIC_PATHS.filter((path) => {
+    const key = legalPathKey[path];
+    return !key || !settings || settings.legalPages[key]?.published !== false;
+  });
+
+  const staticEntries: MetadataRoute.Sitemap = visiblePaths.map((path) => ({
     url: absoluteUrl(path),
     lastModified: now,
     changeFrequency: path === "/" || path === "/products" ? "daily" : "monthly",

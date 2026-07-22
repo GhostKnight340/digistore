@@ -43,11 +43,14 @@ export default function LegalPagesPanel() {
             key={key}
             type="button"
             onClick={() => setActive(key)}
-            className={`block w-full border-b border-border px-4 py-3 text-left text-sm ${
+            className={`flex w-full items-center justify-between gap-2 border-b border-border px-4 py-3 text-left text-sm ${
               active === key ? "bg-accent/10 text-white" : "text-muted hover:bg-surface hover:text-white"
             }`}
           >
-            {labels[key] ?? key}
+            <span className={draft[key]?.published === false ? "opacity-60" : ""}>{labels[key] ?? key}</span>
+            {draft[key]?.published === false ? (
+              <span className="shrink-0 rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-faint">masquée</span>
+            ) : null}
           </button>
         ))}
       </aside>
@@ -58,9 +61,25 @@ export default function LegalPagesPanel() {
             <h2 className="text-xl font-bold text-white">Pages légales</h2>
             <p className="text-xs text-muted">Utilisez des placeholders pour les champs d'identité entreprise.</p>
           </div>
-          <button type="button" onClick={save} className="btn-primary h-10 px-4 text-xs">
-            Enregistrer
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => update(active, "published", !(page.published !== false))}
+              aria-pressed={page.published !== false}
+              title={page.published !== false ? "Cette page est publique — cliquez pour la masquer" : "Cette page est masquée — cliquez pour la publier"}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                page.published !== false
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-border bg-surface text-muted hover:text-white"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${page.published !== false ? "bg-emerald-400" : "bg-faint"}`} />
+              {page.published !== false ? "Page visible" : "Page masquée"}
+            </button>
+            <button type="button" onClick={save} className="btn-primary h-10 px-4 text-xs">
+              Enregistrer
+            </button>
+          </div>
           {message ? <p className="w-full text-xs text-muted">{message}</p> : null}
         </div>
 
