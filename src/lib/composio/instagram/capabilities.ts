@@ -80,12 +80,15 @@ const MATCHERS: Record<InstagramCapability, CapabilityMatcher> = {
   },
   mediaDetails: {
     anyOf: [
+      // INSTAGRAM_GET_IG_MEDIA — a single published media object by id. Excludes
+      // the list (…IG_USER_MEDIA → "user"), carousel children, comments, insights.
+      ["get", "ig", "media"],
       ["get", "media", "detail"],
       ["get", "media", "by"],
       ["media", "info"],
       ["get", "single", "media"],
     ],
-    none: ["comment", "insight", "list"],
+    none: ["comment", "insight", "list", "user", "children"],
   },
   comments: {
     anyOf: [

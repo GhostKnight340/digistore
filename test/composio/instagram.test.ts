@@ -19,19 +19,28 @@ test("Composio account statuses fail closed into Ghost integration statuses", ()
   assert.equal(mapComposioStatus("SOMETHING_NEW"), "ERROR");
 });
 
-test("capability discovery prefers reads and does not confuse comment writes", () => {
+test("capability discovery maps the REAL toolkit slugs and doesn't confuse variants", () => {
+  // Real INSTAGRAM_* slugs (from the Composio toolkit). Key traps:
+  //  - profile must be GET_USER_INFO, NOT GET_MESSENGER_PROFILE (a DM tool that
+  //    also contains "get"+"profile" and requires ig_user_id).
+  //  - mediaDetails (single media) must be GET_IG_MEDIA, NOT the GET_IG_USER_MEDIA
+  //    list nor the comments/insights/children variants.
   const resolved = resolveCapabilitySlugs([
-    "INSTAGRAM_GET_USER_PROFILE",
-    "INSTAGRAM_GET_USER_MEDIA",
-    "INSTAGRAM_GET_MEDIA_COMMENTS",
-    "INSTAGRAM_CREATE_COMMENT_REPLY",
-    "INSTAGRAM_CREATE_MEDIA",
+    "INSTAGRAM_GET_USER_INFO",
+    "INSTAGRAM_GET_MESSENGER_PROFILE",
+    "INSTAGRAM_GET_IG_USER_MEDIA",
+    "INSTAGRAM_GET_IG_MEDIA",
+    "INSTAGRAM_GET_IG_MEDIA_CHILDREN",
+    "INSTAGRAM_GET_IG_MEDIA_COMMENTS",
+    "INSTAGRAM_REPLY_TO_COMMENT",
+    "INSTAGRAM_DELETE_COMMENT",
   ]);
-  assert.equal(resolved.profile, "INSTAGRAM_GET_USER_PROFILE");
-  assert.equal(resolved.media, "INSTAGRAM_GET_USER_MEDIA");
-  assert.equal(resolved.comments, "INSTAGRAM_GET_MEDIA_COMMENTS");
-  assert.equal(resolved.commentReply, "INSTAGRAM_CREATE_COMMENT_REPLY");
-  assert.equal(resolved.publish, "INSTAGRAM_CREATE_MEDIA");
+  assert.equal(resolved.profile, "INSTAGRAM_GET_USER_INFO");
+  assert.equal(resolved.media, "INSTAGRAM_GET_IG_USER_MEDIA");
+  assert.equal(resolved.mediaDetails, "INSTAGRAM_GET_IG_MEDIA");
+  assert.equal(resolved.comments, "INSTAGRAM_GET_IG_MEDIA_COMMENTS");
+  assert.equal(resolved.commentReply, "INSTAGRAM_REPLY_TO_COMMENT");
+  assert.equal(resolved.commentModerate, "INSTAGRAM_DELETE_COMMENT");
 });
 
 test("public-write validation rejects unsafe or oversized payloads", () => {
