@@ -37,9 +37,15 @@ export default function EmailHistoryView({
 }) {
   return (
     <div className="min-w-0">
+      <div className="mb-1">
+        <Link href="/admin/emails/compose" className="text-sm text-muted hover:text-text">← Composeur</Link>
+      </div>
       <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-white">Historique des e-mails</h1>
-        <Link href="/admin/emails/compose" className="btn-primary text-sm">Nouvel e-mail</Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/emails/drafts" className="btn-ghost text-sm">Brouillons</Link>
+          <Link href="/admin/emails/compose" className="btn-primary text-sm">Nouvel e-mail</Link>
+        </div>
       </div>
 
       {drafts.length > 0 && (

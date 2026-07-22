@@ -506,6 +506,7 @@ export default function EmailComposer({
       </div>
       <div className="flex items-center gap-2">
         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusPill.cls}`}>{statusPill.label}</span>
+        <Link href="/admin/emails/drafts" className="btn-ghost text-sm">Brouillons</Link>
         <Link href="/admin/emails/history" className="btn-ghost text-sm">Historique</Link>
         <div ref={overflowRef} className="relative">
           <button type="button" onClick={() => setOverflowOpen((o) => !o)} aria-label="Plus d'actions" className="btn-ghost px-2.5 text-sm">⋮</button>
