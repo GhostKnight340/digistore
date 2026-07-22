@@ -68,8 +68,11 @@ export async function connectInstagramAction(): Promise<InstagramActionResult<{ 
   });
 }
 
-/** Reconnect uses the same managed-OAuth entry point. */
-export const reconnectInstagramAction = connectInstagramAction;
+/** Reconnect uses the same managed-OAuth entry point. Declared as a function
+ *  (not a const alias) so the "use server" export is unambiguously async. */
+export async function reconnectInstagramAction(): Promise<InstagramActionResult<{ redirectUrl: string }>> {
+  return connectInstagramAction();
+}
 
 /** Flow A: list Instagram accounts already connected in Composio (opaque refs). */
 export async function discoverInstagramAccountsAction(): Promise<InstagramActionResult<DiscoveredAccountDTO[]>> {
