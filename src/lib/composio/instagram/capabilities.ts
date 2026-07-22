@@ -59,13 +59,14 @@ interface CapabilityMatcher {
 const MATCHERS: Record<InstagramCapability, CapabilityMatcher> = {
   profile: {
     anyOf: [
-      ["get", "profile"],
-      ["user", "info"],
+      ["user", "info"], // INSTAGRAM_GET_USER_INFO — the real profile tool (ig_user_id optional, defaults to "me")
       ["account", "info"],
       ["get", "me"],
       ["business", "account"],
     ],
-    none: ["media", "comment", "insight", "story"],
+    // "messenger"/"message" excludes GET_MESSENGER_PROFILE (a DM-settings tool
+    // that also contains "get"+"profile" but requires ig_user_id).
+    none: ["media", "comment", "insight", "story", "messenger", "message"],
   },
   media: {
     anyOf: [
