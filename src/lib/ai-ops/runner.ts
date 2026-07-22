@@ -32,6 +32,9 @@ import { isModuleKey, type ExecutionTrigger, type ModuleKey } from "./types";
  */
 export interface ModuleRunContext {
   module: ModuleKey;
+  /** How this run was triggered — lets a body behave differently (e.g. a
+   *  scheduled monitor stays silent when healthy; a manual run always reports). */
+  trigger: ExecutionTrigger;
   config: AiModuleConfigDTO;
   settings: AiOpsSettingsDTO;
   provider: string;
@@ -125,7 +128,7 @@ export async function runModule(input: RunModuleInput): Promise<RunModuleResult>
 
   try {
     const client = resolveProvider(provider);
-    const runCtx: ModuleRunContext = { module, config, settings, provider, model, maxTokens, executionId, client };
+    const runCtx: ModuleRunContext = { module, trigger: input.trigger, config, settings, provider, model, maxTokens, executionId, client };
     const output = input.body ? await input.body(runCtx) : await placeholderRun(runCtx);
     await recordUsage({
       module,

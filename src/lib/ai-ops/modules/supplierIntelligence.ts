@@ -12,15 +12,24 @@
 import "server-only";
 
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
-import { gatherSupplierMetrics, type SupplierMetrics } from "../supplier/metrics";
+import { gatherSupplierMetrics, supplierAlertKeys, type SupplierMetrics } from "../supplier/metrics";
 import { buildSupplierPrompt } from "../supplier/prompt";
 import { buildSupplierPayload, buildSupplierText } from "../supplier/format";
 import { SUPPLIER_INTELLIGENCE_MODULE } from "../supplier/module";
 import { coerceNarrative, type AiNarrative } from "../narrative";
 import { deliverToChannel, notifyAiFailure } from "../discord/deliver";
+import { claimAlertSlot } from "@/lib/ops/alertCooldown";
 import type { ExecutionTrigger } from "../types";
 
 export { SUPPLIER_INTELLIGENCE_MODULE };
+
+/** Re-remind about a still-broken supplier at most this often (per distinct issue). */
+const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+/** A no-post outcome (healthy scheduled check, or all alerts within cooldown). */
+function silentOutput(ctx: ModuleRunContext, summary: string): ModuleRunOutput {
+  return { provider: ctx.provider, model: ctx.model, summary, text: "", usage: { tokensIn: 0, tokensOut: 0, costUsd: 0 } };
+}
 
 /** A deterministic narrative built from the figures — no invented numbers. */
 function fallbackNarrative(metrics: SupplierMetrics): AiNarrative {
@@ -41,12 +50,32 @@ function fallbackNarrative(metrics: SupplierMetrics): AiNarrative {
 }
 
 /**
- * The module body handed to the runner (guardrails wrap this). Always delivers
- * to the supplier channel; a delivery failure throws so the run is recorded as
- * failed and the scheduler retries.
+ * The module body handed to the runner (guardrails wrap this).
+ *
+ * SCHEDULED runs are a monitor, not a report: they post ONLY when there is a
+ * fresh problem. Each distinct issue (supplier down, subscription inactive,
+ * failing calls, high latency, failed fulfillments) is deduped via a durable
+ * cooldown, so a persistent break re-pings at most every few hours instead of
+ * on every check. A healthy check (or one whose alerts are all still cooling
+ * down) exits silently — no AI call, no Discord post, ~$0.
+ *
+ * MANUAL runs ("Run now") always produce the full status list regardless.
  */
 export async function supplierBody(ctx: ModuleRunContext): Promise<ModuleRunOutput> {
   const metrics = await gatherSupplierMetrics(ctx.executionId);
+  const scheduled = ctx.trigger === "schedule";
+
+  if (scheduled) {
+    const keys = supplierAlertKeys(metrics.figures);
+    if (keys.length === 0) return silentOutput(ctx, "Suppliers healthy — no alerts.");
+    // Claim a cooldown slot per issue; post only if at least one is fresh.
+    let fresh = false;
+    for (const key of keys) {
+      const slot = await claimAlertSlot(`supplier_intel:${key}`, "warning", ALERT_COOLDOWN_MS);
+      if (slot.shouldSend) fresh = true;
+    }
+    if (!fresh) return silentOutput(ctx, "Supplier alerts still active but within cooldown — not re-posted.");
+  }
 
   let narrative: AiNarrative;
   let usage = { tokensIn: 0, tokensOut: 0, costUsd: 0 };

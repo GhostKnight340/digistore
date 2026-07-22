@@ -12,7 +12,8 @@ import type { DiscordEmbed, DiscordMessagePayload } from "@/lib/discord/client";
 import type { AiNarrative } from "../narrative";
 import type { SupplierFigures, SupplierMetrics } from "./metrics";
 
-const SUPPLIER_COLOR = 0x1abc9c; // teal
+const SUPPLIER_COLOR = 0x1abc9c; // teal — healthy
+const SUPPLIER_ALERT_COLOR = 0xe74c3c; // red — something needs attention
 const DESC_MAX = 4000;
 const STATUS_EMOJI: Record<string, string> = { healthy: "🟢", degraded: "🟡", down: "🔴" };
 
@@ -97,7 +98,7 @@ export function buildSupplierPayload(m: SupplierMetrics, narrative: AiNarrative)
   const embed: DiscordEmbed = {
     title: "🔌 Ghost.ma Supplier Intelligence",
     description: supplierBodyText(m, narrative),
-    color: SUPPLIER_COLOR,
+    color: m.figures.alerts.length ? SUPPLIER_ALERT_COLOR : SUPPLIER_COLOR,
     footer: { text: "Ghost.ma AI Operations" },
   };
   return { embeds: [embed] };

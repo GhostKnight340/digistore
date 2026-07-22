@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 
 import { buildSupplierPayload, buildSupplierText } from "../../src/lib/ai-ops/supplier/format";
 import { buildSupplierPrompt } from "../../src/lib/ai-ops/supplier/prompt";
-import type { SupplierMetrics } from "../../src/lib/ai-ops/supplier/metrics";
+import { supplierAlertKeys, type SupplierMetrics } from "../../src/lib/ai-ops/supplier/metrics";
 import type { AiNarrative } from "../../src/lib/ai-ops/narrative";
 import { DEFAULT_TOOL_GRANTS } from "../../src/lib/ai-ops/types";
 
@@ -92,6 +92,30 @@ test("the prompt forbids inventing numbers and scopes the AI to prose", () => {
   assert.match(p, /credential|balance/i);
 });
 
+// ─── Alert dedupe keys (monitor mode) ───────────────────────────────────────
+
+test("alert keys are stable per issue and independent of counts", () => {
+  const keys = supplierAlertKeys(metrics().figures);
+  // fazercards: subscription inactive + high latency (8000ms) + last-failure-after-success; plus fulfillment failed.
+  assert.ok(keys.includes("fazercards:subscription"));
+  assert.ok(keys.includes("fazercards:latency"));
+  assert.ok(keys.includes("fazercards:api_failed"));
+  assert.ok(keys.includes("fulfillment:failed"));
+  // reloadly is healthy → no keys for it.
+  assert.ok(!keys.some((k) => k.startsWith("reloadly")));
+});
+
+test("a fully healthy state produces no alert keys (nothing to post)", () => {
+  const keys = supplierAlertKeys(
+    metrics({
+      suppliers: [{ id: "reloadly", enabled: true, subscriptionActive: true, lastSuccessAt: "2026-07-21T10:00:00.000Z", lastFailureAt: null, lastLatencyMs: 200, status: "healthy" }],
+      alerts: [],
+      fulfillment: { total: 5, failed: 0, byStatus: [] },
+    }).figures,
+  );
+  assert.equal(keys.length, 0);
+});
+
 // ─── Registry + security guards ──────────────────────────────────────────────
 
 test("supplier tools are all granted to the supplier_intelligence module", () => {
@@ -112,6 +136,12 @@ test("the module never imports Prisma directly — it reads via the safe tool la
   assert.ok(/callTool\(/.test(METRICS_SRC), "metrics must read data through callTool");
   assert.ok(/runModule\(/.test(MODULE_SRC), "must execute via runModule");
   assert.ok(!/discord\.js/.test(MODULE_SRC), "app module must not pull in discord.js");
+});
+
+test("scheduled runs are alert-gated (monitor, not fixed report)", () => {
+  assert.ok(/ctx\.trigger === "schedule"/.test(MODULE_SRC), "must branch on the trigger");
+  assert.ok(/claimAlertSlot/.test(MODULE_SRC), "must dedupe alerts via the cooldown");
+  assert.ok(/supplierAlertKeys/.test(MODULE_SRC), "must gate posting on fresh alert keys");
 });
 
 test("supplier_intelligence is wired into the base scheduler's body registry", () => {

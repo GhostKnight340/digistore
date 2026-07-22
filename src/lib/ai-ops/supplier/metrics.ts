@@ -120,6 +120,27 @@ function computeAlerts(suppliers: SupplierHealthLine[], failedFulfillments: numb
 }
 
 /**
+ * Stable dedupe keys for the current alerts — one per distinct problem, derived
+ * from the figures (NOT the display strings, so a changing count doesn't change
+ * the key). Kept in sync with `computeAlerts`. Used to decide whether a fresh
+ * problem warrants an alert vs. one already notified (see the module's cooldown).
+ */
+export function supplierAlertKeys(figures: SupplierFigures): string[] {
+  const keys: string[] = [];
+  for (const s of figures.suppliers) {
+    if (!s.enabled) {
+      keys.push(`${s.id}:disabled`);
+      continue;
+    }
+    if (s.subscriptionActive === false) keys.push(`${s.id}:subscription`);
+    if (s.lastFailureAt && tstamp(s.lastFailureAt) > tstamp(s.lastSuccessAt)) keys.push(`${s.id}:api_failed`);
+    if (s.lastLatencyMs != null && s.lastLatencyMs > HIGH_LATENCY_MS) keys.push(`${s.id}:latency`);
+  }
+  if (figures.fulfillment.failed && figures.fulfillment.failed > 0) keys.push("fulfillment:failed");
+  return keys;
+}
+
+/**
  * Gathers supplier metrics through the safe tool layer. `executionId` correlates
  * every tool call to the run. A failed tool is recorded as unavailable rather
  * than aborting.

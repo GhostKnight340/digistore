@@ -210,9 +210,10 @@ export const MODULE_DEFINITIONS: Record<ModuleKey, ModuleDefinition> = {
     key: "supplier_intelligence",
     label: "Supplier Intelligence",
     description:
-      "Monitors Reloadly & FazerCards costs, availability and API health.",
+      "Watches supplier API health, subscriptions, costs and fulfillment; alerts to Discord only when something breaks or needs attention.",
     defaultMode: "READ_ONLY",
-    defaultSchedule: "0 */6 * * *",
+    // Checks every 2h but only posts on a fresh problem (not a fixed report).
+    defaultSchedule: "0 */2 * * *",
     scheduled: true,
     defaultTools: [
       "getSupplierProductCosts",
