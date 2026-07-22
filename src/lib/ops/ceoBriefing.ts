@@ -61,7 +61,7 @@ export function briefingFromSnapshot(snap: OperationsSnapshotDTO): CeoBriefingDT
 
     const actions: CeoBriefingActionDTO[] = [];
     if (top?.resolveHref) actions.push({ label: "Résoudre l'incident", href: top.resolveHref, primary: false });
-    actions.push({ label: "Ouvrir les fournisseurs", href: "/admin?tab=suppliers", primary: true });
+    actions.push({ label: "Ouvrir les fournisseurs", href: "/admin/suppliers", primary: true });
 
     const affected = criticalWarnings.length + offlineSuppliers.length;
     return {
@@ -94,7 +94,7 @@ export function briefingFromSnapshot(snap: OperationsSnapshotDTO): CeoBriefingDT
 
     const actions: CeoBriefingActionDTO[] = [];
     if (topWarning?.resolveHref) actions.push({ label: "Voir le détail", href: topWarning.resolveHref, primary: false });
-    else actions.push({ label: "Ouvrir les fournisseurs", href: "/admin?tab=suppliers", primary: false });
+    else actions.push({ label: "Ouvrir les fournisseurs", href: "/admin/suppliers", primary: false });
     actions.push({ label: "Revue paiements", href: "/admin?tab=payments", primary: true });
 
     return {
@@ -120,7 +120,7 @@ export function briefingFromSnapshot(snap: OperationsSnapshotDTO): CeoBriefingDT
     priorityLabel: PRIORITY_LABEL.quiet,
     actions: [
       { label: "Voir les produits", href: "/admin?tab=products", primary: false },
-      { label: "Centre de contrôle", href: "/admin?tab=operations", primary: true },
+      { label: "Vue d'ensemble", href: "/admin", primary: true },
     ],
   };
 }
