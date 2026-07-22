@@ -479,7 +479,7 @@ export const defaultStoreSettings: StoreSettings = {
   paymentDisplay: {},
   footer: {
     contactEmail: "support@ghost.ma",
-    whatsappNumber: "+212 600 000 000",
+    whatsappNumber: "+212 663 156 633",
     supportText:
       "Le moyen le plus simple d'acheter vos produits numériques au Maroc.",
     socialLinks: {
