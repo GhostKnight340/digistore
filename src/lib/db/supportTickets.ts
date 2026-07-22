@@ -37,6 +37,10 @@ export type SupportMessage = { author: SupportMessageAuthor; body: string; creat
 /** @deprecated kept as an alias while callers migrate to SupportMessage. */
 export type SupportReply = SupportMessage;
 
+/** An internal note — never emailed, never shown in the customer portal. The
+ *  author is a free label (e.g. "ai", "agent", "system"). */
+export type SupportInternalNote = { author: string; body: string; createdAt: string };
+
 /** Safe customer-facing view — looked up by reference + email pair (a bare
  *  reference is enumerable, so it is never enough on its own). No attachment
  *  payloads, no internal ids. */
@@ -73,6 +77,12 @@ export type SupportTicketAdminDTO = {
   status: string;
   resolution: string | null;
   replies: SupportMessage[];
+  /** How the ticket was created: "web" | "email" | "email_fallback" | "feedback". */
+  source: string;
+  /** Current owner: "ai" | "awaiting_human" | "human" | null. */
+  aiOwnership: string | null;
+  /** Internal notes — admin-only, never emailed / never in the customer portal. */
+  internalNotes: SupportInternalNote[];
   feedbackRating: number | null;
   feedbackComment: string | null;
   createdAt: string;
@@ -96,6 +106,13 @@ function messageList(value: unknown): SupportMessage[] {
     }));
 }
 
+function noteList(value: unknown): SupportInternalNote[] {
+  if (!Array.isArray(value)) return [];
+  return (value as Partial<SupportInternalNote>[])
+    .filter((r) => r && typeof r.body === "string")
+    .map((r) => ({ author: String(r.author ?? "system"), body: String(r.body), createdAt: String(r.createdAt ?? "") }));
+}
+
 /** Full row shape shared by the admin + customer DTO mappers. */
 type SupportTicketRow = {
   id: string;
@@ -113,6 +130,15 @@ type SupportTicketRow = {
   status: string;
   resolution: string | null;
   replies: unknown;
+  source: string;
+  emailMessageId: string | null;
+  emailReferences: string | null;
+  lastOutboundEmailId: string | null;
+  internalNotes: unknown;
+  aiLockedAt: Date | null;
+  aiLockExpiresAt: Date | null;
+  aiLockedBy: string | null;
+  aiOwnership: string | null;
   discordMessageId: string | null;
   discordThreadId: string | null;
   feedbackToken: string | null;
@@ -140,6 +166,9 @@ function toAdminDTO(t: SupportTicketRow): SupportTicketAdminDTO {
     status: t.status,
     resolution: t.resolution,
     replies: messageList(t.replies),
+    source: t.source,
+    aiOwnership: t.aiOwnership,
+    internalNotes: noteList(t.internalNotes),
     feedbackRating: t.feedbackRating,
     feedbackComment: t.feedbackComment,
     createdAt: t.createdAt.toISOString(),
@@ -360,6 +389,149 @@ export async function addCustomerSupportMessage(
     "open",
     Prisma.sql`, "customerId" = COALESCE("customerId", ${customerId})`,
   );
+}
+
+// ─── Internal notes (never emailed, never in the customer portal) ─────────────
+
+/** Append an internal note. Does NOT bump updatedAt (notes aren't customer
+ *  activity, and the AI batching/idempotency logic keys off updatedAt). */
+export async function addSupportInternalNote(id: string, author: string, body: string): Promise<void> {
+  await ensureDatabaseReady();
+  const note = { author: author.slice(0, 40), body: body.slice(0, 4000), createdAt: new Date().toISOString() };
+  await prisma.$executeRaw`
+    UPDATE "SupportTicket"
+    SET "internalNotes" = COALESCE("internalNotes", '[]'::jsonb) || ${JSON.stringify(note)}::jsonb
+    WHERE "id" = ${id}
+  `;
+}
+
+// ─── Per-ticket AI outgoing lock (prevents duplicate concurrent replies) ─────
+
+/** Atomically claim the AI lock. Returns true only if this caller got it — a row
+ *  whose lock is unset or expired is claimable. Bounded by `ttlMs` (crash safety).
+ *  Uses raw SQL so it does NOT bump updatedAt (the AI idempotency keys off it). */
+export async function claimTicketAiLock(id: string, by: string, ttlMs: number): Promise<boolean> {
+  await ensureDatabaseReady();
+  const now = new Date();
+  const expires = new Date(now.getTime() + ttlMs);
+  const affected = await prisma.$executeRaw`
+    UPDATE "SupportTicket"
+    SET "aiLockedAt" = ${now}, "aiLockExpiresAt" = ${expires}, "aiLockedBy" = ${by}
+    WHERE "id" = ${id} AND ("aiLockedAt" IS NULL OR "aiLockExpiresAt" < ${now})
+  `;
+  return affected === 1;
+}
+
+export async function releaseTicketAiLock(id: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "SupportTicket" SET "aiLockedAt" = NULL, "aiLockExpiresAt" = NULL, "aiLockedBy" = NULL WHERE "id" = ${id}
+  `.catch(() => {});
+}
+
+/** Set who owns the conversation. Raw SQL so it doesn't bump updatedAt (ownership
+ *  is metadata, not customer activity). Values: "ai" | "awaiting_human" | "human". */
+export async function setTicketOwnership(id: string, owner: string): Promise<void> {
+  await prisma.$executeRaw`UPDATE "SupportTicket" SET "aiOwnership" = ${owner} WHERE "id" = ${id}`.catch(() => {});
+}
+
+// ─── Email intake matching + creation ────────────────────────────────────────
+
+/** Find a ticket whose stored email ids appear in an inbound email's thread refs. */
+export async function findTicketByEmailIds(ids: (string | null | undefined)[]): Promise<SupportTicketRecord | null> {
+  const clean = ids.filter((v): v is string => !!v);
+  if (!clean.length) return null;
+  return prisma.supportTicket.findFirst({
+    where: { OR: [{ emailMessageId: { in: clean } }, { lastOutboundEmailId: { in: clean } }] },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+/** Newest not-closed ticket for an email address (case-insensitive). */
+export async function findOpenTicketByEmail(email: string): Promise<SupportTicketRecord | null> {
+  const e = email.trim();
+  if (!e) return null;
+  return prisma.supportTicket.findFirst({
+    where: { email: { equals: e, mode: "insensitive" }, status: { not: "closed" } },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+/** Newest ticket matching an order reference (any status). */
+export async function findTicketByOrderRef(orderRef: string): Promise<SupportTicketRecord | null> {
+  const r = orderRef.trim();
+  if (!r) return null;
+  return prisma.supportTicket.findFirst({ where: { orderRef: r }, orderBy: { createdAt: "desc" } });
+}
+
+/** Merge inbound attachments into a ticket's attachments (jsonb array concat). */
+export async function appendTicketAttachments(id: string, files: SupportAttachment[]): Promise<void> {
+  if (!files.length) return;
+  await ensureDatabaseReady();
+  await prisma.$executeRaw`
+    UPDATE "SupportTicket"
+    SET "attachments" = COALESCE("attachments", '[]'::jsonb) || ${JSON.stringify(files)}::jsonb
+    WHERE "id" = ${id}
+  `;
+}
+
+/** Append an inbound-email customer message and return the ticket to "open". */
+export async function appendEmailCustomerMessage(
+  id: string,
+  body: string,
+  customerId: string | null,
+): Promise<SupportTicketRecord> {
+  return appendSupportMessage(
+    id,
+    { author: "customer", body, createdAt: new Date().toISOString() },
+    "open",
+    customerId ? Prisma.sql`, "customerId" = COALESCE("customerId", ${customerId})` : Prisma.empty,
+  );
+}
+
+export type CreateEmailTicketInput = {
+  fromEmail: string;
+  fromName?: string | null;
+  subject?: string | null;
+  body?: string | null;
+  attachments?: SupportAttachment[];
+  customerId?: string | null;
+  orderRef?: string | null;
+  emailMessageId: string;
+  emailReferences?: string | null;
+  source?: string;
+};
+
+/** Create a ticket from an inbound email (collision-safe reference + retry).
+ *  Returns the full record so the caller can thread the acknowledgement. */
+export async function createSupportTicketFromEmail(input: CreateEmailTicketInput): Promise<SupportTicketRecord> {
+  await ensureDatabaseReady();
+  const message = [input.subject ? `Objet : ${input.subject}` : null, input.body ?? ""].filter(Boolean).join("\n\n").slice(0, 8000);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const reference = randomReference();
+    try {
+      return await prisma.supportTicket.create({
+        data: {
+          reference,
+          category: "autre",
+          subIssue: "email",
+          subIssueLabel: "E-mail",
+          orderRef: input.orderRef ?? null,
+          name: input.fromName?.trim() || input.fromEmail,
+          email: input.fromEmail,
+          message,
+          attachments: input.attachments?.length ? (input.attachments as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+          customerId: input.customerId ?? null,
+          source: input.source ?? "email_fallback",
+          emailMessageId: input.emailMessageId,
+          emailReferences: input.emailReferences ?? null,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue;
+      throw error;
+    }
+  }
+  throw new Error("Impossible de générer une référence de demande.");
 }
 
 function randomFeedbackToken(): string {

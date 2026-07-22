@@ -282,24 +282,33 @@ export async function runFulfillmentTest(input: RunFulfillmentTestInput): Promis
 
   const durationMs = Date.now() - started;
 
-  const row = await prisma.fulfillmentTestRun.create({
-    data: {
-      supplier: "reloadly",
-      environment: env,
-      mode: input.mode,
-      status,
-      durationMs,
-      healthScore,
-      stages: stages as never,
-      warnings: warnings as never,
-      safeError,
-      developerError,
-      createdBy: input.createdBy,
-    },
-  });
+  // History persistence is best-effort: a diagnostic run's whole value is the
+  // result it just computed, so a failed/absent history table (e.g. migration
+  // not yet applied) must never discard that result — record a warning instead.
+  let id: string | undefined;
+  try {
+    const row = await prisma.fulfillmentTestRun.create({
+      data: {
+        supplier: "reloadly",
+        environment: env,
+        mode: input.mode,
+        status,
+        durationMs,
+        healthScore,
+        stages: stages as never,
+        warnings: warnings as never,
+        safeError,
+        developerError,
+        createdBy: input.createdBy,
+      },
+    });
+    id = row.id;
+  } catch (error) {
+    warnings.push(`Historique non enregistré (${safeMessage(error)}).`);
+  }
 
   return {
-    id: row.id,
+    id,
     status,
     supplier: "reloadly",
     environment: env,

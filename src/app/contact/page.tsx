@@ -38,7 +38,11 @@ export default function ContactPage() {
 
         <p className="mt-4 rounded-lg bg-surface px-3 py-2 text-center text-xs text-muted">
           Interface de démonstration: les messages ne sont pas envoyés en phase
-          1. Écrivez directement à support@ghost.ma.
+          1. Écrivez directement à{" "}
+          <a href="mailto:support@ghost.ma" className="font-medium underline underline-offset-2 hover:text-white">
+            support@ghost.ma
+          </a>
+          .
         </p>
       </div>
     </div>

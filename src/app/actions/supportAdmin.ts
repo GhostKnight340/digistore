@@ -5,24 +5,22 @@ import { requireAdminCustomer } from "@/lib/auth";
 import {
   listSupportTickets,
   updateSupportTicketStatus,
-  addSupportTicketReply,
   closeSupportTicket,
   getSupportTicketAttachment,
+  setTicketOwnership,
   supportTicketAdminDTO,
   type SupportTicketAdminDTO,
   type SupportTicketRecord,
   type SupportTicketStatus,
   type SupportTicketResolution,
 } from "@/lib/db/supportTickets";
+import { notifySupportTicketStatus } from "@/lib/discord/notify";
 import {
-  notifySupportTicketReply,
-  notifySupportTicketStatus,
-  type SupportTicketCardInput,
-} from "@/lib/discord/notify";
-import { sendTransactionalEmail } from "@/lib/email/send-email";
-import { absoluteAppUrl } from "@/lib/orderNumber";
-import { findSupportCategory } from "@/lib/support/config";
-import type { EmailTemplateKey } from "@/lib/emailTemplates";
+  deliverSupportReply,
+  sendSupportEmail,
+  cardInput,
+  feedbackUrl,
+} from "@/lib/support/deliverReply";
 
 const VALID_STATUSES: SupportTicketStatus[] = ["open", "answered", "closed"];
 const VALID_RESOLUTIONS: SupportTicketResolution[] = ["resolved", "cancelled", "dismissed"];
@@ -31,65 +29,6 @@ const RESOLUTION_LABEL: Record<SupportTicketResolution, string> = {
   cancelled: "Annulé",
   dismissed: "Sans suite",
 };
-
-const MAX_REPLY_LENGTH = 4000;
-
-/** The admin dashboard shows support under a tab, so every ticket links back to
- *  the same dashboard URL (there is no per-ticket admin route). */
-function supportAdminUrl(): string {
-  return absoluteAppUrl("/admin");
-}
-
-/** The customer-facing tracking page (reference + email) used in the reply /
- *  received emails; works for guests and logged-in customers alike. */
-function supportTrackingUrl(): string {
-  return absoluteAppUrl("/support/suivi");
-}
-
-function feedbackUrl(token: string | null): string {
-  return token ? absoluteAppUrl(`/support/feedback?token=${token}`) : supportTrackingUrl();
-}
-
-function cardInput(ticket: SupportTicketRecord): SupportTicketCardInput {
-  return {
-    ticketId: ticket.id,
-    reference: ticket.reference,
-    categoryLabel: findSupportCategory(ticket.category)?.label ?? ticket.category,
-    subIssueLabel: ticket.subIssueLabel,
-    orderRef: ticket.orderRef,
-    name: ticket.name,
-    email: ticket.email,
-    status: ticket.status,
-    resolution: ticket.resolution,
-    adminUrl: supportAdminUrl(),
-    discordMessageId: ticket.discordMessageId,
-    discordThreadId: ticket.discordThreadId,
-  };
-}
-
-/** Send a support email off the stored template. Never throws — email delivery
- *  must never fail an admin action (same contract as the order emails). */
-async function sendSupportEmail(
-  ticket: SupportTicketRecord,
-  templateKey: EmailTemplateKey,
-  variables: Record<string, string>,
-): Promise<void> {
-  try {
-    await sendTransactionalEmail({
-      to: ticket.email,
-      customerId: ticket.customerId,
-      templateKey,
-      type: templateKey,
-      variables: {
-        customer_name: ticket.name,
-        reference: ticket.reference,
-        ...variables,
-      },
-    });
-  } catch (error) {
-    console.error(`[support:email:${templateKey}]`, error instanceof Error ? error.message : error);
-  }
-}
 
 export async function listSupportTicketsAction(
   filter: { status?: string } = {},
@@ -107,24 +46,13 @@ export async function replySupportTicketAction(
   body: string,
 ): Promise<{ ok: boolean; error?: string; ticket?: SupportTicketAdminDTO }> {
   await requireAdminCustomer();
-  const text = (body ?? "").trim();
-  if (!text) return { ok: false, error: "La réponse ne peut pas être vide." };
-
-  let ticket: SupportTicketRecord;
-  try {
-    ticket = await addSupportTicketReply(id, text.slice(0, MAX_REPLY_LENGTH));
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Réponse impossible." };
+  const res = await deliverSupportReply(id, body);
+  if (res.ok) {
+    // A human replied → they own the conversation now.
+    await setTicketOwnership(id, "human");
+    revalidatePath("/admin");
   }
-
-  void notifySupportTicketReply({ ...cardInput(ticket), replyBody: text.slice(0, MAX_REPLY_LENGTH) });
-  await sendSupportEmail(ticket, "support_reply", {
-    reason: text.slice(0, MAX_REPLY_LENGTH),
-    support_url: supportTrackingUrl(),
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, ticket: supportTicketAdminDTO(ticket) };
+  return res;
 }
 
 /**

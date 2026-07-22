@@ -34,6 +34,15 @@ type SendEmailInput = {
   metadata?: EmailMetadata;
   manuallyEdited?: boolean;
   type?: string;
+  /**
+   * Threading headers (support replies). `messageId` sets this email's own
+   * Message-ID (so a future reply can be mapped back); `inReplyTo`/`references`
+   * thread it into an existing conversation. Merged into `headers` before send.
+   */
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string;
+  headers?: Record<string, string>;
 };
 
 type EmailSendResult = {
@@ -357,6 +366,13 @@ export async function sendTransactionalEmail(
     const html = rendered.html;
     const text = rendered.text;
 
+    // Threading headers (support replies): thread into the existing conversation
+    // and set a stable Message-ID so the customer's reply maps back to the ticket.
+    const threadHeaders: Record<string, string> = { ...(input.headers ?? {}) };
+    if (input.messageId) threadHeaders["Message-ID"] = input.messageId;
+    if (input.inReplyTo) threadHeaders["In-Reply-To"] = input.inReplyTo;
+    if (input.references) threadHeaders["References"] = input.references;
+
     const { data, error: resendError } = await resend.emails.send({
       from,
       to,
@@ -364,6 +380,7 @@ export async function sendTransactionalEmail(
       html,
       text,
       replyTo,
+      ...(Object.keys(threadHeaders).length ? { headers: threadHeaders } : {}),
     });
 
     if (resendError || !data?.id) {

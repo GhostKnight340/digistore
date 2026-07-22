@@ -128,7 +128,7 @@ export default function DepartmentDetailView({ detail }: { detail: DepartmentDet
         <Link href={BASE} style={{ fontSize: 12, color: "#7d818c", textDecoration: "none" }}>← Centre de contrôle</Link>
 
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, margin: "16px 0 24px" }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 16, margin: "16px 0 24px" }}>
           <div style={{ width: 56, height: 56, borderRadius: 14, background: withAlpha(c, 0.14), border: `1px solid ${withAlpha(c, 0.35)}`, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
             <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${c}` }} />
           </div>

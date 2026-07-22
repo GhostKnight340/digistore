@@ -1,5 +1,6 @@
 import SupportFlow, { type SupportOrderOption } from "@/components/support/SupportFlow";
 import { getCurrentCustomer, getAccountOrders } from "@/lib/auth";
+import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { formatDH } from "@/lib/format";
 import { orderStatusShort } from "@/lib/orderStatus";
 
@@ -42,6 +43,9 @@ function formatFrenchDate(value: Date): string {
 
 export default async function SupportPage() {
   const customer = await getCurrentCustomer().catch(() => null);
+  const supportEmail = await getPublicPaymentMethods()
+    .then((c) => c.support.supportEmail)
+    .catch(() => null);
   const orders: SupportOrderOption[] = [];
 
   if (customer) {
@@ -73,6 +77,7 @@ export default async function SupportPage() {
       initialName={customer?.name ?? ""}
       initialEmail={customer?.email ?? ""}
       initialPhone={customer?.phone ?? ""}
+      supportEmail={supportEmail}
     />
   );
 }

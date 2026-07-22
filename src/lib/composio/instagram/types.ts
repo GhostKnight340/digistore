@@ -65,6 +65,52 @@ export interface InstagramCommentDTO {
   replied: boolean;
 }
 
+// ── Content Studio ──────────────────────────────────────────────────────────
+
+export type StudioFormat = "post" | "carousel" | "reel" | "story";
+export type StudioStatus =
+  | "draft"
+  | "scheduled"
+  | "publishing"
+  | "published"
+  | "failed"
+  | "cancelled";
+
+/**
+ * One media item in the composer. Client-side it may hold a temporary object-URL
+ * (never persisted); once uploaded, `url` is a public Blob https URL. Only these
+ * plain fields are stored — never raw File objects or pixel data.
+ */
+export interface StudioMediaDescriptor {
+  id: string;
+  type: "image" | "video";
+  url: string;
+  name: string | null;
+  size: number | null;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+}
+
+/** A Content Studio item (draft → queue → publication), browser-safe. */
+export interface StudioContentItemDTO {
+  id: string;
+  format: StudioFormat;
+  status: StudioStatus;
+  caption: string;
+  hashtags: string[];
+  media: StudioMediaDescriptor[];
+  reelCoverIndex: number;
+  scheduledFor: string | null;
+  timezone: string | null;
+  retryCount: number;
+  lastError: string | null;
+  publishedAt: string | null;
+  instagramPermalink: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Generic action result mirroring the repo's `{ ok, error }` convention. */
 export interface InstagramActionResult<T = undefined> {
   ok: boolean;

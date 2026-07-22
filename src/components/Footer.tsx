@@ -44,7 +44,15 @@ export default function Footer() {
             {settings.footer.supportText}
           </p>
           <div className="mt-4 space-y-1 text-xs text-muted">
-            <p>E-mail : {settings.footer.contactEmail}</p>
+            <p>
+              E-mail :{" "}
+              <a
+                href={`mailto:${settings.footer.contactEmail}`}
+                className="underline-offset-2 hover:text-white hover:underline"
+              >
+                {settings.footer.contactEmail}
+              </a>
+            </p>
             <p>WhatsApp : {settings.footer.whatsappNumber}</p>
           </div>
           {/* Admin-selected footer badges (Boutique → Pied de page), resolved

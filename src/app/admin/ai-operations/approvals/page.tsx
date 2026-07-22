@@ -27,6 +27,9 @@ export default async function AiOpsApprovalsPage() {
       <div className="mb-4">
         <a href="/admin/ai-operations" className="text-xs text-faint hover:text-white">← AI Operations</a>
         <h1 className="mt-1 text-lg font-semibold text-white">File d'approbation</h1>
+        <a href="/admin/ai-operations/support" className="mt-1 inline-block text-xs text-faint hover:text-white">
+          Couverture support IA →
+        </a>
       </div>
       <AiApprovalsView approvals={approvals} />
     </AdminShellRoute>

@@ -100,11 +100,13 @@ export default function SupportFlow({
   initialName,
   initialEmail,
   initialPhone = "",
+  supportEmail,
 }: {
   orders: SupportOrderOption[];
   initialName: string;
   initialEmail: string;
   initialPhone?: string;
+  supportEmail?: string | null;
 }) {
   const [step, setStep] = useState<Step>("category");
   const [hist, setHist] = useState<Step[]>([]);
@@ -278,6 +280,18 @@ export default function SupportFlow({
               <p className="mt-3 text-[15.5px] leading-relaxed text-muted">
                 Sélectionnez le sujet qui correspond à votre demande. Nous vous guiderons vers la solution la plus adaptée.
               </p>
+              {supportEmail && (
+                <p className="mt-2 text-[13.5px] text-faint">
+                  Vous préférez l&apos;e-mail&nbsp;? Écrivez-nous à{" "}
+                  <a
+                    href={`mailto:${supportEmail}`}
+                    className="font-medium text-[#9FB8FF] underline-offset-2 hover:underline"
+                  >
+                    {supportEmail}
+                  </a>
+                  .
+                </p>
+              )}
             </div>
             <div className="mb-6 mt-5 h-px bg-white/[0.07]" />
 

@@ -30,7 +30,9 @@ import {
   clearConversationByKey,
   type ConversationMetadata,
 } from "@/lib/ai-ops/discord/conversationStore";
-import { transitionApproval } from "@/lib/ai-ops/approvalStore";
+import { transitionApproval, getApproval } from "@/lib/ai-ops/approvalStore";
+import { SUPPORT_ASSISTANT_MODULE } from "@/lib/ai-ops/support/module";
+import { replySupportTicketAction } from "@/app/actions/supportAdmin";
 import { setJobEnabled } from "@/lib/ai-ops/jobStore";
 import { isCacheStrategy, isCacheTtl } from "@/lib/ai-ops/caching";
 import { runModule } from "@/lib/ai-ops/runner";
@@ -226,11 +228,57 @@ export async function decideApprovalAction(
       rejectionReason: extra?.rejectionReason?.slice(0, 500),
       editedContent: extra?.editedContent,
     });
+    // Approving a support action is where it finally happens: a drafted reply is
+    // sent to the customer (the exact same path as a manual admin reply — Discord
+    // + email), an escalation is acknowledged. Rejecting/cancelling never sends.
+    let execError: string | null = null;
+    if (decision === "APPROVED") {
+      const approval = await getApproval(id);
+      if (approval?.module === SUPPORT_ASSISTANT_MODULE) {
+        execError = await executeSupportApproval(approval);
+      }
+    }
     revalidatePath(`${AI_OPS_PATH}/approvals`);
+    revalidatePath(`${AI_OPS_PATH}/support`);
     revalidateAiOps();
-    return { ok: true };
+    return execError ? { ok: false, error: execError } : { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Transition failed." };
+  }
+}
+
+/**
+ * Executes an APPROVED support approval. Drives it APPROVED→EXECUTING→COMPLETED
+ * (or FAILED) so the queue always reflects what actually happened. Returns a
+ * human error string when the send fails, else null. Never throws.
+ */
+async function executeSupportApproval(
+  approval: NonNullable<Awaited<ReturnType<typeof getApproval>>>,
+): Promise<string | null> {
+  try {
+    await transitionApproval(approval.id, "EXECUTING");
+    if (approval.actionType === "support_reply") {
+      if (!approval.entityId) throw new Error("Ticket introuvable pour ce brouillon.");
+      const body = (approval.editedContent ?? approval.proposedContent ?? "").trim();
+      if (!body) throw new Error("La réponse proposée est vide.");
+      const res = await replySupportTicketAction(approval.entityId, body);
+      if (!res.ok) throw new Error(res.error ?? "Envoi impossible.");
+      await transitionApproval(approval.id, "COMPLETED", { executionResult: "Réponse envoyée au client." });
+    } else {
+      // Escalations (and any non-sending action): approving just acknowledges.
+      await transitionApproval(approval.id, "COMPLETED", {
+        executionResult: "Escalade prise en charge manuellement.",
+      });
+    }
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Exécution impossible.";
+    try {
+      await transitionApproval(approval.id, "FAILED", { executionResult: message });
+    } catch {
+      // Already terminal or a race — the error string is still returned below.
+    }
+    return message;
   }
 }
 

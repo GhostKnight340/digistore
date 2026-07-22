@@ -51,7 +51,7 @@ export default function AdminShellRoute({
     >
       {/* Standalone routes need their own scroll region: the shell's content
           slot is overflow:hidden (the dashboard supplies this wrapper itself). */}
-      <div style={{ height: "100%", overflowY: "auto" }}>
+      <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
         <div className="admin-panel-pad" style={{ padding: "26px 28px" }}>
           {children}
         </div>

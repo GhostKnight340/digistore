@@ -690,6 +690,35 @@ export default function AdminShell({
               </svg>
             </button>
           ) : null}
+          {/* Desktop collapse toggle in the header — the discoverable control. */}
+          {!isMobile && !railed ? (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label="Réduire le menu"
+              title="Réduire le menu"
+              style={{
+                marginLeft: "auto",
+                width: "30px",
+                height: "30px",
+                borderRadius: "8px",
+                border: `1px solid ${C.borderStrong}`,
+                background: C.surfaceInput,
+                color: C.muted,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <line x1="9" y1="4" x2="9" y2="20" />
+                <polyline points="16 9 13 12 16 15" />
+              </svg>
+            </button>
+          ) : null}
         </div>
 
         <nav
@@ -736,8 +765,9 @@ export default function AdminShell({
         </nav>
 
         <div style={{ padding: "12px", borderTop: `1px solid ${C.borderHairline}`, flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-          {/* Desktop-only collapse toggle. Mobile uses the drawer close button. */}
-          {!isMobile ? (
+          {/* When railed, the bottom chevron is the expand affordance. Expanded
+              state uses the discoverable header toggle instead. */}
+          {!isMobile && railed ? (
             <button
               type="button"
               onClick={toggleCollapsed}

@@ -1313,6 +1313,28 @@ model SupportTicket {
   // Admin replies sent to the customer: [{ body, createdAt }] — the customer
   // sees these on the account/tracking pages; each also triggers a reply email.
   replies          Json?
+  // How the ticket was created: "web" (guided /support form) | "email"
+  // (inbound email, matched immediately) | "email_fallback" (created by the
+  // 5-min email intake fallback) | "feedback" (converted from feedback).
+  source           String    @default("web")
+  // Email threading (for tickets that involve email): the originating inbound
+  // Message-ID we reply INTO, the accumulated References chain, and the last
+  // outbound reply Message-ID so the next reply threads correctly.
+  emailMessageId     String?
+  emailReferences    String?
+  lastOutboundEmailId String?
+  // Internal AI/agent notes: [{ author, body, createdAt }] — NEVER emailed and
+  // NEVER shown in the customer portal. Classification, order matching, payment
+  // state, escalation reason, failed automation, handoff, etc.
+  internalNotes    Json?
+  // Per-ticket outgoing-message lock so concurrent jobs never send duplicate AI
+  // replies (claimed before an AI send, released after; lockExpiresAt bounds a crash).
+  aiLockedAt       DateTime?
+  aiLockExpiresAt  DateTime?
+  aiLockedBy       String?
+  // Who currently owns the conversation: "ai" (AI handled/drafted it),
+  // "awaiting_human" (escalated), "human" (a person replied). Null = unhandled.
+  aiOwnership      String?
   // Discord #support card/thread tracking — one card per ticket (edited in
   // place as status changes) with a thread holding the full conversation.
   discordMessageId String?
@@ -1329,6 +1351,60 @@ model SupportTicket {
   @@index([status, createdAt])
   @@index([email])
   @@index([customerId])
+  @@index([emailMessageId])
+}
+
+// Inbound support-email intake (Resend Inbound webhook → durable delayed job).
+// Each received email is stored ONCE here (idempotent by provider event + email
+// Message-ID), then processed after `dueAt` (activatedAt + configurable delay,
+// default 5 min) by the support-email cron: match to an existing ticket, append
+// as a customer message, or create a new ticket. The delay lets any other
+// ticket-creating workflow win first, avoiding duplicates. This table IS the
+// durable delayed job — the webhook never blocks.
+model SupportEmailIntake {
+  id String @id @default(cuid())
+  // Resend/Svix webhook event id — dedupes webhook retries of the same delivery.
+  providerEventId String? @unique
+  // RFC 5322 Message-ID of the email — the primary idempotency key.
+  messageId String @unique
+  // Threading: In-Reply-To + the References chain, used to map back to a ticket.
+  inReplyTo  String?
+  references String?
+  // The parsed From / forwarding (envelope) sender that delivered the message.
+  fromEmail  String
+  fromName   String?
+  // The resolved REAL customer sender (from forwarded headers), or null → the
+  // intake is held for manual review (no ticket is created on a guessed sender).
+  originalSender   String?
+  // Which header resolved the sender (from|resent-from|…|none) + how confident.
+  senderSource     String?
+  senderConfidence String?
+  // Raw headers preserved for audit of the forwarding chain.
+  rawHeaders Json?
+  toEmail    String?
+  subject    String?
+  bodyText   String?
+  bodyHtml   String?
+  // [{ fileName, mimeType, dataBase64 }] — same shape as SupportTicket.attachments.
+  attachments Json?
+  // Best-effort order reference parsed from the subject/body (for matching).
+  orderRefGuess String?
+  // Resolved customer (by fromEmail), if any.
+  customerId String?
+  // status: "pending" | "attached" | "created" | "skipped" | "failed"
+  status String @default("pending")
+  // When this intake becomes eligible for processing (receivedAt + delay).
+  dueAt DateTime
+  // Result of processing.
+  ticketId     String?
+  resultReason String?
+  attempts     Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([status, dueAt])
+  @@index([fromEmail])
 }
 
 model PaymentProof {
@@ -2267,6 +2343,13 @@ model AiOpsSettings {
   // Cross-instance rate limits, per minute:
   userRateLimitPerMin      Int @default(12)
   globalRateLimitPerMin    Int @default(240)
+  // Support intake tuning (Customer Support AI):
+  // - batching window: how long a ticket's newest customer message must settle
+  //   before the AI replies (groups rapid consecutive messages into one reply).
+  // - email fallback delay: how long an inbound email waits before the intake
+  //   job creates/attaches a ticket (lets another workflow win first).
+  supportBatchingWindowSec    Int @default(90)
+  supportEmailFallbackDelaySec Int @default(300)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -2495,11 +2578,16 @@ model AiApproval {
   // Safe summary of the execution outcome once an approved action runs.
   executionResult String?
 
+  // The coverage session that authorized this AI action (audit link). Null for
+  // actions created outside a coverage session (e.g. a manual per-conversation draft).
+  coverageSessionId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([module, status])
   @@index([status, createdAt])
+  @@index([coverageSessionId])
 }
 
 // AI usage + cost accounting. One row per provider call (or per execution),
@@ -2684,6 +2772,68 @@ model AiReportSchedule {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([enabled])
+}
+
+// AI Support Coverage session — one durable row per activation of the
+// `support_assistant` module's "cover my shift" mode. Manual activation is the
+// TOP-LEVEL authorization boundary: no sweep, cron, retry, or auto-send may act
+// unless a live session here authorizes it (channel + category + automation +
+// confidence), re-validated server-side immediately before every outgoing
+// message. The absence of a live row IS the INACTIVE state.
+//
+// State (src/lib/ai-ops/support/coverageState.ts):
+//   SCHEDULED | ACTIVE_DRAFT_ONLY | ACTIVE_AUTO_REPLY | PAUSED | ENDING
+//   | EXPIRED | ERROR | DEACTIVATED. Terminal: EXPIRED, DEACTIVATED, ERROR.
+model SupportCoverageSession {
+  id    String @id @default(cuid())
+  state String @default("SCHEDULED")
+
+  // Who authorized it + the lifecycle timestamps.
+  activatedBy      String
+  activatedAt      DateTime  @default(now())
+  scheduledStartAt DateTime?
+  scheduledEndAt   DateTime?
+  actualEndAt      DateTime?
+
+  // Config snapshot (what this session is allowed to do). Empty array = "all".
+  // channels: "support_tickets" (only channel today). categories: support/config keys.
+  channels            String[]
+  languages           String[]
+  categories          String[]
+  // automationMode: "draft_only" | "auto_reply". draftOnly mirrors it as a hard
+  // stop; allowAutoReply must ALSO be explicitly confirmed to permit sending.
+  automationMode      String  @default("draft_only")
+  draftOnly           Boolean @default(true)
+  allowAutoReply      Boolean @default(false)
+  // confidenceThreshold: minimum decision confidence to auto-send ("low"|"medium"|"high").
+  confidenceThreshold String  @default("high")
+  // notifyMode: src/lib/ai-ops/support/coverageConfig.ts.
+  notifyMode          String  @default("approvals_and_urgent")
+  // escalationBehavior: forward-compat label for how escalations are surfaced.
+  escalationBehavior  String  @default("notify")
+  // Sent to the customer when the AI cannot safely resolve (auto-reply mode only).
+  fallbackMessage     String?
+
+  // Live counters for the session dashboard + handoff summary.
+  casesProcessed     Int @default(0)
+  messagesDrafted    Int @default(0)
+  messagesAutoSent   Int @default(0)
+  escalationsCreated Int @default(0)
+  failures           Int @default(0)
+
+  pauseReason        String?
+  deactivationReason String?
+
+  // Handoff summary snapshot, computed when the session ends (Phase B).
+  handoff Json?
+  // Consecutive low-confidence decisions — feeds the auto safety pause (Phase C).
+  consecutiveLowConfidence Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([state])
+  @@index([activatedAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2981,4 +3131,44 @@ model InstagramActionRecord {
   updatedAt    DateTime @default(now()) @updatedAt
 
   @@index([kind, createdAt])
+}
+
+// A single piece of Instagram content authored in the Content Studio. One table
+// spans the draft → queue → publication lifecycle: a row starts as a "draft",
+// may become "scheduled"/"publishing", and ends "published" (or "failed"). This
+// keeps the composer, queue and publications history reading from one place.
+// Media is stored as a JSON array of descriptors ({id,type,url,name,size,width,
+// height,duration}); `url` is a public Blob URL once persisted so Instagram can
+// fetch it. No Composio secrets ever live here.
+model InstagramContentItem {
+  id String @id @default(cuid())
+  // format: "post" | "carousel" | "reel" | "story"
+  format String @default("post")
+  // status: "draft" | "scheduled" | "publishing" | "published" | "failed" | "cancelled"
+  status         String   @default("draft")
+  caption        String   @default("")
+  hashtags       String[] @default([])
+  media          Json     @default("[]")
+  reelCoverIndex Int      @default(0)
+  // Scheduling (populated once a draft is programmed — Phase 4).
+  scheduledFor DateTime?
+  timezone     String?
+  retryCount   Int       @default(0)
+  // Friendly last-error message (never the raw Composio error).
+  lastError String?
+  // Publish outcome.
+  publishedAt        DateTime?
+  instagramMediaId   String?
+  instagramPermalink String?
+  // Ties a publish to the idempotency ledger so a retry can't double-post.
+  idempotencyKey String? @unique
+  // Account + authoring audit (safe ids/names only).
+  accountId          String?
+  createdByAdminId   String?
+  createdByAdminName String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  @@index([status, scheduledFor])
+  @@index([status, createdAt])
 }

@@ -81,7 +81,11 @@ function renderPanel(activeTab: string, inventoryOn: boolean) {
     case "collections":
       return <CollectionsPanel />;
     case "guides":
-      return <GuidesPanel />;
+      return (
+        <div className="min-w-0 max-w-full overflow-hidden">
+          <GuidesPanel />
+        </div>
+      );
     case "pricing":
       return <PricingPanel />;
     case "expenses":
@@ -231,7 +235,7 @@ export default function AdminDashboard({ admin }: { admin: AdminIdentity }) {
           onOpenInventory={() => setActiveTab("inventory")}
         />
       ) : (
-        <div style={{ height: "100%", overflowY: "auto" }}>
+        <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
           <div className="admin-panel-pad" style={{ padding: "26px 28px" }}>
             <style>{`@media (max-width: 640px) { .admin-panel-pad { padding: 16px !important; } }`}</style>
             <Suspense fallback={panelFallback}>{renderPanel(activeTab, inventoryOn)}</Suspense>

@@ -775,6 +775,21 @@ function PaymentExperience({
               </div>
             </a>
 
+            {config.support.supportEmail && (
+              <p className="px-1 text-xs text-faint">
+                Vous préférez l&apos;e-mail&nbsp;? Écrivez-nous à{" "}
+                <a
+                  href={`mailto:${config.support.supportEmail}?subject=${encodeURIComponent(
+                    `Commande ${publicOrderNumber}`,
+                  )}`}
+                  className="font-medium text-[#9FB8FF] underline-offset-2 hover:underline"
+                >
+                  {config.support.supportEmail}
+                </a>
+                .
+              </p>
+            )}
+
             {/* Refund request — self-contained: shows the request status or a
                 low-emphasis "Demander un remboursement" action for a paid order.
                 Authorizes against the order id/token server-side. */}

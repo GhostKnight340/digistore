@@ -24,6 +24,8 @@ export interface CreateApprovalInput {
   entityId?: string | null;
   riskLevel?: RiskLevel;
   expiresAt?: Date | null;
+  /** The coverage session that authorized this AI action (audit link). */
+  coverageSessionId?: string | null;
 }
 
 export async function createApproval(input: CreateApprovalInput): Promise<string> {
@@ -38,6 +40,7 @@ export async function createApproval(input: CreateApprovalInput): Promise<string
       riskLevel: input.riskLevel ?? "low",
       status: "PENDING",
       expiresAt: input.expiresAt ?? null,
+      coverageSessionId: input.coverageSessionId ?? null,
     },
     select: { id: true },
   });
@@ -46,6 +49,55 @@ export async function createApproval(input: CreateApprovalInput): Promise<string
     result: "PENDING",
     actionType: input.actionType,
     riskLevel: input.riskLevel ?? "low",
+  });
+  return row.id;
+}
+
+/** One approval's fields needed to execute an approved action. */
+export async function getApproval(id: string) {
+  return prisma.aiApproval.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      module: true,
+      actionType: true,
+      entityType: true,
+      entityId: true,
+      proposedContent: true,
+      editedContent: true,
+      status: true,
+    },
+  });
+}
+
+/**
+ * Records an AI reply that was AUTO-SENT under an authorizing coverage session,
+ * as a terminal COMPLETED approval — so the queue/audit shows exactly what the
+ * assistant sent on its own and under which session (there was no human step).
+ */
+export async function recordAutoSend(input: {
+  module: string;
+  summary: string;
+  content: string;
+  entityId: string;
+  coverageSessionId: string;
+}): Promise<string> {
+  const row = await prisma.aiApproval.create({
+    data: {
+      module: input.module,
+      actionType: "support_reply",
+      summary: input.summary.slice(0, 300),
+      proposedContent: input.content,
+      entityType: "support_ticket",
+      entityId: input.entityId,
+      riskLevel: "low",
+      status: "COMPLETED",
+      approvedBy: "AI (couverture)",
+      approvedAt: new Date(),
+      executionResult: "Envoyé automatiquement au client.",
+      coverageSessionId: input.coverageSessionId,
+    },
+    select: { id: true },
   });
   return row.id;
 }
@@ -64,6 +116,32 @@ export async function countPendingApprovals(): Promise<number> {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Has an approval already been created for this entity at or after `since`?
+ * The support sweep uses this for idempotency: a ticket whose latest approval is
+ * newer than its last update has already been drafted for its current state, so
+ * it must not be re-drafted (avoids duplicate drafts and an endless re-draft loop
+ * after a human rejects one). A new customer message bumps the ticket's
+ * updatedAt past the old approval, which re-opens it for drafting.
+ */
+export async function hasApprovalForEntitySince(
+  entityType: string,
+  entityId: string,
+  since: Date,
+): Promise<boolean> {
+  const row = await prisma.aiApproval.findFirst({
+    where: { entityType, entityId, createdAt: { gte: since } },
+    select: { id: true },
+  });
+  return row !== null;
+}
+
+/** How many approvals (any status) exist for an entity — used to detect whether
+ *  the assistant has already engaged this ticket (e.g. already asked for info). */
+export async function countApprovalsForEntity(entityType: string, entityId: string): Promise<number> {
+  return prisma.aiApproval.count({ where: { entityType, entityId } });
 }
 
 async function currentStatus(id: string): Promise<ApprovalStatus | null> {

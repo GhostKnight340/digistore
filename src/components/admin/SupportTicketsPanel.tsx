@@ -18,6 +18,7 @@ import {
 } from "@/app/actions/supportAdmin";
 import type { SupportTicketAdminDTO } from "@/lib/db/supportTickets";
 import { findSupportCategory } from "@/lib/support/config";
+import ConversationAssistant from "@/components/admin/ConversationAssistant";
 
 const VIEWS = [
   { id: "active", label: "Actives" },
@@ -67,6 +68,24 @@ function StatusChip({ status, resolution }: { status: string; resolution?: strin
   return (
     <span className={`inline-block whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
       {label}
+    </span>
+  );
+}
+
+const OWNERSHIP_META: Record<string, { label: string; cls: string }> = {
+  ai: { label: "🤖 IA support", cls: "text-sky-300 border-sky-500/30 bg-sky-500/10" },
+  awaiting_human: { label: "⏳ En attente humain", cls: "text-amber-300 border-amber-500/30 bg-amber-500/10" },
+  human: { label: "👤 Humain", cls: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10" },
+};
+
+/** "Handled by" badge — who currently owns the conversation. */
+function OwnershipBadge({ owner }: { owner: string | null }) {
+  if (!owner) return null;
+  const meta = OWNERSHIP_META[owner];
+  if (!meta) return null;
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
+      {meta.label}
     </span>
   );
 }
@@ -258,6 +277,7 @@ export default function SupportTicketsPanel() {
                 >
                   <span className="font-mono text-[13px] font-bold text-accent">{t.reference}</span>
                   <StatusChip status={t.status} resolution={t.resolution} />
+                  <OwnershipBadge owner={t.aiOwnership} />
                   <span className="min-w-0 flex-1 basis-40 truncate text-sm text-white">
                     {categoryLabel(t.category)} — {t.subIssueLabel}
                   </span>
@@ -344,6 +364,24 @@ export default function SupportTicketsPanel() {
                       </div>
                     )}
 
+                    {/* Internal AI/agent notes — admin-only, never emailed. */}
+                    {t.internalNotes.length > 0 && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-faint">
+                          Notes internes ({t.internalNotes.length}) · non visibles par le client
+                        </p>
+                        <div className="mt-1.5 space-y-1.5">
+                          {t.internalNotes.map((n, i) => (
+                            <div key={i} className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
+                              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-amber-300/80">{n.author}</p>
+                              <p className="mt-0.5 whitespace-pre-wrap text-[13px] leading-relaxed text-white/90">{n.body}</p>
+                              <p className="mt-0.5 text-[11px] text-faint">{fmtDateTime(n.createdAt)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {t.feedbackRating != null && (
                       <div className="rounded-lg border border-[#F7B14A]/25 bg-[#F7B14A]/[0.06] px-3 py-2.5">
                         <p className="text-xs uppercase tracking-wide text-faint">Avis du client</p>
@@ -382,6 +420,7 @@ export default function SupportTicketsPanel() {
                           Envoyer la réponse
                         </button>
                       </div>
+                      <ConversationAssistant ticketId={t.id} draft={replyText} onInsert={setReplyText} />
                     </div>
 
                     {/* Close / reopen */}

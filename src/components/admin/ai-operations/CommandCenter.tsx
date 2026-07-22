@@ -126,15 +126,15 @@ export default function CommandCenter({ initial }: { initial: CommandCenterSnaps
       <style>{`@keyframes cc-pulse{0%,100%{opacity:1}50%{opacity:.35}}`}</style>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
           <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg,#5b8cff,#a78bfa)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "#0a0b0e" }}>G</div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>AI Operations</div>
             <div style={{ fontSize: 11, color: "#7d818c" }}>ghost.ma · Centre de contrôle</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#9498a3", padding: "6px 10px", borderRadius: 20, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.07)" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: base.globalEnabled ? "#4ade80" : "#6b6e78", animation: base.globalEnabled ? "cc-pulse 2.4s ease-in-out infinite" : "none" }} />
             {base.globalEnabled ? "Système actif" : "Système désactivé"}

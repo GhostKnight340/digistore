@@ -64,7 +64,25 @@ export default function EmailComposer({
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [previewIndex, setPreviewIndex] = useState(0);
   const [zoom, setZoom] = useState(100);
+  // Preview-panel collapse, persisted (matches the admin sidebar behaviour).
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setPreviewCollapsed(localStorage.getItem("email-composer:preview-collapsed") === "1");
+    } catch {
+      /* private mode / no storage — default expanded. */
+    }
+  }, []);
+  const togglePreviewCollapsed = () =>
+    setPreviewCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem("email-composer:preview-collapsed", next ? "1" : "0");
+      } catch {
+        /* ignore persistence failure */
+      }
+      return next;
+    });
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Layout & UI
@@ -487,7 +505,7 @@ export default function EmailComposer({
       senderEmail="support@ghost.ma"
       collapsible={!isMobile}
       collapsed={previewCollapsed}
-      onCollapse={() => setPreviewCollapsed((c) => !c)}
+      onCollapse={togglePreviewCollapsed}
     />
   );
 

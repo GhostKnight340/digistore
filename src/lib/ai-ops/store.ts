@@ -52,6 +52,8 @@ export interface AiOpsSettingsDTO {
   providerMaxRetries: number;
   userRateLimitPerMin: number;
   globalRateLimitPerMin: number;
+  supportBatchingWindowSec: number;
+  supportEmailFallbackDelaySec: number;
 }
 
 export interface AiModuleConfigDTO {
@@ -121,6 +123,8 @@ export async function getAiOpsSettings(): Promise<AiOpsSettingsDTO> {
     providerMaxRetries: row.providerMaxRetries,
     userRateLimitPerMin: row.userRateLimitPerMin,
     globalRateLimitPerMin: row.globalRateLimitPerMin,
+    supportBatchingWindowSec: row.supportBatchingWindowSec,
+    supportEmailFallbackDelaySec: row.supportEmailFallbackDelaySec,
   };
 }
 

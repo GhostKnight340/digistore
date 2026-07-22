@@ -31,6 +31,7 @@ export const CRON_JOBS = [
   "supplier-health",
   "stuck-orders",
   "ai-ops",
+  "support-email",
 ] as const;
 
 export type CronJob = (typeof CRON_JOBS)[number];
@@ -48,6 +49,7 @@ export const JOB_MAX_AGE_MS: Record<CronJob, number> = {
   "supplier-health": 8 * 60 * 60 * 1000, // every 2 h
   "stuck-orders": 4 * 60 * 60 * 1000, // hourly
   "ai-ops": 90 * 60 * 1000, // every 15 min dispatcher; overdue after 90 min
+  "support-email": 60 * 60 * 1000, // every 5 min; overdue after 60 min
 };
 
 /** Alert after this many consecutive failures. The first failure may be a blip. */
