@@ -28,6 +28,13 @@ export default function Navbar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
+  // Logged-in customers have their orders in their account; the guest number+
+  // e-mail lookup is redundant for them (and only resolves their own orders
+  // anyway), so point "Suivi commande" straight at their order history.
+  const navLinks = customer
+    ? links.map((l) => (l.href === "/find-order" ? { ...l, href: "/account/orders" } : l))
+    : links;
+
   useEffect(() => {
     setSearchOpen(false);
     setMenuOpen(false);
@@ -79,7 +86,7 @@ export default function Navbar({
 
         {/* Links */}
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          {links.map((l) => (
+          {navLinks.map((l) => (
             <Link
               key={l.href}
               href={l.href}
@@ -190,7 +197,7 @@ export default function Navbar({
         {menuOpen && (
           <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-card md:hidden">
             <div className="grid p-1">
-              {links.map((link) => (
+              {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
