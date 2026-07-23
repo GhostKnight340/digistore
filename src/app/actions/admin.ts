@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { CATALOG_TAG } from "@/lib/cacheTags";
 import { requireAdminCustomer } from "@/lib/auth";
+import { isVercelBlobUrl } from "@/lib/storage/imageValidation";
 import {
   getGtaPreorderSettings,
   saveGtaPreorderHeroImage,
@@ -280,9 +281,19 @@ export async function saveGtaPreorderHeroImageAction(
 ): Promise<ActionResult> {
   await assertAdminAccess();
   const value = typeof url === "string" ? url.trim() : "";
-  // Accept only an internal upload path or a data: image URI (what /api/upload
-  // returns), or empty to clear — never an arbitrary remote URL.
-  if (value && !/^(\/uploads\/|data:image\/)/.test(value)) {
+  // Accept what /api/upload can return — an image in our own product-media Blob
+  // store (https), a dev /uploads path, or a legacy data: URI — or empty to
+  // clear. Never an arbitrary remote URL: the Blob branch is pinned to our
+  // vercel-storage host AND the product-media/ prefix.
+  const isOurBlob = (() => {
+    if (!isVercelBlobUrl(value)) return false;
+    try {
+      return new URL(value).pathname.startsWith("/product-media/");
+    } catch {
+      return false;
+    }
+  })();
+  if (value && !/^(\/uploads\/|data:image\/)/.test(value) && !isOurBlob) {
     return { ok: false, error: "Image invalide. Importez un fichier via le bouton." };
   }
   await saveGtaPreorderHeroImage(value);
