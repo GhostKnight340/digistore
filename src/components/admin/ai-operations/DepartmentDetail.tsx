@@ -89,6 +89,19 @@ export default function DepartmentDetailView({ detail }: { detail: DepartmentDet
       setBusy(false);
     });
   };
+  /** Header switch — flip enabled and persist just that field immediately. */
+  const toggleEnabled = () => {
+    const next = !form.enabled;
+    set("enabled", next); // optimistic
+    setMessage(null);
+    startTransition(async () => {
+      const res = await saveModuleConfigAction(form.module, { enabled: next });
+      if (!res.ok) {
+        set("enabled", !next); // revert on failure
+        setMessage(res.error ?? "Échec de l'activation.");
+      }
+    });
+  };
   const save = () => {
     setMessage(null);
     startTransition(async () => {
@@ -142,6 +155,33 @@ export default function DepartmentDetailView({ detail }: { detail: DepartmentDet
             </div>
             <div style={{ fontSize: 13, color: "#8b8f99", marginTop: 4 }}>{detail.description}</div>
           </div>
+          {/* Enable/disable switch — persists immediately (no need to open a tab). */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.enabled}
+            onClick={toggleEnabled}
+            disabled={pending}
+            title={form.enabled ? "Désactiver le module" : "Activer le module"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              background: form.enabled ? "rgba(46,160,103,.14)" : "rgba(255,255,255,.05)",
+              border: `1px solid ${form.enabled ? "rgba(46,160,103,.4)" : "rgba(255,255,255,.09)"}`,
+              color: form.enabled ? "#7fdca6" : "#c4c9d4",
+              fontSize: 13,
+              fontWeight: 600,
+              padding: "9px 14px",
+              borderRadius: 9,
+              cursor: pending ? "wait" : "pointer",
+            }}
+          >
+            <span style={{ position: "relative", width: 30, height: 16, borderRadius: 999, background: form.enabled ? "#2EA067" : "rgba(255,255,255,.18)", transition: "background 150ms", flex: "none" }}>
+              <span style={{ position: "absolute", top: 2, left: form.enabled ? 16 : 2, width: 12, height: 12, borderRadius: "50%", background: "#fff", transition: "left 150ms" }} />
+            </span>
+            {form.enabled ? "Activé" : "Désactivé"}
+          </button>
           <button type="button" onClick={runNow} disabled={busy || pending || !form.enabled} style={{ background: c, color: "#0a0b0e", fontWeight: 600, fontSize: 13, border: "none", padding: "10px 16px", borderRadius: 9, cursor: form.enabled ? "pointer" : "not-allowed", opacity: form.enabled ? 1 : 0.5 }} title={form.enabled ? "Exécuter maintenant" : "Module désactivé"}>
             {busy ? "…" : "Exécuter maintenant"}
           </button>
