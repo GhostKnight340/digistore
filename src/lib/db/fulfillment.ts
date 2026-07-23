@@ -172,10 +172,10 @@ export async function deliverOrder(
           customerEmail: true,
           totalMad: true,
           paymentMethod: true,
+          deliveryToken: true,
           discordMessageId: true,
           discordThreadId: true,
           createdAt: true,
-          deliveryToken: true,
           items: {
             select: {
               id: true,

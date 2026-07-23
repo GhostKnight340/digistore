@@ -265,7 +265,9 @@ function PaymentExperience({
     setSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append("orderId", order.id);
+      // Pass the unguessable order token (URL segment), not the internal id —
+      // the server authorizes the mutation by token or logged-in ownership.
+      fd.append("orderId", order.publicOrderPathSegment);
       if (proofFile) fd.append("proof", proofFile);
       if (proofMessage.trim()) fd.append("message", proofMessage.trim());
       const res = await submitPaymentAction(fd);
@@ -287,7 +289,7 @@ function PaymentExperience({
     setSwitching(true);
     setError("");
     try {
-      const res = await changePaymentMethodAction(order.id, methodId);
+      const res = await changePaymentMethodAction(order.publicOrderPathSegment, methodId);
       if (!res.ok) setError(res.error ?? "Modification impossible.");
       else {
         setProofFile(null);
@@ -306,7 +308,7 @@ function PaymentExperience({
     setCancelling(true);
     setError("");
     try {
-      const res = await cancelOrderAction(order.id);
+      const res = await cancelOrderAction(order.publicOrderPathSegment);
       if (!res.ok) setError(res.error ?? "Annulation impossible.");
       else {
         setCancelOpen(false);

@@ -37,7 +37,14 @@ import type { AdminOverviewDTO, AdminOverviewMetricsDTO, CustomerDTO, CustomerOr
 
 type OrderRecord = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
 type AdminOrderSummaryRecord = Awaited<ReturnType<typeof loadAdminOrderSummaries>>[number];
-type PublicOrderIdentity = { id: string; createdAt: Date | string };
+type PublicOrderIdentity = {
+  id: string;
+  createdAt: Date | string;
+  // Unguessable per-order secret. When present it is the customer-facing URL
+  // segment (see publicOrderReference); the sequential public number stays a
+  // human-readable display label only.
+  deliveryToken?: string | null;
+};
 
 const REVENUE_ORDER_STATUSES = ["payment_confirmed", "delivered", "fulfilled"];
 
@@ -394,8 +401,13 @@ export async function publicOrderSequence(order: PublicOrderIdentity): Promise<n
 export async function publicOrderReference(order: PublicOrderIdentity) {
   const sequence = await publicOrderSequence(order);
   return {
+    // Human-readable display label (enumerable — never an access key).
     number: formatPublicOrderNumber(sequence),
-    pathSegment: formatPublicOrderPathSegment(sequence),
+    // Customer-facing URL segment: the unguessable token when the order has one,
+    // falling back to the sequential segment only for legacy pre-token orders
+    // (reachable via that segment solely by the logged-in owner — see
+    // getCustomerOrder).
+    pathSegment: order.deliveryToken ?? formatPublicOrderPathSegment(sequence),
   };
 }
 
@@ -623,7 +635,7 @@ export function customerOwnsOrder(
 }
 
 /** True when the current session customer owns the given order. */
-async function isOrderOwner(order: {
+export async function isOrderOwner(order: {
   customerId: string | null;
   customerEmail: string;
 }): Promise<boolean> {
