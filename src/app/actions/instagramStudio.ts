@@ -17,13 +17,17 @@ import { requireAdminCustomer } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/db/adminAudit";
 import * as instagram from "@/lib/composio/instagram/service";
 import { normalizeComposioError } from "@/lib/composio/server";
-import { deriveIdempotencyKey, validatePublish } from "@/lib/composio/instagram/validation";
 import { blobConfigured, uploadPublicMedia } from "@/lib/storage/blob";
+import { publishContentItem } from "@/lib/composio/instagram/publishFlow";
 import {
+  cancelScheduled,
+  claimForPublish,
   createContentItem,
-  markFailed,
-  markPublished,
+  deleteContentItem,
+  getContentItem,
+  scheduleItem,
   toContentDTO,
+  updateDraft,
 } from "@/lib/composio/instagram/contentStore";
 import type {
   InstagramActionResult,
@@ -50,14 +54,6 @@ async function admin(): Promise<Actor> {
 
 function revalidate() {
   revalidatePath(ADMIN_PATH);
-}
-
-/** Combines the caption and hashtag chips into the single string Instagram takes. */
-function composeCaption(caption: string, hashtags: string[]): string {
-  const tags = hashtags.map((t) => t.trim()).filter(Boolean);
-  const body = caption.trim();
-  if (!tags.length) return body;
-  return body ? `${body}\n\n${tags.join(" ")}` : tags.join(" ");
 }
 
 function sanitizeDescriptors(input: unknown): StudioMediaDescriptor[] {
@@ -90,7 +86,7 @@ export async function uploadInstagramMediaAction(
 ): Promise<InstagramActionResult<{ url: string }>> {
   await admin();
   if (!blobConfigured()) {
-    return { ok: false, error: "Le stockage média n’est pas configuré (BLOB_READ_WRITE_TOKEN)." };
+    return { ok: false, error: "Le stockage média n’est pas configuré (jeton Vercel Blob manquant)." };
   }
   const file = formData.get("file");
   if (!file || typeof file === "string") return { ok: false, error: "Aucun fichier fourni." };
@@ -117,7 +113,7 @@ export async function uploadInstagramMediaAction(
   }
 }
 
-export interface SaveDraftInput {
+interface SaveDraftInput {
   format: StudioFormat;
   caption: string;
   hashtags: string[];
@@ -163,7 +159,7 @@ export async function saveDraftAction(
   }
 }
 
-export interface PublishNowInput {
+interface PublishNowInput {
   format: StudioFormat;
   caption: string;
   hashtags: string[];
@@ -172,9 +168,10 @@ export interface PublishNowInput {
 }
 
 /**
- * Publishes the composer to Instagram immediately. Phase 2 supports a single
- * "Publication" image (the only format the publish tool handles today); other
- * formats surface a clear "not yet supported" message rather than failing raw.
+ * Publishes the composer to Instagram immediately. Only a single "Publication"
+ * image is publishable today; other formats are rejected with a clear message.
+ * Creates the row (claimed as `publishing`) then delegates to the shared
+ * publish flow so the composer, the queue and the cron all publish identically.
  */
 export async function publishNowAction(
   input: PublishNowInput,
@@ -182,20 +179,11 @@ export async function publishNowAction(
   const actor = await admin();
   const format: StudioFormat = input?.format ?? "post";
   if (format !== "post") {
-    return { ok: false, error: "Seules les publications simples (image) peuvent être publiées pour le moment." };
+    return { ok: false, error: "Ce format ne peut pas encore être publié depuis Ghost.ma." };
   }
   const media = sanitizeDescriptors(input?.media);
-  const image = media.find((m) => m.type === "image");
-  if (!image) return { ok: false, error: "Ajoutez une image à publier." };
+  if (!media.some((m) => m.type === "image")) return { ok: false, error: "Ajoutez une image à publier." };
 
-  const finalCaption = composeCaption(input?.caption ?? "", input?.hashtags ?? []);
-  const valid = validatePublish({ imageUrl: image.url, caption: finalCaption });
-  if (!valid.ok) return { ok: false, error: valid.error };
-
-  const token = (input?.token ?? "").trim() || randomUUID();
-  const idempotencyKey = deriveIdempotencyKey(actor.id, ["publish", image.url, finalCaption], token);
-
-  let itemId: string | null = null;
   try {
     const status = await instagram.getStatusSafe();
     const row = await createContentItem({
@@ -209,48 +197,171 @@ export async function publishNowAction(
       createdByAdminId: actor.id,
       createdByAdminName: actor.name,
     });
-    itemId = row.id;
-
-    const result = await instagram.publishMedia({
-      imageUrl: image.url,
-      caption: finalCaption,
-      adminId: actor.id,
-      adminName: actor.name,
-      idempotencyKey,
-    });
-
-    if (result.ok) {
-      await markPublished(row.id, {
-        instagramMediaId: result.mediaId ?? null,
-        instagramPermalink: null,
-        idempotencyKey,
-      });
-      await writeAuditLog({
-        adminId: actor.id,
-        adminName: actor.name,
-        action: "instagram.post_published",
-        metadata: { itemId: row.id, mediaId: result.mediaId ?? null },
-      });
-      revalidate();
-      const published = { ...toContentDTO(row), status: "published" as const, instagramMediaId: undefined };
-      return { ok: true, data: { ...published } };
-    }
-
-    await markFailed(row.id, result.message ?? "La publication a échoué.");
-    await writeAuditLog({
-      adminId: actor.id,
-      adminName: actor.name,
-      action: "instagram.action_failed",
-      metadata: { itemId: row.id },
-    });
+    const res = await publishContentItem(row, actor);
     revalidate();
-    return { ok: false, error: result.message ?? "La publication a échoué." };
+    return res.ok ? { ok: true, data: res.item } : { ok: false, error: res.error };
   } catch (error) {
     const norm = normalizeComposioError(error);
     // eslint-disable-next-line no-console
     console.error("[instagram-studio] publishNow", norm.logHint);
-    if (itemId) await markFailed(itemId, norm.message).catch(() => {});
+    return { ok: false, error: norm.message };
+  }
+}
+
+// ── Queue row actions (Phase 8) ──────────────────────────────────────────────
+
+interface UpdateDraftActionInput {
+  id: string;
+  format: StudioFormat;
+  caption: string;
+  hashtags: string[];
+  media: StudioMediaDescriptor[];
+  reelCoverIndex?: number;
+}
+
+/** Overwrites an existing draft (the composer's "Modifier" → re-save path). */
+export async function updateDraftAction(
+  input: UpdateDraftActionInput,
+): Promise<InstagramActionResult<StudioContentItemDTO>> {
+  await admin();
+  const id = (input?.id ?? "").trim();
+  if (!id) return { ok: false, error: "Élément introuvable." };
+  try {
+    const existing = await getContentItem(id);
+    if (!existing) return { ok: false, error: "Élément introuvable." };
+    if (existing.status !== "draft" && existing.status !== "failed") {
+      return { ok: false, error: "Seuls les brouillons peuvent être modifiés." };
+    }
+    const row = await updateDraft(id, {
+      format: input?.format ?? "post",
+      caption: (input?.caption ?? "").slice(0, MAX_CAPTION),
+      hashtags: Array.isArray(input?.hashtags) ? input.hashtags.slice(0, 30) : [],
+      media: sanitizeDescriptors(input?.media),
+      reelCoverIndex: input?.reelCoverIndex ?? 0,
+    });
     revalidate();
+    return { ok: true, data: toContentDTO(row) };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[instagram-studio] updateDraft", error);
+    return { ok: false, error: "Mise à jour impossible." };
+  }
+}
+
+/** Duplicates any item into a fresh draft. */
+export async function duplicateItemAction(id: string): Promise<InstagramActionResult<StudioContentItemDTO>> {
+  const actor = await admin();
+  const src = (id ?? "").trim();
+  if (!src) return { ok: false, error: "Élément introuvable." };
+  try {
+    const existing = await getContentItem(src);
+    if (!existing) return { ok: false, error: "Élément introuvable." };
+    const row = await createContentItem({
+      format: existing.format as StudioFormat,
+      status: "draft",
+      caption: existing.caption,
+      hashtags: existing.hashtags,
+      media: sanitizeDescriptors(existing.media),
+      reelCoverIndex: existing.reelCoverIndex,
+      accountId: existing.accountId,
+      createdByAdminId: actor.id,
+      createdByAdminName: actor.name,
+    });
+    revalidate();
+    return { ok: true, data: toContentDTO(row) };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[instagram-studio] duplicate", error);
+    return { ok: false, error: "Duplication impossible." };
+  }
+}
+
+/** Permanently removes a queue item. */
+export async function deleteItemAction(id: string): Promise<InstagramActionResult> {
+  await admin();
+  const target = (id ?? "").trim();
+  if (!target) return { ok: false, error: "Élément introuvable." };
+  try {
+    await deleteContentItem(target);
+    revalidate();
+    return { ok: true };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[instagram-studio] delete", error);
+    return { ok: false, error: "Suppression impossible." };
+  }
+}
+
+/** Cancels a scheduled item (kept as history, not re-published). */
+export async function cancelScheduledAction(id: string): Promise<InstagramActionResult> {
+  await admin();
+  const target = (id ?? "").trim();
+  if (!target) return { ok: false, error: "Élément introuvable." };
+  try {
+    await cancelScheduled(target);
+    revalidate();
+    return { ok: true };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[instagram-studio] cancel", error);
+    return { ok: false, error: "Annulation impossible." };
+  }
+}
+
+const CASABLANCA_TZ = "Africa/Casablanca";
+
+/**
+ * Schedules (or reschedules) an item for a future time. The client sends the
+ * wall-clock date + time the admin picked in Africa/Casablanca (fixed GMT+1),
+ * which we anchor to a real UTC instant. The /api/cron/instagram-publish sweep
+ * publishes it when due.
+ */
+export async function scheduleItemAction(input: {
+  id: string;
+  date: string;
+  time: string;
+}): Promise<InstagramActionResult<StudioContentItemDTO>> {
+  await admin();
+  const id = (input?.id ?? "").trim();
+  if (!id) return { ok: false, error: "Élément introuvable." };
+  if (!input?.date || !input?.time) return { ok: false, error: "Choisissez une date et une heure." };
+
+  const when = new Date(`${input.date}T${input.time}:00+01:00`);
+  if (Number.isNaN(when.getTime())) return { ok: false, error: "Date invalide." };
+  if (when.getTime() < Date.now() + 60_000) return { ok: false, error: "Choisissez une date dans le futur." };
+
+  try {
+    await scheduleItem(id, when, CASABLANCA_TZ);
+    const row = await getContentItem(id);
+    if (!row) return { ok: false, error: "Élément introuvable." };
+    revalidate();
+    return { ok: true, data: toContentDTO(row) };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[instagram-studio] schedule", error);
+    return { ok: false, error: "Programmation impossible." };
+  }
+}
+
+/**
+ * Publishes an existing queue item now (queue "Publier maintenant" and failed
+ * "Réessayer"). Claims the row atomically so a second click / the cron can't
+ * double-post, then runs the shared publish flow.
+ */
+export async function publishExistingAction(id: string): Promise<InstagramActionResult<StudioContentItemDTO>> {
+  const actor = await admin();
+  const target = (id ?? "").trim();
+  if (!target) return { ok: false, error: "Élément introuvable." };
+  try {
+    const row = await claimForPublish(target, ["draft", "scheduled", "failed"]);
+    if (!row) return { ok: false, error: "Cet élément est déjà en cours de publication." };
+    const res = await publishContentItem(row, actor);
+    revalidate();
+    return res.ok ? { ok: true, data: res.item } : { ok: false, error: res.error };
+  } catch (error) {
+    const norm = normalizeComposioError(error);
+    // eslint-disable-next-line no-console
+    console.error("[instagram-studio] publishExisting", norm.logHint);
     return { ok: false, error: norm.message };
   }
 }

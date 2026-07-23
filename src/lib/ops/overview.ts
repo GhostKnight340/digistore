@@ -174,6 +174,7 @@ const JOB_LABEL: Record<CronJob, string> = {
   "stuck-orders": "Cron commandes bloquées",
   "ai-ops": "Cron AI Operations",
   "support-email": "Cron e-mails support",
+  "instagram-publish": "Cron publications Instagram",
 };
 
 export async function getJobsStatus(): Promise<OpsJobDTO[]> {

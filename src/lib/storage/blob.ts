@@ -8,8 +8,11 @@ import { put } from "@vercel/blob";
  * service. The rest of Ghost.ma stores small artwork as `data:` URIs in Postgres
  * (see /api/upload), but Instagram/Composio fetches the media URL itself, so a
  * post's image has to live at a real public https URL — that is what Blob gives
- * us. Requires BLOB_READ_WRITE_TOKEN (set automatically when a Vercel Blob store
- * is attached to the project; add it locally to test uploads in dev).
+ * us. The Instagram store is connected with the `INSTAGRAM` env prefix (a
+ * dedicated store, so it doesn't collide with the project's other Blob stores),
+ * giving INSTAGRAM_READ_WRITE_TOKEN; we fall back to the default
+ * BLOB_READ_WRITE_TOKEN if a store is ever wired without a prefix. The store
+ * MUST be created with Public access so Instagram can fetch the URL unauthenticated.
  */
 
 export interface BlobUploadResult {
@@ -17,9 +20,14 @@ export interface BlobUploadResult {
   pathname: string;
 }
 
+/** The read-write token for the Instagram Blob store (prefixed, else default). */
+function blobToken(): string | undefined {
+  return process.env.INSTAGRAM_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
+}
+
 /** Whether a Blob token is present. Publishing an uploaded file needs this. */
 export function blobConfigured(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(blobToken());
 }
 
 /**
@@ -33,8 +41,8 @@ export async function uploadPublicMedia(input: {
   ext: string;
   prefix?: string;
 }): Promise<BlobUploadResult> {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) throw new Error("BLOB_READ_WRITE_TOKEN is not configured.");
+  const token = blobToken();
+  if (!token) throw new Error("Instagram Blob token is not configured (INSTAGRAM_READ_WRITE_TOKEN).");
 
   const key = `${input.prefix ?? "instagram"}/${randomBytes(8).toString("hex")}.${input.ext}`;
   const blob = await put(key, input.buffer, {

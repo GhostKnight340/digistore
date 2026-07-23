@@ -18,10 +18,14 @@ export default function AdminShellRoute({
   active,
   admin,
   children,
+  bare = false,
 }: {
   active: string;
   admin: AdminIdentity;
   children: ReactNode;
+  /** Skip the default padded scroll wrapper so the route owns the full-height
+   *  content slot (its own sticky header + scroll region), e.g. the IG studio. */
+  bare?: boolean;
 }) {
   const router = useRouter();
   const [navCounts, setNavCounts] = useState<NavCounts | null>(null);
@@ -50,12 +54,17 @@ export default function AdminShellRoute({
       admin={admin}
     >
       {/* Standalone routes need their own scroll region: the shell's content
-          slot is overflow:hidden (the dashboard supplies this wrapper itself). */}
-      <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
-        <div className="admin-panel-pad" style={{ padding: "26px 28px" }}>
-          {children}
+          slot is overflow:hidden (the dashboard supplies this wrapper itself).
+          `bare` routes take the full-height slot and scroll themselves. */}
+      {bare ? (
+        <div style={{ height: "100%", overflow: "hidden" }}>{children}</div>
+      ) : (
+        <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
+          <div className="admin-panel-pad" style={{ padding: "26px 28px" }}>
+            {children}
+          </div>
         </div>
-      </div>
+      )}
     </AdminShell>
   );
 }

@@ -1,16 +1,20 @@
 import { requireAdminCustomer } from "@/lib/auth";
 import { toAdminIdentity } from "@/lib/adminIdentity";
 import AdminShellRoute from "@/components/admin/AdminShellRoute";
-import { getStatusSafe, getRecentMedia } from "@/lib/composio/instagram/service";
-import type { InstagramMediaDTO } from "@/lib/composio/instagram/types";
+import { getStatusSafe } from "@/lib/composio/instagram/service";
+import { listPublications, listQueue } from "@/lib/composio/instagram/contentStore";
+import type { StudioContentItemDTO } from "@/lib/composio/instagram/types";
 import InstagramIntegrationView from "@/components/admin/integrations/InstagramIntegrationView";
+import InstagramStudio from "@/components/admin/integrations/instagram/studio/InstagramStudio";
 
 /**
  * Admin > Intégrations > Instagram.
  *
  * Server component: gates on an admin session, loads the browser-safe status DTO
- * (no Composio ids) and — when connected — recent media. All mutations happen
- * through server actions in src/app/actions/instagram.ts.
+ * (no Composio ids). When connected it renders the Instagram Content Studio (its
+ * own full-height layout, hence `bare`); when not, it falls back to the connect
+ * flow. All mutations go through the server actions in
+ * src/app/actions/instagram.ts and src/app/actions/instagramStudio.ts.
  */
 export const dynamic = "force-dynamic";
 
@@ -30,22 +34,32 @@ export default async function InstagramIntegrationPage({
 }) {
   const customer = await requireAdminCustomer();
   const params = await searchParams;
+  const admin = toAdminIdentity(customer.name, customer.role);
+  const banner = bannerFrom(params);
 
   const status = await getStatusSafe();
 
-  // Recent media is a live Composio read — never let it break the page.
-  let media: InstagramMediaDTO[] = [];
   if (status.connected) {
+    // Queue + publications are DB reads — never let them break the studio.
+    let queue: StudioContentItemDTO[] = [];
+    let publications: StudioContentItemDTO[] = [];
     try {
-      media = await getRecentMedia(12);
+      [queue, publications] = await Promise.all([listQueue(), listPublications()]);
     } catch {
-      media = [];
+      queue = [];
+      publications = [];
     }
+
+    return (
+      <AdminShellRoute active="integrations" admin={admin} bare>
+        <InstagramStudio status={status} queue={queue} publications={publications} banner={banner} />
+      </AdminShellRoute>
+    );
   }
 
   return (
-    <AdminShellRoute active="integrations" admin={toAdminIdentity(customer.name, customer.role)}>
-      <InstagramIntegrationView status={status} media={media} banner={bannerFrom(params)} />
+    <AdminShellRoute active="integrations" admin={admin}>
+      <InstagramIntegrationView status={status} media={[]} banner={banner} />
     </AdminShellRoute>
   );
 }
