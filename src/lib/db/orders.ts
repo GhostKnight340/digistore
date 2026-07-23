@@ -600,6 +600,28 @@ export async function emailHasRegisteredAccount(email: string): Promise<boolean>
   return Boolean(customer?.passwordHash || customer?.googleId || customer?.discordId);
 }
 
+/**
+ * Owner identity of an order, for authorizing a logged-in customer's access.
+ * Returns null when the order does not exist.
+ */
+export async function getOrderOwnership(
+  orderId: string,
+): Promise<{ customerId: string | null; customerEmail: string } | null> {
+  return prisma.order.findUnique({
+    where: { id: orderId },
+    select: { customerId: true, customerEmail: true },
+  });
+}
+
+/** Pure ownership check: does this customer own the given order? */
+export function customerOwnsOrder(
+  customer: { id: string; email: string },
+  owner: { customerId: string | null; customerEmail: string },
+): boolean {
+  if (owner.customerId && owner.customerId === customer.id) return true;
+  return owner.customerEmail.toLowerCase() === customer.email.toLowerCase();
+}
+
 /** True when the current session customer owns the given order. */
 async function isOrderOwner(order: {
   customerId: string | null;

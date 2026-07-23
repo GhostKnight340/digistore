@@ -79,7 +79,7 @@ function sniffImageType(buffer: Buffer): string | null {
 
 export async function POST(req: NextRequest) {
   try {
-    const { allowed, retryAfterMs } = consume([
+    const { allowed, retryAfterMs } = await consume([
       dim("feedback-attachment:ip", requestIp(req), POLICIES.attachmentIp),
     ]);
     if (!allowed) {

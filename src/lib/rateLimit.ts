@@ -1,27 +1,27 @@
 import { headers } from "next/headers";
-import {
-  consumeAll,
-  createStore,
-  sweep,
-  type Dimension,
-  type RateLimitPolicy,
-  type RateLimitResult,
-} from "./rateLimitCore";
+import type { Dimension, RateLimitPolicy, RateLimitResult } from "./rateLimitCore";
 
 /**
- * Shared abuse-prevention limiter for the public, unauthenticated surface:
- * order lookup, the auth actions, feedback attachment upload and search.
+ * Shared abuse-prevention limiter for the public, unauthenticated surface: order
+ * lookup, the auth actions, feedback / refund attachment upload and search.
  *
- * Read the LIMITATION block at the top of ./rateLimitCore before treating any
- * of these budgets as a security guarantee — the store is per-instance and
- * resets on a serverless cold start.
+ * Backend (see ./rateLimit/*): a DURABLE, cross-instance limiter, unlike the
+ * per-process Map it replaced.
+ *   1. Primary  — Upstash Redis via @upstash/ratelimit (sliding window).
+ *   2. Fallback — a Postgres fixed-window counter (RateLimitCounter), used when
+ *                 Redis is unavailable, so limits still hold across instances.
+ *   3. Both down — FAIL CLOSED (deny). Sensitive endpoints must never silently
+ *                 become unlimited; if Postgres itself is down the app can't serve
+ *                 these routes anyway.
+ *
+ * `POLICIES` remains the single source of truth for every budget and is reused by
+ * auth, support, payment-proof/refund and order-lookup routes.
  */
 
-const store = createStore();
+import { redisConfigured, redisConsume } from "./rateLimit/redis";
+import { dbConsume, sweepExpiredCounters } from "./rateLimit/dbCounter";
 
-/** Longest window any policy below uses — drives the lazy sweep. */
-const MAX_WINDOW_MS = 60 * 60 * 1000;
-const SWEEP_THRESHOLD = 5_000;
+export type { Dimension, RateLimitPolicy, RateLimitResult } from "./rateLimitCore";
 
 // ── Budgets ──────────────────────────────────────────────────────────────────
 // Sized per action: rarer + more damaging (password reset e-mails, order-token
@@ -37,6 +37,15 @@ export const POLICIES = {
   orderLookupEmail: { limit: 5, windowMs: 10 * MIN },
 
   /**
+   * Escalating penalty budgets charged ONLY on a FAILED lookup (wrong email / no
+   * such order / unauthorized). Much tighter and over a longer window than the
+   * per-attempt budgets above, so a handful of honest typos are fine but a script
+   * grinding order-number×email combinations is throttled hard and quickly.
+   */
+  orderLookupFailIp: { limit: 20, windowMs: 60 * MIN },
+  orderLookupFailEmail: { limit: 10, windowMs: 60 * MIN },
+
+  /**
    * Order creation. Guest checkout means this is reachable without a session,
    * and each accepted call writes an Order + items + a payment event and sends a
    * transactional e-mail on Resend's quota. Generous enough that a customer
@@ -50,6 +59,8 @@ export const POLICIES = {
   loginEmail: { limit: 8, windowMs: 15 * MIN },
   /** Looser than the e-mail budget: offices and mobile carriers share an IP. */
   loginIp: { limit: 20, windowMs: 15 * MIN },
+  /** Escalating penalty for repeated FAILED logins from one IP. */
+  loginFailIp: { limit: 30, windowMs: 60 * MIN },
 
   registerIp: { limit: 5, windowMs: 60 * MIN },
 
@@ -59,7 +70,7 @@ export const POLICIES = {
   resendVerificationEmail: { limit: 3, windowMs: 60 * MIN },
   resendVerificationIp: { limit: 10, windowMs: 60 * MIN },
 
-  /** Each accepted upload writes megabytes of base64 into the database. */
+  /** Each accepted upload writes megabytes into Blob/Postgres. */
   attachmentIp: { limit: 5, windowMs: 10 * MIN },
 
   /** Keystroke autocomplete — must stay comfortable for real typing. */
@@ -69,10 +80,10 @@ export const POLICIES = {
 // ── Client IP ────────────────────────────────────────────────────────────────
 
 /**
- * Same derivation the codebase already uses (see src/app/actions/feedback.ts
- * and src/lib/checkout/emailVerification.ts). Note these headers are supplied by
- * the proxy; on Vercel x-forwarded-for is trustworthy, but a self-hosted
- * deployment behind a misconfigured proxy could see a spoofed value.
+ * Derive the client IP from Vercel's documented request headers. On Vercel
+ * `x-forwarded-for`'s first hop is set by the platform and is trustworthy; a
+ * self-hosted deployment behind a misconfigured proxy could see a spoofed value,
+ * which is why the email/identifier dimension exists alongside the IP one.
  */
 export async function clientIp(): Promise<string> {
   try {
@@ -92,21 +103,43 @@ export function requestIp(req: Request): string {
 
 // ── Enforcement ──────────────────────────────────────────────────────────────
 
+let sweptAt = 0;
+const SWEEP_INTERVAL_MS = 5 * MIN;
+
 /**
- * Charge one attempt against every listed dimension. Dimensions are namespaced
- * per action so an IP's search budget is independent of its login budget.
+ * Charge one attempt against every listed dimension, as one all-or-nothing
+ * decision. Durable + shared across serverless instances. Tries Redis first,
+ * then the Postgres counter, then fails closed. Async (the durable stores are
+ * network calls) — callers must `await`.
  */
-export function consume(dimensions: Dimension[]): RateLimitResult {
-  if (store.size > SWEEP_THRESHOLD) sweep(store, MAX_WINDOW_MS);
-  return consumeAll(store, dimensions);
+export async function consume(dimensions: Dimension[]): Promise<RateLimitResult> {
+  if (redisConfigured()) {
+    try {
+      return await redisConsume(dimensions);
+    } catch (err) {
+      console.error("[rateLimit] Redis unavailable, falling back to Postgres counter", err);
+    }
+  }
+
+  try {
+    const result = await dbConsume(dimensions);
+    // Opportunistically prune expired counter rows (no serverless scheduler).
+    const now = Date.now();
+    if (now - sweptAt > SWEEP_INTERVAL_MS) {
+      sweptAt = now;
+      void sweepExpiredCounters(now);
+    }
+    return result;
+  } catch (err) {
+    // Both durable stores are unavailable. Fail CLOSED so a sensitive endpoint
+    // never becomes unlimited. (If Postgres is down these routes can't work
+    // anyway — everything they do is a DB read/write.)
+    console.error("[rateLimit] durable stores unavailable — failing closed", err);
+    return { allowed: false, remaining: 0, retryAfterMs: 60 * 1000 };
+  }
 }
 
 /** Build a namespaced dimension, e.g. dim("login:ip", ip, POLICIES.loginIp). */
 export function dim(namespace: string, value: string, policy: RateLimitPolicy): Dimension {
   return { key: `${namespace}:${value}`, policy };
-}
-
-/** Test-only: drop all recorded events. */
-export function __resetForTests(): void {
-  store.clear();
 }

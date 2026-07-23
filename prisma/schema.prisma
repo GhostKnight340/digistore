@@ -328,7 +328,23 @@ model RecentlyViewedProduct {
 model ProductMedia {
   id        String   @id @default(cuid())
   productId String
+  // LEGACY serving/source URL. Historically this held either a `/uploads/...`
+  // dev path or a `data:<mime>;base64,...` URI (production). New media is stored
+  // on Vercel Blob and `blobUrl` below is authoritative; `url` is kept only for
+  // read compatibility with un-migrated rows and MUST NOT be dropped until the
+  // Blob migration is verified. Prefer `blobUrl ?? url` everywhere.
   url       String
+  // Vercel Blob https URL (set once migrated / for all new uploads). When present
+  // it wins over `url`; list queries select this instead of the base64 `url`.
+  blobUrl   String?
+  // Blob object key (pathname) — needed to delete the object safely.
+  pathname  String?
+  // Intrinsic pixel dimensions, for next/image and to avoid layout shift.
+  width     Int?
+  height    Int?
+  // Stored MIME type (e.g. "image/webp") and byte size of the Blob object.
+  mimeType  String?
+  fileSize  Int?
   alt       String   @default("")
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
@@ -336,6 +352,9 @@ model ProductMedia {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+  // Powers the "is this Blob still referenced?" check before a delete, and
+  // orphan detection in the migration script.
+  @@index([pathname])
 }
 
 model ProductVariant {
@@ -2704,6 +2723,42 @@ model AiRateCounter {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
+}
+
+// Durable fallback for the PUBLIC rate limiter (order lookup, auth, attachments,
+// support). Fixed-window counter per dimension — `bucket` =
+// "{dimension-key}:{windowIndex}" — incremented atomically via upsert, so limits
+// hold across serverless instances when Upstash Redis is unavailable. Separate
+// from AiRateCounter (which is ai-ops scoped) so the two never share buckets.
+// Expired rows are swept opportunistically. See src/lib/rateLimit.
+model RateLimitCounter {
+  id        String   @id @default(cuid())
+  bucket    String   @unique
+  count     Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// Public/guest security events (no admin identity — distinct from AdminAuditLog).
+// Records suspicious activity on unauthenticated surfaces: repeated failed order
+// lookups, rate-limit trips and unauthorized order access. `identifierHash` is a
+// salted hash of the normalized lookup identifier (never the raw email); `ip` is
+// the derived client IP. Powers escalation review + Discord alerting.
+model SecurityEvent {
+  id             String   @id @default(cuid())
+  // kind: "order_lookup_failed" | "order_lookup_ratelimited" |
+  //       "order_lookup_unauthorized" | "auth_ratelimited" | ...
+  kind           String
+  ip             String?
+  identifierHash String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([kind, createdAt])
+  @@index([identifierHash, createdAt])
+  @@index([ip, createdAt])
 }
 
 // Idempotency + execution locking for Discord messages (spec §5). The Discord

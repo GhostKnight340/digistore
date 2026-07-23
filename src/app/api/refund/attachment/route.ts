@@ -59,7 +59,7 @@ const EXT: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { allowed, retryAfterMs } = consume([
+    const { allowed, retryAfterMs } = await consume([
       dim("refund-attachment:ip", requestIp(req), POLICIES.attachmentIp),
     ]);
     if (!allowed) {

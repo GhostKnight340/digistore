@@ -44,7 +44,7 @@ export async function GET(request: Request) {
   // Unauthenticated endpoint: throttle per IP so search cannot be used to hammer
   // the database. Budget is generous enough for fast typing (the client debounces
   // keystrokes) but stops scripted floods from a single source.
-  const { allowed, retryAfterMs } = consume([
+  const { allowed, retryAfterMs } = await consume([
     dim("search:ip", requestIp(request), POLICIES.searchIp),
   ]);
   if (!allowed) {

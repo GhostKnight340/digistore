@@ -63,13 +63,13 @@ function isValidOptionalPhone(value: string) {
  * did) let one attacker spread an attack across many addresses for free; keying
  * on IP alone would punish shared office and mobile-carrier addresses.
  *
- * The limiter's store is per serverless instance, so on Vercel these budgets
- * bound a single instance rather than the whole deployment — see the LIMITATION
- * note in src/lib/rateLimitCore.ts. They meaningfully raise the cost of casual
- * abuse; they are not a durable guarantee.
+ * The limiter is now DURABLE and shared across serverless instances (Upstash
+ * Redis, with a Postgres-counter fallback and fail-closed on total outage — see
+ * @/lib/rateLimit), so these budgets bound the whole deployment, not a single
+ * instance.
  */
 async function checkLoginRateLimit(email: string) {
-  const { allowed } = consume([
+  const { allowed } = await consume([
     dim("login:email", email.toLowerCase(), POLICIES.loginEmail),
     dim("login:ip", await clientIp(), POLICIES.loginIp),
   ]);
@@ -92,7 +92,7 @@ export async function registerCustomerAction(input: {
     // Registration sends a verification e-mail, so it burns Resend quota and can
     // be pointed at arbitrary addresses. Keyed on IP only: the e-mail dimension
     // would be useless here (every attempt uses a fresh address by definition).
-    if (!consume([dim("register:ip", await clientIp(), POLICIES.registerIp)]).allowed) {
+    if (!(await consume([dim("register:ip", await clientIp(), POLICIES.registerIp)])).allowed) {
       return { ok: false, error: "Trop de tentatives. Réessayez plus tard." };
     }
     if (!input.acceptTerms) return { ok: false, error: "Veuillez accepter les conditions." };
@@ -204,6 +204,9 @@ export async function loginCustomerAction(input: {
   const customer = await prisma.customer.findUnique({ where: { email } });
   const valid = await verifyPassword(input.password, customer?.passwordHash ?? null);
   if (!customer || !valid) {
+    // Escalating penalty for repeated FAILED logins from one source — tightens
+    // fast under a credential-stuffing run without punishing honest mistakes.
+    await consume([dim("login-fail:ip", await clientIp(), POLICIES.loginFailIp)]);
     return { ok: false, error: "E-mail ou mot de passe incorrect." };
   }
   await prisma.customer.update({
@@ -230,10 +233,12 @@ export async function requestPasswordResetAction(emailInput: string): Promise<Au
   // an attacker-chosen address. When the budget is exhausted we skip the send
   // but return the SAME generic response as always — the message must stay
   // independent of whether the account exists, and of whether we were throttled.
-  const withinBudget = consume([
-    dim("password-reset:email", email, POLICIES.passwordResetEmail),
-    dim("password-reset:ip", await clientIp(), POLICIES.passwordResetIp),
-  ]).allowed;
+  const withinBudget = (
+    await consume([
+      dim("password-reset:email", email, POLICIES.passwordResetEmail),
+      dim("password-reset:ip", await clientIp(), POLICIES.passwordResetIp),
+    ])
+  ).allowed;
   const customer =
     withinBudget && isEmail(email)
       ? await prisma.customer.findUnique({ where: { email } })
@@ -295,10 +300,12 @@ export async function resendVerificationAction(): Promise<AuthActionResult> {
 
     // Session-gated, so this is quota burn rather than open e-mail bombing — but
     // one account can still drive unlimited sends to its own address.
-    const withinBudget = consume([
-      dim("resend-verification:email", customer.email.toLowerCase(), POLICIES.resendVerificationEmail),
-      dim("resend-verification:ip", await clientIp(), POLICIES.resendVerificationIp),
-    ]).allowed;
+    const withinBudget = (
+      await consume([
+        dim("resend-verification:email", customer.email.toLowerCase(), POLICIES.resendVerificationEmail),
+        dim("resend-verification:ip", await clientIp(), POLICIES.resendVerificationIp),
+      ])
+    ).allowed;
     if (!withinBudget) {
       return { ok: false, error: "Trop de demandes. Réessayez dans un moment." };
     }
