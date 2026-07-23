@@ -20,6 +20,7 @@ type PreviewMode = "feed" | "mobile" | "fullscreen";
 type Autosave = "idle" | "saving" | "saved";
 
 const MAX_CAPTION = 2200;
+const MAX_HASHTAGS = 30; // Instagram's per-post hashtag limit.
 const EMOJIS = ["✨", "🔥", "📦", "🎮", "🛒", "🚀", "💎"];
 const AUTOSAVE_KEY = "ig-studio-composer";
 
@@ -219,7 +220,12 @@ export function Composer({
     let v = raw.trim().replace(/\s+/g, "");
     if (!v) return;
     if (!v.startsWith("#")) v = `#${v}`;
-    if (!hashtags.includes(v)) updateHashtags([...hashtags, v]);
+    if (hashtags.includes(v)) return;
+    if (hashtags.length >= MAX_HASHTAGS) {
+      onToast(`Instagram limite à ${MAX_HASHTAGS} hashtags.`, "err");
+      return;
+    }
+    updateHashtags([...hashtags, v]);
   }
   function improveHashtags() {
     if (!hashtags.length) return;
@@ -235,11 +241,20 @@ export function Composer({
     else onToast(res.error ?? "Suggestion impossible.", "err");
   }
   function addSuggested(tag: string) {
-    if (!hashtags.includes(tag)) updateHashtags([...hashtags, tag]);
+    if (hashtags.includes(tag)) return;
+    if (hashtags.length >= MAX_HASHTAGS) {
+      onToast(`Instagram limite à ${MAX_HASHTAGS} hashtags.`, "err");
+      return;
+    }
+    updateHashtags([...hashtags, tag]);
     setSuggested((s) => s.filter((h) => h !== tag));
   }
   function addAllSuggested() {
-    updateHashtags([...new Set([...hashtags, ...suggested])]);
+    const merged = [...new Set([...hashtags, ...suggested])].slice(0, MAX_HASHTAGS);
+    if (merged.length < hashtags.length + suggested.length) {
+      onToast(`Ajouté jusqu’à la limite de ${MAX_HASHTAGS} hashtags.`, "info");
+    }
+    updateHashtags(merged);
     setSuggested([]);
   }
   function insertHashtagsIntoCaption() {
@@ -591,7 +606,7 @@ export function Composer({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: C.dim }}>Hashtags</div>
             <span style={{ fontSize: 11.5, color: C.muted }}>
-              {hashtags.length ? `${hashtags.length} hashtag${hashtags.length > 1 ? "s" : ""}` : ""}
+              {hashtags.length ? `${hashtags.length} / ${MAX_HASHTAGS} hashtags` : ""}
             </span>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 9 }}>

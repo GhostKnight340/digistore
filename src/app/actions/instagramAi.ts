@@ -33,8 +33,27 @@ const ACTION_INSTRUCTION: Record<string, string> = {
 const SYSTEM =
   "Tu es un expert en rédaction de légendes Instagram pour Ghost.ma, une boutique " +
   "marocaine de produits numériques (cartes cadeaux, recharges, gaming). Tu écris des " +
-  "légendes concises, authentiques et adaptées à Instagram. Réponds UNIQUEMENT avec le " +
-  "texte final, sans guillemets, sans préambule ni commentaire.";
+  "légendes concises, authentiques et adaptées à Instagram. Contraintes Instagram : la " +
+  "légende ne doit JAMAIS dépasser 2 200 caractères (vise plutôt 125–300 pour l'accroche). " +
+  "N'ajoute PAS de hashtags dans la légende — les hashtags sont gérés séparément. " +
+  "Réponds UNIQUEMENT avec le texte final, sans guillemets, sans préambule ni commentaire.";
+
+/**
+ * Curated bank of PROVEN, real Instagram hashtags for Ghost.ma's niche, grouped
+ * by reach tier. The model selects + tailors from this (rather than inventing
+ * obscure tags) so suggestions are established, searchable hashtags. Best-practice
+ * reach mix beats raw volume — a huge tag buries you; mid-size niche tags rank.
+ */
+const HASHTAG_BANK = {
+  largeReach: ["#gaming", "#gamer", "#playstation", "#xbox", "#steam", "#giftcard", "#jeuxvideo", "#gamingcommunity"],
+  midNiche: [
+    "#gamingmaroc", "#cartescadeaux", "#steamwallet", "#playstationmaroc", "#xboxmaroc",
+    "#freefire", "#pubgmobile", "#rechargeenligne", "#netflixmaroc", "#produitnumerique",
+    "#gamingsetup", "#cartecadeau",
+  ],
+  local: ["#maroc", "#morocco", "#casablanca", "#rabat", "#marrakech", "#tanger", "#shoppingmaroc", "#مغرب"],
+  brand: ["#ghostma", "#ghostshop", "#livraisoninstantanee", "#paiementsecurise"],
+};
 
 function notConfigured(): InstagramActionResult<never> {
   return { ok: false, error: "L’assistance IA n’est pas configurée sur ce serveur." };
@@ -95,22 +114,42 @@ export async function suggestHashtagsAction(
   const existing = Array.isArray(input?.hashtags) ? input.hashtags : [];
 
   const prompt = [
-    "À partir du texte suivant, propose 6 à 10 hashtags Instagram pertinents pour une boutique",
-    "marocaine de produits numériques. Mélange des hashtags de marque, de niche et locaux.",
-    `Langue : ${input?.language || "Français"}.`,
+    "Propose des hashtags Instagram pour ce post d'une boutique marocaine de produits",
+    "numériques (Ghost.ma : cartes cadeaux, recharges, gaming).",
+    "",
+    "STRATÉGIE (essentielle pour la portée) : ne choisis PAS uniquement les plus gros",
+    "hashtags — un hashtag énorme enterre le post. Vise un MÉLANGE de niveaux :",
+    "• 2–3 à forte portée (larges, très recherchés)",
+    "• 4–6 de niche moyenne (10k–500k publications, où le post peut ressortir)",
+    "• 2–3 locaux (Maroc / villes)",
+    "• 1–2 de marque.",
+    "Total : 10 à 14 hashtags (maximum absolu Instagram = 30 ; ne dépasse pas).",
+    "Choisis des hashtags RÉELS et populaires, pas des inventions obscures.",
+    "Adapte-les au texte du post et à la langue.",
+    "",
+    "Banque de hashtags éprouvés à privilégier (choisis les plus pertinents, tu peux en",
+    "ajouter d'autres réels si le sujet l'exige) :",
+    `• Forte portée : ${HASHTAG_BANK.largeReach.join(" ")}`,
+    `• Niche moyenne : ${HASHTAG_BANK.midNiche.join(" ")}`,
+    `• Local : ${HASHTAG_BANK.local.join(" ")}`,
+    `• Marque : ${HASHTAG_BANK.brand.join(" ")}`,
+    "",
+    `Langue de préférence : ${input?.language || "Français"}.`,
     existing.length ? `Évite ces hashtags déjà utilisés : ${existing.join(" ")}.` : "",
     "Réponds UNIQUEMENT avec les hashtags séparés par des espaces, chacun commençant par #.",
     "",
-    "Texte :",
-    caption || "(pas de légende — base-toi sur le contexte Ghost.ma)",
+    "Texte du post :",
+    caption || "(pas de légende — base-toi sur le contexte Ghost.ma : gaming, cartes cadeaux, recharges, Maroc)",
   ].filter(Boolean);
 
   try {
     const client = resolveProvider("anthropic");
-    const res = await client.complete({ model: MODEL, system: SYSTEM, input: prompt.join("\n"), maxTokens: 200 });
+    const res = await client.complete({ model: MODEL, system: SYSTEM, input: prompt.join("\n"), maxTokens: 300 });
     if (res.provider === "mock") return notConfigured();
     const found = res.text.match(/#[\p{L}0-9_]+/gu) ?? [];
-    const suggestions = [...new Set(found)].filter((h) => !existing.includes(h)).slice(0, 10);
+    // Instagram allows 30 hashtags total; leave room for what's already added.
+    const room = Math.max(0, 30 - existing.length);
+    const suggestions = [...new Set(found)].filter((h) => !existing.includes(h)).slice(0, Math.min(14, room));
     if (!suggestions.length) return { ok: false, error: "Aucune suggestion. Réessayez." };
     return { ok: true, data: { suggestions } };
   } catch (error) {
