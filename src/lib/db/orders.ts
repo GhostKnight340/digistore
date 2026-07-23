@@ -698,6 +698,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
       where: { id: orderId },
       select: {
         discordDeliveryRequested: true,
+        discordDeliveryPreferenceSet: true,
         discordDeliveryStatus: true,
         discordDeliveryError: true,
         discordDeliveryAttemptedAt: true,
@@ -707,10 +708,12 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
             phone: true,
             discordId: true,
             discordDmActivated: true,
+            discordDmUserId: true,
             discordDmUsername: true,
             discordDmDisplayName: true,
             discordUsername: true,
             discordGlobalName: true,
+            discordOrderDeliveryEnabled: true,
           },
         },
         // Delivered codes drive the manual "ready to send" message (admin
@@ -746,6 +749,23 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
     dCustomer?.discordUsername ??
     dCustomer?.discordGlobalName ??
     null;
+  // Resolve the effective Discord delivery intent the same way dm.ts and
+  // getOrderDiscordContextAction do: explicit per-order choice wins, else the
+  // customer's live global default. Also lift a still-default status to PENDING
+  // so admin matches what the customer sees on the payment page.
+  const rawDiscordRequested = discordRow?.discordDeliveryRequested ?? false;
+  const rawDiscordStatus = discordRow?.discordDeliveryStatus ?? "NOT_REQUESTED";
+  const effectiveDiscordRequested = discordRow?.discordDeliveryPreferenceSet
+    ? rawDiscordRequested
+    : (dCustomer?.discordOrderDeliveryEnabled ?? false);
+  const effectiveDiscordStatus =
+    !discordRow?.discordDeliveryPreferenceSet &&
+    rawDiscordStatus !== "SENT" &&
+    rawDiscordStatus !== "FAILED"
+      ? effectiveDiscordRequested
+        ? "PENDING"
+        : "NOT_REQUESTED"
+      : rawDiscordStatus;
   const codes = discordRow?.deliveredCodes ?? [];
   const readyMessage =
     codes.length > 0
@@ -776,8 +796,12 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
     },
     discord: {
       connection,
-      deliveryRequested: discordRow?.discordDeliveryRequested ?? false,
-      deliveryStatus: discordRow?.discordDeliveryStatus ?? "NOT_REQUESTED",
+      // Mirror the delivery pipeline (dm.ts) and payment page: an explicit
+      // per-order choice wins, otherwise follow the customer's live global
+      // preference. Without this, admin shows "Non demandée" for orders that
+      // will actually be delivered via Discord by default.
+      deliveryRequested: effectiveDiscordRequested,
+      deliveryStatus: effectiveDiscordStatus,
       deliveryError: discordRow?.discordDeliveryError ?? null,
       deliveryAttemptedAt: discordRow?.discordDeliveryAttemptedAt
         ? iso(discordRow.discordDeliveryAttemptedAt)
@@ -787,6 +811,11 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDT
         : null,
       username,
       readyMessage,
+      // Deep link straight to the customer's DM in the Discord desktop app.
+      // Discord has no text-prefill, so the admin opens the chat then pastes.
+      dmDeepLink: dCustomer?.discordDmUserId
+        ? `discord://-/users/${dCustomer.discordDmUserId}`
+        : null,
     },
   };
 }

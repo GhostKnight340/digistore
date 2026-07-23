@@ -134,6 +134,12 @@ export interface AdminOrderDiscordDTO {
   username: string | null;
   /** Pre-composed message the admin copies into Discord — null until codes exist. */
   readyMessage: string | null;
+  /**
+   * Desktop-app deep link to the customer's DM conversation
+   * (`discord://-/users/{id}`), or null when no verified DM user id is stored.
+   * Discord cannot pre-fill message text, so the admin still pastes readyMessage.
+   */
+  dmDeepLink: string | null;
 }
 
 /** WhatsApp manual-delivery helpers for the admin order view. */

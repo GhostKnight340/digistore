@@ -2209,25 +2209,47 @@ function DiscordCard({
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
             }}
           />
-          <button
-            type="button"
-            onClick={onMarkSent}
-            disabled={busy || !canMarkSent}
-            style={{
-              alignSelf: "flex-start",
-              fontSize: 12,
-              fontWeight: 600,
-              color: canMarkSent ? "#fff" : C.faint,
-              background: canMarkSent ? "#5865F2" : "transparent",
-              border: `1px solid ${canMarkSent ? "#5865F2" : "rgba(255,255,255,0.12)"}`,
-              borderRadius: 8,
-              padding: "6px 12px",
-              cursor: busy || !canMarkSent ? "not-allowed" : "pointer",
-              opacity: busy ? 0.6 : 1,
-            }}
-          >
-            {d.deliveryStatus === "SENT" ? "Déjà envoyé" : "Marquer comme envoyé"}
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {/* Opens the customer's DM in the Discord desktop app. Discord has no
+                text-prefill, so the admin pastes the copied message and sends. */}
+            {d.dmDeepLink ? (
+              <a
+                href={d.dmDeepLink}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#9FB8FF",
+                  background: "rgba(88,101,242,0.12)",
+                  border: "1px solid rgba(88,101,242,0.5)",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  textDecoration: "none",
+                }}
+              >
+                Ouvrir Discord
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={onMarkSent}
+              disabled={busy || !canMarkSent}
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: canMarkSent ? "#fff" : C.faint,
+                background: canMarkSent ? "#5865F2" : "transparent",
+                border: `1px solid ${canMarkSent ? "#5865F2" : "rgba(255,255,255,0.12)"}`,
+                borderRadius: 8,
+                padding: "6px 12px",
+                cursor: busy || !canMarkSent ? "not-allowed" : "pointer",
+                opacity: busy ? 0.6 : 1,
+              }}
+            >
+              {d.deliveryStatus === "SENT" ? "Déjà envoyé" : "Marquer comme envoyé"}
+            </button>
+          </div>
         </div>
       ) : d.deliveryRequested ? (
         <p style={{ fontSize: 11.5, color: C.faint, margin: "12px 0 0" }}>
