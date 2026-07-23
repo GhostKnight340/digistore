@@ -28,6 +28,47 @@ import { sendPurchaseEvent } from "@/lib/analytics/purchase";
 
 const LOW_STOCK_THRESHOLD = 3;
 
+/**
+ * Re-send the "order delivered" e-mail (with the secure delivery-page link) for
+ * an already-delivered order — e.g. when the customer can't find the original.
+ * Admin-triggered; changes no codes and no order state, just re-sends the mail.
+ */
+export async function resendDeliveryEmail(orderId: string): Promise<ActionResult> {
+  await ensureDatabaseReady();
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      status: true,
+      customerEmail: true,
+      customerName: true,
+      customerId: true,
+      deliveryToken: true,
+      totalMad: true,
+      createdAt: true,
+    },
+  });
+  if (!order) return { ok: false, error: "Commande introuvable." };
+  if (order.status !== "delivered") return { ok: false, error: "La commande n'est pas encore livrée." };
+  if (!order.deliveryToken) return { ok: false, error: "Aucun lien de livraison disponible pour cette commande." };
+
+  const reference = await publicOrderReference(order);
+  const res = await sendTransactionalEmail({
+    to: order.customerEmail,
+    orderId: order.id,
+    customerId: order.customerId,
+    templateKey: "order_delivered",
+    type: "code_delivered",
+    variables: {
+      customer_name: order.customerName,
+      order_number: reference.number,
+      delivery_url: absoluteAppUrl(`/delivery/${order.deliveryToken}`),
+      total: `${order.totalMad} DH`,
+    },
+  });
+  return res.ok ? { ok: true } : { ok: false, error: res.error ?? "Envoi de l'e-mail impossible." };
+}
+
 export async function confirmPayment(orderId: string): Promise<ActionResult> {
   await ensureDatabaseReady();
   const order = await timeAdmin(

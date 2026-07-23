@@ -28,7 +28,7 @@ import {
   addCodesBulk,
   disableCode,
 } from "@/lib/db/inventory";
-import { confirmPayment, deliverOrder } from "@/lib/db/fulfillment";
+import { confirmPayment, deliverOrder, resendDeliveryEmail } from "@/lib/db/fulfillment";
 import { markDiscordDeliveryManuallySent } from "@/lib/discord/dm";
 import {
   changeOrderStatus,
@@ -363,6 +363,15 @@ export async function deliverOrderAction(
   const result = await deliverOrder(orderId, assignments);
   // Delivery consumes unused codes → a product may have just sold out.
   if (result.ok) revalidateStorefrontCatalog();
+  return result;
+}
+
+/** Re-send the delivery e-mail (with the secure delivery link) for a delivered
+ *  order — no code or state change. */
+export async function resendDeliveryEmailAction(orderId: string): Promise<ActionResult> {
+  await assertAdminAccess();
+  const result = await resendDeliveryEmail(orderId);
+  if (result.ok) revalidatePath(`/admin/orders/${orderId}`);
   return result;
 }
 

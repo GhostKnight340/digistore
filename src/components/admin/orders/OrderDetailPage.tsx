@@ -23,6 +23,7 @@ import {
   getAvailableCodesAction,
   deliverOrderAction,
   markDiscordDeliverySentAction,
+  resendDeliveryEmailAction,
 } from "@/app/actions/admin";
 import {
   approvePaymentAction,
@@ -650,6 +651,15 @@ export default function OrderDetailPage({
           >
             Changer le statut
           </HeaderButton>
+          {delivered ? (
+            <HeaderButton
+              tone="neutral"
+              disabled={busy}
+              onClick={() => void runAction("E-mail de livraison renvoyé.", () => resendDeliveryEmailAction(order.id))}
+            >
+              Renvoyer l&apos;e-mail de livraison
+            </HeaderButton>
+          ) : null}
           {canApprove ? (
             <HeaderButton
               tone="success"
@@ -817,6 +827,15 @@ export default function OrderDetailPage({
         >
           Changer le statut
         </HeaderButton>
+        {delivered ? (
+          <HeaderButton
+            tone="neutral"
+            disabled={busy}
+            onClick={() => void runAction("E-mail de livraison renvoyé.", () => resendDeliveryEmailAction(order.id))}
+          >
+            Renvoyer la livraison
+          </HeaderButton>
+        ) : null}
         {canIssue ? (
           <HeaderButton
             tone="neutral"
