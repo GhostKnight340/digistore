@@ -284,12 +284,20 @@ export default function OrderDetailPage({
   // stop polling.
   useEffect(() => {
     if (order.status === "delivered" || order.status === "cancelled") return;
+    // Match the customer payment page's cadence so admin and customer see the
+    // same state at (near) the same time — a proof upload / webhook confirmation
+    // must feel live here, not up to 15s stale.
     const interval = setInterval(() => {
       void refreshOrder();
-    }, 15_000);
+    }, 5_000);
     return () => clearInterval(interval);
   }, [order.status, refreshOrder]);
 
+  // Re-fetch the proof image whenever a proof appears (or is re-submitted) while
+  // the page is open — keyed on proofUploaded + the latest submission time so the
+  // poll above, which flips those on the order, pulls the actual image in. Keying
+  // on order.id alone meant a proof uploaded after mount never showed (the panel
+  // stayed "En attente du justificatif").
   useEffect(() => {
     setProof("loading");
     getPaymentProofAction(order.id)
@@ -298,7 +306,7 @@ export default function OrderDetailPage({
         console.error("Failed to load proof", loadError);
         setProof(null);
       });
-  }, [order.id]);
+  }, [order.id, order.proofUploaded, submittedAt]);
 
   // Live "waiting" clock — mounted-only so SSR/CSR stay consistent.
   useEffect(() => {
