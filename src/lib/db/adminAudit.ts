@@ -46,6 +46,7 @@ export type AuditAction =
   | "instagram.unlinked"
   | "instagram.comment_replied"
   | "instagram.post_published"
+  | "instagram.draft_saved"
   | "instagram.action_failed";
 
 export interface WriteAuditInput {
