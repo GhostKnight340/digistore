@@ -40,16 +40,15 @@ test("a guest with incomplete details may not, and is told why", () => {
   assert.equal(gate.accountIncomplete, "Ajoutez votre nom complet.");
 });
 
-test("a guest with an unverified e-mail may not place an order", () => {
-  // The security bar: the order and the code go to that address, and createOrder
-  // attaches the order to whatever Customer row holds it.
-  const gate = resolveCheckoutGate(
-    input({
-      gateReady: false,
-      gateIncompleteReason: "Vérifiez votre adresse e-mail pour continuer vers le paiement.",
-    }),
-  );
-  assert.equal(gate.accountReady, false);
+test("a guest is ready on valid details — no e-mail verification required", () => {
+  // Guest checkout no longer requires e-mail verification: codes deliver only
+  // after a human confirms the manual payment, so a mistyped address is a
+  // recoverable delivery issue, not a way to obtain codes. resolveCheckoutGate
+  // has no verification input for guests — readiness is purely their details
+  // (the guest tab reports gateReady once name + e-mail are valid).
+  const gate = resolveCheckoutGate(input({ accountVerified: false, gateReady: true }));
+  assert.equal(gate.accountReady, true);
+  assert.equal(gate.isGuest, true);
 });
 
 test("a FILLED but unsubmitted register form may NOT place an order", () => {

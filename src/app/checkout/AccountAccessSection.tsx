@@ -549,8 +549,11 @@ export function AccountAccessSection({
   const incompleteReason = useMemo(() => {
     if (!nameValid) return "Ajoutez votre nom complet.";
     if (!emailValid) return "Saisissez une adresse e-mail valide.";
-    if (!emailVerified) return "Vérifiez votre adresse e-mail pour continuer vers le paiement.";
+    // Guests order with just a valid name + e-mail — no e-mail verification.
+    // Codes are delivered only after a human confirms the manual payment, so a
+    // mistyped address is a recoverable delivery issue, not a way to get codes.
     if (mode === "guest") return null;
+    if (!emailVerified) return "Vérifiez votre adresse e-mail pour continuer vers le paiement.";
     if (!pwdValid) return "Choisissez un mot de passe valide.";
     if (!confirmMatches) return "Confirmez votre mot de passe.";
     if (!acceptTerms) return "Acceptez les conditions générales.";
@@ -662,8 +665,7 @@ export function AccountAccessSection({
           <div className="grid gap-4">
             <p className="text-[13px] leading-relaxed text-muted">
               Commandez sans créer de compte. Nous avons seulement besoin de votre nom et
-              d’une adresse e-mail vérifiée : c’est là que nous enverrons votre commande et
-              votre code.
+              d’une adresse e-mail : c’est là que nous enverrons votre commande et votre code.
             </p>
 
             <div>
@@ -680,16 +682,24 @@ export function AccountAccessSection({
               />
             </div>
 
-            <EmailVerifyBlock
-              email={email}
-              onEmailChange={setEmail}
-              name={name}
-              verified={emailVerified}
-              onVerifiedChange={setEmailVerified}
-              // An address that already has an account should sign in: it keeps
-              // the order in their history and their Ghost Credit spendable.
-              onAccountExists={() => switchToLogin(ACCOUNT_EXISTS_NOTICE)}
-            />
+            <div>
+              <label htmlFor="guest-email" className="mb-1.5 block text-sm font-medium text-white">
+                E-mail
+              </label>
+              <input
+                id="guest-email"
+                type="email"
+                inputMode="email"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="vous@exemple.com"
+                autoComplete="email"
+              />
+              <p className="mt-1.5 text-[12px] leading-relaxed text-faint">
+                Vérifiez qu’elle est correcte : votre confirmation et votre code y seront envoyés.
+              </p>
+            </div>
 
             {phoneField}
 

@@ -10,7 +10,6 @@ import {
   findOrderByEmailAndId,
 } from "@/lib/db/orders";
 import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
-import { getCheckoutSessionId, hasVerifiedProof } from "@/lib/checkout/emailVerification";
 import { getCurrentCustomer } from "@/lib/auth";
 import { customerOrderRedirectPath } from "@/lib/orderNumber";
 import { logSecurityEvent } from "@/lib/db/securityLog";
@@ -74,14 +73,13 @@ export async function createOrderAction(input: {
 
   // ── Guest checkout ────────────────────────────────────────────────────────
   // Guests are supported deliberately: forcing account creation to buy a gift
-  // card costs real orders. What a guest still must prove is CONTROL OF THE
-  // E-MAIL, because the order — and the token that later reveals the delivered
-  // codes — is delivered there, and because createOrder attaches the order to
-  // whatever Customer row holds that address. Without this check, anyone could
-  // place orders against a stranger's e-mail. The proof is the same six-digit
-  // code flow the register path already uses; it is NOT consumed here, so a
-  // guest can place a second order, and a retry of this one, without
-  // re-verifying.
+  // card costs real orders. Guest e-mail verification is intentionally NOT
+  // required here — codes are delivered only AFTER a human confirms the (manual)
+  // payment, so a mistyped address is a delivery/support issue (recoverable via
+  // WhatsApp/Discord or a corrected address), not a way to obtain codes for free.
+  // We still validate the address format and block checkout under an address that
+  // already has a real account (below), so a guest order never silently attaches
+  // to a stranger's account.
   const guestName = input.customerName.trim();
   const guestEmail = input.customerEmail.trim().toLowerCase();
   if (guestName.length < 2) {
@@ -89,11 +87,6 @@ export async function createOrderAction(input: {
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
     return { error: "Veuillez saisir une adresse e-mail valide." };
-  }
-
-  const sessionId = await getCheckoutSessionId();
-  if (!sessionId || !(await hasVerifiedProof(guestEmail, sessionId))) {
-    return { error: "Vérifiez votre adresse e-mail pour continuer vers le paiement." };
   }
 
   // An address that already has a real (password or OAuth) account belongs to a
