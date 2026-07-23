@@ -266,6 +266,19 @@ export function Composer({
     onToast("Hashtags insérés dans la légende.", "ok");
   }
 
+  // ── Copy ─────────────────────────────────────────────────────────────────────
+  function captionWithHashtags(): string {
+    const tags = hashtags.join(" ");
+    const body = caption.trim();
+    return body && tags ? `${body}\n\n${tags}` : body || tags;
+  }
+  function copy(text: string, label: string) {
+    const t = text.trim();
+    if (!t) return;
+    void navigator.clipboard?.writeText(t);
+    onToast(label, "ok");
+  }
+
   // ── AI caption ───────────────────────────────────────────────────────────────
   function applyAiProposal(proposal: string) {
     setLastAiEdit(caption);
@@ -562,6 +575,9 @@ export function Composer({
             >
               🙂
             </button>
+            <button type="button" onClick={() => copy(caption, "Légende copiée.")} style={{ border: "none", background: "transparent", color: C.dim2, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+              Copier
+            </button>
             <button type="button" onClick={() => updateCaption("")} style={{ border: "none", background: "transparent", color: C.dim2, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
               Effacer
             </button>
@@ -670,15 +686,11 @@ export function Composer({
             <button type="button" onClick={improveHashtags} style={pill}>
               Améliorer
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard?.writeText(hashtags.join(" "));
-                onToast("Hashtags copiés.", "ok");
-              }}
-              style={pill}
-            >
+            <button type="button" onClick={() => copy(hashtags.join(" "), "Hashtags copiés.")} style={pill}>
               Copier
+            </button>
+            <button type="button" onClick={() => copy(captionWithHashtags(), "Légende + hashtags copiés.")} style={pill}>
+              Copier tout
             </button>
           </div>
 
