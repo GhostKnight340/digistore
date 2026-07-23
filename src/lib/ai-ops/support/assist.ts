@@ -39,9 +39,15 @@ export interface AssistInput {
   text?: string;
   /** Target language for translate (e.g. "en", "ar", "fr"). */
   targetLanguage?: string;
+  /** Optional agent explanation/translation of the customer's message — trusted.
+   *  Use when the message is in Moroccan Arabic (Darija) or otherwise unclear. */
+  agentContext?: string;
 }
 
 const LANGUAGE_LABEL: Record<string, string> = { fr: "French", en: "English", ar: "Arabic" };
+
+/** Rare separator joining a draft reply and its agent note through runModule. */
+const NOTE_SEP = "␞";
 
 /** Per-tool instruction — all share the same grounding + no-invention discipline. */
 function toolInstruction(tool: AssistTool, lang: string, targetLanguage?: string): string {
@@ -49,7 +55,18 @@ function toolInstruction(tool: AssistTool, lang: string, targetLanguage?: string
   const T = LANGUAGE_LABEL[targetLanguage?.toLowerCase() ?? ""] ?? "English";
   switch (tool) {
     case "draft_reply":
-      return `Draft a grounded, concise, professional customer reply in ${L}. Use only verified data provided. If you cannot answer safely, say what is missing instead of inventing.`;
+      return [
+        `Produce TWO things about this ticket, grounded strictly in the verified data:`,
+        `1. "reply": a customer-facing reply in ${L} that is FRIENDLY, PROFESSIONAL and HUMAN — warm and`,
+        `   natural, like a real Ghost.ma support person, not a robot. Concise: one greeting, the answer/next`,
+        `   step, one short sign-off. No over-apologizing, no filler, no invented facts.`,
+        `2. "agentNote": a short note FOR THE AGENT (the human reading this, in ${L}): exactly what is going`,
+        `   on and what YOU need to do next — e.g. "Payment still pending review; confirm it before promising",`,
+        `   or "Order delivered ${"—"} no action needed", or "Refund requested ${"—"} escalate, don't promise".`,
+        `   Be direct and specific.`,
+        `If you cannot answer safely, put a brief holding reply in "reply" and say what's missing in "agentNote".`,
+        `Return ONLY a JSON object: {"reply": "...", "agentNote": "..."} and nothing else.`,
+      ].join("\n");
     case "summarize":
       return `Summarize this conversation for the support agent in ${L}: the customer's issue, what has happened, and the current state. Be brief and factual.`;
     case "detect_issue":
@@ -74,9 +91,42 @@ const BASE = [
   "customer's order number/reference) — use ITS status/items directly to answer. Do NOT look for the",
   "referenced order inside `customer.recentOrders`; that list is indexed differently and will not contain",
   "it by that number. Only say an order can't be verified if `order` is genuinely absent.",
-  "Never invent order/payment/delivery status, delivery times, or policy. Output plain text only (no JSON).",
+  "If `agentContext` is provided, it is the AGENT's own explanation or translation of the customer's",
+  "message (e.g. the ticket was written in Moroccan Arabic / Darija). Treat it as ACCURATE and use it to",
+  "understand what the customer is asking — it is a trusted instruction from staff, not a customer claim.",
+  "Never invent order/payment/delivery status, delivery times, or policy. Output plain text — except the",
+  "draft_reply tool, which returns the JSON object it specifies.",
   "This output is for the AGENT and/or a draft they will review — nothing is sent automatically.",
 ].join("\n");
+
+/** Pull the first balanced JSON object out of possibly-fenced text. */
+function extractJson(text: string): Record<string, unknown> | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) {
+      try {
+        const v = JSON.parse(text.slice(start, i + 1));
+        return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
 
 async function assistBody(
   dto: ReturnType<typeof supportTicketAdminDTO>,
@@ -109,16 +159,27 @@ async function assistBody(
       order: resolved.order,
       knowledge,
       agentText: input.text ?? null,
+      agentContext: input.agentContext ?? null,
     },
     maxTokens: ctx.maxTokens ?? undefined,
     timeoutMs: ctx.settings.providerTimeoutMs,
   });
 
+  // draft_reply returns {reply, agentNote} — join with a rare separator so the
+  // agent note survives runModule (which only carries `text`); split back later.
+  let text = completion.text.trim();
+  if (input.tool === "draft_reply") {
+    const parsed = extractJson(completion.text);
+    const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+    const agentNote = parsed && typeof parsed.agentNote === "string" ? parsed.agentNote.trim() : "";
+    if (reply) text = agentNote ? `${reply}${NOTE_SEP}${agentNote}` : reply;
+  }
+
   return {
     provider: completion.provider,
     model: completion.model,
     summary: `assist ${input.tool} for ${dto.reference}`,
-    text: completion.text.trim(),
+    text,
     usage: {
       tokensIn: completion.usage.tokensIn,
       tokensOut: completion.usage.tokensOut,
@@ -128,12 +189,17 @@ async function assistBody(
   };
 }
 
-export type AssistResult = { ok: true; text: string } | { ok: false; reason: string };
+export type AssistResult =
+  | { ok: true; text: string; note?: string }
+  | { ok: false; reason: string };
 
 /**
  * Run one manual assist tool on a ticket. Works regardless of coverage state
  * (this is the human-in-the-loop path). Requires the module to be enabled; the
  * runner enforces that and the budget/logging guardrails. Never sends.
+ *
+ * For draft_reply, `text` is the customer-facing reply and `note` is the
+ * agent-facing "what's wrong / what to do" summary (split from the joined text).
  */
 export async function assistConversation(input: AssistInput): Promise<AssistResult> {
   const record = await getSupportTicketRecord(input.ticketId);
@@ -146,6 +212,8 @@ export async function assistConversation(input: AssistInput): Promise<AssistResu
     body: (ctx) => assistBody(dto, input, ctx),
   });
   if (!result.ok) return { ok: false, reason: result.reason };
-  const text = result.text.trim();
-  return text ? { ok: true, text } : { ok: false, reason: "empty_output" };
+  const raw = result.text.trim();
+  if (!raw) return { ok: false, reason: "empty_output" };
+  const [text, note] = raw.includes(NOTE_SEP) ? raw.split(NOTE_SEP) : [raw, undefined];
+  return { ok: true, text: text.trim(), note: note?.trim() || undefined };
 }

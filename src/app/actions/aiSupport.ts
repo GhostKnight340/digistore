@@ -138,7 +138,8 @@ export async function assistConversationAction(input: {
   tool: string;
   text?: string;
   targetLanguage?: string;
-}): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  agentContext?: string;
+}): Promise<{ ok: true; text: string; note?: string } | { ok: false; error: string }> {
   await requireAdminCustomer();
   if (!input?.ticketId || typeof input.ticketId !== "string") return { ok: false, error: "Ticket manquant." };
   if (!isAssistTool(input.tool)) return { ok: false, error: "Outil invalide." };
@@ -147,8 +148,9 @@ export async function assistConversationAction(input: {
     tool: input.tool,
     text: typeof input.text === "string" ? input.text.slice(0, 4000) : undefined,
     targetLanguage: typeof input.targetLanguage === "string" ? input.targetLanguage : undefined,
+    agentContext: typeof input.agentContext === "string" ? input.agentContext.slice(0, 2000) : undefined,
   });
-  if (res.ok) return { ok: true, text: res.text };
+  if (res.ok) return { ok: true, text: res.text, note: res.note };
   const friendly =
     res.reason === "module_disabled" || res.reason === "global_disabled"
       ? "Activez le module « Assistant support » dans les réglages IA."

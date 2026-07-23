@@ -38,8 +38,10 @@ export default function ConversationAssistant({
 }) {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState("en");
+  const [agentContext, setAgentContext] = useState("");
   const [busyTool, setBusyTool] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -51,11 +53,20 @@ export default function ConversationAssistant({
     }
     setBusyTool(tool.key);
     start(async () => {
-      const res = await assistConversationAction({ ticketId, tool: tool.key, text: draft, targetLanguage: lang });
-      if (res.ok) setResult(res.text);
-      else {
+      const res = await assistConversationAction({
+        ticketId,
+        tool: tool.key,
+        text: draft,
+        targetLanguage: lang,
+        agentContext: agentContext.trim() || undefined,
+      });
+      if (res.ok) {
+        setResult(res.text);
+        setNote(res.note ?? null);
+      } else {
         setError(res.error);
         setResult(null);
+        setNote(null);
       }
       setBusyTool(null);
     });
@@ -96,19 +107,38 @@ export default function ConversationAssistant({
             </select>
           </div>
 
+          {/* Optional agent context — for Darija/unclear messages, explain in English. */}
+          <textarea
+            value={agentContext}
+            onChange={(e) => setAgentContext(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            placeholder="Contexte pour l'IA (optionnel) — ex. traduction en anglais si le client a écrit en darija, ou précision sur sa demande."
+            className="w-full rounded-md border border-border bg-canvas px-2 py-1.5 text-[12px] text-white placeholder:text-faint"
+          />
+
           {error && <p className="text-[11px] text-red-400">{error}</p>}
 
           {result && (
             <div className="rounded-md border border-border bg-canvas p-2">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">Brouillon de réponse (client)</p>
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[13px] leading-relaxed text-white">{result}</pre>
               <div className="mt-2 flex gap-2">
                 <button type="button" onClick={() => onInsert(result)} className="btn-ghost py-1 text-[11px]">
                   Insérer dans la réponse
                 </button>
-                <button type="button" onClick={() => setResult(null)} className="btn-ghost py-1 text-[11px]">
+                <button type="button" onClick={() => { setResult(null); setNote(null); }} className="btn-ghost py-1 text-[11px]">
                   Effacer
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Agent-facing note — what's wrong / what to do. NEVER inserted / sent. */}
+          {note && (
+            <div className="rounded-md border border-amber-500/25 bg-amber-500/[0.07] p-2">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-300/80">Pour vous · ce qui se passe / à faire</p>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[13px] leading-relaxed text-white/90">{note}</pre>
             </div>
           )}
         </div>
