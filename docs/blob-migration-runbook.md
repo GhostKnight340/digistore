@@ -1,122 +1,116 @@
-# Product-image Blob migration + durable rate limiting — runbook
+# Production runbook — Blob images, durable rate limiting, hero optimizations
 
-Branch: `feat/blob-images-and-durable-ratelimit` (off `staging`).
-Status: implemented + validated on the **staging Neon branch**; **production run NOT executed** (awaiting approval).
+Branch: `feat/blob-images-and-durable-ratelimit` → merged into `staging` (deployed + verified on staging.ghost.ma). **Production NOT executed. Do not run without explicit approval.**
 
----
-
-## 1. What changed
-
-### Priority 1 — product images off Postgres → Vercel Blob
-- `ProductMedia` gained `blobUrl, pathname, width, height, mimeType, fileSize` (all nullable; legacy `url` kept for read-compat, **not** dropped).
-- New uploads (`/api/upload`) go to a dedicated product-media Blob store (`PRODUCT_MEDIA_READ_WRITE_TOKEN`) under the `product-media/` prefix; base64-in-Postgres is retired.
-- Catalog/list queries prefer `blobUrl` and no longer need the base64 `url`.
-- Customer images render via `next/image`; strict `remotePatterns` added to **`next.config.mjs`** (the authoritative config — `next.config.ts` is ignored by Next).
-- Migration script `scripts/migrate-product-images-to-blob.ts` (`pnpm images:migrate`): dry-run/apply/verify/orphans, idempotent, non-destructive, production-guarded.
-- Blob delete-on-replace only when unreferenced; orphan detection in the script.
-
-### Priority 2 — durable rate limiting + secure order lookup
-- Limiter is now durable & shared: **Upstash Redis** primary (`@upstash/ratelimit`) → **Postgres `RateLimitCounter`** fallback → **fail-closed** if both are down.
-- Escalating failure budgets (`orderLookupFail*`, `loginFailIp`).
-- `findOrderAction`: logged-in customers confined to their own orders; uniform `{found:false}` (+timing pad) for not-found / wrong-email / unauthorized / rate-limited; no data disclosed pre-authorization.
-- New `SecurityEvent` model + `logSecurityEvent()` (hashed identifier, never raw email) with Discord escalation via `notifySystemAlert`.
-
-### Env vars added (see `.env.example`)
-`PRODUCT_MEDIA_READ_WRITE_TOKEN`, `PRODUCT_MEDIA_BLOB_HOSTNAME` (optional), `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SECURITY_LOG_SALT` (optional).
+Staging is the `ep-green-pine` Neon branch; production is `ep-steep-flower`. The image *data* migration is a manual script that must be run against **each** environment's DB separately — the schema migrations auto-apply on deploy, the data migration does not.
 
 ---
 
-## 2. Staging verification report
+## 1. What ships in this branch
+
+**Priority 1 — product images off Postgres → Vercel Blob**
+- `ProductMedia` + Blob columns; `/api/upload` writes to a dedicated product-media Blob store; catalog/list queries prefer `blobUrl`; customer images render via `next/image` (strict `remotePatterns` in `next.config.mjs`).
+- Idempotent, resumable migration script `scripts/migrate-product-images-to-blob.ts`.
+
+**Priority 2 — durable rate limiting + secure order lookup**
+- Upstash Redis → Postgres `RateLimitCounter` fallback → fail-closed; escalating failure budgets; logged-in customers confined to their own orders; uniform failure; `SecurityEvent` audit + Discord escalation.
+
+**Also in this branch (came out of staging perf review — safe, UI/code-only)**
+- GTA homepage hero migrated to Blob + `next/image`.
+- `admin.ts` fix: `saveGtaPreorderHeroImageAction` accepts product-media Blob URLs (REQUIRED — without it the GTA hero can't be saved once `/api/upload` returns Blob URLs).
+- Navigator mascot + support-pill avatar → `next/image`; carousel dot 24×24 tap targets.
+
+---
+
+## 2. Staging verification report (final)
 
 | Check | Result |
 |---|---|
+| `pnpm test` | ✅ 906 pass |
 | `tsc --noEmit` | ✅ clean |
-| `pnpm test` (906 tests, incl. 25 new) | ✅ all pass |
-| Migration `--dry-run` (staging) | ✅ detected **5** legacy base64 `Product.imageUrl` (224–518 KB each), 0 `ProductMedia.url` |
-| Migration `--verify` baseline | legacy remaining **5**, migrated **0**, broken URLs n/a (no staging Blob token yet) |
-| Storefront rendering (dev server) | ✅ catalogue + product page images render via `next/image`; 0 console errors |
-| Payload win (measured on `steam-wallet`) | raw `/api/product-image` = **228,977 B** → `next/image` optimized = **8,287 B** (~27× smaller on the wire) |
-| Durable limiter fallback (`dbConsume`) | ✅ 3 allowed / then denied; shared `RateLimitCounter` row persisted (count=3) |
-| Secure lookup form submit | ✅ generic failure, no server error |
-
-**Blocked pending staging credentials** (must be provisioned before the report is "clean"):
-- `PRODUCT_MEDIA_READ_WRITE_TOKEN` (staging Blob store) → run `--apply` + `--verify` (broken-URL check) on staging.
-- `UPSTASH_REDIS_REST_URL/TOKEN` (dev/staging) → exercise the Redis primary path end-to-end.
-- A Vercel Preview deploy with the above scoped to Preview/Staging only.
-
-Until those are set, the app safely uses: base64→`/api/product-image`→`next/image` for images, and the Postgres-counter limiter (proven above).
+| Image migration (products) on staging | ✅ 9/9 → Blob, 0 base64, 0 broken |
+| GTA hero on staging | ✅ migrated → Blob (1.09 MB base64 removed) |
+| Homepage base64 images | ✅ 0 (was ~1.5 MB+) |
+| Durable limiter | ✅ Redis→Postgres fallback proven (shared counter) |
+| Real Lighthouse (desktop) | ✅ **98/100** — LCP 0.7 s, FCP 0.5 s, TBT 0, CLS 0 |
 
 ---
 
-## 3. Production migration procedure (DO NOT RUN WITHOUT EXPLICIT APPROVAL)
+## 3. Pre-flight (before touching production)
 
-Prereqs (Production Vercel env only):
-1. Create a **separate production** public Vercel Blob store; set `PRODUCT_MEDIA_READ_WRITE_TOKEN` (+ optional `PRODUCT_MEDIA_BLOB_HOSTNAME`) in **Production** scope only.
-2. Set `UPSTASH_REDIS_REST_URL/TOKEN` (production Upstash) in Production scope.
-3. Confirm `next.config.mjs` `remotePatterns` matches the production Blob host (pin via `PRODUCT_MEDIA_BLOB_HOSTNAME`).
+1. **Production Blob store — MUST be Public.** `next/image` cannot serve customer images from a private store. Create/confirm a **production** public store and set `PRODUCT_MEDIA_READ_WRITE_TOKEN` in the **Production** Vercel scope only (staging store `product-media-staging` is Preview+Development only). ⚠️ The pre-existing `product-media-upload` store is Private — do NOT use it for this.
+2. **Pin the image host:** set `PRODUCT_MEDIA_BLOB_HOSTNAME` = the production store host (`<storeId>.public.blob.vercel-storage.com`) in Production scope so `remotePatterns` is exact.
+3. **Upstash (optional but recommended):** set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (production) in Production scope. Without them the limiter uses the Postgres counter (still durable).
+4. **Get the production DB connection string from Neon** (not Vercel — the vars are "Sensitive"/write-only). You'll pass it to the migration script.
+5. Merge the branch to `main` (this is the deploy — see step 6 ordering).
 
-### Backups (required, before any write)
+---
+
+## 4. Backups (REQUIRED, before any write)
+
 ```
 pnpm run prod:status                 # confirm target = production, migrations in sync
-node scripts/db-backup.mjs           # full logical backup of the production DB
-node scripts/db-verify-backup.mjs    # verify the backup is restorable
+node scripts/db-backup.mjs           # full logical backup of production DB
+node scripts/db-verify-backup.mjs    # verify the backup restores
 ```
-Also snapshot the Neon branch (Neon console → Branches → create a restore point).
-
-### Apply DB migrations (additive only — no data change)
-```
-CONFIRM_PRODUCTION_DB=true pnpm run prod:migrate
-# applies: 20260723150000_product_media_blob_fields
-#          20260723160000_rate_limit_counter_and_security_event
-```
-
-### Deploy the branch to Production (after merge approval).
-
-### Run the image migration against production
-```
-# The script HARD-REFUSES production by default. For the real run, temporarily
-# point env at production Blob + DB and pass the explicit override:
-CONFIRM_PRODUCTION_DB=true GHOST_DB_ENV=production pnpm images:migrate -- --verify   # baseline
-CONFIRM_PRODUCTION_DB=true GHOST_DB_ENV=production pnpm images:migrate -- --apply     # migrate
-CONFIRM_PRODUCTION_DB=true GHOST_DB_ENV=production pnpm images:migrate -- --verify    # must be CLEAN
-```
-> NOTE: the script's `activeDbIsProduction()` guard currently blocks production outright by design. For the approved production run, either (a) run it as a one-off with the guard relaxed to honor `CONFIRM_PRODUCTION_DB=true` like the other prod scripts, or (b) run from a trusted CI job. Decide with the owner; do not weaken the guard silently.
-
-"Clean" = `legacy remaining: 0`, `broken Blob URLs: 0`.
-
-### Revalidate the catalog cache (after the image migration)
-`getActiveProductRows` / catalog DTOs are cached under `CATALOG_TAG` with **no TTL** — a DB-only migration does NOT refresh them, so the storefront keeps emitting `/api/product-image/<slug>`.
-
-IMPORTANT (verified live on staging): a **redeploy does NOT clear this** — Vercel's Data Cache (which `unstable_cache` uses) **persists across deployments**. The ONLY way to refresh it is `revalidateTag(CATALOG_TAG)`:
-- trigger any admin product/category save (it calls `revalidateTag(CATALOG_TAG)`), or
-- add a one-off `revalidateTag(CATALOG_TAG)` call / route.
-
-This is **cosmetic only**. Even without it, the payload win is fully realized: `Product.imageUrl` is now a Blob URL, so `/api/product-image/<slug>` **302-redirects to Blob** (no Postgres base64), and `next/image` optimizes from Blob. Measured live: a 3,144 KB base64 image now delivers as **13 KB WebP**. Revalidating only removes the one extra 302 hop by emitting the Blob URL directly.
-
-Note: the `/api/product-image` responses are CDN-cached (`max-age=3600`); a fresh deploy serves them uncached (`x-vercel-cache: MISS`).
-
-### Store environment scope (isolation)
-The staging Blob store MUST be scoped to **Preview + Development only** in Vercel — NOT Production. If a "staging" store also has Production in scope, the production deployment shares that bucket and staging test objects live alongside real production media. Fix: Vercel → Storage → the store → environments → uncheck Production. Production must use its own separate **Public** store.
-
-### Only after a clean verify + a soak period
-- Drop `url` from the list `select` in `catalog.ts`/`categories.ts` (stops loading legacy base64 entirely).
-- In a **later** migration, drop the `ProductMedia.url` column. Not before.
+Also create a Neon restore point (Neon console → Branches → the prod branch → restore point). Blob is additive (random-suffix keys, nothing overwritten), so no Blob backup is needed.
 
 ---
 
-## 4. Expected impact
-- Additive DB migration: no downtime, no row rewrites.
-- Image migration: one Blob upload per legacy image (~5 products on staging; size TBD on prod). Reads stay working throughout (legacy base64 still served until each row flips to `blobUrl`).
-- Runtime: catalog query payloads shrink (base64 no longer transferred once `Product.imageUrl` is rewritten); customer image bytes drop sharply via `next/image` (measured ~27× on a 224 KB card).
-- Rate limiting becomes deployment-wide instead of per-instance.
+## 5. Production execution (ordered)
 
-## 5. Rollback
-- **Migration is non-destructive**: legacy base64 in `Product.imageUrl` and `ProductMedia.url` is preserved; Blob writes use random suffixes (no overwrite).
-- Code rollback: revert the branch → resolution falls back to `imageUrl ?? media.url` (base64), `/api/product-image` still serves bytes, `<img>` replaces `next/image`. No data loss.
-- DB rollback: the new columns/tables are additive and inert if unused; leave them or drop in a follow-up.
-- Blob cleanup after an abandoned migration: `pnpm images:migrate -- --orphans` (report), then `--apply --delete-orphans` to remove unreferenced objects.
-- Limiter rollback: unset `UPSTASH_*` → automatically uses the Postgres counter; the module has no hard Redis dependency.
+**a. Deploy the code + schema migrations.** Merge to `main` → production build runs `prisma migrate deploy`, applying:
+- `20260723150000_product_media_blob_fields`
+- `20260723160000_rate_limit_counter_and_security_event`
 
-## 6. Known follow-ups (flagged, out of scope here)
-- `next.config.ts` is dead config (Next uses `.mjs`); it still holds a wildcard image pattern + `serverExternalPackages`/webpack tweaks that are currently inert. Consolidate into `.mjs` or delete to avoid confusion.
-- Admin "export product media as zip" (`/api/admin/product-media`) only zips inline base64; Blob-backed images are skipped (would need a remote fetch). Not customer-facing.
+Both are additive (nullable columns + 2 new tables) — no downtime, no row rewrites. After deploy, product images still render (legacy base64 served via `/api/product-image` until the data migration flips each row).
+
+**b. Run the image data migration against production.** The script hard-refuses production by default (staging-only guard). For the approved run, point env at the prod DB and confirm:
+```
+# baseline (read-only)
+CONFIRM_PRODUCTION_DB=true DATABASE_URL="<prod pooled>" DIRECT_URL="<prod pooled>" \
+  pnpm images:migrate -- --verify
+# dry-run to see scale + sizes
+CONFIRM_PRODUCTION_DB=true DATABASE_URL="<prod pooled>" DIRECT_URL="<prod pooled>" \
+  pnpm images:migrate
+# apply (products + GTA hero + any Collection/Category/Guide base64)
+CONFIRM_PRODUCTION_DB=true DATABASE_URL="<prod pooled>" DIRECT_URL="<prod pooled>" \
+  pnpm images:migrate -- --apply
+# verify CLEAN
+CONFIRM_PRODUCTION_DB=true DATABASE_URL="<prod pooled>" DIRECT_URL="<prod pooled>" \
+  pnpm images:migrate -- --verify
+```
+> The script's `activeDbIsProduction()` guard blocks production by design. For the real run, relax it to honor `CONFIRM_PRODUCTION_DB=true` like the other prod scripts (`scripts/prod-op.mjs`), or run from a trusted CI job. Decide with the owner — do not weaken it silently.
+
+"Clean" = `total legacy base64 remaining: 0`, `broken Blob URLs: 0`.
+
+**c. Revalidate caches (REQUIRED — a redeploy does NOT clear Vercel's Data Cache).** `unstable_cache` (no TTL) will keep serving `/api/product-image` URLs and the old GTA hero until the tags are revalidated:
+- `CATALOG_TAG` → trigger any admin product/category save (fires `revalidateTag`).
+- `GTA_PREORDER_TAG` → **simplest: re-upload the GTA hero in the admin panel** (it uploads to Blob *and* revalidates in one step — this is the clean path; a plain migrate leaves the tag stale). If you don't have the source file, pull it from the Blob URL first (`curl <blobUrl> -o hero.jpg`).
+
+Even before revalidation, no base64 is served from Postgres (the `/api/product-image` route 302-redirects to Blob once `imageUrl` is a Blob URL) — revalidation only removes the extra redirect hop.
+
+---
+
+## 6. Expected impact
+- Deploy: no downtime; additive migration.
+- Data migration: one Blob upload per legacy image; reads keep working throughout.
+- Runtime: catalog query payloads shrink (base64 leaves Postgres); customer image bytes drop sharply (staging measured hero **3.1 MB → 13 KB WebP**, homepage **1.5 MB base64 → 0**, Lighthouse **84 → 98**).
+- Security: rate limiting becomes deployment-wide (shared) instead of per-instance.
+
+## 7. Rollback
+- **Data migration is non-destructive** — legacy base64 in `Product.imageUrl`/`ProductMedia.url` is preserved; Blob writes use random suffixes.
+- Code rollback: revert the branch → resolution falls back to base64 via `/api/product-image`; `next/image` reverts to `<img>`. No data loss.
+- DB rollback: the new columns/tables are additive and inert if unused; drop them in a later migration if desired.
+- Restore from backup / Neon restore point only if something unexpected corrupts data (not expected — nothing is deleted or overwritten).
+- Limiter rollback: unset `UPSTASH_*` → auto-falls back to the Postgres counter.
+- Orphaned Blobs from an abandoned run: `pnpm images:migrate -- --orphans` (report), then `--apply --delete-orphans`.
+
+## 8. After a clean prod run + a soak period
+- Remove `url` from the list `select` in `catalog.ts`/`categories.ts` (stops loading legacy base64 entirely).
+- In a **later** migration, drop `ProductMedia.url`. Not before verification is clean and soaked.
+
+## 9. Known follow-ups (out of scope, flagged)
+- `next.config.ts` is dead config (Next uses `.mjs`); consolidate or delete.
+- Admin "export product media as zip" only zips inline base64; Blob-backed images are skipped.
+- TTFB ~689 ms on the homepage is server-render + Neon latency — a separate infra project (ISR/static homepage, DB round-trips, Vercel/Neon region colocation), not part of this work.
