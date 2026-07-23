@@ -37,7 +37,7 @@
  *   pnpm images:migrate -- --orphans    # orphan report
  */
 import { prisma } from "../src/lib/db/prisma";
-import { activeDbIsProduction } from "./lib/db-guard.mjs";
+import { activeDbIsProduction, assertWriteAllowed } from "./lib/db-guard.mjs";
 import {
   PRODUCT_MEDIA_PREFIX,
   deleteProductMediaBlob,
@@ -375,17 +375,16 @@ async function main() {
   const limitArg = args.find((a) => a.startsWith("--limit"));
   const limit = limitArg ? Number(limitArg.split("=")[1] ?? args[args.indexOf(limitArg) + 1]) || 0 : 0;
 
-  // Hard staging-only guard. Unlike the generic assertWriteAllowed, this blocks
-  // production even WITH CONFIRM_PRODUCTION_DB — the prod run is a separate,
-  // explicitly-approved procedure and must never happen from this dev tool.
-  if (activeDbIsProduction()) {
-    console.error(
-      `\n⛔ REFUS: la base active est la PRODUCTION. Cette migration ne s'exécute que sur staging.\n`,
-    );
-    process.exit(1);
-  }
+  // Production is the owner-approved release run only, gated behind
+  // CONFIRM_PRODUCTION_DB=true exactly like every other prod script
+  // (lib/db-guard.mjs, scripts/prod-op.mjs). Staging/dev need no confirmation.
+  // Only WRITE modes require it; read-only verify/dry-run may inspect prod.
+  // See docs/production-release-runbook.md §5b.
+  const isProd = activeDbIsProduction();
+  const willWrite = apply || (doOrphans && deleteOrphans);
+  if (willWrite) assertWriteAllowed("images:migrate --apply (product images → Blob)");
 
-  console.log(`[${TAG}] DB=staging  mode=${apply ? "APPLY" : doVerify ? "VERIFY" : doOrphans ? "ORPHANS" : "DRY RUN"}`);
+  console.log(`[${TAG}] DB=${isProd ? "PRODUCTION" : "staging"}  mode=${apply ? "APPLY" : doVerify ? "VERIFY" : doOrphans ? "ORPHANS" : "DRY RUN"}`);
 
   if (doVerify) {
     await verify();
