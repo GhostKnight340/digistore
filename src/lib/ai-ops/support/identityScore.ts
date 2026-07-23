@@ -35,7 +35,14 @@ export function aggregateIdentity(candidates: IdentityCandidate[]): ResolvedIden
   };
 
   const customerId = bestWith((c) => c.customerId);
-  const orderId = bestWith((c) => c.orderId);
+  // The order the customer EXPLICITLY named (order number / payment reference) is
+  // authoritative for WHICH order they mean — it must win over "latest order by
+  // email", which otherwise outranks a cross-account/older reference by confidence.
+  const explicitOrderId =
+    candidates
+      .filter((c) => c.orderId && (c.via === "order_number" || c.via === "payment_ref"))
+      .sort((a, b) => b.confidence - a.confidence)[0]?.orderId ?? null;
+  const orderId = explicitOrderId ?? bestWith((c) => c.orderId);
   const via = [...new Set(candidates.map((c) => c.via))];
 
   // Orders known to belong to this person, encoded by the order_email resolver
@@ -49,7 +56,8 @@ export function aggregateIdentity(candidates: IdentityCandidate[]): ResolvedIden
     candidates.filter((c) => c.confidence >= 0.5).map((c) => c.via.replace(/\(.*\)/, "")),
   ).size;
   const maxConfidence = candidates.reduce((m, c) => Math.max(m, c.confidence), 0);
-  const identified = (!!customerId || !!orderId) && (maxConfidence >= HIGH_CONFIDENCE || distinctStrongSignals >= 2);
+  // An explicitly-referenced order that resolved is itself a confident identification.
+  const identified = !!explicitOrderId || ((!!customerId || !!orderId) && (maxConfidence >= HIGH_CONFIDENCE || distinctStrongSignals >= 2));
 
   return { identified, customerId, orderId, ordersFound, via };
 }

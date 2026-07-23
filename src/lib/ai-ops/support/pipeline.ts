@@ -18,7 +18,6 @@
 
 import "server-only";
 
-import { callTool } from "../tools/service";
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
 import { createApproval, recordAutoSend, countApprovalsForEntity } from "../approvalStore";
 import type { RiskLevel } from "../types";
@@ -41,8 +40,7 @@ import { notifyCoverage } from "./notify";
 import type { NotifyMode } from "./coverageConfig";
 import { assessEligibility, CLARIFY_MESSAGE } from "./eligibility";
 import { lastCustomerMessageAt } from "./thread";
-import { extractIdentitySignals } from "./identitySignals";
-import { resolveIdentity, type ResolvedIdentity } from "./identity";
+import { resolveTicketContext, customerMessageText } from "./ticketContext";
 
 /** The only channel today; a covered channel must match this. */
 export const SUPPORT_CHANNEL = "support_tickets";
@@ -73,25 +71,6 @@ export interface PipelineSession {
 
 function riskFor(confidence: string): RiskLevel {
   return confidence === "high" ? "low" : "medium";
-}
-
-/** Read redacted business context for the resolved ids via the safe tool layer. */
-async function contextForIdentity(
-  identity: ResolvedIdentity,
-  executionId: string | null,
-): Promise<{ customer: unknown; order: unknown }> {
-  const [customerRes, orderRes] = await Promise.all([
-    identity.customerId
-      ? callTool({ module: SUPPORT_ASSISTANT_MODULE, tool: "getCustomerHistory", input: { customerId: identity.customerId }, executionId })
-      : Promise.resolve(null),
-    identity.orderId
-      ? callTool({ module: SUPPORT_ASSISTANT_MODULE, tool: "getOrderDetails", input: { orderId: identity.orderId }, executionId })
-      : Promise.resolve(null),
-  ]);
-  return {
-    customer: customerRes?.ok ? customerRes.data : null,
-    order: orderRes?.ok ? orderRes.data : null,
-  };
 }
 
 /** Escalate: stage a high-risk approval, note it, count it, notify per policy. */
@@ -197,13 +176,10 @@ async function supportBody(ticket: PipelineTicket, session: PipelineSession, ctx
   // 1. IDENTIFY the customer/order from ALL signals before deciding anything —
   // a guest checkout (no account) is identified by their order email just like a
   // registered customer. Only a genuine non-match falls through to needs_info.
-  const customerText = [ticket.message, ...ticket.replies.filter((r) => r.author === "customer").map((r) => r.body)]
-    .filter(Boolean)
-    .join("\n")
-    .slice(0, 6000);
-  const signals = extractIdentitySignals({ email: ticket.email, orderRef: ticket.orderRef, phone: ticket.phone, text: customerText });
-  const identity = await resolveIdentity(signals);
-  const { customer, order } = await contextForIdentity(identity, ctx.executionId);
+  const { identity, customer, order } = await resolveTicketContext(
+    { email: ticket.email, orderRef: ticket.orderRef, phone: ticket.phone, text: customerMessageText(ticket.message, ticket.replies) },
+    ctx.executionId,
+  );
   await addSupportInternalNote(
     ticket.id,
     "ai",

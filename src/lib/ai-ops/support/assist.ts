@@ -12,10 +12,10 @@
 import "server-only";
 
 import { runModule, type ModuleRunContext, type ModuleRunOutput } from "../runner";
-import { callTool } from "../tools/service";
 import { getSupportTicketRecord, supportTicketAdminDTO } from "@/lib/db/supportTickets";
 import { SUPPORT_ASSISTANT_MODULE } from "./module";
 import { gatherSupportKnowledge } from "./knowledge";
+import { resolveTicketContext, customerMessageText } from "./ticketContext";
 
 export const ASSIST_TOOLS = [
   "draft_reply",
@@ -69,7 +69,11 @@ function toolInstruction(tool: AssistTool, lang: string, targetLanguage?: string
 
 const BASE = [
   "You are the Ghost.ma Customer Support Assistant helping a human agent with ONE ticket.",
-  "Ground everything strictly in the verified data provided (ticket, customer history, knowledge).",
+  "Ground everything strictly in the verified data provided (ticket, order, customer history, knowledge).",
+  "The `order` object, WHEN PRESENT, is the exact order this ticket is about (resolved from the",
+  "customer's order number/reference) — use ITS status/items directly to answer. Do NOT look for the",
+  "referenced order inside `customer.recentOrders`; that list is indexed differently and will not contain",
+  "it by that number. Only say an order can't be verified if `order` is genuinely absent.",
   "Never invent order/payment/delivery status, delivery times, or policy. Output plain text only (no JSON).",
   "This output is for the AGENT and/or a draft they will review — nothing is sent automatically.",
 ].join("\n");
@@ -79,11 +83,12 @@ async function assistBody(
   input: AssistInput,
   ctx: ModuleRunContext,
 ): Promise<ModuleRunOutput> {
-  const [knowledge, customer] = await Promise.all([
+  const [knowledge, resolved] = await Promise.all([
     gatherSupportKnowledge(),
-    dto.customerId
-      ? callTool({ module: SUPPORT_ASSISTANT_MODULE, tool: "getCustomerHistory", input: { customerId: dto.customerId }, executionId: ctx.executionId }).then((r) => (r.ok ? r.data : null))
-      : Promise.resolve(null),
+    resolveTicketContext(
+      { email: dto.email, orderRef: dto.orderRef, phone: dto.phone, text: customerMessageText(dto.message, dto.replies) },
+      ctx.executionId,
+    ),
   ]);
 
   const completion = await ctx.client.complete({
@@ -99,7 +104,9 @@ async function assistBody(
         firstMessage: dto.message,
         conversation: dto.replies.map((r) => ({ from: r.author, body: r.body })),
       },
-      customer,
+      identity: { matchedVia: resolved.identity.via, ordersFound: resolved.identity.ordersFound },
+      customer: resolved.customer,
+      order: resolved.order,
       knowledge,
       agentText: input.text ?? null,
     },

@@ -38,3 +38,20 @@ test("no candidates → not identified", () => {
   assert.equal(r.identified, false);
   assert.equal(r.ordersFound, 0);
 });
+
+test("explicit order reference wins over latest-order-by-email for orderId", () => {
+  const r = aggregateIdentity([
+    { customerId: "c1", orderId: "latest-order", confidence: 0.85, via: "order_email(3)" },
+    { customerId: "c1", orderId: "referenced-order", confidence: 0.7, via: "order_number" },
+  ]);
+  assert.equal(r.orderId, "referenced-order", "the order the customer named must win");
+  assert.equal(r.identified, true);
+});
+
+test("payment_ref order also takes priority for orderId", () => {
+  const r = aggregateIdentity([
+    { customerId: "c1", orderId: "latest", confidence: 0.85, via: "order_email(2)" },
+    { customerId: null, orderId: "paid-order", confidence: 0.9, via: "payment_ref" },
+  ]);
+  assert.equal(r.orderId, "paid-order");
+});
