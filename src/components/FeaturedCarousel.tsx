@@ -99,10 +99,17 @@ export default function FeaturedCarousel({
               aria-label={`Aller à la page ${i + 1}`}
               aria-current={active === i}
               onClick={() => goTo(i)}
-              className={`h-1.5 rounded-full transition-all duration-200 ${
-                active === i ? "w-6 bg-accent" : "w-1.5 bg-border-strong hover:bg-muted"
-              }`}
-            />
+              // 24×24 tap target (a11y) with the visual dot centered inside — the
+              // pill/dot look is unchanged, the hit area is just no longer 6px.
+              className="group grid h-6 min-w-6 place-items-center rounded-full"
+            >
+              <span
+                aria-hidden
+                className={`block h-1.5 rounded-full transition-all duration-200 ${
+                  active === i ? "w-6 bg-accent" : "w-1.5 bg-border-strong group-hover:bg-muted"
+                }`}
+              />
+            </button>
           ))}
         </div>
       )}

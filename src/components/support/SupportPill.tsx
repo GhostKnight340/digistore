@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 /**
@@ -39,15 +40,12 @@ export default function SupportPill() {
         style={{ bottom: "calc(20px + env(safe-area-inset-bottom))" }}
         className="fixed right-5 z-40 hidden items-center gap-3 rounded-full border border-border bg-card/95 py-1.5 pl-1.5 pr-4 shadow-card backdrop-blur-xl transition hover:border-accent/50 sm:flex"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="/brand/navigator-profile-circle-256.png"
           alt=""
           width={36}
           height={36}
-          className="h-9 w-9 rounded-full"
-          loading="lazy"
-          decoding="async"
+          className="h-9 w-9 shrink-0 rounded-full"
         />
         <span className="leading-tight">
           <span className="block text-[13px] font-semibold text-white">
@@ -66,15 +64,12 @@ export default function SupportPill() {
         style={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }}
         className="fixed right-4 z-40 grid h-11 w-11 place-items-center rounded-full border border-border bg-card shadow-card sm:hidden"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="/brand/navigator-profile-circle-256.png"
           alt=""
           width={44}
           height={44}
-          className="h-11 w-11 rounded-full"
-          loading="lazy"
-          decoding="async"
+          className="h-11 w-11 shrink-0 rounded-full"
         />
       </Link>
     </>
