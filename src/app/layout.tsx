@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { headers } from "next/headers";
 import "./globals.css";
 import { isOrderingEnabled, ORDERS_UNAVAILABLE_COPY } from "@/lib/storeSettings";
@@ -153,8 +154,7 @@ export default async function RootLayout({
               {showMaintenance ? (
                 <main className="grid min-h-screen place-items-center px-6 py-12">
                   <section className="w-full max-w-xl rounded-2xl border border-border bg-card p-8 text-center shadow-card">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src="/brand/navigator-master-transparent-2048.png"
                       alt=""
                       width={96}

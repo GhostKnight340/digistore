@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import BrandNav from "@/components/BrandNav";
 import StatStrip from "@/components/StatStrip";
 import FeaturedCarousel from "@/components/FeaturedCarousel";
@@ -101,14 +102,14 @@ export default async function HomePage() {
                 no animation), floating to the right on desktop (220px) with a
                 faint blue halo. Decorative — the copy carries all meaning. */}
             <div className="home-hero-mascot order-1 shrink-0 lg:order-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/brand/navigator-master-transparent-2048.png"
                 alt=""
                 width={220}
                 height={220}
+                sizes="(min-width: 1024px) 220px, (min-width: 640px) 180px, 120px"
                 className="home-hero-mascot__img h-[120px] w-[120px] sm:h-[180px] sm:w-[180px] lg:h-[220px] lg:w-[220px]"
-                fetchPriority="high"
+                priority
               />
             </div>
           </div>
@@ -235,15 +236,13 @@ export default async function HomePage() {
           <div className="mt-6 flex flex-col gap-8 md:flex-row md:items-start md:gap-10">
             {/* Guide mascot — 130px desktop / 110px tablet, hidden on mobile. */}
             <figure className="hidden shrink-0 md:block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/brand/navigator-master-transparent-2048.png"
                 alt=""
                 width={130}
                 height={130}
-                className="w-[110px] lg:w-[130px]"
-                loading="lazy"
-                decoding="async"
+                sizes="(min-width: 1024px) 130px, 110px"
+                className="h-auto w-[110px] lg:w-[130px]"
               />
               <figcaption className="mt-3 max-w-[130px] text-sm leading-snug text-muted">
                 Le Navigateur vous guide à chaque étape
