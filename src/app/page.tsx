@@ -26,8 +26,15 @@ import { getHomepageCollectionCards } from "@/lib/db/collections";
 import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { resolveBrandColor } from "@/lib/brandAssets";
 import { visibleReviews } from "@/lib/trust/content";
+import type { Metadata } from "next";
 
 export const revalidate = 3600;
+
+// Self-referencing canonical for the home page. Title/description/openGraph are
+// inherited from the root layout; only the canonical URL is page-specific.
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 /** GA4 list id for the "Produits populaires" carousel — shared by the
  *  view_item_list impression and each card's select_item, so GA4 can join them. */

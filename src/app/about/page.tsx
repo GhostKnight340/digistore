@@ -1,4 +1,4 @@
-export const metadata = { title: "À propos - ghost.ma" };
+export const metadata = { title: "À propos - ghost.ma", alternates: { canonical: "/about" } };
 
 export default function AboutPage() {
   return (

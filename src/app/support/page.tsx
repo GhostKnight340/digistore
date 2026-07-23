@@ -4,7 +4,7 @@ import { getPublicPaymentMethods } from "@/lib/db/paymentMethods";
 import { formatDH } from "@/lib/format";
 import { orderStatusShort } from "@/lib/orderStatus";
 
-export const metadata = { title: "Support - ghost.ma" };
+export const metadata = { title: "Support - ghost.ma", alternates: { canonical: "/support" } };
 export const dynamic = "force-dynamic";
 
 const RECENT_ORDERS_SHOWN = 3;

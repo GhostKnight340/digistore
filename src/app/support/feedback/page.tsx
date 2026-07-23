@@ -3,7 +3,7 @@ import SupportFeedbackForm from "@/components/support/SupportFeedbackForm";
 import { getSupportFeedbackStatusAction } from "@/app/actions/support";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Votre avis sur le support - ghost.ma" };
+export const metadata = { title: "Votre avis sur le support - ghost.ma", alternates: { canonical: "/support/feedback" } };
 
 export default async function SupportFeedbackPage({
   searchParams,
