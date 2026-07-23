@@ -162,7 +162,97 @@ async function migrateProductImageUrl(apply: boolean, limit: number, report: Rep
   }
 }
 
+// ── Site media (hero / banner scalar fields + GTA StoreSetting) ───────────────
+//
+// Other admin-uploaded images also live as base64 `data:` URIs in scalar columns
+// and render as heroes/banners. Same treatment as Product.imageUrl: upload once,
+// rewrite the string field to the Blob URL. Metadata isn't tracked for these
+// (they're single hero images, not a gallery), matching the imageUrl decision.
+const SITE_MEDIA_FIELDS: { model: string; field: string; label: string }[] = [
+  { model: "collection", field: "imageUrl", label: "Collection.imageUrl" },
+  { model: "collection", field: "socialImageUrl", label: "Collection.socialImageUrl" },
+  { model: "category", field: "coverImageUrl", label: "Category.coverImageUrl" },
+  { model: "guide", field: "heroImageUrl", label: "Guide.heroImageUrl" },
+  { model: "guide", field: "socialImageUrl", label: "Guide.socialImageUrl" },
+];
+
+async function migrateSiteMediaScalars(apply: boolean, limit: number, report: Report) {
+  for (const f of SITE_MEDIA_FIELDS) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const model = (prisma as any)[f.model];
+    const rows: { id: string; [k: string]: unknown }[] = await model.findMany({
+      where: { [f.field]: { startsWith: "data:" } },
+      select: { id: true, [f.field]: true },
+      take: limit || undefined,
+    });
+    report.detected += rows.length;
+    for (const row of rows) {
+      const parsed = parseDataUri(String(row[f.field] ?? ""));
+      if (!parsed) {
+        report.failed++;
+        report.failures.push({ kind: f.label, id: row.id, error: "not a base64 data URI" });
+        continue;
+      }
+      if (!apply) {
+        console.log(`  → ${f.label} ${row.id} (${Math.round(parsed.buffer.length / 1024)} KB) → Blob`);
+        continue;
+      }
+      try {
+        const uploaded = await uploadProductMedia({ buffer: parsed.buffer });
+        await model.update({ where: { id: row.id }, data: { [f.field]: uploaded.url } });
+        report.migrated++;
+        console.log(`  ✓ ${f.label} ${row.id} → ${uploaded.pathname}`);
+      } catch (err) {
+        report.failed++;
+        report.failures.push({ kind: f.label, id: row.id, error: err instanceof Error ? err.message : String(err) });
+        console.log(`  ✗ ${f.label} ${row.id}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+  }
+}
+
+/** The homepage GTA VI hero lives in StoreSetting id="gta-preorder" as
+ * { heroImageUrl } — often a multi-MB base64 JPEG (the homepage LCP image). */
+async function migrateGtaHero(apply: boolean, report: Report) {
+  const record = await prisma.storeSetting.findUnique({ where: { id: "gta-preorder" } });
+  const value = (record?.value ?? null) as { heroImageUrl?: unknown } | null;
+  const current = typeof value?.heroImageUrl === "string" ? value.heroImageUrl : "";
+  const parsed = parseDataUri(current);
+  if (!parsed) return; // empty, already a URL, or not base64 — nothing to do
+  report.detected += 1;
+  if (!apply) {
+    console.log(`  → GTA hero (StoreSetting) (${Math.round(parsed.buffer.length / 1024)} KB) → Blob`);
+    return;
+  }
+  try {
+    const uploaded = await uploadProductMedia({ buffer: parsed.buffer });
+    await prisma.storeSetting.upsert({
+      where: { id: "gta-preorder" },
+      update: { value: { heroImageUrl: uploaded.url } },
+      create: { id: "gta-preorder", value: { heroImageUrl: uploaded.url } },
+    });
+    report.migrated += 1;
+    console.log(`  ✓ GTA hero (StoreSetting) → ${uploaded.pathname}`);
+  } catch (err) {
+    report.failed += 1;
+    report.failures.push({ kind: "GtaHero", id: "gta-preorder", error: err instanceof Error ? err.message : String(err) });
+    console.log(`  ✗ GTA hero: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
 // ── Verification report ──────────────────────────────────────────────────────
+
+async function siteMediaBase64Remaining(): Promise<number> {
+  let total = 0;
+  for (const f of SITE_MEDIA_FIELDS) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    total += await (prisma as any)[f.model].count({ where: { [f.field]: { startsWith: "data:" } } });
+  }
+  const gta = await prisma.storeSetting.findUnique({ where: { id: "gta-preorder" } });
+  const heroVal = (gta?.value as { heroImageUrl?: unknown } | null)?.heroImageUrl;
+  if (typeof heroVal === "string" && heroVal.startsWith("data:")) total += 1;
+  return total;
+}
 
 async function verify() {
   const [mediaBase64, productBase64, mediaMigrated] = await Promise.all([
@@ -177,6 +267,7 @@ async function verify() {
     select: { id: true, slug: true, imageUrl: true },
   });
   const productMigrated = productImages.filter((p) => isVercelBlobUrl(p.imageUrl)).length;
+  const siteMediaBase64 = await siteMediaBase64Remaining();
 
   // Broken-Blob-URL check: HEAD every migrated blobUrl / imageUrl.
   const broken: string[] = [];
@@ -201,16 +292,17 @@ async function verify() {
   console.log("\n" + bar());
   console.log("VERIFICATION REPORT — product image Blob migration");
   console.log(bar());
-  console.log(`  total legacy base64 remaining : ${mediaBase64 + productBase64}`);
+  console.log(`  total legacy base64 remaining : ${mediaBase64 + productBase64 + siteMediaBase64}`);
   console.log(`      · ProductMedia.url        : ${mediaBase64}`);
   console.log(`      · Product.imageUrl        : ${productBase64}`);
+  console.log(`      · site media (hero/banner): ${siteMediaBase64}`);
   console.log(`  successfully migrated         : ${mediaMigrated + productMigrated}`);
   console.log(`      · ProductMedia.blobUrl    : ${mediaMigrated}`);
   console.log(`      · Product.imageUrl (Blob) : ${productMigrated}`);
   console.log(`  broken Blob URLs              : ${canProbe ? broken.length : "n/a (no token)"}`);
   for (const b of broken) console.log(`      ✗ ${b}`);
   console.log(bar());
-  const clean = mediaBase64 + productBase64 === 0 && broken.length === 0;
+  const clean = mediaBase64 + productBase64 + siteMediaBase64 === 0 && broken.length === 0;
   console.log(
     clean
       ? "✅ CLEAN — no base64 remaining, no broken Blob URLs."
@@ -317,6 +409,8 @@ async function main() {
   console.log(bar());
   await migrateProductMedia(apply, limit, report);
   await migrateProductImageUrl(apply, limit, report);
+  await migrateSiteMediaScalars(apply, limit, report);
+  await migrateGtaHero(apply, report);
   console.log("-".repeat(60));
   console.log(
     `detected=${report.detected} migrated=${report.migrated} ` +

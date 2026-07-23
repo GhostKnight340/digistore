@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Sora } from "next/font/google";
 import TrackedLink from "@/components/gta/TrackedLink";
 import { getGtaPreorderSettings } from "@/lib/db/gtaPreorderSettings";
@@ -25,6 +26,10 @@ export default async function GtaPreorderBanner() {
   const { heroImageUrl } = await getGtaPreorderSettings();
   const art = heroImageUrl.trim();
   const hasArt = Boolean(art);
+  // Optimize through next/image for Blob + same-origin sources; pass a legacy
+  // base64 data: URI (pre-migration) or an external URL through untouched.
+  const artUnoptimized =
+    !/^https:\/\/[^/]+\.public\.blob\.vercel-storage\.com\//.test(art) && !art.startsWith("/");
 
   return (
     <section className={`mt-8 sm:mt-12 ${sora.className}`}>
@@ -39,12 +44,16 @@ export default async function GtaPreorderBanner() {
         {/* Key art bleeding from the right — the admin-uploaded image only. */}
         {hasArt && (
           <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[64%] sm:w-[54%]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={art}
               alt=""
-              className="h-full w-full object-cover"
+              fill
+              // Homepage hero → the LCP image, so load it eagerly (not lazy).
+              priority
+              sizes="(min-width: 640px) 54vw, 64vw"
+              className="object-cover"
               style={{ objectPosition: "62% center" }}
+              unoptimized={artUnoptimized}
             />
             <span
               className="absolute inset-0"

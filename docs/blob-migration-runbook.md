@@ -84,12 +84,16 @@ CONFIRM_PRODUCTION_DB=true GHOST_DB_ENV=production pnpm images:migrate -- --veri
 
 "Clean" = `legacy remaining: 0`, `broken Blob URLs: 0`.
 
-### Revalidate the catalog cache (REQUIRED after the image migration)
-`getActiveProductRows` / catalog DTOs are cached under `CATALOG_TAG` with **no TTL** — a DB-only migration does NOT refresh them, so the storefront keeps emitting `/api/product-image/<slug>` (which still works — it now 302-redirects to the Blob URL — but skips the direct-Blob optimization). After a clean verify, refresh the cache by either:
-- triggering any admin product/category save (calls `revalidateTag(CATALOG_TAG)`), or
-- adding a one-off `revalidateTag(CATALOG_TAG)` call / redeploy.
+### Revalidate the catalog cache (after the image migration)
+`getActiveProductRows` / catalog DTOs are cached under `CATALOG_TAG` with **no TTL** — a DB-only migration does NOT refresh them, so the storefront keeps emitting `/api/product-image/<slug>`.
 
-Not doing this is cosmetic only (an extra redirect hop); the base64→Postgres payload win is already realized because `Product.imageUrl` is now a short Blob URL.
+IMPORTANT (verified live on staging): a **redeploy does NOT clear this** — Vercel's Data Cache (which `unstable_cache` uses) **persists across deployments**. The ONLY way to refresh it is `revalidateTag(CATALOG_TAG)`:
+- trigger any admin product/category save (it calls `revalidateTag(CATALOG_TAG)`), or
+- add a one-off `revalidateTag(CATALOG_TAG)` call / route.
+
+This is **cosmetic only**. Even without it, the payload win is fully realized: `Product.imageUrl` is now a Blob URL, so `/api/product-image/<slug>` **302-redirects to Blob** (no Postgres base64), and `next/image` optimizes from Blob. Measured live: a 3,144 KB base64 image now delivers as **13 KB WebP**. Revalidating only removes the one extra 302 hop by emitting the Blob URL directly.
+
+Note: the `/api/product-image` responses are CDN-cached (`max-age=3600`); a fresh deploy serves them uncached (`x-vercel-cache: MISS`).
 
 ### Store environment scope (isolation)
 The staging Blob store MUST be scoped to **Preview + Development only** in Vercel — NOT Production. If a "staging" store also has Production in scope, the production deployment shares that bucket and staging test objects live alongside real production media. Fix: Vercel → Storage → the store → environments → uncheck Production. Production must use its own separate **Public** store.
