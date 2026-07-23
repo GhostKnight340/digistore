@@ -121,7 +121,7 @@ function RowMenu({
   );
 }
 
-function PreviewModal({ item, handle, onClose }: { item: StudioContentItemDTO; handle: string; onClose: () => void }) {
+function PreviewModal({ item, handle, avatarUrl, onClose }: { item: StudioContentItemDTO; handle: string; avatarUrl?: string | null; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -140,7 +140,7 @@ function PreviewModal({ item, handle, onClose }: { item: StudioContentItemDTO; h
         <button type="button" aria-label="Fermer" onClick={onClose} style={{ position: "absolute", top: -40, right: 0, width: 30, height: 30, borderRadius: 8, border: `1px solid rgba(255,255,255,0.14)`, background: C.surface, color: C.accentTextBright, cursor: "pointer" }}>
           ✕
         </button>
-        <PreviewCard width={340} format={item.format} media={item.media} caption={item.caption} hashtags={item.hashtags} handle={handle} />
+        <PreviewCard width={340} format={item.format} media={item.media} caption={item.caption} hashtags={item.hashtags} handle={handle} avatarUrl={avatarUrl} />
       </div>
     </div>
   );
@@ -156,11 +156,13 @@ const QUEUE_FILTERS: { key: "all" | StudioStatus; label: string }[] = [
 export function QueuePanel({
   items,
   handle,
+  avatarUrl,
   busy,
   onAction,
 }: {
   items: StudioContentItemDTO[];
   handle: string;
+  avatarUrl?: string | null;
   busy: boolean;
   onAction: (action: RowAction, item: StudioContentItemDTO) => void;
 }) {
@@ -259,7 +261,7 @@ export function QueuePanel({
         </div>
       )}
 
-      {preview && <PreviewModal item={preview} handle={handle} onClose={() => setPreview(null)} />}
+      {preview && <PreviewModal item={preview} handle={handle} avatarUrl={avatarUrl} onClose={() => setPreview(null)} />}
     </div>
   );
 }

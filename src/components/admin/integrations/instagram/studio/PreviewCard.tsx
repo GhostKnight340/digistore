@@ -37,6 +37,7 @@ export function PreviewCard({
   caption,
   hashtags,
   handle,
+  avatarUrl,
 }: {
   width?: number;
   format: StudioFormat;
@@ -44,6 +45,7 @@ export function PreviewCard({
   caption: string;
   hashtags: string[];
   handle: string;
+  avatarUrl?: string | null;
 }) {
   const isReel = format === "reel";
   const isStory = format === "story";
@@ -69,16 +71,18 @@ export function PreviewCard({
   )) : null;
   const hashtagStr = hashtags.length ? hashtags.join(" ") : "";
 
-  const avatar = (
-    <div
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: "50%",
-        background: "linear-gradient(145deg,#f58529,#dd2a7b,#515bd4)",
-        flexShrink: 0,
-      }}
-    />
+  const avatarBase = {
+    width: 28,
+    height: 28,
+    borderRadius: "50%",
+    flexShrink: 0,
+    objectFit: "cover" as const,
+  };
+  const avatar = avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={avatarUrl} alt="" style={avatarBase} />
+  ) : (
+    <div style={{ ...avatarBase, background: "linear-gradient(145deg,#f58529,#dd2a7b,#515bd4)" }} />
   );
 
   return (

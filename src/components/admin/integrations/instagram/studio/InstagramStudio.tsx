@@ -241,6 +241,7 @@ export default function InstagramStudio({
             <Composer
               key={editItem?.id ?? "new"}
               handle={handle}
+              avatarUrl={status.profilePictureUrl}
               publishAvailable={publishAvailable}
               viewport={viewport}
               initialItem={editItem}
@@ -250,7 +251,7 @@ export default function InstagramStudio({
               onSchedule={(item) => setScheduleTarget(item)}
             />
           )}
-          {tab === "queue" && <QueuePanel items={queue} handle={handle} busy={pending} onAction={handleRowAction} />}
+          {tab === "queue" && <QueuePanel items={queue} handle={handle} avatarUrl={status.profilePictureUrl} busy={pending} onAction={handleRowAction} />}
           {tab === "publications" && <PublicationsPanel items={publications} onAction={handleRowAction} />}
 
           {/* ZONE SENSIBLE (all tabs) */}

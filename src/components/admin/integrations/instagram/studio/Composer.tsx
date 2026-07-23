@@ -45,6 +45,7 @@ function readImageMeta(file: File): Promise<{ url: string; width: number | null;
 
 export function Composer({
   handle,
+  avatarUrl,
   publishAvailable,
   viewport,
   initialItem,
@@ -54,6 +55,7 @@ export function Composer({
   onSchedule,
 }: {
   handle: string;
+  avatarUrl?: string | null;
   publishAvailable: boolean;
   viewport: "desktop" | "mobile";
   initialItem?: StudioContentItemDTO | null;
@@ -792,7 +794,7 @@ export function Composer({
               })}
             </div>
           </div>
-          <PreviewCard width={previewWidth} format={format} media={media} caption={caption} hashtags={hashtags} handle={handle} />
+          <PreviewCard width={previewWidth} format={format} media={media} caption={caption} hashtags={hashtags} handle={handle} avatarUrl={avatarUrl} />
         </div>
       )}
 
@@ -814,7 +816,7 @@ export function Composer({
           <div style={{ width: "100%", maxWidth: 420, background: "#0C0D11", borderTopLeftRadius: 20, borderTopRightRadius: 20, border: `1px solid ${C.borderInput}`, maxHeight: "88%", display: "flex", flexDirection: "column" }}>
             <SheetHeader title="Aperçu" onClose={() => setMobileSheet(false)} />
             <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", justifyContent: "center" }}>
-              <PreviewCard width={340} format={format} media={media} caption={caption} hashtags={hashtags} handle={handle} />
+              <PreviewCard width={340} format={format} media={media} caption={caption} hashtags={hashtags} handle={handle} avatarUrl={avatarUrl} />
             </div>
           </div>
         </Overlay>
@@ -827,7 +829,7 @@ export function Composer({
             <button type="button" aria-label="Fermer" onClick={() => setFullscreen(false)} style={{ position: "absolute", top: -40, right: 0, width: 30, height: 30, borderRadius: 8, border: `1px solid rgba(255,255,255,0.14)`, background: C.surface, color: C.accentTextBright, cursor: "pointer" }}>
               ✕
             </button>
-            <PreviewCard width={360} format={format} media={media} caption={caption} hashtags={hashtags} handle={handle} />
+            <PreviewCard width={360} format={format} media={media} caption={caption} hashtags={hashtags} handle={handle} avatarUrl={avatarUrl} />
           </div>
         </Overlay>
       )}
