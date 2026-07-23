@@ -2,7 +2,7 @@ import { getStoreSettings } from "@/lib/db/catalog";
 import { notFound } from "next/navigation";
 import LegalArticle from "@/components/legal/LegalArticle";
 
-export const metadata = { title: "Politique de Confidentialité - ghost.ma" };
+export const metadata = { title: "Politique de Confidentialité - ghost.ma", alternates: { canonical: "/privacy" } };
 
 export default async function PrivacyPage() {
   const settings = await getStoreSettings();

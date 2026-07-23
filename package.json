@@ -27,6 +27,7 @@
     "assign:collection-images": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/assign-collection-images.ts",
     "prod:status": "node scripts/prod-op.mjs migrate status",
     "prod:migrate": "node scripts/prod-op.mjs migrate deploy",
+    "images:migrate": "tsx --conditions=react-server --import ./scripts/lib/load-env.mjs scripts/migrate-product-images-to-blob.ts",
     "test": "node --conditions=react-server --import tsx --test \"test/**/*.test.ts\"",
     "postinstall": "prisma generate"
   },
@@ -39,6 +40,8 @@
     "@composio/vercel": "^0.11.1",
     "@prisma/client": "^6.19.3",
     "@sentry/nextjs": "^10.66.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "@vercel/blob": "^2.6.1",
     "@vercel/speed-insights": "^2.0.0",
     "ai": "^7.0.34",

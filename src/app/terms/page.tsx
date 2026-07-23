@@ -2,7 +2,7 @@ import { getStoreSettings } from "@/lib/db/catalog";
 import { notFound } from "next/navigation";
 import LegalArticle from "@/components/legal/LegalArticle";
 
-export const metadata = { title: "Conditions Générales de Vente - ghost.ma" };
+export const metadata = { title: "Conditions Générales de Vente - ghost.ma", alternates: { canonical: "/terms" } };
 
 export default async function TermsPage() {
   const settings = await getStoreSettings();

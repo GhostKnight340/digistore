@@ -38,12 +38,15 @@ export async function GET(
       media: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         take: 1,
-        select: { url: true },
+        select: { blobUrl: true, url: true },
       },
     },
   });
 
-  const src = product?.imageUrl ?? product?.media[0]?.url ?? null;
+  // Prefer a Blob URL (post-migration); fall back to the legacy `url`, which may
+  // still be a base64 `data:` URI on un-migrated rows.
+  const src =
+    product?.imageUrl ?? product?.media[0]?.blobUrl ?? product?.media[0]?.url ?? null;
   if (!src) return new NextResponse(null, { status: 404 });
 
   if (src.startsWith("data:")) {

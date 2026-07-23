@@ -1,5 +1,18 @@
 import { withSentryConfig } from "@sentry/nextjs";
 
+/**
+ * NOTE: Next resolves next.config.js → .mjs → .ts and uses the FIRST match, so
+ * THIS file (.mjs) is authoritative — next.config.ts is ignored. Image
+ * remotePatterns therefore MUST live here, not in next.config.ts.
+ *
+ * Product media is served from a dedicated public Vercel Blob store under the
+ * `/product-media/` prefix. The pattern is scoped to that exact path (and, when
+ * PRODUCT_MEDIA_BLOB_HOSTNAME is set for the environment, that exact host) so
+ * next/image will not proxy arbitrary third-party images. Vercel Blob public
+ * hostnames are `<storeId>.public.blob.vercel-storage.com`.
+ */
+const blobHostname = process.env.PRODUCT_MEDIA_BLOB_HOSTNAME;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -7,6 +20,17 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "8mb",
     },
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        // Pinned to the exact store host when provided; otherwise scoped to the
+        // Vercel Blob public domain (single-label store subdomain).
+        hostname: blobHostname || "*.public.blob.vercel-storage.com",
+        pathname: "/product-media/**",
+      },
+    ],
   },
 };
 

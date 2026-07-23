@@ -159,7 +159,10 @@ function FooterGroup({
 }) {
   return (
     <div>
-      <h4 className="text-sm font-semibold text-white">{title}</h4>
+      {/* h2 (not h4) so the footer column labels don't skip a heading level:
+          every page section above uses h2, so an h4 here created an a11y
+          H2→H4 jump. Styling is class-driven, so the level change is invisible. */}
+      <h2 className="text-sm font-semibold text-white">{title}</h2>
       <ul className="mt-3 space-y-2.5">
         {links.map((link) => (
           <li key={`${link.href}-${link.label}`}>

@@ -2,8 +2,10 @@
 
 import {
   createOrder,
+  customerOwnsOrder,
   emailHasRegisteredAccount,
   getCustomerOrder,
+  getOrderOwnership,
   getOrderSummaries,
   findOrderByEmailAndId,
 } from "@/lib/db/orders";
@@ -11,6 +13,7 @@ import { isOrderingCurrentlyEnabled } from "@/lib/db/ordering";
 import { getCheckoutSessionId, hasVerifiedProof } from "@/lib/checkout/emailVerification";
 import { getCurrentCustomer } from "@/lib/auth";
 import { customerOrderRedirectPath } from "@/lib/orderNumber";
+import { logSecurityEvent } from "@/lib/db/securityLog";
 import { POLICIES, clientIp, consume, dim } from "@/lib/rateLimit";
 import type { CustomerOrderDTO } from "@/lib/dto";
 
@@ -49,7 +52,7 @@ export async function createOrderAction(input: {
   // without a session: the IP budget bounds a single abusive source, the e-mail
   // budget bounds someone rotating IPs against one address. A tripped limit
   // returns the same generic French message as any other failure.
-  const { allowed } = consume([
+  const { allowed } = await consume([
     dim("order-create:ip", await clientIp(), POLICIES.orderCreateIp),
     dim(
       "order-create:email",
@@ -144,19 +147,23 @@ async function padTo(startedAt: number): Promise<void> {
  * Customer: look up an order by public number + the email used at checkout.
  * Falls back to the internal ID for legacy support links.
  *
- * This is an UNAUTHENTICATED endpoint that, on a hit, returns a redirect
- * carrying the order's `deliveryToken` — which grants the full order PII and any
- * delivered gift-card codes. Public order numbers are sequential, so the email
- * address is the only secret. It is therefore rate limited on BOTH the source IP
- * and the submitted email, and every failure mode (no such order / wrong email /
- * rate limited) returns the identical `{ found: false }` so the response cannot
- * be used as an existence oracle. The caller renders one generic French message
- * for all of them.
+ * This is a public endpoint that, on a hit, returns a redirect carrying the
+ * order's `deliveryToken` — which grants the full order PII and any delivered
+ * gift-card codes. Public order numbers are sequential, so the email address is
+ * the guest's shared secret.
  *
- * Caveat: the limiter is per serverless instance (see src/lib/rateLimitCore),
- * so this raises the cost of enumeration rather than preventing it outright.
- * Requiring an authenticated session here would close the hole properly, but
- * Order.customerId is nullable — legacy guest orders still depend on this path.
+ * Defenses, layered:
+ *   - DURABLE rate limiting (Upstash Redis, Postgres fallback) on BOTH the source
+ *     IP and the submitted email, shared across serverless instances.
+ *   - An ESCALATING penalty budget charged only on failed/unauthorized attempts,
+ *     so scripted enumeration is throttled hard while honest typos are fine.
+ *   - A logged-in customer may ONLY resolve orders that belong to their account,
+ *     even with a correct number+email for someone else's order.
+ *   - Every failure mode (no such order / wrong email / unauthorized / rate
+ *     limited) returns the IDENTICAL `{ found: false }` with the same timing pad,
+ *     so the response is never an existence oracle and no order/customer/payment
+ *     data is disclosed before authorization succeeds.
+ *   - Suspicious attempts are recorded to SecurityEvent, with Discord escalation.
  */
 export async function findOrderAction(
   orderNumber: string,
@@ -164,21 +171,46 @@ export async function findOrderAction(
 ): Promise<{ found: boolean; id?: string; redirectTo?: string }> {
   const startedAt = Date.now();
   const normalizedEmail = email.trim().toLowerCase();
+  const ip = await clientIp();
+  const customer = await getCurrentCustomer();
 
-  const { allowed } = consume([
-    dim("order-lookup:ip", await clientIp(), POLICIES.orderLookupIp),
+  // Charge the escalating failure budget + record the event. Shared helper so
+  // every failure path is uniform (identical response, same audit trail).
+  const fail = async (kind: Parameters<typeof logSecurityEvent>[0]["kind"]) => {
+    if (kind !== "order_lookup_ratelimited") {
+      await consume([
+        dim("order-lookup-fail:ip", ip, POLICIES.orderLookupFailIp),
+        dim("order-lookup-fail:email", normalizedEmail, POLICIES.orderLookupFailEmail),
+      ]);
+    }
+    await logSecurityEvent({
+      kind,
+      ip,
+      identifier: normalizedEmail,
+      metadata: { orderNumber: orderNumber.trim().slice(0, 32) },
+    });
+    await padTo(startedAt);
+    return { found: false as const };
+  };
+
+  const { allowed } = await consume([
+    dim("order-lookup:ip", ip, POLICIES.orderLookupIp),
     dim("order-lookup:email", normalizedEmail, POLICIES.orderLookupEmail),
   ]);
-  if (!allowed) {
-    await padTo(startedAt);
-    return { found: false };
-  }
+  if (!allowed) return fail("order_lookup_ratelimited");
 
   const order = await findOrderByEmailAndId(orderNumber.trim(), normalizedEmail);
-  if (!order) {
-    await padTo(startedAt);
-    return { found: false };
+  if (!order) return fail("order_lookup_failed");
+
+  // Logged-in customers are confined to their own orders: knowing another
+  // customer's number+email is not enough while authenticated.
+  if (customer) {
+    const owner = await getOrderOwnership(order.id);
+    if (!owner || !customerOwnsOrder(customer, owner)) {
+      return fail("order_lookup_unauthorized");
+    }
   }
+
   // Route via the secret per-order token whenever one exists (the email match
   // already authenticated the guest): it authorizes the payment/order pages and
   // guest order actions, and reveals codes once delivered. Only legacy rows

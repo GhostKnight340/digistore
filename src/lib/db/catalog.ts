@@ -46,6 +46,18 @@ const productCatalogInclude = {
   media: {
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     take: 1,
+    // Prefer the Blob URL + its dimensions. `url` is still selected ONLY as a
+    // read-compat fallback for un-migrated rows and is dropped from this list
+    // select once the Blob migration is verified (it can hold megabytes of
+    // base64). blobUrl wins wherever both are present.
+    select: {
+      blobUrl: true,
+      url: true,
+      alt: true,
+      sortOrder: true,
+      width: true,
+      height: true,
+    },
   },
   variants: {
     where: { active: true },
@@ -130,7 +142,7 @@ function toVariantProduct(
   opts?: StockOpts,
 ): Product {
   const title = variantTitle(row.name, variant);
-  const imageUrl = catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug);
+  const imageUrl = catalogImageUrl(row.imageUrl ?? row.media[0]?.blobUrl ?? row.media[0]?.url ?? null, row.slug);
   const region = variant.region || row.region;
   return {
     id: variant.id,
@@ -168,7 +180,7 @@ function toParentProduct(
     .map((variant) => toVariantOption(row, variant, opts));
   const selectedVariant =
     variants.find((variant) => variant.id === selectedVariantId) ?? variants[0];
-  const imageUrl = catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug);
+  const imageUrl = catalogImageUrl(row.imageUrl ?? row.media[0]?.blobUrl ?? row.media[0]?.url ?? null, row.slug);
 
   return {
     id: row.slug,
@@ -297,12 +309,16 @@ async function resolveCategoryFallbackImages(
       category: true,
       slug: true,
       imageUrl: true,
-      media: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], take: 1, select: { url: true } },
+      media: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        take: 1,
+        select: { blobUrl: true, url: true },
+      },
     },
   });
   for (const p of products) {
     if (result.has(p.category)) continue; // first match per category wins
-    const url = catalogImageUrl(p.imageUrl ?? p.media[0]?.url ?? null, p.slug);
+    const url = catalogImageUrl(p.imageUrl ?? p.media[0]?.blobUrl ?? p.media[0]?.url ?? null, p.slug);
     if (url) result.set(p.category, url);
   }
   return result;
@@ -587,7 +603,7 @@ function buildParentCard(
     description: row.description,
     shortDescription: row.shortDescription,
     longDescription: row.longDescription,
-    imageUrl: catalogImageUrl(row.imageUrl ?? row.media[0]?.url ?? null, row.slug),
+    imageUrl: catalogImageUrl(row.imageUrl ?? row.media[0]?.blobUrl ?? row.media[0]?.url ?? null, row.slug),
     featured: row.featured,
     stockStatus: inStock ? "in_stock" : "out_of_stock",
   };
@@ -899,7 +915,7 @@ const searchStorefrontCached = unstable_cache(
         (min, variant) => (variant.priceMad < min ? variant.priceMad : min),
         publicVariants[0].priceMad,
       );
-      const rawImage = row.imageUrl ?? row.media[0]?.url ?? null;
+      const rawImage = row.imageUrl ?? row.media[0]?.blobUrl ?? row.media[0]?.url ?? null;
       scoredProducts.push({
         score,
         result: {

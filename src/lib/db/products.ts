@@ -6,6 +6,7 @@ import { ensureCategoryForProduct } from "./categories";
 import { timeAdmin } from "./adminTiming";
 import { isRegionCode } from "@/lib/regions";
 import { variantTitle } from "@/lib/pricing/variant-identity";
+import { deleteProductBlobIfUnreferenced } from "@/lib/storage/productMediaGc";
 import type {
   ActionResult,
   ConvertProductToVariantInput,
@@ -113,7 +114,7 @@ function toParent(product: ProductRow): ParentProductDTO {
     shortDescription: product.shortDescription,
     longDescription: product.longDescription,
     instructions: product.instructions,
-    thumbnail: product.imageUrl ?? product.media[0]?.url ?? null,
+    thumbnail: product.imageUrl ?? product.media[0]?.blobUrl ?? product.media[0]?.url ?? null,
     active: product.active,
     featured: product.featured,
     searchAliases: product.searchAliases ?? [],
@@ -594,10 +595,20 @@ export async function saveParentProduct(
     if (data.originalSlug) {
       // Editing existing product — use original slug as the lookup key so
       // renaming the slug doesn't create a duplicate.
+      const existing = await prisma.product.findUnique({
+        where: { slug: data.originalSlug },
+        select: { imageUrl: true },
+      });
       await prisma.product.update({
         where: { slug: data.originalSlug },
         data: { ...productData, slug: data.slug },
       });
+      // Image replaced (or cleared): reclaim the previous Blob, but only once the
+      // row above no longer points at it and nothing else references it. Runs
+      // after the successful update so a failed save never orphans/deletes.
+      if (existing?.imageUrl && existing.imageUrl !== productData.imageUrl) {
+        await deleteProductBlobIfUnreferenced(existing.imageUrl);
+      }
     } else {
       // Creating a new product.
       await prisma.product.create({

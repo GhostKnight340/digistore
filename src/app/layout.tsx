@@ -14,6 +14,7 @@ import Footer from "@/components/Footer";
 import SupportPill from "@/components/support/SupportPill";
 import AnalyticsConsentProvider from "@/components/analytics/AnalyticsConsent";
 import FeedbackButton from "@/components/feedback/FeedbackButton";
+import OrganizationJsonLd from "@/components/trust/OrganizationJsonLd";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getCatalogData, getStoreSettings } from "@/lib/db/catalog";
 import { getCurrentCustomer } from "@/lib/auth";
@@ -22,11 +23,27 @@ import { isProductionRuntime, isPreviewDeployment, runtimeEnvLabel } from "@/lib
 
 export const dynamic = "force-dynamic";
 
+const SITE_TITLE = "ghost.ma - Cartes cadeaux et recharges au Maroc";
+const SITE_DESCRIPTION =
+  "Cartes cadeaux, recharges et codes numériques (Steam, PlayStation, Xbox, Nintendo, Roblox, Valorant et plus) livrés rapidement après confirmation du paiement. Simple, sécurisé et adapté au Maroc.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
-  title: "ghost.ma - Cartes cadeaux et recharges au Maroc",
-  description:
-    "Cartes cadeaux, recharges et codes numériques (Steam, PlayStation, Xbox, Nintendo, Roblox, Valorant et plus) livrés rapidement après confirmation du paiement. Simple, sécurisé et adapté au Maroc.",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  // Default social-preview metadata for every page that doesn't set its own
+  // openGraph (product/category/guide/collection pages override this). The image
+  // itself comes from the file-based card in app/opengraph-image.tsx, so it is
+  // not listed here. No twitter card is declared: the business has no X account,
+  // so we don't advertise one — X still falls back to these Open Graph tags.
+  openGraph: {
+    type: "website",
+    siteName: "ghost.ma",
+    locale: "fr_MA",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: getSiteUrl(),
+  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -104,7 +121,9 @@ export default async function RootLayout({
         AnalyticsConsentProvider, and only after the visitor grants consent —
         keeping it here would load it for everyone before they could choose.
       */}
-      <head />
+      <head>
+        <OrganizationJsonLd settings={settings} />
+      </head>
       <body className="min-h-screen font-sans antialiased">
         {showStagingBanner ? (
           <div

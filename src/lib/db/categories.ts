@@ -106,12 +106,16 @@ export async function getCategoryProductMedia(
       name: true,
       slug: true,
       imageUrl: true,
-      media: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], take: 1, select: { url: true } },
+      media: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        take: 1,
+        select: { blobUrl: true, url: true },
+      },
     },
   });
   const out: { id: string; name: string; imageUrl: string }[] = [];
   for (const p of products) {
-    const raw = p.imageUrl ?? p.media[0]?.url ?? null;
+    const raw = p.imageUrl ?? p.media[0]?.blobUrl ?? p.media[0]?.url ?? null;
     if (!raw) continue;
     const url = raw.startsWith("data:")
       ? `/api/product-image/${encodeURIComponent(p.slug)}`

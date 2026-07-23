@@ -29,7 +29,7 @@ export async function generateMetadata({
       robots: { index: false, follow: true },
     };
   }
-  return { title: "Catalogue - ghost.ma" };
+  return { title: "Catalogue - ghost.ma", alternates: { canonical: "/products" } };
 }
 
 export default async function ProductsPage({
