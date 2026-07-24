@@ -13,6 +13,7 @@
 
 import "server-only";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import {
   DEFAULT_TOOL_GRANTS,
@@ -146,14 +147,18 @@ export async function updateAiOpsSettings(
 
 /**
  * Ensures every module has a config row (seeded from MODULE_DEFINITIONS) and a
- * default permission grant set. Idempotent: existing rows are left untouched.
- * Safe to call on every dashboard load.
+ * default permission grant set. Idempotent AND concurrency-safe: existing rows
+ * are left untouched, and a concurrent seed racing on a fresh environment (e.g.
+ * the overview page and its `.rsc` prefetch both firing on an empty AI-ops
+ * schema) is tolerated — the loser of the create race gets a unique violation
+ * on `module`, which just means "already seeded". Safe to call on every load.
  */
 export async function ensureModulesSeeded(): Promise<void> {
   for (const key of MODULE_KEYS) {
     const def = MODULE_DEFINITIONS[key];
     const existing = await prisma.aiModuleConfig.findUnique({ where: { module: key } });
-    if (!existing) {
+    if (existing) continue;
+    try {
       await prisma.aiModuleConfig.create({
         data: {
           module: key,
@@ -165,6 +170,13 @@ export async function ensureModulesSeeded(): Promise<void> {
           },
         },
       });
+    } catch (err) {
+      // A concurrent request created this row between the findUnique above and
+      // here — the unique constraint on `module` is the expected outcome, not a
+      // failure. Anything else is a real error.
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) {
+        throw err;
+      }
     }
   }
 }
