@@ -24,6 +24,7 @@ const PURPOSE_LABEL: Record<string, string> = {
   daily_reports: "Rapports quotidiens",
   alerts: "Alertes",
   supplier_reports: "Rapports fournisseurs",
+  business_intelligence: "Business Intelligence",
   marketing_drafts: "Brouillons marketing",
 };
 
